@@ -1,14 +1,19 @@
-"""The Public Accounts of Canada, professional and special services: the public_accounts stage.
+"""The Public Accounts of Canada, professional and special services and the works file: the public_accounts stage.
 
-Source: PSPC's "Detailed information on Professional and Special Services, as per the Public Accounts of
-Canada", open.canada.ca dataset ac597ff8-ee13-48c3-b315-42e528090af2 (config.PA_SERVICES_DATASET), Open
-Government Licence - Canada. One CSV a fiscal year, published each autumn for the year that ended on March
-31: the file named 2026 holds fiscal 2025-26. The record says of itself that it is not the official record;
-the official version is the Public Accounts of Canada on the Receiver General's site.
+Sources: PSPC's "Detailed information on Professional and Special Services, as per the Public Accounts of
+Canada", open.canada.ca dataset ac597ff8-ee13-48c3-b315-42e528090af2 (config.PA_SERVICES_DATASET), and its
+"Acquisition of land, buildings and works" (config.PA_WORKS_DATASET), both Open Government Licence - Canada.
+One CSV a fiscal year for each, published each autumn for the year that ended on March 31: a file named 2026
+holds fiscal 2025-26. The records say of themselves that they are not the official record; the official
+version is the Public Accounts of Canada on the Receiver General's site. Each file is a Family (SERVICES,
+WORKS): its own dataset record, cadence, hold, table, review files and line in the log row.
 
-These are payments in a fiscal year. Every other source the site holds is a contract or agreement value, and
-nothing here is ever added to one: the tables below feed two blocks of their own in the static export (a
-profile's "public_accounts", a buyer file's "public_accounts") and nothing else (docs/public-accounts.md).
+The services file holds payments in a fiscal year; the works file holds contracts of $250,000 or more
+($25,000 for cost-plus contracts) with what the department spent on each in the year and to date. Every
+other source the site holds is a contract or agreement value, and nothing here is ever added to one, nor a
+works figure to a services payment: the tables below feed two blocks of their own in the static export (a
+profile's "public_accounts", a buyer file's "public_accounts"), each with its services part and its works
+part side by side, and nothing else (docs/public-accounts.md).
 
 A file of the 2026 layout (LAYOUT_2026: the payee, its city, province and country in columns of their own,
 each in English and French) is read in blocks, one per department and class of service:
@@ -20,18 +25,30 @@ each in English and French) is read in blocks, one per department and class of s
 
 Each block's rows add up to its header; a file with more than BLOCKS_OFF_SHARE of its blocks off is held.
 
-The rules for a named row, in order (docs/public-accounts.md "The rules"):
+A works file of the 2026 layout (REQUIRED_WORKS_2026: the contractor and its place, the project's description
+and place, each in English and French, the amount contracted, the year's spending and the spending to date)
+has no blocks. Its rows (read_works_file) are contracts, a row per contract with no key of its own (the same
+contract can stand twice; the row's number in the file keeps them apart), and one "Total" row per department
+whose contractor reads "Contracts under $250,000 and cost plus contracts under $25,000 (N contractors)": the
+department's line under the threshold, a count and the year's spending. A contractor's trailing "**" (awarded
+through PWGSC, in older files) is dropped. A project's province gets a code only when its column names one
+province or territory (project_province). The portfolio columns of the 2026 works file are swapped (the French
+name in the English column); no column of the portfolio is ever read.
+
+The rules for a named row, in order (docs/public-accounts.md "The rules"); a works row's contractor goes
+through the same ones:
 
 1. Persons (person_rule), before anything is written: the publisher's "Name withheld"; the site's test
-   (matching.is_person_name) on the legal part (matching.filed_name); then three rules of this stage only, so
+   (matching.is_person_name) on the legal part (matching.filed_name); then four rules of this stage only, so
    no other source moves: a courtesy title "(Dr)", "(MD)" or a leading "Dr"; a professional corporation whose
    name without its form reads as a person; one or two capitalized words followed by one or two capitals
-   that are not a legal form ("<Surname> <II>"). Also a name whose hash is in config.PA_WITHHOLD. A withheld
-   row keeps its department, class and amount, so the class totals stay as published; every name and place
-   column is NULL.
+   that are not a legal form ("<Surname> <II>"); a name held "in trust" ("en fiducie", "en fidéicommis")
+   whose other words, the plain connectors aside, hold no business or generic word and no legal form. Also a
+   name whose hash is in config.PA_WITHHOLD. A withheld row keeps its department, class and amount, so the
+   class totals stay as published; every name and place column is NULL.
 2. Federal payees (FederalIndex): the name, without its brackets, inverted ("Health (Department of)") and
    without a place written after it, each keyed by buyers.name_key, equal to the key of a department name of
-   these files or of a buyer title (buyer_names sources ckan, seed and alias). No shortening and no acronym
+   either file or of a buyer title (buyer_names sources ckan, seed and alias). No shortening and no acronym
    rule. Such a row names a buyer and no organization.
 3. The place a 2026 payee still carries in its name (", Ottawa, Ontario") is cut (strip_place) before its
    name is normalized: a trailing comma part that is a province or state, the row's own city or country, or a
@@ -43,18 +60,18 @@ The rules for a named row, in order (docs/public-accounts.md "The rules"):
    A match key (match_key.match_key) naming an organization is listed for review and never linked.
 5. Every night the links are computed again from the stored names (relink), so a merge moves the payments.
 
-Cadence: the dataset record (package_show, one request) is read every night from September to January, when
-every release so far has landed, and weekly otherwise. The newest year's file is downloaded only when the
-record lists a newer year, a changed address or a changed last_modified, or when the rules here changed
-(rules()); the request is conditional on the copy last applied, and a copy with the same SHA-256 is not read
-again. Most nights make one request and read nothing.
+Cadence, for each file apart: its dataset record (package_show, one request) is read every night from
+September to January, when every release so far has landed, and weekly otherwise. The newest year's file is
+downloaded only when the record lists a newer year, a changed address or a changed last_modified, or when the
+rules here changed (rules(family)); the request is conditional on the copy last applied, and a copy with the
+same SHA-256 is not read again. Most nights make one request a file and read nothing.
 
 A download that fails, a record that does not read, a layout that is not known, a file whose named rows fall
 by more than HOLD_FALL from the copy of the same year applied before, or too many class blocks that do not
-add up: the previous rows stand, the stage logs a notice and ends ok, so a yearly source never sets off the
-retries a failed stage does. A held copy is not downloaded again until the record changes or the operator
-writes the copy's SHA-256 (12 characters or more) to config.PA_RELEASE. Only an exception in this module's
-own code fails the stage.
+add up: the previous rows of that file stand, the stage logs a notice and ends ok, so a yearly source never
+sets off the retries a failed stage does, and the other file goes on as if nothing happened. A held copy is
+not downloaded again until the record changes or the operator writes the copy's SHA-256 (12 characters or
+more) to config.PA_RELEASE. Only an exception in this module's own code fails the stage.
 """
 
 from __future__ import annotations
@@ -74,6 +91,7 @@ from urllib.parse import urlsplit
 
 from .. import config, organizations
 from ..db import get_meta, hours_since, log_run, now_iso, set_meta
+from ..exclusions import name_words
 from ..http import AbortRun, FetchError, PoliteClient
 from ..match_key import ABBREVIATIONS, match_key
 from ..normalize import (
@@ -96,14 +114,20 @@ PERSONS_FILE = "public-accounts-persons.txt"
 
 # Raised whenever this module reads a row differently (the person rules, the strip, the row kinds): with the
 # name rules, the shared person test and the hand-kept hashes it makes rules(), and a file applied under other
-# rules is read again on the next night.
-RULES_VERSION = 2
+# rules is read again on the next night. 2: a provincial or territorial government is a named payee
+# (other_governments). 3: rule 6, a name held in trust, so both files are read again once.
+RULES_VERSION = 3
+# Raised whenever the works file alone is read differently (its row kinds, its columns, the project's place):
+# the works file is read again, the services file is not.
+WORKS_RULES_VERSION = 1
 
 # What the export shows (site/src/public_accounts.tsx holds the same figures): the newest fiscal years a
-# profile and a buyer file carry, a profile's rows a year, a buyer file's payees.
+# profile and a buyer file carry, a profile's rows a year (of each file), a buyer file's payees, a buyer
+# file's works contracts (the largest by amount contracted).
 PA_FREE_YEARS = 3
 PA_PROFILE_ROWS = 100
 PA_BUYER_PAYEES = 50
+PA_BUYER_WORKS = 25
 
 HOLD_FALL = 0.30
 BLOCKS_OFF_SHARE = 0.02
@@ -145,6 +169,72 @@ REQUIRED_2026 = (
 
 # A yearly file as the dataset record lists it: idsps-dipss-2026.csv (bilingual), or -2021-eng.csv and -fra.csv.
 FILE_RE = re.compile(r"/idsps-dipss-(\d{4})(?:-(eng|fra))?\.csv$", re.I)
+WORKS_FILE_RE = re.compile(r"/atbt-albw-(\d{4})(?:-(eng|fra))?\.csv$", re.I)
+
+# The works file's 2026 layout: the first seven columns and the contractor's as above, then the project's
+# description and place in both languages and three amounts. A file without one of them is refused.
+DESC_EN, DESC_FR = "Proj-desc_eng", "Proj-desc_fra"
+PCITY_EN, PCITY_FR = "Proj-city_Ville-proj_eng", "Proj-city_Ville-proj_fra"
+PPROV_EN, PPROV_FR = "Proj-province_Province-proj_eng", "Proj-province_Province-proj_fra"
+PCOUNTRY_EN, PCOUNTRY_FR = "Proj-country_Pays-proj_eng", "Proj-country_Pays-proj_fra"
+CONTRACTED, TO_DATE = "Contract-amt_Mnt-contrat", "Xpnd-to-date_Dep-a-jour"
+REQUIRED_WORKS_2026 = (
+    FY_COL, "Min-code", "Min-portfolio_Portefeuille-min_eng", "Min-portfolio_Portefeuille-min_fra", DEPT_NO, DEPT_EN,
+    DEPT_FR, PAYEE_EN, PAYEE_FR, CITY_EN, CITY_FR, PROV_EN, PROV_FR, COUNTRY_EN, COUNTRY_FR, DESC_EN, DESC_FR,
+    PCITY_EN, PCITY_FR, PPROV_EN, PPROV_FR, PCOUNTRY_EN, PCOUNTRY_FR, CONTRACTED, CURRENT, TO_DATE,
+)
+# A department's line under the threshold: "Contracts under $250,000 and cost plus contracts under $25,000 (31
+# contractors)", "(1 contractor)", in French "Contrats inférieurs à 250 000 $ ... (3 entrepreneurs)"; its
+# project reads "Total".
+WORKS_UNDER_RE = re.compile(r"^\s*(?:contracts?\s+under\s+\$?\s*250[\s,]?000|contrats?\s+inf[ée]rieurs?\s+[àa]\s+250[\s,]?000)", re.I)
+WORKS_COUNT_RE = re.compile(r"\((\d[\d,\s]*?)\s*(?:contractors?|entrepreneurs?)?\)\s*$", re.I)
+TOTAL_RE = re.compile(r"^\s*total\s*$", re.I)
+# The marker an older works file puts after a contractor's name for a contract awarded through PWGSC.
+MARKER_RE = re.compile(r"\s*\*+\s*$")
+
+
+@dataclass(frozen=True)
+class Family:
+    """One of the yearly files the stage reads: what keeps it apart from the other everywhere the stage goes."""
+    name: str                  # pa_files.family
+    title: str                 # the review files' heading
+    label: str                 # the notices' prefix
+    party: str                 # what the file calls a named row's other side, in the review file
+    dataset: str               # the open.canada.ca dataset
+    file_re: re.Pattern
+    table: str
+    stats_source: str          # its rows in stats.json "sources" (the Data page's row)
+    default_file: str          # the file the Data page names before a read
+    sample_name: str           # its file in a samples run
+    review_file: str
+    persons_file: str
+    meta_checked: str          # when its dataset record was last read
+    meta_hold: str             # the copy last refused or held
+    meta_review: str           # the review's costly lists, kept until the next copy
+    withheld: str              # PersonDrops.write's word for a name withheld
+    log_prefix: str            # before its part of the log row's detail
+
+
+SERVICES = Family(
+    name=FAMILY, title="professional and special services", label="public accounts", party="payee",
+    dataset=config.PA_SERVICES_DATASET, file_re=FILE_RE, table="pa_payments", stats_source=STATS_SOURCE,
+    default_file=STATS_DEFAULT_FILE, sample_name=SAMPLE_NAME, review_file=REVIEW_FILE, persons_file=PERSONS_FILE,
+    meta_checked=META_CHECKED, meta_hold=META_HOLD, meta_review=META_REVIEW, withheld="payee withheld", log_prefix="",
+)
+WORKS = Family(
+    name="works", title="acquisition of land, buildings and works", label="public accounts, works", party="contractor",
+    dataset=config.PA_WORKS_DATASET, file_re=WORKS_FILE_RE, table="pa_works", stats_source="pa_works",
+    default_file="atbt-albw", sample_name="pa-works.csv", review_file="public-accounts-works.txt",
+    persons_file="public-accounts-works-persons.txt", meta_checked="public_accounts:works:ckan_read_at",
+    meta_hold="public_accounts:works:hold", meta_review="public_accounts:works:review", withheld="contractor withheld",
+    log_prefix="works ",
+)
+# In the order the stage reads them and the log row writes them.
+FAMILIES = (SERVICES, WORKS)
+
+
+def _family(fam: Family | None) -> Family:
+    return fam or SERVICES
 FY_RE = re.compile(r"^\s*(\d{4})\s*[/-]\s*(\d{4})(?:\s*-\s*COMP)?\s*$", re.I)
 # "Service payments under $100,000 (396)", "(28 payees)", "(1 payee)", and two written with no count.
 UNDER_RE = re.compile(r"^\s*service\s+payments?\s+under\s+\$?\s*100,?000\s*(?:\((\d[\d,]*)(?:\s+payees?)?\))?\s*$", re.I)
@@ -170,6 +260,13 @@ COURTESY_START_RE = re.compile(r"^\s*(?:dr|dre|mr|mrs|ms|mme|me)\.?\s", re.I)
 # in three is a firm's (a law firm's letters, a charity's acronym, a company form abroad).
 CAPS_TAIL_RE = re.compile(r"^([^\W\d_][^\W\d_'’-]+)(?:\s+([^\W\d_][^\W\d_'’-]+))?\s+([A-Z]{1,2})$")
 CAPS_LEGAL = frozenset(matching.FOREIGN_LEGAL_FORMS | LEGAL_SUFFIXES | {"na", "llc", "plc", "inc", "co"})
+# Rule 6: a name held in trust, read on its accents folded ("en fidéicommis" too), whole words in any case. The
+# shared test reads "trust" as a business word, so persons' names written before it pass it (four rows of the
+# works file of 2025-26).
+TRUST_RE = re.compile(r"\b(?:in\s+trust|en\s+fiducie|en\s+fideicommis)\b", re.I)
+# Set aside with the trust words before the words left are read ("&" is no word, and "l'" goes with ELISION_RE).
+TRUST_CONNECTORS = frozenset({"and", "et", "for", "pour", "of", "de", "du", "des", "the", "la", "le"})
+ELISION_RE = re.compile(r"(?<![^\W\d_])l['’](?=[^\W\d_])", re.I)
 
 # The trailing comma parts strip_place cuts beside the file's own cities and provinces: the provinces and
 # territories by name and code, and the United States by its postal codes.
@@ -221,6 +318,30 @@ def under_count(name: str) -> tuple[bool, int | None]:
     if not m:
         return False, None
     return True, int(m.group(1).replace(",", "")) if m.group(1) else None
+
+
+def works_under(name: object) -> tuple[bool, int | None]:
+    """(a works file's line under the threshold, the contractors it counts or None when it gives none)."""
+    text = squash(name)
+    if not WORKS_UNDER_RE.match(text):
+        return False, None
+    m = WORKS_COUNT_RE.search(text)
+    return True, int(re.sub(r"\D", "", m.group(1))) if m else None
+
+
+def drop_marker(name: str) -> str:
+    """A contractor's name without the "**" an older works file writes after it for a contract awarded through
+    PWGSC: the marker is no part of the name, and the link reads the name."""
+    return MARKER_RE.sub("", name or "")
+
+
+def project_province(prov: object, country: object = None) -> str | None:
+    """A project's province code, only when its province column names one province or territory of Canada:
+    "Various provinces", "Ontario and Quebec", a city written there, a state or a project abroad give none."""
+    if squash(country) and country_code(country) != "CA":
+        return None
+    code = province_code(squash(prov)) if squash(prov) else None
+    return code if code in PROVINCE_CODES else None
 
 
 # ---------------------------------------------------------------------------
@@ -279,11 +400,13 @@ def read_withheld(path: Path | None = None) -> frozenset[str]:
     return frozenset(line.split("#", 1)[0].strip().lower() for line in text.splitlines() if line.split("#", 1)[0].strip())
 
 
-def rules() -> str:
-    """The rules a file is read under: this module's version, the name rules, the person test and a digest of
-    the hand-kept hashes, so a line added to config.PA_WITHHOLD reads the files again."""
+def rules(fam: Family | None = None) -> str:
+    """The rules a file is read under: this module's version (and the works file's own), the name rules, the
+    person test and a digest of the hand-kept hashes, so a line added to config.PA_WITHHOLD reads the files
+    again. The services file's string has the form slice 1 wrote, with no works part."""
     seeded = hashlib.blake2b(" ".join(sorted(read_withheld())).encode("ascii"), digest_size=4).hexdigest()
-    return f"{RULES_VERSION}.{NORMALIZE_VERSION}.{matching.person_test_stamp()}.{seeded}"
+    own = f".w{WORKS_RULES_VERSION}" if _family(fam).name == WORKS.name else ""
+    return f"{RULES_VERSION}{own}.{NORMALIZE_VERSION}.{matching.person_test_stamp()}.{seeded}"
 
 
 def _practice_head(name: str) -> str | None:
@@ -306,8 +429,22 @@ def _caps_tail(name: str) -> bool:
         matching._key(w) in matching.PUBLIC_BUSINESS_WORDS or matching._key(w) in matching.GENERIC_WORDS for w in words)
 
 
+def _held_in_trust(name: str) -> bool:
+    """Rule 6: "in trust", "en fiducie" or "en fidéicommis", and every word left once those and the plain
+    connectors are set aside is no business or generic word and no legal form, read as _caps_tail reads its
+    words. A firm in trust keeps its name ("<Firm> LLP In Trust", "<Name> Law Office in trust"), and so does a
+    name with a digit (a numbered company is no person)."""
+    text = fold_accents(name)
+    if not TRUST_RE.search(text) or re.search(r"\d", text):
+        return False
+    words = [k for w in name_words(ELISION_RE.sub(" ", TRUST_RE.sub(" ", text)))
+             if (k := matching._key(w)) not in TRUST_CONNECTORS]
+    return bool(words) and not any(
+        w in matching.PUBLIC_BUSINESS_WORDS or w in matching.GENERIC_WORDS or w in CAPS_LEGAL for w in words)
+
+
 def person_rule(en: str, fr: str, places: Places, own: tuple[object, ...], withheld: frozenset[str] = frozenset()) -> str | None:
-    """The rule that withholds a payee as a person ("1" to "5", or "seed"), or None for a payee that is named.
+    """The rule that withholds a payee as a person ("1" to "6", or "seed"), or None for a payee that is named.
 
     Every rule reads the English and the French name, each as written and without the place after it, so a
     spelling of either that reads as a person withholds the row.
@@ -336,6 +473,9 @@ def person_rule(en: str, fr: str, places: Places, own: tuple[object, ...], withh
     # Sécuritaire NB").
     if any(_caps_tail(f) for f in forms[:english]):
         return "5"
+    written = [t for t in (en, fr) if t]
+    if any(_held_in_trust(f) for f in dict.fromkeys([*forms, *written, *(strip_place(t, places, *own) for t in written)])):
+        return "6"
     if withheld and any(withhold_key(norm_name(f)) in withheld for f in forms if norm_name(f)):
         return "seed"
     return None
@@ -475,6 +615,110 @@ def check_blocks(rows: Iterable[tuple[str | None, str, str, str, int | None]]) -
     return len(set(head) | set(total)), off
 
 
+@dataclass
+class WorkRow:
+    """A row of the works file: a contract, a department's line under the threshold (under), or a contract whose
+    contractor is withheld (nothing that names or places it, nor its project, is kept)."""
+    seq: int
+    kind: str
+    dept_no: str | None
+    dept_en: str
+    dept_fr: str | None
+    payee_en: str | None = None       # the contractor as written, its legal part, the marker dropped
+    payee_fr: str | None = None
+    city: str | None = None
+    city_fr: str | None = None
+    prov: str | None = None
+    prov_fr: str | None = None
+    country: str | None = None
+    country_fr: str | None = None
+    desc_en: str | None = None
+    desc_fr: str | None = None
+    proj_city: str | None = None
+    proj_city_fr: str | None = None
+    proj_prov: str | None = None
+    proj_prov_fr: str | None = None
+    proj_country: str | None = None
+    proj_country_fr: str | None = None
+    contracted: int | None = None     # cents
+    spent_year: int | None = None
+    spent_to_date: int | None = None
+    n_contractors: int | None = None  # under rows: the count in brackets
+    why: str | None = None
+
+
+def _pair(en: object, fr: object) -> tuple[str | None, str | None]:
+    """A text and its French, the French kept only when it differs."""
+    a, b = _text(en), _text(fr)
+    first = a or b
+    return first, (b if b != first else None)
+
+
+def read_works_file(path: Path, drops: matching.PersonDrops, *, partial_tail: bool = False,
+                    withheld: frozenset[str] | None = None) -> Parsed:
+    """Every row of one works file, persons already withheld (their names go to drops and nowhere else).
+
+    Raises LayoutError, before a row is kept, for a file without a column of the 2026 works layout, with no row
+    of a fiscal year, or holding rows of two fiscal years. The portfolio columns are required and never read."""
+    parsed = Parsed()
+    stats = LoadStats()
+    with path.open(encoding="utf-8-sig", errors="replace", newline="") as fh:
+        head = next(csv.reader(fh), [])
+    headers = [h.strip() for h in head]
+    parsed.extra = [h for h in headers if h and h not in REQUIRED_WORKS_2026]
+    raw: list[tuple[int, dict[str, str]]] = []
+    years: Counter = Counter()
+    with csv_rows(path, REQUIRED_WORKS_2026, (), path.name, stats, partial_tail=partial_tail) as getters:
+        for get in getters:
+            fy = fiscal_year(get(FY_COL))
+            row = {c: get(c) for c in REQUIRED_WORKS_2026}
+            if fy is None or not squash(row[DEPT_EN]):
+                parsed.skipped += 1
+                continue
+            years[fy] += 1
+            raw.append((stats.rows, row))
+    parsed.read = stats.rows
+    parsed.skipped += stats.skipped
+    if not years:
+        raise LayoutError(f"{path.name} holds no row of a fiscal year; the previous rows are kept")
+    if len(years) > 1:
+        raise LayoutError(f"{path.name} holds rows of {len(years)} fiscal years ({', '.join(map(str, sorted(years)))})")
+    parsed.fy = next(iter(years))
+    places = Places()
+    for _, r in raw:
+        places.add(r[CITY_EN], r[CITY_FR], r[PROV_EN], r[PROV_FR])
+    seeded = read_withheld() if withheld is None else withheld
+    for seq, r in raw:
+        base = dict(seq=seq, dept_no=_text(r[DEPT_NO]), dept_en=squash(r[DEPT_EN]), dept_fr=_text(r[DEPT_FR]),
+                    contracted=cents(r[CONTRACTED]), spent_year=cents(r[CURRENT]), spent_to_date=cents(r[TO_DATE]))
+        en, fr = drop_marker(squash(r[PAYEE_EN])), drop_marker(squash(r[PAYEE_FR]))
+        under_en, n_en = works_under(en)
+        under_fr, n_fr = works_under(fr)
+        if under_en or under_fr or TOTAL_RE.match(squash(r[DESC_EN])) or TOTAL_RE.match(squash(r[DESC_FR])):
+            # The department's contracts under the threshold: a count and the year's spending, no contractor.
+            parsed.rows.append(WorkRow(kind=UNDER, n_contractors=n_en if n_en is not None else n_fr, **base))
+            continue
+        rule = person_rule(en, fr, places, (r[CITY_EN], r[CITY_FR], r[COUNTRY_EN], r[COUNTRY_FR]), seeded) if en or fr else None
+        if rule is not None:
+            if rule != "1":
+                drops.add(en or fr)
+            # Nothing that names or places the person is kept, nor the project (a house bought from them): the
+            # department and the amounts stay.
+            parsed.rows.append(WorkRow(kind=WITHHELD, why=rule, **base))
+            continue
+        payee, payee_fr = _pair(legal_part(en) if en else None, legal_part(fr) if fr else None)
+        city, city_fr = _pair(r[CITY_EN], r[CITY_FR])
+        desc, desc_fr = _pair(r[DESC_EN], r[DESC_FR])
+        proj_city, proj_city_fr = _pair(r[PCITY_EN], r[PCITY_FR])
+        parsed.rows.append(WorkRow(
+            kind=NAMED, payee_en=payee, payee_fr=payee_fr, city=city, city_fr=city_fr,
+            prov=_text(r[PROV_EN]), prov_fr=_text(r[PROV_FR]), country=_text(r[COUNTRY_EN]), country_fr=_text(r[COUNTRY_FR]),
+            desc_en=desc, desc_fr=desc_fr, proj_city=proj_city, proj_city_fr=proj_city_fr,
+            proj_prov=_text(r[PPROV_EN]), proj_prov_fr=_text(r[PPROV_FR]),
+            proj_country=_text(r[PCOUNTRY_EN]), proj_country_fr=_text(r[PCOUNTRY_FR]), **base))
+    return parsed
+
+
 # ---------------------------------------------------------------------------
 # Writing a file's rows
 # ---------------------------------------------------------------------------
@@ -497,6 +741,22 @@ def _values(fy: int, r: Row) -> tuple:
             _prov_code(r.prov, r.country) if r.kind == NAMED else None, r.cents, r.n_payees, r.why)
 
 
+# The works table names the contractor in the columns pa_payments names the payee in, so one relink reads both.
+WORK_COLUMNS = ("fy", "seq", "kind", "dept_no", "dept_en", "dept_fr", "payee_raw", "payee_fr", "city", "city_fr", "prov",
+                "prov_fr", "country", "country_fr", "prov_code", "desc_en", "desc_fr", "proj_city", "proj_city_fr", "proj_prov",
+                "proj_prov_fr", "proj_country", "proj_country_fr", "proj_prov_code", "contracted", "spent_year",
+                "spent_to_date", "n_contractors", "why")
+
+
+def _work_values(fy: int, r: WorkRow) -> tuple:
+    named = r.kind == NAMED
+    return (fy, r.seq, r.kind, r.dept_no, r.dept_en, r.dept_fr, r.payee_en, r.payee_fr, r.city, r.city_fr, r.prov, r.prov_fr,
+            r.country, r.country_fr, _prov_code(r.prov, r.country) if named else None, r.desc_en, r.desc_fr, r.proj_city,
+            r.proj_city_fr, r.proj_prov, r.proj_prov_fr, r.proj_country, r.proj_country_fr,
+            project_province(r.proj_prov, r.proj_country) if named else None, r.contracted, r.spent_year, r.spent_to_date,
+            r.n_contractors, r.why)
+
+
 @dataclass(frozen=True)
 class Resource:
     """A yearly file as the dataset record lists it."""
@@ -512,23 +772,25 @@ class Resource:
 
 
 def apply(conn: sqlite3.Connection, parsed: Parsed, res: Resource, *, digest: str, etag: str | None,
-          last_modified: str | None, stamp: str) -> Linked:
-    """Replace the fiscal year's rows with the file's, record the file, and link every row, in one transaction:
-    a fault anywhere leaves the rows of the night before."""
+          last_modified: str | None, stamp: str, fam: Family | None = None) -> Linked:
+    """Replace the fiscal year's rows of the file's family with the file's, record the file, and link every row,
+    in one transaction: a fault anywhere leaves the rows of the night before."""
+    fam = _family(fam)
     fy = parsed.fy
     assert fy is not None
+    columns, values = (WORK_COLUMNS, _work_values) if fam.name == WORKS.name else (COLUMNS, _values)
     try:
-        conn.execute("DELETE FROM pa_payments WHERE fy = ?", (fy,))
-        conn.executemany(f"INSERT INTO pa_payments ({', '.join(COLUMNS)}) VALUES ({', '.join('?' * len(COLUMNS))})",
-                         [_values(fy, r) for r in parsed.rows])
-        conn.execute("DELETE FROM pa_files WHERE family = ? AND fy = ?", (FAMILY, fy))
+        conn.execute(f"DELETE FROM {fam.table} WHERE fy = ?", (fy,))
+        conn.executemany(f"INSERT INTO {fam.table} ({', '.join(columns)}) VALUES ({', '.join('?' * len(columns))})",
+                         [values(fy, r) for r in parsed.rows])
+        conn.execute("DELETE FROM pa_files WHERE family = ? AND fy = ?", (fam.name, fy))
         conn.execute(
             "INSERT INTO pa_files (family, fy, lang, resource_id, url, layout, etag, last_modified, ckan_modified, sha256, "
             "rules, rows, applied_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (FAMILY, fy, res.lang, res.resource_id, res.url, parsed.layout, etag, last_modified, res.ckan_modified, digest,
-             rules(), parsed.read, stamp))
-        conn.execute("DELETE FROM meta WHERE key = ?", (META_HOLD,))
-        linked = relink(conn, stamp=stamp, commit=False, full=True)
+            (fam.name, fy, res.lang, res.resource_id, res.url, parsed.layout, etag, last_modified, res.ckan_modified, digest,
+             rules(fam), parsed.read, stamp))
+        conn.execute("DELETE FROM meta WHERE key = ?", (fam.meta_hold,))
+        linked = relink(conn, stamp=stamp, commit=False, full=True, fam=fam)
         conn.commit()
     except BaseException:
         conn.rollback()
@@ -694,18 +956,22 @@ def key_candidates(conn: sqlite3.Connection, names: dict[str, str]) -> dict[str,
     return {raw: sorted(by_key[k.key]) for raw, k in keyed.items() if by_key.get(k.key)}
 
 
-def relink(conn: sqlite3.Connection, *, stamp: str, commit: bool = True, full: bool = False) -> Linked:
+_RELINK_COLUMNS = ("fy, seq, kind, dept_no, dept_en, dept_fr, buyer_id, payee_raw, payee_fr, payee_norm, city, city_fr, prov, "
+                   "prov_fr, country, country_fr, prov_code, payee_buyer_id, organization_id, pf, why")
+
+
+def relink(conn: sqlite3.Connection, *, stamp: str, commit: bool = True, full: bool = False, fam: Family | None = None) -> Linked:
     """Every row's buyer, and every named row's kind (named or federal), organization, flag and reason,
-    computed again from the stored names; only the rows that changed are written.
+    computed again from the stored names of one file's table (the services file's unless fam says); only the
+    rows that changed are written.
 
     full also works out the review's two costly lists (the match key candidates, an index range of the
     organizations for each spelling's first word, and the general resolver's federal readings) and keeps them
-    in META_REVIEW; a night without it reads them from there."""
+    in the family's meta_review; a night without it reads them from there."""
+    fam = _family(fam)
+    services = fam.name == SERVICES.name
     out = Linked()
-    rows = conn.execute(
-        "SELECT fy, seq, kind, dept_no, dept_en, dept_fr, buyer_id, cls, payee_raw, payee_fr, payee_norm, city, city_fr, prov, "
-        "prov_fr, country, country_fr, prov_code, cents, payee_buyer_id, organization_id, pf, why FROM pa_payments "
-        "ORDER BY fy, seq").fetchall()
+    rows = conn.execute(f"SELECT {_RELINK_COLUMNS}{', cls, cents' if services else ''} FROM {fam.table} ORDER BY fy, seq").fetchall()
     if not rows:
         return out
     out.fy = max(r["fy"] for r in rows)
@@ -717,6 +983,13 @@ def relink(conn: sqlite3.Connection, *, stamp: str, commit: bool = True, full: b
             if departments[pair] is None:
                 out.departments.append(pair)
     federal = FederalIndex(conn, departments)
+    # The department names of the other file count too, under the buyer each resolved to there.
+    for other in FAMILIES:
+        if other.name != fam.name:
+            for en, fr, bid in conn.execute(f"SELECT DISTINCT dept_en, dept_fr, buyer_id FROM {other.table} WHERE buyer_id IS NOT NULL"):
+                for name in (en, fr):
+                    if name:
+                        federal.add(name, bid)
     places: dict[int, Places] = defaultdict(Places)
     for r in rows:
         places[r["fy"]].add(r["city"], r["city_fr"], r["prov"], r["prov_fr"])
@@ -764,7 +1037,7 @@ def relink(conn: sqlite3.Connection, *, stamp: str, commit: bool = True, full: b
         if new["pf"]:
             out.flagged.append((r["fy"], r["payee_raw"], r["city"] or "", prov or r["country"] or "", oid))
     try:
-        kept = json.loads(get_meta(conn, META_REVIEW) or "null")
+        kept = json.loads(get_meta(conn, fam.meta_review) or "null")
     except ValueError:
         kept = None
     if full or not isinstance(kept, dict):
@@ -797,9 +1070,10 @@ def relink(conn: sqlite3.Connection, *, stamp: str, commit: bool = True, full: b
             c[f"withheld_{r['why']}"] += 1
         if new["kind"] == FEDERAL:
             out.federal.append((r["fy"], r["payee_raw"], new["payee_buyer_id"] or ""))
-    conn.executemany("UPDATE pa_payments SET buyer_id = ?, kind = ?, payee_norm = ?, payee_buyer_id = ?, organization_id = ?, "
+    conn.executemany(f"UPDATE {fam.table} SET buyer_id = ?, kind = ?, payee_norm = ?, payee_buyer_id = ?, organization_id = ?, "
                      "pf = ?, why = ? WHERE fy = ? AND seq = ?", changed)
-    for fy in sorted({r["fy"] for r in rows}):
+    # Class blocks are the services file's alone.
+    for fy in sorted({r["fy"] for r in rows}) if services else ():
         _, off = check_blocks((r["dept_no"], r["dept_en"], r["cls"], r["kind"], r["cents"]) for r in rows if r["fy"] == fy)
         out.blocks_off += [(fy, *b) for b in off]
     if full or not isinstance(kept, dict):
@@ -813,7 +1087,7 @@ def relink(conn: sqlite3.Connection, *, stamp: str, commit: bool = True, full: b
                 hit = buyers._match(conn, r["payee_raw"], r["payee_fr"] or "")
                 if hit:
                     out.loose.append((r["payee_raw"], hit))
-        set_meta(conn, META_REVIEW, json.dumps({"keys": candidates, "loose": out.loose}, ensure_ascii=False, sort_keys=True))
+        set_meta(conn, fam.meta_review, json.dumps({"keys": candidates, "loose": out.loose}, ensure_ascii=False, sort_keys=True))
     else:
         out.loose = [tuple(x) for x in kept.get("loose") or [] if isinstance(x, list) and len(x) == 2]
     if commit:
@@ -826,8 +1100,9 @@ def relink(conn: sqlite3.Connection, *, stamp: str, commit: bool = True, full: b
 # The stage
 # ---------------------------------------------------------------------------
 
-def newest_resource(record: object) -> Resource | None:
-    """The newest fiscal year's file the dataset record lists: the bilingual one when the year has it."""
+def newest_resource(record: object, fam: Family | None = None) -> Resource | None:
+    """The newest fiscal year's file of the family the dataset record lists: the bilingual one when the year has it."""
+    fam = _family(fam)
     result = record.get("result") if isinstance(record, dict) else None
     if not isinstance(record, dict) or not record.get("success") or not isinstance(result, dict):
         raise ValueError("the dataset record did not answer with a result")
@@ -836,7 +1111,7 @@ def newest_resource(record: object) -> Resource | None:
         if not isinstance(res, dict):
             continue
         url = str(res.get("url") or "")
-        m = FILE_RE.search(url)
+        m = fam.file_re.search(url)
         if not m:
             continue
         year, lang = int(m.group(1)), (m.group(2) or "").lower()
@@ -866,23 +1141,26 @@ class Result:
     written: int = 0
     notices: list[str] = field(default_factory=list)
     linked: Linked | None = None
+    # run() hands back the services file's result with every family's result here, by name.
+    families: dict[str, Result] = field(default_factory=dict)
 
 
-def _file_row(conn: sqlite3.Connection, fy: int) -> sqlite3.Row | None:
-    return conn.execute("SELECT * FROM pa_files WHERE family = ? AND fy = ?", (FAMILY, fy)).fetchone()
+def _file_row(conn: sqlite3.Connection, fy: int, fam: Family | None = None) -> sqlite3.Row | None:
+    return conn.execute("SELECT * FROM pa_files WHERE family = ? AND fy = ?", (_family(fam).name, fy)).fetchone()
 
 
 def _hold(conn: sqlite3.Connection, why: str, res: Resource, digest: str | None, etag: str | None,
-          last_modified: str | None, fy: int | None) -> None:
-    set_meta(conn, META_HOLD, json.dumps({"why": why, "fy": fy, "url": res.url, "ckan_modified": res.ckan_modified,
-                                          "sha256": digest, "etag": etag, "last_modified": last_modified, "rules": rules()},
-                                         sort_keys=True))
+          last_modified: str | None, fy: int | None, fam: Family | None = None) -> None:
+    fam = _family(fam)
+    set_meta(conn, fam.meta_hold, json.dumps({"why": why, "fy": fy, "url": res.url, "ckan_modified": res.ckan_modified,
+                                              "sha256": digest, "etag": etag, "last_modified": last_modified,
+                                              "rules": rules(fam)}, sort_keys=True))
     conn.commit()
 
 
-def held_copy(conn: sqlite3.Connection) -> dict | None:
+def held_copy(conn: sqlite3.Connection, fam: Family | None = None) -> dict | None:
     try:
-        value = json.loads(get_meta(conn, META_HOLD) or "null")
+        value = json.loads(get_meta(conn, _family(fam).meta_hold) or "null")
     except ValueError:
         return None
     return value if isinstance(value, dict) else None
@@ -890,26 +1168,28 @@ def held_copy(conn: sqlite3.Connection) -> dict | None:
 
 def _read_copy(conn: sqlite3.Connection, path: Path, res: Resource, result: Result, drops: matching.PersonDrops, *,
                digest: str, etag: str | None, last_modified: str | None, stamp: str, partial_tail: bool = False,
-               release_path: Path | None = None) -> None:
+               release_path: Path | None = None, fam: Family | None = None) -> None:
     """Read one copy and apply it, unless its layout is not known or it is held."""
+    fam = _family(fam)
+    reader = read_works_file if fam.name == WORKS.name else read_file
     try:
-        parsed = read_file(path, drops, partial_tail=partial_tail)
+        parsed = reader(path, drops, partial_tail=partial_tail)
     except LayoutError as exc:
-        _hold(conn, f"layout: {exc}"[:400], res, digest, etag, last_modified, None)
+        _hold(conn, f"layout: {exc}"[:400], res, digest, etag, last_modified, None, fam)
         result.state = "refused"
-        result.notices.append(f"public accounts: {res.file} was not read ({exc}); the rows of the copy applied before stand")
+        result.notices.append(f"{fam.label}: {res.file} was not read ({exc}); the rows of the copy applied before stand")
         return
     result.read, result.fy = parsed.read, parsed.fy
     if parsed.extra:
-        result.notices.append(f"public accounts: {res.file} has columns the stage does not read: {', '.join(parsed.extra[:10])}")
+        result.notices.append(f"{fam.label}: {res.file} has columns the stage does not read: {', '.join(parsed.extra[:10])}")
     if parsed.skipped:
-        result.notices.append(f"public accounts: {parsed.skipped} rows of {res.file} without a fiscal year, a department "
-                              "or a class, or cut short, were skipped")
+        what = "a fiscal year or a department" if fam.name == WORKS.name else "a fiscal year, a department or a class"
+        result.notices.append(f"{fam.label}: {parsed.skipped} rows of {res.file} without {what}, or cut short, were skipped")
     if res.fy != parsed.fy and res.resource_id != "sample":
-        result.notices.append(f"public accounts: {res.file} holds fiscal {parsed.fy}, not {res.fy} as its name says")
+        result.notices.append(f"{fam.label}: {res.file} holds fiscal {parsed.fy}, not {res.fy} as its name says")
     free = released(release_path)
     let_through = bool(free and digest.startswith(free))
-    previous = conn.execute("SELECT COUNT(*) FROM pa_payments WHERE fy = ? AND kind IN (?, ?, ?)",
+    previous = conn.execute(f"SELECT COUNT(*) FROM {fam.table} WHERE fy = ? AND kind IN (?, ?, ?)",
                             (parsed.fy, NAMED, WITHHELD, FEDERAL)).fetchone()[0]
     reasons = []
     if previous and parsed.named < previous * (1 - HOLD_FALL):
@@ -918,22 +1198,22 @@ def _read_copy(conn: sqlite3.Connection, path: Path, res: Resource, result: Resu
     if parsed.blocks and len(parsed.blocks_off) > parsed.blocks * BLOCKS_OFF_SHARE:
         reasons.append(f"{len(parsed.blocks_off)} of {parsed.blocks} class blocks do not add up to their total")
     if reasons and not let_through:
-        _hold(conn, "; ".join(reasons), res, digest, etag, last_modified, parsed.fy)
+        _hold(conn, "; ".join(reasons), res, digest, etag, last_modified, parsed.fy, fam)
         result.state = "held"
-        result.notices.append(f"public accounts: {res.file} (sha256 {digest[:12]}) is held: {'; '.join(reasons)}. The rows "
+        result.notices.append(f"{fam.label}: {res.file} (sha256 {digest[:12]}) is held: {'; '.join(reasons)}. The rows "
                               f"applied before stand. Release it by writing {digest[:12]} to "
                               f"awardwatch_pipeline/data/{config.PA_RELEASE.name}")
         return
     if parsed.blocks_off:
-        result.notices.append(f"public accounts: {len(parsed.blocks_off)} of {parsed.blocks} class blocks of {res.file} do not "
+        result.notices.append(f"{fam.label}: {len(parsed.blocks_off)} of {parsed.blocks} class blocks of {res.file} do not "
                               "add up to their total; they are listed in the review file")
-    result.linked = apply(conn, parsed, res, digest=digest, etag=etag, last_modified=last_modified, stamp=stamp)
+    result.linked = apply(conn, parsed, res, digest=digest, etag=etag, last_modified=last_modified, stamp=stamp, fam=fam)
     result.state, result.written = "read", len(parsed.rows)
 
 
-def ckan_due(conn: sqlite3.Connection, stamp: str) -> bool:
-    """The dataset record is read nightly in the release season (September to January) and weekly otherwise."""
-    age = hours_since(conn, META_CHECKED, now=stamp)
+def ckan_due(conn: sqlite3.Connection, stamp: str, fam: Family | None = None) -> bool:
+    """A family's dataset record is read nightly in the release season (September to January) and weekly otherwise."""
+    age = hours_since(conn, _family(fam).meta_checked, now=stamp)
     if age is None:
         return True
     month = int(stamp[5:7])
@@ -941,8 +1221,9 @@ def ckan_due(conn: sqlite3.Connection, stamp: str) -> bool:
 
 
 def _fetch(conn: sqlite3.Connection, client: PoliteClient, res: Resource, result: Result, drops: matching.PersonDrops, *,
-           stamp: str, work_dir: Path | None, conditional: sqlite3.Row | None) -> None:
+           stamp: str, work_dir: Path | None, conditional: sqlite3.Row | None, fam: Family | None = None) -> None:
     """Download one file (conditional on the copy applied when there is one) and read it when it changed."""
+    fam = _family(fam)
     path = (work_dir or config.WORK_DIR) / f"pa-{res.file}"
     try:
         got = client.download_if_changed(res.url, path, etag=conditional["etag"] if conditional else None,
@@ -951,108 +1232,114 @@ def _fetch(conn: sqlite3.Connection, client: PoliteClient, res: Resource, result
         if got is None:
             # Not modified: the record changed, the file did not. Nothing is read again.
             conn.execute("UPDATE pa_files SET ckan_modified = ?, resource_id = ? WHERE family = ? AND fy = ?",
-                         (res.ckan_modified, res.resource_id, FAMILY, res.fy))
+                         (res.ckan_modified, res.resource_id, fam.name, res.fy))
             conn.commit()
             result.state = "unchanged"
             return
         digest = sha256(path)
-        same = conditional is not None and conditional["sha256"] == digest and conditional["rules"] == rules()
+        same = conditional is not None and conditional["sha256"] == digest and conditional["rules"] == rules(fam)
         if same:
             conn.execute("UPDATE pa_files SET ckan_modified = ?, resource_id = ?, etag = ?, last_modified = ? "
                          "WHERE family = ? AND fy = ?", (res.ckan_modified, res.resource_id, got.etag, got.last_modified,
-                                                         FAMILY, res.fy))
+                                                         fam.name, res.fy))
             conn.commit()
             result.state = "unchanged"
             return
-        _read_copy(conn, path, res, result, drops, digest=digest, etag=got.etag, last_modified=got.last_modified, stamp=stamp)
+        _read_copy(conn, path, res, result, drops, digest=digest, etag=got.etag, last_modified=got.last_modified, stamp=stamp,
+                   fam=fam)
     finally:
         path.unlink(missing_ok=True)
 
 
 def refresh(conn: sqlite3.Connection, client: PoliteClient | None, result: Result, drops: matching.PersonDrops, *,
-            stamp: str, samples: Path | None = None, work_dir: Path | None = None) -> None:
-    """Read the newest year's file when it is new, changed or read under other rules; never raises for the
+            stamp: str, samples: Path | None = None, work_dir: Path | None = None, fam: Family | None = None) -> None:
+    """Read the family's newest year's file when it is new, changed or read under other rules; never raises for the
     network, the record or the file (those are notices)."""
+    fam = _family(fam)
     if samples is not None:
-        path = samples / SAMPLE_NAME
+        path = samples / fam.sample_name
         if not path.exists():
             result.state = "no sample"
-            result.notices.append(f"no {SAMPLE_NAME} in the samples folder (samples run)")
+            result.notices.append(f"no {fam.sample_name} in the samples folder (samples run)")
             return
         digest = sha256(path)
         applied = conn.execute("SELECT sha256, rules FROM pa_files WHERE family = ? AND url = ?",
-                               (FAMILY, f"samples/{SAMPLE_NAME}")).fetchone()
-        if applied and applied["sha256"] == digest and applied["rules"] == rules():
+                               (fam.name, f"samples/{fam.sample_name}")).fetchone()
+        if applied and applied["sha256"] == digest and applied["rules"] == rules(fam):
             result.state = "unchanged"
             return
-        res = Resource(fy=0, url=f"samples/{SAMPLE_NAME}", resource_id="sample", ckan_modified=None)
-        _read_copy(conn, path, res, result, drops, digest=digest, etag=None, last_modified=None, stamp=stamp, partial_tail=True)
+        res = Resource(fy=0, url=f"samples/{fam.sample_name}", resource_id="sample", ckan_modified=None)
+        _read_copy(conn, path, res, result, drops, digest=digest, etag=None, last_modified=None, stamp=stamp, partial_tail=True,
+                   fam=fam)
         return
     assert client is not None
     # A year applied under other rules is read again tonight from the address it was read from.
-    current = rules()
-    stale = conn.execute("SELECT * FROM pa_files WHERE family = ? AND rules IS NOT ? ORDER BY fy DESC", (FAMILY, current)).fetchall()
+    current = rules(fam)
+    stale = conn.execute("SELECT * FROM pa_files WHERE family = ? AND rules IS NOT ? ORDER BY fy DESC", (fam.name, current)).fetchall()
     for row in stale:
         res = Resource(fy=row["fy"], url=row["url"], resource_id=row["resource_id"], ckan_modified=row["ckan_modified"],
                        lang=row["lang"])
         try:
-            _fetch(conn, client, res, result, drops, stamp=stamp, work_dir=work_dir, conditional=None)
+            _fetch(conn, client, res, result, drops, stamp=stamp, work_dir=work_dir, conditional=None, fam=fam)
         except (FetchError, AbortRun, OSError) as exc:
             conn.rollback()
-            result.notices.append(f"public accounts: {res.file} could not be read again under new rules ({_short(exc)}); "
+            result.notices.append(f"{fam.label}: {res.file} could not be read again under new rules ({_short(exc)}); "
                                   "its rows stand as they were read")
-    if not ckan_due(conn, stamp):
+    if not ckan_due(conn, stamp, fam):
         result.state = result.state or "not due"
         return
     try:
-        record = client.get_json(config.CKAN_PACKAGE_SHOW.format(dataset=config.PA_SERVICES_DATASET), timeout=60)
-        res = newest_resource(record)
+        record = client.get_json(config.CKAN_PACKAGE_SHOW.format(dataset=fam.dataset), timeout=60)
+        res = newest_resource(record, fam)
     except (FetchError, AbortRun, OSError, ValueError) as exc:
         conn.rollback()
         result.state = result.state or "not read"
-        result.notices.append(f"public accounts: the dataset record could not be read ({_short(exc)}); the rows stand")
+        result.notices.append(f"{fam.label}: the dataset record could not be read ({_short(exc)}); the rows stand")
         return
-    set_meta(conn, META_CHECKED, stamp)
+    set_meta(conn, fam.meta_checked, stamp)
     conn.commit()
     if res is None:
         result.state = result.state or "not read"
-        result.notices.append("public accounts: the dataset record lists no yearly file; the rows stand")
+        result.notices.append(f"{fam.label}: the dataset record lists no yearly file; the rows stand")
         return
-    applied = _file_row(conn, res.fy)
+    applied = _file_row(conn, res.fy, fam)
     if applied and applied["url"] == res.url and applied["ckan_modified"] == res.ckan_modified and applied["rules"] == current:
         result.state = result.state or "unchanged"
         return
-    hold = held_copy(conn)
+    hold = held_copy(conn, fam)
     if hold and hold.get("url") == res.url and hold.get("ckan_modified") == res.ckan_modified and hold.get("rules") == current:
         free = released()
         if str(hold.get("why", "")).startswith("layout") or not (free and str(hold.get("sha256") or "").startswith(free)):
             result.state = "refused" if str(hold.get("why", "")).startswith("layout") else "held"
-            result.notices.append(f"public accounts: {res.file} is still {result.state} ({hold.get('why')}); the rows stand")
+            result.notices.append(f"{fam.label}: {res.file} is still {result.state} ({hold.get('why')}); the rows stand")
             return
     conditional = applied if applied and applied["url"] == res.url and applied["rules"] == current else None
     try:
-        _fetch(conn, client, res, result, drops, stamp=stamp, work_dir=work_dir, conditional=conditional)
+        _fetch(conn, client, res, result, drops, stamp=stamp, work_dir=work_dir, conditional=conditional, fam=fam)
     except (FetchError, AbortRun, OSError) as exc:
         conn.rollback()
         result.state = "not read"
-        result.notices.append(f"public accounts: {res.file} could not be downloaded ({_short(exc)}); the rows stand")
+        result.notices.append(f"{fam.label}: {res.file} could not be downloaded ({_short(exc)}); the rows stand")
 
 
 def _short(exc: BaseException) -> str:
     return f"{type(exc).__name__}: {exc}"[:200]
 
 
-def detail(conn: sqlite3.Connection, result: Result) -> str:
-    """The run status line: public, counts only, no name."""
+def detail(conn: sqlite3.Connection, result: Result, fam: Family | None = None) -> str:
+    """A family's part of the run status line: public, counts only, no name. The works file's adds its lines under
+    the threshold."""
+    fam = _family(fam)
     linked = result.linked or Linked()
     fy = linked.fy
     c = linked.counts.get(fy, Counter()) if fy is not None else Counter()
-    files = conn.execute("SELECT COUNT(*) FROM pa_files WHERE family = ?", (FAMILY,)).fetchone()[0]
-    hold = held_copy(conn)
+    files = conn.execute("SELECT COUNT(*) FROM pa_files WHERE family = ?", (fam.name,)).fetchone()[0]
+    hold = held_copy(conn, fam)
     label = f"{fy}-{(fy + 1) % 100:02d}" if fy is not None else "none"
     held = "none" if not hold else str(hold.get("fy") or "layout")
+    under = f" under={c[UNDER]}" if fam.name == WORKS.name else ""
     return (f"{result.state or 'unchanged'} fy={label} files={files} rows={c['rows']} named={c[NAMED]} linked={c['linked']} "
-            f"unlinked={c['unlinked']} withheld={withheld_rows(c)} federal={c[FEDERAL]} flagged={c['flagged']} held={held}")
+            f"unlinked={c['unlinked']} withheld={withheld_rows(c)} federal={c[FEDERAL]} flagged={c['flagged']}{under} held={held}")
 
 
 def withheld_rows(counts: Counter) -> int:
@@ -1060,87 +1347,102 @@ def withheld_rows(counts: Counter) -> int:
 
 
 def run(conn: sqlite3.Connection, client: PoliteClient | None, *, now: str | None = None, samples: Path | None = None,
-        work_dir: Path | None = None, review_dir: Path | None = None) -> Result:
-    """The public_accounts stage: the newest year's file when it changed, then the nightly relink, the review
-    files and one log row. A fault of the network or the file is a notice; the stage ends ok."""
+        work_dir: Path | None = None, review_dir: Path | None = None, families: tuple[Family, ...] = FAMILIES) -> Result:
+    """The public_accounts stage: for each family in turn, its newest year's file when it changed, then the nightly
+    relink and its review files; then one log row for the stage, each family's line in it. A fault of the network
+    or of a file is a notice of that family and the other goes on; the stage ends ok. Returns the first family's
+    result, every family's in its families."""
     stamp = now or now_iso()
-    result = Result()
-    drops = matching.PersonDrops()
     buyers.take_notices(conn)
     buyers.take_rejects(conn)
     conn.commit()
-    refresh(conn, client, result, drops, stamp=stamp, samples=samples, work_dir=work_dir)
-    if result.linked is None:
-        # Every night, whatever the record said: tonight's merges and buyer changes move the payments.
-        try:
-            result.linked = relink(conn, stamp=stamp)
-        except BaseException:
-            conn.rollback()
-            raise
     folder = review_dir or config.OUT_DIR / "review"
-    if drops.rows:
-        shown = drops.write(folder / PERSONS_FILE, what="Public Accounts, professional and special services", stamp=stamp,
-                            withheld="payee withheld")
-        if shown:
-            result.notices.append(shown)
-    reviewed = write_review(conn, result.linked, folder / REVIEW_FILE, stamp=stamp)
-    if reviewed and result.state == "read":
-        result.notices.append(f"public accounts: a new file was applied; the review is in {reviewed}")
+    results: dict[str, Result] = {}
+    for fam in families:
+        result = results[fam.name] = Result()
+        drops = matching.PersonDrops()
+        refresh(conn, client, result, drops, stamp=stamp, samples=samples, work_dir=work_dir, fam=fam)
+        if result.linked is None:
+            # Every night, whatever the record said: tonight's merges and buyer changes move the rows.
+            try:
+                result.linked = relink(conn, stamp=stamp, fam=fam)
+            except BaseException:
+                conn.rollback()
+                raise
+        if drops.rows:
+            shown = drops.write(folder / fam.persons_file, what=f"Public Accounts, {fam.title}", stamp=stamp, withheld=fam.withheld)
+            if shown:
+                result.notices.append(shown)
+        reviewed = write_review(conn, result.linked, folder / fam.review_file, stamp=stamp, fam=fam)
+        if reviewed and result.state == "read":
+            result.notices.append(f"{fam.label}: a new file was applied; the review is in {reviewed}")
+    notices = [n for r in results.values() for n in r.notices]
     made = buyers.take_notices(conn)
     if made:
-        result.notices.append(f"{len(made)} buyers not in CKAN or the seed: {'; '.join(made[:15])}")
+        notices.append(f"{len(made)} buyers not in CKAN or the seed: {'; '.join(made[:15])}")
     buyers.take_rejects(conn)
-    line = detail(conn, result)
+    line = " | ".join(fam.log_prefix + detail(conn, results[fam.name], fam) for fam in families)
     log.info("public_accounts: %s", line)
-    newest = result.linked.counts.get(result.linked.fy, Counter()) if result.linked.fy is not None else Counter()
-    log_run(conn, SOURCE, detail=line[:900], rows_in=result.read, rows_new=result.written, excluded=withheld_rows(newest),
-            notice=" | ".join(result.notices) or None)
-    return result
+
+    def newest(r: Result) -> Counter:
+        return r.linked.counts.get(r.linked.fy, Counter()) if r.linked and r.linked.fy is not None else Counter()
+
+    log_run(conn, SOURCE, detail=line[:900], rows_in=sum(r.read for r in results.values()),
+            rows_new=sum(r.written for r in results.values()), excluded=sum(withheld_rows(newest(r)) for r in results.values()),
+            notice=" | ".join(notices) or None)
+    first = results[families[0].name]
+    first.families = results
+    return first
 
 
 # ---------------------------------------------------------------------------
-# The review file (private: no step exports, logs or uploads it)
+# The review files (private: no step exports, logs or uploads them)
 # ---------------------------------------------------------------------------
 
-def write_review(conn: sqlite3.Connection, linked: Linked, path: Path, *, stamp: str) -> str | None:
-    """The operator's yearly read: the files, the counts, and each list the rules leave for a person to look at.
-    It names businesses and departments, never a person: a withheld row holds no name to list."""
-    files = conn.execute("SELECT * FROM pa_files WHERE family = ? ORDER BY fy DESC", (FAMILY,)).fetchall()
+def write_review(conn: sqlite3.Connection, linked: Linked, path: Path, *, stamp: str, fam: Family | None = None) -> str | None:
+    """The operator's yearly read of one family's file: the files, the counts, and each list the rules leave for a
+    person to look at. It names businesses and departments, never a person: a withheld row holds no name to list."""
+    fam = _family(fam)
+    services = fam.name == SERVICES.name
+    files = conn.execute("SELECT * FROM pa_files WHERE family = ? ORDER BY fy DESC", (fam.name,)).fetchall()
     if not files and not linked.counts:
         path.unlink(missing_ok=True)
         return None
     path.parent.mkdir(parents=True, exist_ok=True)
     cap = REVIEW_LIST_MAX
+    who = fam.party
 
     def section(title: str, head: str, items: list[tuple]) -> list[str]:
         lines = ["", f"## {title}: {len(items)}" + (f", the first {cap} listed" if len(items) > cap else ""), f"# {head}"]
         return lines + ["\t".join("" if x is None else str(x) for x in item) for item in items[:cap]]
 
-    out = [f"# Public Accounts of Canada, professional and special services: the run of {stamp}, rules {rules()}. "
+    out = [f"# Public Accounts of Canada, {fam.title}: the run of {stamp}, rules {rules(fam)}. "
            "For the operator: no step publishes this file, and it names no person.",
            "", "## Files applied", "# fy\tfile\tlayout\tsha256\trows\tapplied_at\tckan_modified"]
     out += [f"{f['fy']}\t{f['url'].rsplit('/', 1)[-1]}\t{f['layout']}\t{(f['sha256'] or '')[:12]}\t{f['rows']}\t{f['applied_at']}\t"
             f"{f['ckan_modified'] or ''}" for f in files]
-    hold = held_copy(conn)
+    hold = held_copy(conn, fam)
     if hold:
         out += ["", f"## Held or refused: {hold.get('why')} (sha256 {str(hold.get('sha256') or '')[:12]}, {hold.get('url')})"]
-    keys = ("rows", HEADER, UNDER, NAMED, "linked", "unlinked", "unlinked_common", "unlinked_key", "unlinked_none", "flagged",
-            FEDERAL, "withheld_1", "withheld_2", "withheld_3", "withheld_4", "withheld_5", "withheld_seed")
+    keys = ("rows", *((HEADER,) if services else ()), UNDER, NAMED, "linked", "unlinked", "unlinked_common", "unlinked_key",
+            "unlinked_none", "flagged", FEDERAL, "withheld_1", "withheld_2", "withheld_3", "withheld_4", "withheld_5", "withheld_6",
+            "withheld_seed")
     out += ["", "## Counts by fiscal year (withheld_<n>: by the person rule that withheld the row)", "# fy\t" + "\t".join(keys)]
     out += [f"{fy}\t" + "\t".join(str(linked.counts[fy].get(k, 0)) for k in keys) for fy in sorted(linked.counts, reverse=True)]
     out += ["", f"## Kept names of two or three words without a legal form and with no profile: {linked.short_kept} "
             "(counted, not listed)"]
-    out += section("Federal payees by the strict test", "fy\tpayee as written\tbuyer id (blank: two or more)", linked.federal)
+    out += section(f"Federal {who}s by the strict test", f"fy\t{who} as written\tbuyer id (blank: two or more)", linked.federal)
     out += section("The general resolver's further federal readings, not taken (an alias seed row makes one federal)",
-                   "payee as written\tbuyer id", linked.loose)
+                   f"{who} as written\tbuyer id", linked.loose)
     out += section("Links whose province is not among the organization's addresses (kept, flagged)",
-                   "fy\tpayee as written\tcity\tprovince or country\torganization", linked.flagged)
-    out += section("Common names left unlinked (the payee's province is not the organization's)",
-                   "fy\tpayee as written\tprovince or country\torganization", linked.common)
-    out += section("Match key candidates, never linked", "payee\torganizations\tids",
+                   f"fy\t{who} as written\tcity\tprovince or country\torganization", linked.flagged)
+    out += section(f"Common names left unlinked (the {who}'s province is not the organization's)",
+                   f"fy\t{who} as written\tprovince or country\torganization", linked.common)
+    out += section("Match key candidates, never linked", f"{who}\torganizations\tids",
                    [(raw, n, ", ".join(ids[:5])) for raw, n, ids in linked.keys])
     out += section("Departments that resolved to no buyer", "department\tFrench", linked.departments)
-    out += section("Class blocks that do not add up", "fy\tdepartment\tclass\theader cents\tsum cents", linked.blocks_off)
+    if services:
+        out += section("Class blocks that do not add up", "fy\tdepartment\tclass\theader cents\tsum cents", linked.blocks_off)
     path.write_text("\n".join(out) + "\n", encoding="utf-8", newline="\n")
     try:
         return path.relative_to(config.REPO_ROOT).as_posix()
@@ -1152,19 +1454,21 @@ def write_review(conn: sqlite3.Connection, linked: Linked, path: Path, *, stamp:
 # What the export writes (export_static calls these, each guarded)
 # ---------------------------------------------------------------------------
 
-def loaded_years(conn: sqlite3.Connection) -> list[int]:
-    """The fiscal years of the services files applied, newest first."""
-    return [r[0] for r in conn.execute("SELECT DISTINCT fy FROM pa_files WHERE family = ? ORDER BY fy DESC", (FAMILY,))]
+def loaded_years(conn: sqlite3.Connection, fam: Family | None = None) -> list[int]:
+    """The fiscal years of the family's files applied (the services file's unless fam says), newest first."""
+    return [r[0] for r in conn.execute("SELECT DISTINCT fy FROM pa_files WHERE family = ? ORDER BY fy DESC", (_family(fam).name,))]
 
 
-def _place(r: sqlite3.Row) -> str | list[str] | None:
-    """A row's place as the site reads it: a province's code, a country (or a state abroad) in both languages, or None."""
-    if r["prov_code"] in PROVINCE_CODES and not r["country"]:
-        return r["prov_code"]
-    if r["country"]:
-        return [r["country"], r["country_fr"] or r["country"]]
-    if r["prov"]:
-        return [r["prov"], r["prov_fr"] or r["prov"]]
+def _place(r: sqlite3.Row, prefix: str = "") -> str | list[str] | None:
+    """A row's place as the site reads it: a province's code, a country (or a state abroad) in both languages, or None.
+    prefix "proj_" reads a works row's project place, else the payee's or the contractor's."""
+    code, country, prov = r[f"{prefix}prov_code"], r[f"{prefix}country"], r[f"{prefix}prov"]
+    if code in PROVINCE_CODES and not country:
+        return code
+    if country:
+        return [country, r[f"{prefix}country_fr"] or country]
+    if prov:
+        return [prov, r[f"{prefix}prov_fr"] or prov]
     return None
 
 
@@ -1177,95 +1481,159 @@ def _dept_key(r: sqlite3.Row, listed: Collection) -> str:
 
 _ROW_SQL = ("SELECT fy, seq, kind, dept_no, dept_en, dept_fr, buyer_id, cls, cls_en, cls_fr, payee_raw, payee_fr, city, city_fr, "
             "prov, prov_fr, country, country_fr, prov_code, cents, n_payees, organization_id, pf FROM pa_payments")
+_WORK_SQL = ("SELECT fy, seq, kind, dept_no, dept_en, dept_fr, buyer_id, payee_raw, payee_fr, city, city_fr, prov, prov_fr, country, "
+             "country_fr, prov_code, desc_en, desc_fr, proj_city, proj_city_fr, proj_prov, proj_prov_fr, proj_country, "
+             "proj_country_fr, proj_prov_code, contracted, spent_year, spent_to_date, n_contractors, organization_id, pf FROM pa_works")
+
+
+def _shown(conn: sqlite3.Connection, sql: str, order: str, years: list[int]) -> dict:
+    """A file's named rows linked to an organization in the given years, by organization."""
+    if not years:
+        return {}
+    marks = ",".join("?" * len(years))
+    rows = conn.execute(f"{sql} WHERE kind = ? AND organization_id IS NOT NULL AND fy IN ({marks}) ORDER BY organization_id, fy DESC, "
+                        f"{order}, seq", (NAMED, *years)).fetchall()
+    return _by(rows, "organization_id")
 
 
 def profile_blocks(conn: sqlite3.Connection, *, orgs: Collection, listed: Collection,
-                   buyer_names: dict[str, tuple[str | None, str | None]]) -> dict[str, dict]:
+                   buyer_names: dict[str, tuple[str | None, str | None]], works: bool = True) -> dict[str, dict]:
     """The "public_accounts" block of each organization with a linked row in the newest PA_FREE_YEARS fiscal
-    years held: per year its rows (largest first, PA_PROFILE_ROWS at most), how many there are, their sum and
-    the departments they come from; the names of those departments and classes; the years held. Payments of
-    one file and one year only: no figure here is ever added to a contract value."""
+    years of either file held. Services, per year: its rows (largest first, PA_PROFILE_ROWS at most), how many
+    there are, their sum and the departments they come from. Works, per year and only when there are any: its
+    contracts (the largest amount contracted first, PA_PROFILE_ROWS at most) and how many there are, with no sum
+    of any kind. Then the names of those departments and classes and the years held. Payments of one file and one
+    year only: no figure here is ever added to a contract value, nor a works figure to a services payment. A block
+    with no works key is the one slice 1 wrote, byte for byte.
+
+    works=False reads nothing of the works file and returns what slice 1 returned: the export's guard
+    (export_static.public_accounts_blocks) builds that when the works part faults, so the payments still go out."""
     years = loaded_years(conn)
-    shown = years[:PA_FREE_YEARS]
-    if not shown:
+    wyears = loaded_years(conn, WORKS) if works else []
+    paid = _shown(conn, _ROW_SQL, "cents DESC", years[:PA_FREE_YEARS])
+    contracts = _shown(conn, _WORK_SQL, "contracted DESC", wyears[:PA_FREE_YEARS]) if works else {}
+    if not paid and not contracts:
         return {}
-    marks = ",".join("?" * len(shown))
-    rows = conn.execute(f"{_ROW_SQL} WHERE kind = ? AND organization_id IS NOT NULL AND fy IN ({marks}) "
-                        "ORDER BY organization_id, fy DESC, cents DESC, seq", (NAMED, *shown)).fetchall()
+    held = sorted({*years, *wyears})
     out: dict[str, dict] = {}
-    for oid, mine in _by(rows, "organization_id").items():
+    for oid in sorted({*paid, *contracts}):
         if oid not in orgs:
             continue
         depts: dict[str, list] = {}
         classes: dict[str, list] = {}
+
+        def dept(r: sqlite3.Row) -> str:
+            key = _dept_key(r, listed)
+            if key not in depts:
+                names = buyer_names.get(r["buyer_id"]) if key == r["buyer_id"] else None
+                depts[key] = [(names or (None, None))[0] or r["dept_en"], (names or (None, None))[1] or r["dept_fr"]]
+            return key
+
         services = []
-        for fy, year_rows in _by(mine, "fy").items():
-            keys = [_dept_key(r, listed) for r in year_rows]
-            for r, key in zip(year_rows, keys):
-                if key not in depts:
-                    names = buyer_names.get(r["buyer_id"]) if key == r["buyer_id"] else None
-                    depts[key] = [(names or (None, None))[0] or r["dept_en"], (names or (None, None))[1] or r["dept_fr"]]
+        for fy, year_rows in _by(paid.get(oid, []), "fy").items():
+            keys = [dept(r) for r in year_rows]
+            for r in year_rows:
                 classes.setdefault(r["cls"], [r["cls_en"] or r["cls"], r["cls_fr"] or r["cls_en"] or r["cls"]])
             services.append({
                 "fy": fy, "n": len(year_rows), "total": dollars(sum(r["cents"] or 0 for r in year_rows)), "d": len(set(keys)),
                 "rows": [[key, r["cls"], dollars(r["cents"]), r["payee_raw"], r["payee_fr"], r["city"], r["city_fr"], _place(r), r["pf"]]
                          for r, key in list(zip(year_rows, keys))[:PA_PROFILE_ROWS]],
             })
-        out[oid] = {"v": 1, "services": sorted(services, key=lambda s: -s["fy"]), "buyers": dict(sorted(depts.items())),
-                    "classes": dict(sorted(classes.items())), "loaded": [min(years), max(years)]}
+        works = []
+        for fy, year_rows in _by(contracts.get(oid, []), "fy").items():
+            works.append({"fy": fy, "n": len(year_rows), "rows": [
+                [dept(r), dollars(r["contracted"]), dollars(r["spent_year"]), dollars(r["spent_to_date"]), r["payee_raw"], r["payee_fr"],
+                 r["city"], r["city_fr"], _place(r), r["desc_en"], r["desc_fr"], r["proj_city"], r["proj_city_fr"], _place(r, "proj_"),
+                 r["pf"]]
+                for r in year_rows[:PA_PROFILE_ROWS]]})
+        block: dict = {"v": 1, "services": sorted(services, key=lambda s: -s["fy"])}
+        if works:
+            block["works"] = sorted(works, key=lambda w: -w["fy"])
+        block.update(buyers=dict(sorted(depts.items())), classes=dict(sorted(classes.items())), loaded=[held[0], held[-1]])
+        out[oid] = block
     return out
 
 
-def buyer_blocks(conn: sqlite3.Connection, *, orgs: Collection, listed: Collection) -> dict[str, dict]:
-    """The "public_accounts" block of each listed buyer with a class of the newest fiscal year held: each class's
-    total as published and how it splits (named organizations, under the threshold, federal institutions, a
-    count of the persons withheld), the newest year's PA_BUYER_PAYEES largest organization payees (linked when
-    a profile holds them), and the buyer's total of the file for each of the newest PA_FREE_YEARS years."""
+def buyer_blocks(conn: sqlite3.Connection, *, orgs: Collection, listed: Collection, works: bool = True) -> dict[str, dict]:
+    """The "public_accounts" block of each listed buyer with a row of the newest fiscal year of either file held.
+    Services: each class's total as published and how it splits (named organizations, under the threshold,
+    federal institutions, a count of the persons withheld), the newest year's PA_BUYER_PAYEES largest
+    organization payees (linked when a profile holds them), and the buyer's total of the file for each of the
+    newest PA_FREE_YEARS years; empty for a buyer the services file does not name. Works, only when there are any:
+    the newest year's PA_BUYER_WORKS largest contracts by amount contracted (a contractor linked when a profile
+    holds it; a federal contractor never, and marked), how many there are, and the department's line under the
+    threshold. No works figure is added to a services one.
+
+    works=False reads nothing of the works file and returns what slice 1 returned, as profile_blocks does."""
     years = loaded_years(conn)
-    if not years:
+    wyears = loaded_years(conn, WORKS) if works else []
+    if not years and not wyears:
         return {}
-    newest, shown = years[0], years[:PA_FREE_YEARS]
-    marks = ",".join("?" * len(shown))
-    year_totals: dict[str, dict[int, int]] = defaultdict(dict)
-    for bid, fy, total in conn.execute(f"SELECT buyer_id, fy, SUM(cents) FROM pa_payments WHERE kind = ? AND buyer_id IS NOT NULL "
-                                       f"AND fy IN ({marks}) GROUP BY buyer_id, fy", (HEADER, *shown)):
-        year_totals[bid][fy] = total or 0
-    rows = conn.execute(f"{_ROW_SQL} WHERE fy = ? AND buyer_id IS NOT NULL ORDER BY buyer_id, cls, seq", (newest,)).fetchall()
     out: dict[str, dict] = {}
-    for bid, mine in _by(rows, "buyer_id").items():
-        if bid not in listed:
-            continue
-        classes: dict[str, dict] = {}
-        for r in mine:
-            c = classes.setdefault(r["cls"], {"cls": r["cls"], "en": r["cls_en"] or r["cls"], "fr": r["cls_fr"] or r["cls_en"] or r["cls"],
-                                              "total": 0, "named": [0, 0], "under": [0, 0], "federal": [0, 0], "withheld": 0})
-            amount = r["cents"] or 0
-            if r["kind"] == HEADER:
-                c["total"] += amount
-            elif r["kind"] == NAMED:
-                c["named"][0] += 1
-                c["named"][1] += amount
-            elif r["kind"] == UNDER:
-                c["under"][0] = None if c["under"][0] is None or r["n_payees"] is None else c["under"][0] + r["n_payees"]
-                c["under"][1] += amount
-            elif r["kind"] == FEDERAL:
-                c["federal"][0] += 1
-                c["federal"][1] += amount
-            elif r["kind"] == WITHHELD:
-                c["withheld"] += 1
-        for c in classes.values():
-            c["total"] = dollars(c["total"])
-            for part in ("named", "under", "federal"):
-                c[part][1] = dollars(c[part][1])
-        named = sorted((r for r in mine if r["kind"] == NAMED), key=lambda r: (-(r["cents"] or 0), r["seq"]))
-        out[bid] = {
-            "v": 1, "fy": newest,
-            "classes": sorted(classes.values(), key=lambda c: (-(c["total"] or 0), c["cls"])),
-            "payees": [[r["payee_raw"], r["payee_fr"], r["organization_id"] if r["organization_id"] in orgs else None, r["cls"],
-                        dollars(r["cents"]), r["city"], r["city_fr"], _place(r)] for r in named[:PA_BUYER_PAYEES]],
-            "named_rows": len(named),
-            "years": [[fy, dollars(year_totals[bid][fy])] for fy in shown if fy in year_totals.get(bid, {})],
-        }
+    if years:
+        newest, shown = years[0], years[:PA_FREE_YEARS]
+        marks = ",".join("?" * len(shown))
+        year_totals: dict[str, dict[int, int]] = defaultdict(dict)
+        for bid, fy, total in conn.execute(f"SELECT buyer_id, fy, SUM(cents) FROM pa_payments WHERE kind = ? AND buyer_id IS NOT NULL "
+                                           f"AND fy IN ({marks}) GROUP BY buyer_id, fy", (HEADER, *shown)):
+            year_totals[bid][fy] = total or 0
+        rows = conn.execute(f"{_ROW_SQL} WHERE fy = ? AND buyer_id IS NOT NULL ORDER BY buyer_id, cls, seq", (newest,)).fetchall()
+        for bid, mine in _by(rows, "buyer_id").items():
+            if bid not in listed:
+                continue
+            classes: dict[str, dict] = {}
+            for r in mine:
+                c = classes.setdefault(r["cls"], {"cls": r["cls"], "en": r["cls_en"] or r["cls"], "fr": r["cls_fr"] or r["cls_en"] or r["cls"],
+                                                  "total": 0, "named": [0, 0], "under": [0, 0], "federal": [0, 0], "withheld": 0})
+                amount = r["cents"] or 0
+                if r["kind"] == HEADER:
+                    c["total"] += amount
+                elif r["kind"] == NAMED:
+                    c["named"][0] += 1
+                    c["named"][1] += amount
+                elif r["kind"] == UNDER:
+                    c["under"][0] = None if c["under"][0] is None or r["n_payees"] is None else c["under"][0] + r["n_payees"]
+                    c["under"][1] += amount
+                elif r["kind"] == FEDERAL:
+                    c["federal"][0] += 1
+                    c["federal"][1] += amount
+                elif r["kind"] == WITHHELD:
+                    c["withheld"] += 1
+            for c in classes.values():
+                c["total"] = dollars(c["total"])
+                for part in ("named", "under", "federal"):
+                    c[part][1] = dollars(c[part][1])
+            named = sorted((r for r in mine if r["kind"] == NAMED), key=lambda r: (-(r["cents"] or 0), r["seq"]))
+            out[bid] = {
+                "v": 1, "fy": newest,
+                "classes": sorted(classes.values(), key=lambda c: (-(c["total"] or 0), c["cls"])),
+                "payees": [[r["payee_raw"], r["payee_fr"], r["organization_id"] if r["organization_id"] in orgs else None, r["cls"],
+                            dollars(r["cents"]), r["city"], r["city_fr"], _place(r)] for r in named[:PA_BUYER_PAYEES]],
+                "named_rows": len(named),
+                "years": [[fy, dollars(year_totals[bid][fy])] for fy in shown if fy in year_totals.get(bid, {})],
+            }
+    if wyears:
+        wfy = wyears[0]
+        wrows = conn.execute(f"{_WORK_SQL} WHERE fy = ? AND buyer_id IS NOT NULL ORDER BY buyer_id, seq", (wfy,)).fetchall()
+        for bid, mine in _by(wrows, "buyer_id").items():
+            if bid not in listed:
+                continue
+            # A contract withheld for its contractor is in neither list nor count: nothing of it is shown.
+            listed_rows = sorted((r for r in mine if r["kind"] in (NAMED, FEDERAL)), key=lambda r: (-(r["contracted"] or 0), r["seq"]))
+            unders = [r for r in mine if r["kind"] == UNDER]
+            if not listed_rows and not unders:
+                continue
+            under = None
+            if unders:
+                counts = [r["n_contractors"] for r in unders]
+                under = [None if None in counts else sum(counts), dollars(sum(r["spent_year"] or 0 for r in unders))]
+            block = out.setdefault(bid, {"v": 1, "fy": wfy, "classes": [], "payees": [], "named_rows": 0, "years": []})
+            # The last element marks a contractor that is a federal institution (the page says so on its row).
+            block["works"] = {"fy": wfy, "n": len(listed_rows), "rows": [
+                [r["payee_raw"], r["payee_fr"], r["organization_id"] if r["kind"] == NAMED and r["organization_id"] in orgs else None,
+                 r["city"], r["city_fr"], _place(r), r["desc_en"], r["desc_fr"], r["proj_city"], r["proj_city_fr"], _place(r, "proj_"),
+                 dollars(r["contracted"]), dollars(r["spent_year"]), dollars(r["spent_to_date"]), 1 if r["kind"] == FEDERAL else 0]
+                for r in listed_rows[:PA_BUYER_WORKS]], "under": under}
     return out
 
 
@@ -1277,7 +1645,8 @@ def _by(rows: Iterable[sqlite3.Row], column: str) -> dict:
 
 
 def source_rows(conn: sqlite3.Connection, http_date_iso) -> list[dict]:
-    """stats.json "sources": one row per file applied, newest year first."""
-    return [{"source": STATS_SOURCE, "file": f["url"].rsplit("/", 1)[-1], "last_read": f["applied_at"],
+    """stats.json "sources": one row per file applied, the services files first, newest year first."""
+    return [{"source": fam.stats_source, "file": f["url"].rsplit("/", 1)[-1], "last_read": f["applied_at"],
              "last_modified": http_date_iso(f["last_modified"]), "last_modified_http": f["last_modified"], "loaded": True}
-            for f in conn.execute("SELECT url, applied_at, last_modified FROM pa_files WHERE family = ? ORDER BY fy DESC", (FAMILY,))]
+            for fam in FAMILIES
+            for f in conn.execute("SELECT url, applied_at, last_modified FROM pa_files WHERE family = ? ORDER BY fy DESC", (fam.name,))]

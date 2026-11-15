@@ -1668,6 +1668,10 @@ const STRINGS = {
     en: "Public Accounts of Canada, professional and special services",
     fr: "Comptes publics du Canada, services professionnels et spéciaux",
   },
+  "data.src.pa_works": {
+    en: "Public Accounts of Canada, acquisition of land, buildings and works",
+    fr: "Comptes publics du Canada, acquisition de terrains, bâtiments et travaux",
+  },
   "data.src.indigenous_target": {
     en: "Mandatory minimum 5% Indigenous procurement target: plans, gaps and results",
     fr: "Cible minimale obligatoire de 5 % d'approvisionnement auprès des entreprises autochtones : plans, lacunes et résultats",
@@ -1767,8 +1771,8 @@ const STRINGS = {
   },
   "data.lic.corporations": { en: "Corporations Canada federal corporations extract", fr: "Extrait des sociétés fédérales de Corporations Canada" },
   "data.lic.public_accounts": {
-    en: "Public Accounts of Canada files: professional and special services",
-    fr: "Fichiers des Comptes publics du Canada : services professionnels et spéciaux",
+    en: "Public Accounts of Canada files: professional and special services; acquisition of land, buildings and works",
+    fr: "Fichiers des Comptes publics du Canada : services professionnels et spéciaux; acquisition de terrains, bâtiments et travaux",
   },
   "data.lic.indigenous_target": {
     en: "Indigenous procurement target files: planned procurement, gaps and results",
@@ -2173,16 +2177,20 @@ const STRINGS = {
   // The Methodology section (#public-accounts) and its line in the sources list.
   "methodology.toc_public_accounts": { en: "Payments in the Public Accounts", fr: "Paiements dans les Comptes publics" },
   "methodology.src_public_accounts": {
-    en: "Public Accounts of Canada: the yearly files of payments of $100,000 or more for professional and special services, published each autumn for the fiscal year that ended on March 31, and read when a new file appears.",
-    fr: "Comptes publics du Canada : les fichiers annuels des paiements de 100 000 $ ou plus pour des services professionnels et spéciaux, publiés chaque automne pour l'exercice terminé le 31 mars, et lus lorsqu'un nouveau fichier paraît.",
+    en: "Public Accounts of Canada: the yearly files of payments of $100,000 or more for professional and special services and of works contracts of $250,000 or more, published each autumn for the fiscal year that ended on March 31, and read when a new file appears.",
+    fr: "Comptes publics du Canada : les fichiers annuels des paiements de 100 000 $ ou plus pour des services professionnels et spéciaux et des marchés de travaux de 250 000 $ ou plus, publiés chaque automne pour l'exercice terminé le 31 mars, et lus lorsqu'un nouveau fichier paraît.",
   },
   "methodology.pa_what": {
     en: "The Public Accounts are the only source on the site that reports amounts paid. A row gives what one department reported paying one payee for one class of service in one fiscal year: payments and accrued charges, totalled by the department. It names no contract, so it cannot be tied to a contract record. Payments are shown by fiscal year, in sections of their own, and are never added to a contract or agreement value.",
     fr: "Les Comptes publics sont la seule source du site qui déclare des montants versés. Une ligne donne ce qu'un ministère a déclaré avoir versé à un bénéficiaire pour une catégorie de services au cours d'un exercice : les paiements et les charges à payer, totalisés par le ministère. Elle ne nomme aucun contrat et ne peut donc pas être reliée à un dossier de contrat. Les paiements sont présentés par exercice, dans des sections distinctes, et ne sont jamais ajoutés à la valeur d'un contrat ou d'un accord.",
   },
   "methodology.pa_thresholds": {
-    en: "Each department names every payee it paid $100,000 or more in a class of service in the year. Payees paid less are given only as a number and a total per class, and the site shows those totals as published.",
-    fr: "Chaque ministère nomme tout bénéficiaire à qui il a versé 100 000 $ ou plus dans une catégorie de services au cours de l'exercice. Les bénéficiaires ayant reçu moins ne sont donnés que par leur nombre et un total par catégorie, et le site présente ces totaux tels que publiés.",
+    en: "Each department names every payee it paid $100,000 or more in a class of service in the year. Payees paid less are given only as a number and a total per class, and the site shows those totals as published. Works contracts are listed from $250,000, or $25,000 for cost-plus contracts.",
+    fr: "Chaque ministère nomme tout bénéficiaire à qui il a versé 100 000 $ ou plus dans une catégorie de services au cours de l'exercice. Les bénéficiaires ayant reçu moins ne sont donnés que par leur nombre et un total par catégorie, et le site présente ces totaux tels que publiés. Les marchés de travaux sont présentés à partir de 250 000 $, ou de 25 000 $ pour les marchés à prix coûtant majoré.",
+  },
+  "methodology.pa_works": {
+    en: "The works file gives each contract with its amount contracted and what the department spent on it in the fiscal year and to date; the contracts under its thresholds are one line per department, a count of contractors and the year's spending. A contract whose contractor reads as a private individual is not listed. The amount contracted is the Public Accounts' own figure and is not added to the contract values of the other sources. Spending is never added to an amount contracted, nor to the payments for services: a works contract awarded through Public Services and Procurement Canada can be counted in both.",
+    fr: "Le fichier des travaux donne chaque marché avec son montant et ce que le ministère a dépensé pour lui au cours de l'exercice et à ce jour; les marchés sous ses seuils forment une ligne par ministère, un nombre d'entrepreneurs et les dépenses de l'exercice. Un marché dont l'entrepreneur se lit comme un particulier n'est pas présenté. Le montant du marché est celui des Comptes publics et n'est pas ajouté aux valeurs de contrats des autres sources. Les dépenses ne sont jamais ajoutées à un montant de marché ni aux paiements pour services : un marché de travaux attribué par Services publics et Approvisionnement Canada peut être compté dans les deux.",
   },
   "methodology.pa_match": {
     en: "A payee is matched to an organization when its name, as the Public Accounts write it and without a city or province written after it, gives that organization's ID under the rule above. A name of one word, or made only of common business words, is matched only when the payee's province is among the organization's addresses. A payee that matches no organization is listed under its own name, with no profile. The match is by name alone: the Public Accounts carry no business number.",
@@ -2263,6 +2271,49 @@ const STRINGS = {
     fr: "Les paiements à d'autres institutions fédérales règlent des services entre ministères. Ils sont compris dans les totaux des catégories et ne sont pas des organisations sur le site.",
   },
   "pa.buyer_payees": { en: "Payees Listed by Name, Fiscal {fy}", fr: "Bénéficiaires nommés, exercice {fy}" },
+  // The works file's contracts (src/public_accounts.tsx): a table under its own heading on a profile's panel, a
+  // panel of its own (BuyerWorksPanel) after the payments on a buyer page. Never summed with the payments.
+  "pa.works_head": { en: "Works contracts", fr: "Marchés de travaux" },
+  "pa.works_lead": {
+    en: "Contracts of $250,000 or more ($25,000 or more for cost-plus contracts) for land, buildings and works, with what the department spent on each in fiscal {fy} and to date, as the Public Accounts of Canada report them.",
+    fr: "Marchés de 250 000 $ ou plus (25 000 $ ou plus pour les marchés à prix coûtant majoré) visant des terrains, des bâtiments et des travaux, avec ce que le ministère a dépensé pour chacun au cours de l'exercice {fy} et à ce jour, tels que les déclarent les Comptes publics du Canada.",
+  },
+  // Under the payments for services on the same page.
+  "pa.works_apart": {
+    en: "The amount contracted is the Public Accounts' own figure and is not added to the contract values of the other sources. Spending is never added to an amount contracted, nor to the payments for services above: a works contract awarded through Public Services and Procurement Canada can be counted in both.",
+    fr: "Le montant du marché est celui des Comptes publics et n'est pas ajouté aux valeurs de contrats des autres sources. Les dépenses ne sont jamais ajoutées à un montant de marché ni aux paiements pour services ci-dessus : un marché de travaux attribué par Services publics et Approvisionnement Canada peut être compté dans les deux.",
+  },
+  // The same where the page shows no payments for services.
+  "pa.works_apart_alone": {
+    en: "The amount contracted is the Public Accounts' own figure and is not added to the contract values of the other sources. Spending is never added to an amount contracted, nor to payments for professional and special services: a works contract awarded through Public Services and Procurement Canada can be counted in both.",
+    fr: "Le montant du marché est celui des Comptes publics et n'est pas ajouté aux valeurs de contrats des autres sources. Les dépenses ne sont jamais ajoutées à un montant de marché ni aux paiements pour services professionnels et spéciaux : un marché de travaux attribué par Services publics et Approvisionnement Canada peut être compté dans les deux.",
+  },
+  "pa.col_project": { en: "Project", fr: "Projet" },
+  "pa.col_contracted": { en: "Amount contracted", fr: "Montant du marché" },
+  "pa.col_spent_year": { en: "Spent in {fy}", fr: "Dépensé en {fy}" },
+  "pa.col_spent_to_date": { en: "Spent to date", fr: "Dépensé à ce jour" },
+  "pa.col_contractor": { en: "Contractor as written", fr: "Entrepreneur tel qu'inscrit" },
+  // On a buyer page's row whose contractor is another federal institution (as the payments' federal_note says of payees).
+  "pa.works_federal": { en: "A federal institution, not an organization on the site", fr: "Une institution fédérale, qui n'est pas une organisation sur le site" },
+  // The department's line under the threshold (the file's "Total" row).
+  "pa.works_under": {
+    en: "Contracts under $250,000: {n} contractors, {amount} spent in fiscal {fy}.",
+    fr: "Marchés de moins de 250 000 $ : {n} entrepreneurs, {amount} dépensés au cours de l'exercice {fy}.",
+  },
+  "pa.works_under_one": {
+    en: "Contracts under $250,000: {n} contractor, {amount} spent in fiscal {fy}.",
+    fr: "Marchés de moins de 250 000 $ : {n} entrepreneur, {amount} dépensés au cours de l'exercice {fy}.",
+  },
+  "pa.works_under_nocount": {
+    en: "Contracts under $250,000: {amount} spent in fiscal {fy}.",
+    fr: "Marchés de moins de 250 000 $ : {amount} dépensés au cours de l'exercice {fy}.",
+  },
+  "pa.buyer_works": { en: "Works Contracts in the Public Accounts, Fiscal {fy}", fr: "Marchés de travaux dans les Comptes publics, exercice {fy}" },
+  // The works file's line in the foot of a panel that shows it.
+  "pa.works_source": {
+    en: "Public Accounts of Canada, Volume III, acquisition of land, buildings and works, fiscal {fy}. {dataset}",
+    fr: "Comptes publics du Canada, volume III, acquisition de terrains, bâtiments et travaux, exercice {fy}. {dataset}",
+  },
 
   // -- the mandatory minimum 5% Indigenous procurement target (src/indigenous_target.tsx) --------------------
   // A buyer page's panel (IndigenousTargetPanel), before the Public Accounts' payments. Plans and results as the

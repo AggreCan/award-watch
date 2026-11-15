@@ -16,7 +16,7 @@ import { clearClosingCache } from "../src/closing";
 import { clearParsedCache } from "../src/data";
 import { app } from "../src/index";
 import { FILES, TEST_NOW, testEnv } from "./assets";
-import { PA_BUYER_PAYEES, PA_FREE_YEARS, PA_PROFILE_ROWS } from "../src/public_accounts";
+import { PA_BUYER_PAYEES, PA_BUYER_WORKS, PA_FREE_YEARS, PA_PROFILE_ROWS } from "../src/public_accounts";
 import { homeApp } from "./home";
 
 // -- the scaled-up files ------------------------------------------------------------
@@ -209,6 +209,46 @@ const paAssets = assetsOf({
   "buyers/pwgsc-tpsgc.json": JSON.stringify({ ...(FILES["buyers/pwgsc-tpsgc.json"] as Record<string, unknown>), public_accounts: paBuyerBlock }),
 }, "v1-pa");
 const paEnv = { ...env, ASSETS: paAssets };
+// The same blocks with the works file's largest parts (slice 2): three fiscal years of 100 contracts on the
+// profile, each with its project, its place and the contractor's, a third flagged; on the buyer file the 25
+// largest contracts and the line under the threshold.
+const paWorksProfile = {
+  ...paProfileBlock,
+  works: Array.from({ length: PA_FREE_YEARS }, (_, y) => ({
+    fy: 2025 - y, n: 140,
+    rows: Array.from({ length: PA_PROFILE_ROWS }, (_, i) => [
+      PA_DEPTS[i % PA_DEPTS.length], 25_000_000 - i * 12_345, i % 11 === 0 ? -6_606 : 1_000_000 + i, 9_000_000 - i * 1_000,
+      "Exemplar Translation Services Inc", i % 7 === 0 ? "Services de traduction Exemplar inc." : null, i % 5 === 0 ? "Montréal" : "Ottawa", null,
+      i % 9 === 0 ? ["United Kingdom", "Royaume-Uni"] : i % 5 === 0 ? "QC" : "ON",
+      "Construction Works - Buildings, envelope repairs and the renewal of the mechanical systems of the main building",
+      i % 2 ? "Travaux de construction - Bâtiments, réparation de l'enveloppe et renouvellement des systèmes mécaniques" : null,
+      i % 4 === 0 ? "Various locations" : "Petawawa", i % 4 === 0 ? "Divers endroits" : null,
+      i % 4 === 0 ? ["Various provinces", "Plusieurs provinces"] : "ON", i % 3 === 0 ? 1 : 0,
+    ]),
+  })),
+};
+const paWorksBuyer = {
+  ...paBuyerBlock,
+  works: {
+    fy: 2025, n: 683,
+    rows: Array.from({ length: PA_BUYER_WORKS }, (_, i) => [
+      `Exemplar Builders ${i} Ltd`, null, i % 2 ? "org-a000000001" : null, "Ottawa", null, "ON",
+      "Construction Works - Buildings, envelope repairs and the renewal of the mechanical systems of the main building", null,
+      "Petawawa", null, "ON", 72_354_222 - i * 100_000, 5_000_000 - i * 1_000, 40_000_000 - i * 10_000, i % 2 === 0 && i % 5 === 0 ? 1 : 0,
+    ]),
+    under: [31, 3_556_269],
+  },
+};
+const paWorksShard = bigProfileShard() as Record<string, Record<string, unknown>>;
+paWorksShard["org-a000000001"] = { ...paWorksShard["org-a000000001"], public_accounts: paWorksProfile };
+const paWorksEnv = {
+  ...env,
+  ASSETS: assetsOf({
+    ...BODIES,
+    "profiles/a00.json": JSON.stringify(paWorksShard),
+    "buyers/pwgsc-tpsgc.json": JSON.stringify({ ...(FILES["buyers/pwgsc-tpsgc.json"] as Record<string, unknown>), public_accounts: paWorksBuyer }),
+  }, "v1-pa-works"),
+};
 
 // -- the Indigenous procurement target ------------------------------------------------------
 //
@@ -293,15 +333,19 @@ let address = 0;
 // without it "/" is the landing page, there being no session here.
 // signedIn: the request carries the stub's Pro session, under the signed-in environment (signedInEnv).
 let signedInEnv: object | null = null;
-// payments: the files carry the largest Public Accounts blocks (paEnv); target: the buyer file carries the
-// largest Indigenous procurement target block (iptEnv); records: the records database answers from memory (recordsEnv).
-async function render(path: string, home = false, signedIn = false, payments = false, target = false, records = false): Promise<number> {
+// payments: the files carry the largest Public Accounts blocks (paEnv), and with works their works parts too
+// (paWorksEnv); target: the buyer file carries the largest Indigenous procurement target block (iptEnv);
+// records: the records database answers from memory (recordsEnv).
+async function render(
+  path: string, home = false, signedIn = false, payments = false, target = false, works = false, records = false,
+): Promise<number> {
   const res = await (home ? homeApp : app).request(path, {
     headers: {
       "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.${100 + ((address >> 8) % 100)}.${(address++ % 250) + 1}`,
       ...(signedIn ? { cookie: SIGNED_IN } : {}),
     },
-  }, signedIn ? signedInEnv! : payments ? paEnv : target ? iptEnv : records ? recordsEnv : path === "/" && !home ? landingEnv : env);
+  }, signedIn ? signedInEnv! : works ? paWorksEnv : payments ? paEnv : target ? iptEnv : records ? recordsEnv
+    : path === "/" && !home ? landingEnv : env);
   await res.arrayBuffer();
   return res.status;
 }
@@ -320,13 +364,15 @@ const yardstick = () => JSON.parse(JSON.stringify(ROWS));
 
 // A route's time over the yardstick's, batches of each taken in turn so a
 // change in the machine's load falls on both.
-async function ratio(path: string, per: number, home = false, signedIn = false, payments = false, target = false, records = false): Promise<number> {
-  for (let i = 0; i < 3; i++) await render(path, home, signedIn, payments, target, records);
+async function ratio(
+  path: string, per: number, home = false, signedIn = false, payments = false, target = false, works = false, records = false,
+): Promise<number> {
+  for (let i = 0; i < 3; i++) await render(path, home, signedIn, payments, target, works, records);
   const route: number[] = [];
   const yard: number[] = [];
   for (let b = 0; b < 5; b++) {
     yard.push(await batch(yardstick, 16));
-    route.push(await batch(() => render(path, home, signedIn, payments, target, records), per));
+    route.push(await batch(() => render(path, home, signedIn, payments, target, works, records), per));
   }
   return median(route) / median(yard);
 }
@@ -370,6 +416,11 @@ const BUDGET: [path: string, bound: number, per: number][] = [
   // largest block the 2025-26 plan gives, a little larger (two years of 26 rows, the longest delivery location,
   // 24 gaps); 2.6 against 1.6 for the plain page and 2.4 with the payments in the same run.
   ["/buyers/pwgsc-tpsgc (with the target)", 9, 16], // [2.6]
+  // The works file's contracts beside the payments (src/public_accounts.tsx, slice 2; measured 2026-11-15): the
+  // profile above with three fiscal years of 100 contracts more (13.9 against 8.0 with the payments alone in the
+  // same run), and the buyer page with its 25 largest (3.9 against 3.0).
+  ["/organizations/org-a000000001 (with payments and works, 600 rows)", 42, 8], // [13.9]
+  ["/buyers/pwgsc-tpsgc (with payments and works)", 12, 16], // [3.9]
   // The other pages that end on the line of guides (src/guide_links.tsx; measured 2026-11-15 with the line): the
   // lists, a contract history record, the radar's overview, and the two pages that read the records database,
   // answered from memory (recordsEnv).
@@ -590,6 +641,11 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
     // And on the notice: may follow's three rows, each holder with its mark.
     const notice = await (await app.request("/tenders/cb-100-10000001", { headers: { "sec-fetch-mode": "navigate", cookie: SIGNED_IN } }, signedInEnv)).text();
     expect(notice.match(/class="muted small line-mark"/g)).toHaveLength(3);
+    // What the works entries time: every contract of the three years on the profile, the 25 on the buyer page.
+    const worksProfile = await (await app.request("/organizations/org-a000000001", { headers: { "sec-fetch-mode": "navigate" } }, paWorksEnv)).text();
+    expect(worksProfile.match(/<td data-label="Amount contracted" class="mono num">/g)?.length).toBe(PA_FREE_YEARS * PA_PROFILE_ROWS);
+    const worksBuyer = await (await app.request("/buyers/pwgsc-tpsgc", { headers: { "sec-fetch-mode": "navigate" } }, paWorksEnv)).text();
+    expect(worksBuyer.match(/<td data-label="Amount contracted" class="mono num">/g)?.length).toBe(PA_BUYER_WORKS);
     // And on the two pages read from the records database: the whole page, its line of guides at the foot.
     for (const [path, guides] of [[PUBLISHED_PAGE, 3], [INSTRUMENT_PAGE, 1]] as const) {
       const res = await app.request(path, { headers: { "sec-fetch-mode": "navigate" } }, recordsEnv);
@@ -602,11 +658,12 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
       const signedIn = name.includes("(signed in");
       const payments = name.includes("(with payments");
       const target = name.includes("(with the target");
+      const works = name.includes("and works");
       const records = name.includes("(records in memory");
       const path = home ? "/" : name.split(" ")[0];
       // The search page answers 503 without its database, after rendering in full.
-      expect([200, 503], name).toContain(await render(path, home, signedIn, payments, target, records));
-      const r = await ratio(path, per, home, signedIn, payments, target, records);
+      expect([200, 503], name).toContain(await render(path, home, signedIn, payments, target, works, records));
+      const r = await ratio(path, per, home, signedIn, payments, target, works, records);
       seen.push(`${name} ${r.toFixed(2)}`);
       if (r > bound) over.push(`${name}: ${r.toFixed(2)} over ${bound}`);
     }

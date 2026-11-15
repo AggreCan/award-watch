@@ -2,3 +2,6 @@
 # never a name, since this repository is public. A line is public_accounts.withhold_key of the name's
 # normalized form (normalize.norm_name of the legal part, the place written after it cut). The file's lines
 # are part of public_accounts.rules(), so a line added here reads the yearly files again on the next night.
+# Works 2025-26: a contractor written as several persons' names "In Trust". Rule 6 (RULES_VERSION 3)
+# withholds it too; the line stays, so a change to that rule cannot let this name through.
+df7abddb2e0450ee0d04c1aa1eb2cfcf

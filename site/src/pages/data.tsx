@@ -11,7 +11,7 @@ import { Layout, PageHead, noDataPage, page, todayOf } from "../layout";
 import { allowsRadarDepth, requestPlan } from "../plan";
 import { ProNote } from "../pro";
 import { IPT_SEARCH_URL } from "../indigenous_target";
-import { PAC_URL, paDatasetUrl } from "../public_accounts";
+import { PAC_URL, paDatasetUrl, paWorksDatasetUrl } from "../public_accounts";
 import { type DataSet, ODLA_URL, OGL_URL, datasetJsonLd, pageSeo } from "../seo";
 import { KeyedApiDocs } from "./keyed_api";
 import { datasetUrl } from "./shared";
@@ -140,6 +140,8 @@ export const SOURCE_ROWS: readonly { key: string; name: Key; publisher: Key; fil
   { key: "registry", name: "data.src.registry", publisher: "data.pub.ised", files: "federal corporations extract", url: (lang) => `https://open.canada.ca/data/${lang}/dataset/0032ce54-c5dd-4b66-99a0-320a7b5e99f2` },
   // Payments in a fiscal year, one file a year (pipeline sources/public_accounts.py); its rows in stats.json are pa_services.
   { key: "pa_services", name: "data.src.pa_services", publisher: "data.pub.pspc", files: "idsps-dipss", url: paDatasetUrl },
+  // The works contracts of the same stage, one file a year; rows pa_works.
+  { key: "pa_works", name: "data.src.pa_works", publisher: "data.pub.pspc", files: "atbt-albw", url: paWorksDatasetUrl },
   // A new dataset each year for the plans and one for the results (pipeline sources/indigenous_target.py), so the
   // row links the catalogue's list of them; the buyer page links each dataset it reads.
   { key: "indigenous_target", name: "data.src.indigenous_target", publisher: "data.pub.isc", files: "planned procurement, gaps, results",

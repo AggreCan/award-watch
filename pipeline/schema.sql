@@ -1097,7 +1097,7 @@ CREATE INDEX IF NOT EXISTS idx_sosa_events_day ON sosa_events(day);
 
 -- One row per yearly file applied: what was read, when, and under which rules.
 CREATE TABLE IF NOT EXISTS pa_files (
-  family TEXT NOT NULL,                          -- services (works and obligations come later)
+  family TEXT NOT NULL,                          -- services | works (obligations come later)
   fy INTEGER NOT NULL,                           -- the fiscal year by its first calendar year (2025 = 2025-26)
   lang TEXT NOT NULL DEFAULT '',                 -- '' bilingual, en, fr
   resource_id TEXT NOT NULL,                     -- the dataset record's resource id
@@ -1144,12 +1144,62 @@ CREATE TABLE IF NOT EXISTS pa_payments (
   payee_buyer_id TEXT,                           -- federal rows: the buyer the payee names (NULL: two or more)
   organization_id TEXT REFERENCES organizations(id) ON DELETE SET NULL,
   pf INTEGER NOT NULL DEFAULT 0,                 -- 1: the province (country abroad) is not among the organization's
-  why TEXT,                                      -- withheld: the person rule (1 to 5, seed); named and unlinked:
+  why TEXT,                                      -- withheld: the person rule (1 to 6, seed); named and unlinked:
                                                  -- common | key | none
   PRIMARY KEY (fy, seq)
 );
 CREATE INDEX IF NOT EXISTS idx_pa_payments_org ON pa_payments(organization_id, fy);
 CREATE INDEX IF NOT EXISTS idx_pa_payments_buyer ON pa_payments(buyer_id, fy, cls);
+
+-- Acquisition of land, buildings and works: every row of every file applied,
+-- the same way. A row is a contract (named, or federal when the contractor is
+-- a federal institution), a department's line under the threshold (under: the
+-- "Total" row, a count of contractors and the year's spending), or a contract
+-- whose contractor is withheld as a person (withheld: no name, no place, no
+-- project). The contractor sits in the columns pa_payments names the payee in,
+-- so one relink reads both tables. Its amounts are never added to a services
+-- payment nor to a contract value of another source.
+CREATE TABLE IF NOT EXISTS pa_works (
+  fy INTEGER NOT NULL,
+  seq INTEGER NOT NULL,                          -- the row's number in the file: two rows can be the same contract twice
+  kind TEXT NOT NULL,                            -- named | under | withheld | federal
+  dept_no TEXT,
+  dept_en TEXT NOT NULL,
+  dept_fr TEXT,
+  buyer_id TEXT,                                 -- the department's buyer (buyers.resolve, source public_accounts)
+  payee_raw TEXT,                                -- the contractor as written (English), the "**" marker dropped;
+                                                 -- NULL when withheld and on under rows
+  payee_fr TEXT,                                 -- the French spelling when it differs
+  payee_norm TEXT,                               -- the legal part normalized, the place written after it cut
+  city TEXT,                                     -- the contractor's place, as written; NULL when withheld
+  city_fr TEXT,
+  prov TEXT,
+  prov_fr TEXT,
+  country TEXT,
+  country_fr TEXT,
+  prov_code TEXT,                                -- the contractor's: two letters in Canada, XX abroad
+  desc_en TEXT,                                  -- the project as described; NULL when withheld
+  desc_fr TEXT,                                  -- when it differs
+  proj_city TEXT,
+  proj_city_fr TEXT,                             -- when it differs
+  proj_prov TEXT,                                -- as written ("Various provinces" too)
+  proj_prov_fr TEXT,
+  proj_country TEXT,                             -- blank in Canada
+  proj_country_fr TEXT,
+  proj_prov_code TEXT,                           -- two letters only when proj_prov names one province or territory
+  contracted INTEGER,                            -- cents: the amount contracted (0 on under rows, as published)
+  spent_year INTEGER,                            -- cents: spent in the fiscal year
+  spent_to_date INTEGER,                         -- cents: spent to date
+  n_contractors INTEGER,                         -- under rows: the contractors the row counts, when it says
+  payee_buyer_id TEXT,                           -- federal rows: the buyer the contractor names (NULL: two or more)
+  organization_id TEXT REFERENCES organizations(id) ON DELETE SET NULL,
+  pf INTEGER NOT NULL DEFAULT 0,                 -- 1: the contractor's province (country abroad) is not among the organization's
+  why TEXT,                                      -- withheld: the person rule (1 to 6, seed); named and unlinked:
+                                                 -- common | key | none
+  PRIMARY KEY (fy, seq)
+);
+CREATE INDEX IF NOT EXISTS idx_pa_works_org ON pa_works(organization_id, fy);
+CREATE INDEX IF NOT EXISTS idx_pa_works_buyer ON pa_works(buyer_id, fy);
 
 -- ---------------------------------------------------------------------------
 -- The mandatory minimum 5% Indigenous procurement target

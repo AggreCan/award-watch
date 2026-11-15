@@ -140,6 +140,7 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
           <h2 id="public-accounts">{t(lang, "methodology.toc_public_accounts")}</h2>
           <p>{t(lang, "methodology.pa_what")}</p>
           <p>{t(lang, "methodology.pa_thresholds")}</p>
+          <p>{t(lang, "methodology.pa_works")}</p>
           <p>{t(lang, "methodology.pa_match")}</p>
           <p>{t(lang, "methodology.pa_federal")}</p>
           <p>{t(lang, "methodology.pa_people")}</p>

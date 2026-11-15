@@ -94,7 +94,12 @@ change there. Output tree (under data/out/static):
                                 Public Accounts linked to it in the newest public_accounts.PA_FREE_YEARS fiscal
                                 years carries public_accounts (sources/public_accounts.profile_blocks): payments
                                 in a fiscal year, a block of their own that no figure of the profile adds
-  aliases/<ab>.json            retired organization id -> the live id that took its records, sharded on the
+                                (services, an empty list for a profile with works rows alone), and, for a
+                                profile with a contractor row of the works file linked to it, works: per fiscal
+                                year its contracts, the largest amount contracted first, with what the
+                                department spent in the year and to date and no sum of any kind; a profile
+                                with no works row has no works key, its block as before
+  aliases/<ab>.json           retired organization id -> the live id that took its records, sharded on the
                                 id's characters 5 and 6 (256 files at most: 27,000 merged ids on 4,096
                                 shards pushed the export past the file cap on 2026-11-02): retired by a
                                 normalization change (migrate.py) or merged into another organization
@@ -109,7 +114,11 @@ change there. Output tree (under data/out/static):
                                 with n_lobbying); a buyer file's "aliases" are the names it also appears under
                                 (buyer_aliases_of); a buyer with a class of the newest Public Accounts file
                                 carries public_accounts (sources/public_accounts.buyer_blocks), apart from its
-                                contract figures; a buyer an institution of the Indigenous procurement target's
+                                contract figures, and a buyer with a row of the newest works file carries its
+                                works part there (public_accounts.PA_BUYER_WORKS contracts, the largest amount
+                                contracted first, and the department's line under the threshold), its services
+                                part empty when the services file does not name it, the two never summed; a
+                                buyer an institution of the Indigenous procurement target's
                                 files resolves to carries indigenous_target (sources/indigenous_target.buyer_blocks):
                                 its plan, gaps and result as reported, apart from every contract figure
   buyers/aliases.json           {"aliases": {old buyer id: listed buyer id}}: the buyer ids the buyers stage
@@ -943,7 +952,7 @@ SOURCE_FILES = {
 # The stages that read a source, in the order the Data page lists them; each
 # key is the "source" of its rows in stats.json "sources".
 SOURCE_ORDER = ("buyers", "tenders", "awards", "history", "contracts", "grants", "lobbying", "registry",
-                public_accounts.STATS_SOURCE, indigenous_target.STATS_SOURCE)
+                public_accounts.STATS_SOURCE, public_accounts.WORKS.stats_source, indigenous_target.STATS_SOURCE)
 # The file a source's row names until a read records its own (a source never read yet).
 SOURCE_DEFAULT_FILE = {
     "buyers": "organization_show",
@@ -953,6 +962,7 @@ SOURCE_DEFAULT_FILE = {
     **SOURCE_FILES,
     "registry": "corporations-active-cbca-en.csv",
     public_accounts.STATS_SOURCE: public_accounts.STATS_DEFAULT_FILE,
+    public_accounts.WORKS.stats_source: public_accounts.WORKS.default_file,
     indigenous_target.STATS_SOURCE: indigenous_target.STATS_DEFAULT_FILE,
 }
 # The buyers stage records the time it read the CKAN organization list under
@@ -1026,7 +1036,7 @@ def source_files(conn: sqlite3.Connection) -> list[dict]:
     buyers_read = next((v for k in BUYERS_READ_KEYS if (v := get_meta(conn, k))), None)
     if buyers_read:
         entry("buyers", SOURCE_DEFAULT_FILE["buyers"])["last_read"] = buyers_read
-    # The Public Accounts' yearly files, one row each (pa_files); a fault here leaves the default row.
+    # The Public Accounts' yearly files, one row each (pa_files), services and works; a fault here leaves the default rows.
     try:
         for row in public_accounts.source_rows(conn, http_date_iso):
             entry(row["source"], row["file"]).update(row)
@@ -1800,9 +1810,24 @@ def profile_aliases(conn: sqlite3.Connection, m: Model) -> dict[str, tuple[list[
             for live, items in lists.items()}
 
 
-def public_accounts_blocks(conn: sqlite3.Connection, what: str, build: Callable[[], dict[str, dict]]) -> dict[str, dict]:
+def public_accounts_blocks(conn: sqlite3.Connection, what: str, build: Callable[[], dict[str, dict]],
+                           without_works: Callable[[], dict[str, dict]] | None = None) -> dict[str, dict]:
     """A Public Accounts block builder (sources/public_accounts.py), guarded: a fault writes the profiles or the
-    buyer files without the block, logs a notice, and never fails the export."""
+    buyer files without the block, logs a notice, and never fails the export.
+
+    With without_works (the same builder told to leave the works file alone), a fault in build is first taken
+    for the works part's: it is logged with a notice of its own, ok stays 1, and the blocks are built again
+    without the works contracts, under the guard above. The services payments have been live since slice 1 and
+    the works part is newer, so a fault in it no longer takes the payments out with it."""
+    if without_works is not None:
+        try:
+            return build()
+        except Exception as exc:
+            log.exception("export: the Public Accounts works contracts of the %s failed", what)
+            log_run(conn, "export_public_accounts", detail=f"{what}, works: {type(exc).__name__}: {exc}"[:900],
+                    notice=f"the Public Accounts works contracts were left out of the {what} tonight "
+                           f"({type(exc).__name__}: {exc})"[:900])
+            build = without_works
     try:
         return build()
     except Exception as exc:
@@ -1828,8 +1853,10 @@ def write_profiles(conn: sqlite3.Connection, out: Path, m: Model) -> dict[str, i
     """profiles/<abc>.json: every organization's profile, one shard per three hex digits of its id."""
     keys = sorted({shard_key(oid) for oid in m.orgs})
     held = sosa_export.organization_parts(conn)
-    payments = public_accounts_blocks(conn, "profiles", lambda: public_accounts.profile_blocks(
-        conn, orgs=m.orgs, listed=m.listed, buyer_names={bid: (b["name_en"], b["name_fr"]) for bid, b in m.buyers.items()}))
+    paid = lambda works: public_accounts.profile_blocks(  # noqa: E731
+        conn, orgs=m.orgs, listed=m.listed, buyer_names={bid: (b["name_en"], b["name_fr"]) for bid, b in m.buyers.items()},
+        works=works)
+    payments = public_accounts_blocks(conn, "profiles", lambda: paid(True), lambda: paid(False))
     held_segments = profile_matching.held_instruments(conn)
     family = profile_families(conn, m)
     also = profile_aliases(conn, m)
@@ -2098,7 +2125,8 @@ def write_buyers(m: Model, out: Path, totals: Totals, open_rows: list[dict]) -> 
             top[bid][source] = _top(items, BUYER_TOP, _by_value)
     also = buyer_aliases_of(m, listed)
     holders = sosa_export.buyer_holders(conn)
-    payments = public_accounts_blocks(conn, "buyer files", lambda: public_accounts.buyer_blocks(conn, orgs=m.orgs, listed=listed))
+    paid = lambda works: public_accounts.buyer_blocks(conn, orgs=m.orgs, listed=listed, works=works)  # noqa: E731
+    payments = public_accounts_blocks(conn, "buyer files", lambda: paid(True), lambda: paid(False))
     targets = indigenous_target_blocks(conn, lambda: indigenous_target.buyer_blocks(conn, listed=listed))
     for s in summaries:
         bid = s["id"]

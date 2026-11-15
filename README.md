@@ -55,11 +55,13 @@ and contributions (Treasury Board of Canada Secretariat, consolidated on
 open.canada.ca), the Registry of Lobbyists' monthly communication reports
 (Office of the Commissioner of Lobbying) and the federal corporations extract
 (Corporations Canada) are all published under the Open Government Licence,
-Canada. So is the Public Accounts of Canada's yearly file of payments for
-professional and special services (Public Services and Procurement Canada),
-the one source of amounts paid, shown apart and never added to a contract
-value; its records say they are not the official record, which is the Public
-Accounts on the Receiver General's site (`docs/public-accounts.md`). So are
+Canada. So are the Public Accounts of Canada's yearly files (Public Services
+and Procurement Canada): the payments for professional and special services,
+the one source of amounts paid, and the works contracts of $250,000 or more
+with what was spent on them, each shown apart and never added to a contract
+value or to the other; their records say they are not the official record,
+which is the Public Accounts on the Receiver General's site
+(`docs/public-accounts.md`). So are
 Indigenous Services Canada's files on the mandatory minimum 5% Indigenous
 procurement target: each institution's plan, the gaps it reported and its
 latest result, as it reported them, shown on its buyer page apart from every

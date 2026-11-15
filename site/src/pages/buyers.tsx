@@ -26,7 +26,7 @@ import { ExpiringSection } from "./expiring";
 import { EXPIRING_EVENT, loadFeedIndex } from "./feeds";
 import { InterestPanel, interestFilter } from "./interest";
 import { holdersPart } from "../instruments";
-import { BuyerPaymentsPanel, buyerPublicAccounts } from "../public_accounts";
+import { BuyerPaymentsPanel, BuyerWorksPanel, buyerPublicAccounts } from "../public_accounts";
 import { IndigenousTargetPanel, buyerIndigenousTarget } from "../indigenous_target";
 import { HoldersPanel } from "./instruments";
 import {
@@ -179,6 +179,8 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
     return notFoundPage(c, stats.data_as_of, "buyer.not_found", "/buyers", "buyer.back");
   }
   const name = buyerName(lang, b.buyer);
+  // The Public Accounts block, read once for its two panels (the payments and the works contracts).
+  const payments = buyerPublicAccounts(b);
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "buyers.title"), path: "/buyers" }, { name }];
   const n = (v: number) => fmtInt(v, lang);
   const dataYear = Number(todayOf(stats.data_as_of).slice(0, 4));
@@ -331,11 +333,13 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
       ) : <p class="muted">{t(lang, "org.years_none")}</p>}
       </Panel>
       {/* The institution's own reports under the Indigenous procurement target, with the Public Accounts after the
-          records: what it reported, apart from every contract figure. Before the payments, which stay the last panel:
+          records: what it reported, apart from every contract figure. Before the Public Accounts' panels, which stay last:
           its plan looks ahead, and a page without either block is as it was. */}
       <IndigenousTargetPanel lang={lang} ipt={buyerIndigenousTarget(b)} buyer={name} />
-      {/* Payments in a fiscal year, the last panel and apart from the records: none before the source. */}
-      <BuyerPaymentsPanel lang={lang} pa={buyerPublicAccounts(b)} buyer={name} />
+      {/* Payments in a fiscal year, apart from the records: none before the source. The works contracts after them,
+          a panel of their own and the last of the page, never summed with the payments. */}
+      <BuyerPaymentsPanel lang={lang} pa={payments} buyer={name} />
+      <BuyerWorksPanel lang={lang} pa={payments} />
       <PhonePagerScript lang={lang} />
     </Layout>,
   );

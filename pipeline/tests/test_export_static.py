@@ -584,7 +584,7 @@ def test_every_source_the_data_page_lists_has_a_row_with_its_real_last_read(conn
     es.export_static(conn, out, today=TODAY, base_url=BASE)
     rows = load(out, "stats.json")["sources"]
     assert [r["source"] for r in rows] == ["buyers", "tenders", "awards", "history", "contracts", "grants", "lobbying",
-                                           "registry", "registry", "pa_services", "indigenous_target"]
+                                           "registry", "registry", "pa_services", "pa_works", "indigenous_target"]
     assert all(set(r) == {"source", "file", "last_read", "last_modified", "last_modified_http", "loaded"} for r in rows)
     assert all(r["loaded"] is (r["last_read"] is not None) for r in rows)
     buyers_row, tenders_row = rows[0], rows[1]

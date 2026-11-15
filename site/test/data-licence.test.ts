@@ -50,7 +50,7 @@ describe("data page", () => {
     const html = await (await get("/data")).text();
     const sources = section(html, "sources");
     expect(SOURCE_ROWS.map((s) => s.key)).toEqual(["buyers", "tenders", "awards", "history", "contracts", "grants", "lobbying", "registry", "pa_services",
-      "indigenous_target"]);
+      "pa_works", "indigenous_target"]);
     expect(sources).toContain('<a href="https://open.canada.ca/data/en/dataset/6abd20d4-7a1c-4b38-baa2-9525d0bb2fd2">CanadaBuys tender notices</a>');
     expect(sources).toContain("Public Services and Procurement Canada");
     expect(sources).toContain("Treasury Board of Canada Secretariat");

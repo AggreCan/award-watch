@@ -91,7 +91,8 @@ def record(url: str = URL, modified: str = "2026-11-06T00:00:00") -> bytes:
 
 
 def stage(conn, client, tmp_path, now: str = STAMP):
-    return pa.run(conn, client, now=now, work_dir=tmp_path / "work", review_dir=tmp_path / "review")
+    # The services file alone: the works file has its own tests (test_public_accounts_works.py), both files together too.
+    return pa.run(conn, client, now=now, work_dir=tmp_path / "work", review_dir=tmp_path / "review", families=(pa.SERVICES,))
 
 
 def log_row(conn):
@@ -194,6 +195,17 @@ def test_each_person_rule_withholds_and_a_withheld_row_keeps_no_name_or_place(co
     ("Quentaro Z Prof. Corp.", "4"),
     ("Vexlor QZ", "5"),
     ("Vexlor Trand QX", "5"),
+    # Rule 6: persons' names held in trust, which the shared test keeps for its business word "trust".
+    ("Orrin Vexlor In Trust", "6"),
+    ("Orrin Vexlor and Mirelle Tansby In Trust", "6"),
+    ("Orrin Vexlor, Mirelle Tansby and Dace Holmwick In Trust", "6"),
+    ("Mirelle Tansby & Orrin Vexlor IN TRUST", "6"),
+    ("Orrin Vexlor et Mirelle Tansby en fiducie", "6"),
+    ("Mirelle Tansby et Orrin Vexlor en fidéicommis", "6"),
+    ("Mirelle Tansby et Orrin Vexlor EN FIDEICOMMIS", "6"),
+    ("Mirelle Tansby in trust for l'Orrin Vexlor", "6"),
+    # The place after it is set aside like the other rules' ("Toronto" alone is a business word to the lists).
+    ("Orrin Vexlor and Mirelle Tansby In Trust, Toronto, Ontario", "6"),
 ])
 def test_the_person_rules(name, rule):
     assert pa.person_rule(name, name, pa.Places(), ("Toronto", "", "", "")) == rule
@@ -204,6 +216,13 @@ def test_the_person_rules(name, rule):
     "Tidewater Innovate BC", "Cedarline Analytics Inc", "Marlowe Hydrographics Ltd, Ottawa, Ontario",
     "Gowland WLX",  # three capitals: firms' acronyms on the 2026 file, never withheld by the last rule
     "Halcyon Law Professional Corporation",  # a firm's words before the form
+    # In trust, with a legal form or a business word before or after the trust words.
+    "Thrandle Oskeby LLP In Trust", "Thrandle Oskeby L.L.P. in trust", "Thrandle Oskeby s.e.n.c.r.l. en fidéicommis",
+    "THRANDLE OSKEBY INC EN FIDÉICOMMIS", "Orrin Vexlor Ltée en fiducie", "Thrandle Law Office in trust",
+    "Orrin Vexlor In Trust for Thrandle Holdings Ltd", "Thrandle Oskeby Associates In Trust",
+    "1234567 In Trust",  # a number: no person's name
+    "Orrin Vexlor Family Trust",  # a trust's own name, not a name held in trust
+    "In Trust",  # no word left
 ])
 def test_firms_stay_named(name):
     assert pa.person_rule(name, name, pa.Places(), ("Ottawa", "", "", "")) is None
@@ -213,6 +232,8 @@ def test_a_french_spelling_that_reads_as_a_person_withholds_the_row():
     assert pa.person_rule("Lindqvist Partners BV", "Quentaro Z", pa.Places(), ()) == "2"
     # The last rule reads the English name only: a French spelling translates the words before the capitals.
     assert pa.person_rule("Tidewater Safety", "Sécurité Tidewater NE", pa.Places(), ()) is None
+    # A name held in trust is read in either language.
+    assert pa.person_rule("Thrandle Oskeby LLP In Trust", "Orrin Vexlor et Mirelle Tansby en fiducie", pa.Places(), ()) == "6"
 
 
 def test_a_hash_listed_by_hand_withholds_a_name_the_rules_keep(conn, world, fixtures, tmp_path, monkeypatch):
