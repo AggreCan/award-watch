@@ -197,7 +197,7 @@ before the sources, the same for every such reader: a band
 form (`InterestBody`), which posts to `/interest` as on the list pages and
 saves the list it was served with. Its line offering Pro is left out, since
 a guide links no account page. With the switch off, or for a signed-in
-reader, a guide is as it was. The ten guides: the bidding, tender notice, trade agreement, Buy Canadian,
+reader, a guide is as it was. The eleven guides: the bidding, evaluation, tender notice, trade agreement, Buy Canadian,
 security and set-aside guides save every new tender notice; the ACAN guide the new notices of the type Advance Contract
 Award Notice, and the standing offers guide those of the type Request for
 Standing Offer, each while the open notices carry that type (otherwise

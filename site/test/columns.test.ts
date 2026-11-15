@@ -32,6 +32,7 @@ const PAGES = [
   "/guides/advance-contract-award-notices-acan", "/guides/indigenous-business-set-asides-psib", "/guides/when-a-federal-contract-ends",
   "/guides/how-to-bid-on-government-of-canada-contracts", "/guides/trade-agreements-and-thresholds-on-federal-tenders",
   "/guides/security-requirements-on-federal-contracts", "/guides/buy-canadian-policy-on-federal-tenders",
+  "/guides/how-federal-bids-are-evaluated-and-selected",
 ];
 
 describe("column widths", () => {

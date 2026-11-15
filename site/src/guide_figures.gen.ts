@@ -38,6 +38,22 @@ export const GUIDE_FIGURES: Readonly<Record<string, FigureEntry>> = {
       phone: {"width":370,"height":270,"viewport":390,"boxes":[[1.62,2.22,96.76,29.63],[1.62,56.3,96.76,8.89],[1.62,71.11,96.76,26.67]]},
     },
   },
+  "evaluation-selection": {
+    slug: "how-federal-bids-are-evaluated-and-selected", page: "/tenders/cb-900-90000101", region: "section.panel:has(> dl.wide)",
+    targets: [
+      "dl.wide > dt:nth-of-type(2), dl.wide > dt:nth-of-type(2) + dd",
+      "dl.wide > dt:nth-of-type(4), dl.wide > dt:nth-of-type(4) + dd",
+      "dl.wide > dt:nth-of-type(5), dl.wide > dt:nth-of-type(5) + dd",
+    ],
+    en: {
+      wide: {"width":838,"height":457,"viewport":1153,"boxes":[[0.84,18.16,98.33,8.1],[0.84,34.35,98.33,8.1],[0.84,42.45,98.33,25.6]]},
+      phone: {"width":370,"height":689,"viewport":390,"boxes":[[1.89,12.05,96.22,5.37],[1.89,25.69,96.22,8.27],[1.89,33.96,96.22,37.3]]},
+    },
+    fr: {
+      wide: {"width":838,"height":477,"viewport":1153,"boxes":[[0.84,17.4,98.33,7.76],[0.84,37.11,98.33,7.76],[0.84,44.86,98.33,24.53]]},
+      phone: {"width":370,"height":737,"viewport":390,"boxes":[[1.89,11.26,96.22,5.02],[1.89,24.02,96.22,10.45],[1.89,34.46,96.22,40.3]]},
+    },
+  },
   "notice-head": {
     slug: "reading-a-canadabuys-tender-notice", page: "/tenders/cb-900-90000101", region: "header.page-head .page-head-row",
     targets: [

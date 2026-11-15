@@ -36,6 +36,7 @@ account.
 - https://awardwatch.ca/methodology: how organizations and buyers are merged and how money is counted, source by source
 - https://awardwatch.ca/guides: plain explanations of federal procurement records, each checked against the official pages it cites
 - https://awardwatch.ca/guides/how-to-bid-on-government-of-canada-contracts: the steps to bid on a federal contract, from registration and the numbers a supplier needs to the award, the debriefing and the published records
+- https://awardwatch.ca/guides/how-federal-bids-are-evaluated-and-selected: how a federal bid is evaluated, mandatory and point-rated criteria and the financial evaluation, the basis of selection clauses with a worked combined rating, and the selection criteria field on tender and award notices
 - https://awardwatch.ca/guides/reading-a-canadabuys-tender-notice: what each part of a federal tender notice on CanadaBuys means
 - https://awardwatch.ca/guides/trade-agreements-and-thresholds-on-federal-tenders: the trade agreements line on a tender notice, the thresholds in effect for 2026 and 2027, and the limited tendering reasons
 - https://awardwatch.ca/guides/buy-canadian-policy-on-federal-tenders: the Buy Canadian Policy's framework and policies, their dates and thresholds, who counts as Canadian, how bids are evaluated and what a tender notice asks for

@@ -630,6 +630,96 @@ const SRC = {
       url: "https://achatscanada.canada.ca/fr/occasions-de-marche/appels-d-offres/cb-342-43639893",
     },
   },
+  // How bids are evaluated and selected: CanadaBuys' page for suppliers, the Buyer's Guide's pages on the method of
+  // selection and on evaluating offers, the archived basis of selection clauses and the Treasury Board's directive
+  // (each read on 2026-11-14).
+  bidEvaluation: {
+    title: "How bids are evaluated and selected",
+    publisher: PSPC,
+    url: "https://canadabuys.canada.ca/en/getting-started/preparing-sell-government/how-bids-evaluated-and-selected",
+    fr: {
+      title: "Comment les soumissions sont évaluées et sélectionnées",
+      url: "https://achatscanada.canada.ca/fr/pour-commencer/se-preparer-pour-vendre/comment-les-soumissions-sont-evaluees-et-selectionnees",
+    },
+  },
+  methodSelection: {
+    title: "Method of selection (Buyer's Guide)",
+    publisher: PSPC,
+    url: `${GUIDE_EN}/plan/method-selection`,
+    fr: { title: "Méthode de sélection (Guide de l'acheteur)", url: `${GUIDE_FR}/planifier/methode-de-selection` },
+  },
+  evaluationCriteria: {
+    title: "Specifying evaluation criteria (Buyer's Guide)",
+    publisher: PSPC,
+    url: `${GUIDE_EN}/plan/method-selection/specifying-evaluation-criteria`,
+    fr: { title: "Préciser les critères d'évaluation (Guide de l'acheteur)", url: `${GUIDE_FR}/planifier/methode-de-selection/preciser-les-criteres-d-evaluation` },
+  },
+  basisSelection: {
+    title: "Including basis of selection (Buyer's Guide)",
+    publisher: PSPC,
+    url: `${GUIDE_EN}/plan/method-selection/including-basis-selection`,
+    fr: { title: "Inclure la méthode de sélection (Guide de l'acheteur)", url: `${GUIDE_FR}/planifier/methode-de-selection/inclure-la-methode-de-selection` },
+  },
+  communicatingSelection: {
+    title: "Communicating the method of selection (Buyer's Guide)",
+    publisher: PSPC,
+    url: `${GUIDE_EN}/plan/method-selection/communicating-method-selection`,
+    fr: {
+      title: "Communiquer la méthode de sélection (Guide de l'acheteur)",
+      url: `${GUIDE_FR}/planifier/methode-de-selection/communiquer-la-methode-de-selection`,
+    },
+  },
+  evaluationProcess: {
+    title: "Evaluation process (Buyer's Guide)",
+    publisher: PSPC,
+    url: `${GUIDE_EN}/receive-and-evaluate/offer-evaluation/evaluation-process`,
+    fr: { title: "Processus d'évaluation (Guide de l'acheteur)", url: `${GUIDE_FR}/recevoir-et-evaluer/evaluation-des-offres/processus-d-evaluation` },
+  },
+  technicalEvaluation: {
+    title: "Conduct a technical evaluation (Buyer's Guide)",
+    publisher: PSPC,
+    url: `${GUIDE_EN}/receive-and-evaluate/offer-evaluation/conduct-technical-evaluation`,
+    fr: {
+      title: "Procéder à une évaluation technique (Guide de l'acheteur)",
+      url: `${GUIDE_FR}/recevoir-et-evaluer/evaluation-des-offres/proceder-une-evaluation-technique`,
+    },
+  },
+  financialEvaluation: {
+    title: "Conduct a financial evaluation (Buyer's Guide)",
+    publisher: PSPC,
+    url: `${GUIDE_EN}/receive-and-evaluate/offer-evaluation/conduct-financial-evaluation`,
+    fr: {
+      title: "Procéder à une évaluation financière (Guide de l'acheteur)",
+      url: `${GUIDE_FR}/recevoir-et-evaluer/evaluation-des-offres/proceder-une-evaluation-financiere`,
+    },
+  },
+  // The archived manual's subsection 5.A, which holds the basis of selection clauses (A0027T, A0031T, A0034T, A0035T,
+  // A0036T, A0069T). Its title joins parts with dashes; commas stand in.
+  saccSelection: {
+    title: "Archived, Standard Acquisition Clauses and Conditions Manual, A, Instructions to Bidders / Contractors",
+    publisher: PSPC,
+    url: "https://canadabuys.canada.ca/en/standard-acquisition-clauses-and-conditions-manual-5a",
+    fr: {
+      title: "Archivée, Guide des clauses et conditions uniformisées d'achat, A, Instructions aux soumissionnaires / entrepreneurs",
+      url: "https://achatscanada.canada.ca/fr/guide-des-clauses-et-cond-5a",
+    },
+  },
+  procurementDirective: {
+    title: "Directive on the Management of Procurement",
+    publisher: TBS,
+    url: "https://www.tbs-sct.canada.ca/pol/doc-eng.aspx?id=32692",
+    fr: { title: "Directive sur la gestion de l'approvisionnement", url: "https://www.tbs-sct.canada.ca/pol/doc-fra.aspx?id=32692" },
+  },
+  // The French notice's title joins its parts with a dash; a comma stands in.
+  exampleEvaluation: {
+    title: "WS5933829424 Canada Strong Technical and Trades Training Program (tender notice WS5933829424-Doc5973518768)",
+    publisher: PSPC,
+    url: "https://canadabuys.canada.ca/en/tender-opportunities/tender-notice/ws5933829424-doc5973518768",
+    fr: {
+      title: "WS5933829424 Programme de formation technique et métier, Une Équipe Canada forte (avis d'appel d'offres WS5933829424-Doc5973518768)",
+      url: "https://achatscanada.canada.ca/fr/occasions-de-marche/appels-d-offres/ws5933829424-doc5973518768",
+    },
+  },
 } satisfies Record<string, Source>;
 
 // The site's own pages the guides link to.
@@ -653,6 +743,10 @@ export const EXAMPLE_AWARD = "/awards/cb-391-38769273";
 // applicable trading partner, and asks for the Canadian Content Attestation Form (read on CanadaBuys, in its open
 // data and on awardwatch.ca on 2026-11-14; it closes 2026-12-03).
 export const EXAMPLE_BUY_CANADIAN = "/tenders/cb-342-43639893";
+// A request for proposal from PSPC for National Defence whose selection criteria read Highest Combined Rating of
+// Technical Merit and Price, and whose description sends bidders to SAP Ariba for the solicitation and its annexes
+// (read on CanadaBuys, in the site's data and on awardwatch.ca on 2026-11-14; it closes 2026-12-31).
+export const EXAMPLE_EVALUATION = "/tenders/ws5933829424-doc5973518768";
 // The pages the figures are captured from, drawn from the sample records in site/figures/, made for the figures
 // and never real, their reference numbers in ranges the real series are nowhere near: three tender notices (the
 // second with security requirements in its description, a limited tendering reason of None and a trade
@@ -683,6 +777,7 @@ const BID_PATH = "/guides/how-to-bid-on-government-of-canada-contracts";
 const SECURITY_PATH = "/guides/security-requirements-on-federal-contracts";
 const TRADE_PATH = "/guides/trade-agreements-and-thresholds-on-federal-tenders";
 const BUY_CANADIAN_PATH = "/guides/buy-canadian-policy-on-federal-tenders";
+const EVALUATION_PATH = "/guides/how-federal-bids-are-evaluated-and-selected";
 
 // -- the guides ---------------------------------------------------------------------
 
@@ -837,8 +932,9 @@ const TENDER_NOTICE: Guide = {
           { competitive: a(`${METHODOLOGY}#competitive`, "Methodology", "Méthodologie") },
         ),
         p(
-          "A limited tendering reason, such as exclusive rights or extreme urgency, explains why a contract is not awarded through competitive solicitation.",
-          "Un motif d'appel d'offres limité, comme des droits exclusifs ou une urgence extrême, explique pourquoi un contrat n'est pas attribué par une demande de soumissions concurrentielle.",
+          "A limited tendering reason, such as exclusive rights or extreme urgency, explains why a contract is not awarded through competitive solicitation. {evaluation} explains the selection criteria.",
+          "Un motif d'appel d'offres limité, comme des droits exclusifs ou une urgence extrême, explique pourquoi un contrat n'est pas attribué par une demande de soumissions concurrentielle. {evaluation} explique les critères de sélection.",
+          { evaluation: a(EVALUATION_PATH, "How a Federal Bid Is Evaluated and the Basis of Selection", "L'évaluation d'une soumission fédérale et la méthode de sélection") },
         ),
       ],
     },
@@ -2303,9 +2399,12 @@ const HOW_TO_BID: Guide = {
           "Chaque avis d'appel d'offres indique la méthode de dépôt des soumissions : SAP Ariba pour les appels d'offres publiés dans la solution d'achats électroniques de SPAC et, pour certaines occasions de marché, un autre moyen, comme une unité de réception des soumissions ou le service Connexion de Postes Canada. Une soumission peut être modifiée et soumise de nouveau jusqu'à la clôture de l'appel d'offres.",
         ),
         p(
-          "Mandatory criteria are assessed pass or fail, and point-rated criteria score the value added over and above them. The seminar notes describe three ways of selecting the winning bid: the lowest priced responsive bid, the best overall value, and the highest rated technical bid within a stipulated budget. This {example} from Indigenous Services Canada states its selection criteria as the highest combined rating of technical merit and price.",
-          "Les critères obligatoires sont évalués sur une base de réussite ou d'échec, et les critères cotés mesurent la valeur ajoutée en plus des exigences obligatoires. Les notes de séminaire décrivent trois façons de choisir la soumission retenue : la soumission recevable la plus basse, le meilleur rapport qualité-prix et la soumission technique la mieux cotée dans les limites d'un budget. Cet {example} de Services aux Autochtones Canada indique comme critère de sélection la cote combinée la plus élevée pour le mérite technique et le prix.",
-          { example: a(EXAMPLE_NOTICE, "request for proposal", "appel d'offres") },
+          "Mandatory criteria are assessed pass or fail, and point-rated criteria score the value added over and above them. The seminar notes describe {ways}: the lowest priced responsive bid, the best overall value, and the highest rated technical bid within a stipulated budget. This {example} from Indigenous Services Canada states its selection criteria as the highest combined rating of technical merit and price.",
+          "Les critères obligatoires sont évalués sur une base de réussite ou d'échec, et les critères cotés mesurent la valeur ajoutée en plus des exigences obligatoires. Les notes de séminaire décrivent {ways} : la soumission recevable la plus basse, le meilleur rapport qualité-prix et la soumission technique la mieux cotée dans les limites d'un budget. Cet {example} de Services aux Autochtones Canada indique comme critère de sélection la cote combinée la plus élevée pour le mérite technique et le prix.",
+          {
+            ways: a(EVALUATION_PATH, "three ways of selecting the winning bid", "trois façons de choisir la soumission retenue"),
+            example: a(EXAMPLE_NOTICE, "request for proposal", "appel d'offres"),
+          },
         ),
       ],
     },
@@ -3187,8 +3286,261 @@ const BUY_CANADIAN: Guide = {
   ],
 };
 
+const EVALUATION: Guide = {
+  slug: EVALUATION_PATH.slice("/guides/".length),
+  title: both("How a Federal Bid Is Evaluated and the Basis of Selection", "L'évaluation d'une soumission fédérale et la méthode de sélection"),
+  seoTitle: both("How Federal Bids Are Evaluated and Selected", "Évaluation des soumissions fédérales et méthode de sélection"),
+  summary: both(
+    "How a federal bid is evaluated: mandatory and point-rated criteria, the financial evaluation, the bases of selection and the field a tender notice shows.",
+    "Comment une soumission fédérale est évaluée : critères obligatoires et cotés, évaluation financière, méthodes de sélection et champ de l'avis.",
+  ),
+  checked: "2026-11-14",
+  action: tenderList(
+    "To keep track of new federal tender notices, requests for proposal among them, save this list with your email address.",
+    "Pour suivre les nouveaux avis d'appel d'offres fédéraux, dont les demandes de propositions, enregistrez cette liste avec votre adresse courriel.",
+  ),
+  sections: [
+    {
+      id: "solicitation",
+      title: both("What the Solicitation States", "Ce qu'énonce la demande de soumissions"),
+      blocks: [
+        p(
+          "CanadaBuys says bids are normally evaluated on relevant technical merit and overall best value, in line with the selection method specified in a tender notice, with financial information assessed separately from the technical information. The technical evaluation may use mandatory technical criteria only, point-rated technical criteria only, or a combination of both.",
+          "AchatsCanada indique que les soumissions sont normalement évaluées en fonction de leur mérite technique pertinent et du meilleur rapport qualité-prix global, conformément à la méthode de sélection spécifiée dans un avis d'appel d'offres, les informations financières étant évaluées séparément des informations techniques. L'évaluation technique peut reposer sur des critères techniques obligatoires uniquement, sur des critères techniques cotés seulement ou sur une combinaison des deux.",
+        ),
+        p(
+          "The Buyer's Guide of Public Services and Procurement Canada (PSPC) requires the evaluation process and the method of selection to be clearly described in the solicitation documents, and all evaluation criteria to be specified there with their relative weighting and importance. It cites a Canadian International Trade Tribunal (CITT) ruling on the importance of communicating the method of selection, and requires it to be stated even where awarding to the lowest responsive offeror is a recognized practice. Evaluations should not be influenced by criteria or factors not specified in the solicitation.",
+          "Le Guide de l'acheteur de Services publics et Approvisionnement Canada (SPAC) exige que le processus d'évaluation et la méthode de sélection soient clairement décrits dans les documents de la demande, et que tous les critères d'évaluation y soient précisés avec leur pondération et leur importance relatives. Il cite une décision du Tribunal canadien du commerce extérieur (TCCE) sur l'importance de communiquer la méthode de sélection, et exige qu'elle soit indiquée même si l'attribution du contrat à l'offrant recevable le plus bas est une pratique reconnue. Les évaluateurs ne devraient pas appliquer de critères ou de facteurs ne figurant pas dans la demande d'offres.",
+        ),
+        p(
+          "PSPC's seminar notes describe a request for proposal as a call for bids that describes the evaluation criteria that will be used to choose the winning bid; {bid} sets out the steps from registration to the award.",
+          "Les notes de séminaire de SPAC décrivent une demande de propositions comme un appel d'offres qui décrit les critères d'évaluation qui s'appliquent au choix de la soumission retenue; {bid} présente les étapes, de l'inscription à l'attribution.",
+          { bid: a(BID_PATH, "How to Bid on Government of Canada Contracts", "Soumissionner sur les marchés du gouvernement du Canada") },
+        ),
+      ],
+    },
+    {
+      id: "mandatory",
+      title: both("Mandatory Criteria", "Critères obligatoires"),
+      blocks: [
+        p(
+          "Mandatory evaluation criteria identify the minimum requirements that are essential to the successful completion of the work, and may include licensing requirements, minimum performance characteristics of equipment, delivery dates or conditions, essential minimum qualifications or experience of proposed personnel, and budget limitations. None can be waived once the solicitation has closed. The Treasury Board's Directive on the Management of Procurement has contracting authorities limit the number of mandatory technical criteria to those determined to be essential requirements, so that no bid is unnecessarily disqualified.",
+          "Les critères d'évaluation obligatoires précisent les exigences minimales essentielles à l'exécution efficace des travaux, et peuvent comprendre les permis et licences nécessaires, les caractéristiques de rendement minimal de l'équipement, les dates et les conditions de livraison, l'expérience ou les compétences essentielles minimales du personnel proposé et les limites budgétaires. Aucun ne peut être supprimé une fois la demande de soumissions terminée. La Directive sur la gestion de l'approvisionnement du Conseil du Trésor charge les autorités contractantes de limiter le nombre de critères techniques obligatoires à ceux jugés être des exigences essentielles, pour qu'aucune soumission ne soit rejetée inutilement.",
+        ),
+        p(
+          "Under the Buyer's Guide, the client is responsible for the technical evaluation, and the buyer for the financial one. Mandatory criteria are assessed on a simple pass or fail basis; an offer that fails any mandatory requirement or mandatory evaluation criterion, whether technical, financial or other, is declared non-responsive.",
+          "Selon le Guide de l'acheteur, le client est responsable de l'évaluation technique, et l'acheteur de l'évaluation financière. Les critères obligatoires sont évalués selon une méthode simple, réussite ou échec; une offre qui ne respecte pas une exigence obligatoire ou un critère d'évaluation obligatoire, qu'il soit technique, financier ou autre, est déclarée irrecevable.",
+        ),
+      ],
+    },
+    {
+      id: "rated",
+      title: both("Point-Rated Criteria", "Critères cotés"),
+      blocks: [
+        p(
+          "Only offers meeting all mandatory criteria are subject to point rating. Rated criteria assess elements of the technical offer so that the relative merits of each offer can distinguish one offer from another. The solicitation must give each rated criterion's maximum points and any minimum thresholds, and offers must often meet a minimum overall point threshold and receive minimum points for specific criteria to be considered responsive. In weighting, a high aggregate of points for minor criteria should not overcompensate for a low aggregate for major ones.",
+          "Seules les offres qui satisfont à tous les critères obligatoires sont cotées par points. Les critères cotés servent à évaluer divers éléments de l'offre technique pour faire ressortir le mérite relatif de chaque offre par rapport aux autres. La demande doit préciser le nombre maximal de points de chaque critère coté et les seuils minimaux éventuels, et les offres doivent souvent atteindre un seuil minimum global de points et recevoir un minimum de points pour des critères précis pour être considérées comme recevables. En pondérant les critères, un nombre global élevé de points pour des critères mineurs ne devrait pas masquer un faible total pour des critères majeurs.",
+        ),
+        p(
+          "The Buyer's Guide notes that the CITT can re-weigh points if an offer is denied and there is clear evidence the evaluation was not conducted in a fair manner, and will intervene if it feels the evaluators improperly applied the evaluation criteria and methodology set out in the solicitation. A complaint to the CITT requires a procurement covered by at least one trade agreement; the {trade} explains a notice's trade agreements line.",
+          "Le Guide de l'acheteur précise que le TCCE peut procéder à une réévaluation des points si l'offre est rejetée et que des éléments de preuve démontrent clairement que l'évaluation n'a pas été effectuée de manière équitable, et qu'il interviendra s'il estime que les évaluateurs ont mal appliqué les critères et la méthodologie d'évaluation établis dans la demande. Une plainte au TCCE exige un approvisionnement visé par au moins un accord commercial; le {trade} explique la ligne des accords commerciaux d'un avis.",
+          { trade: a(TRADE_PATH, "guide on trade agreements", "guide sur les accords commerciaux") },
+        ),
+      ],
+    },
+    {
+      id: "financial",
+      title: both("The Financial Evaluation", "L'évaluation financière"),
+      blocks: [
+        p(
+          "The buyer conducts the financial evaluation after the technical one, and pricing information must not be provided to the client until the technical evaluation is complete. This stage tries to identify the offer that presents the best value, considering the price and the technical merits evaluated in the previous step. The buyer must evaluate offers exclusive of the GST or HST, as applicable.",
+          "L'acheteur procède à l'évaluation financière après l'évaluation technique, et les informations relatives aux prix ne doivent être communiquées au client qu'une fois l'évaluation technique terminée. Cette étape vise à déterminer l'offre qui présente le meilleur rapport qualité-prix, selon le prix et les mérites techniques évalués à l'étape précédente. L'acheteur doit évaluer les offres sans tenir compte de la TPS ou de la TVH, selon le cas.",
+        ),
+        p(
+          "If identical low offers are received, the contract should be awarded on the basis of best value, using factors such as performance record and after-sales service; if none applies, a tie-breaking method mutually acceptable to Canada and the offerors can be used, such as a coin toss.",
+          "Si des offres basses identiques sont reçues, le contrat devrait être attribué selon le meilleur rapport qualité-prix, d'après des critères comme les performances antérieures et le service après-vente; si aucun ne s'applique, une méthode de bris d'égalité convenue entre le Canada et les offrants peut être appliquée, comme tirer à pile ou face.",
+        ),
+      ],
+    },
+    {
+      id: "basis",
+      title: both("The Basis of Selection", "La méthode de sélection"),
+      blocks: [
+        p(
+          "The buyer must include the appropriate basis of selection clauses in the solicitation documents; the Buyer's Guide's common examples include the highest combined rating of technical merit and price, the lowest evaluated price with mandatory technical criteria, and the highest rated within budget. PSPC's Standard Acquisition Clauses and Conditions (SACC) Manual, no longer maintained as of June 2023 and available on CanadaBuys for reference, has a clause for each basis below; contracts issued with its clauses remain valid.",
+          "L'acheteur doit inclure les clauses appropriées de la méthode de sélection dans les documents de la demande; les exemples courants du Guide de l'acheteur comprennent la méthode du meilleur ratio combiné mérite technique-prix, le prix évalué le plus bas comportant les critères techniques obligatoires et la proposition la mieux cotée en fonction du budget. Le Guide des clauses et conditions uniformisées d'achat (CCUA) de SPAC, qui n'est plus maintenu depuis juin 2023 et reste accessible dans AchatsCanada à titre de référence, contient une clause pour chaque méthode ci-dessous; les contrats comportant ses clauses demeurent valides.",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "label", label: both("Clause", "Clause") },
+            { kind: "text", label: both("Title", "Titre") },
+            { kind: "main", label: both("What the clause provides", "Ce que prévoit la clause") },
+          ],
+          rows: [
+            [
+              both("A0069T", "A0069T"),
+              both("Basis of Selection", "Méthode de sélection"),
+              both(
+                "For a bid solicitation with no technical evaluation criteria, a bid that complies with all its requirements is responsive, and the responsive bid with the lowest evaluated price is recommended for award",
+                "Pour une demande de soumissions sans critère d'évaluation technique, une soumission qui en respecte toutes les exigences est recevable, et la soumission recevable avec le prix évalué le plus bas est recommandée pour l'attribution du contrat",
+              ),
+            ],
+            [
+              both("A0031T", "A0031T"),
+              both("Basis of Selection, Mandatory Technical Criteria", "Méthode de sélection, critères techniques obligatoires"),
+              both(
+                "A bid must also meet all mandatory technical evaluation criteria to be responsive; the responsive bid with the lowest evaluated price is recommended for award",
+                "Une soumission doit aussi satisfaire à tous les critères d'évaluation techniques obligatoires pour être recevable; la soumission recevable avec le prix évalué le plus bas est recommandée pour l'attribution du contrat",
+              ),
+            ],
+            [
+              both("A0034T", "A0034T"),
+              both("Basis of Selection, Minimum Point Rating", "Méthode de sélection, cotation numérique minimale"),
+              both(
+                "With mandatory and point-rated technical criteria, a responsive bid also obtains the required minimum points; the responsive bid with the lowest evaluated price is recommended for award",
+                "Avec des critères techniques obligatoires et cotés, une soumission recevable obtient aussi la cotation minimale exigée; la soumission recevable ayant le prix évalué le plus bas est recommandée pour l'attribution du contrat",
+              ),
+            ],
+            [
+              both("A0035T", "A0035T"),
+              both("Basis of Selection, Lowest Price Per Point", "Méthode de sélection, le prix le plus bas par point"),
+              both(
+                "With the same criteria and minimum points, the responsive bid with the lowest evaluated price per point is recommended for award; neither the responsive bid with the most points nor the one with the lowest price will necessarily be accepted",
+                "Avec les mêmes critères et la cotation minimale, la soumission recevable ayant le prix évalué le plus bas par point est recommandée pour l'attribution du contrat; ni la soumission recevable ayant obtenu le plus de points ni celle ayant le prix le plus bas ne sera nécessairement acceptée",
+              ),
+            ],
+            [
+              both("A0036T", "A0036T"),
+              both("Basis of Selection, Highest Rated Within Budget", "Méthode de sélection, cotation numérique la plus élevée dans les limites du budget"),
+              both(
+                "With the same criteria and minimum points, the responsive bid with the highest number of points is recommended, provided its total evaluated price does not exceed the budget available; the clause is used with one that indicates to bidders the maximum funding available",
+                "Avec les mêmes critères et la cotation minimale, la soumission recevable ayant obtenu le plus grand nombre de points est recommandée, pourvu que le prix total évalué n'excède pas le budget disponible; la clause s'emploie avec une autre qui indique aux soumissionnaires le budget maximal disponible",
+              ),
+            ],
+            [
+              both("A0027T", "A0027T"),
+              both(
+                "Basis of Selection, Highest Combined Rating of Technical Merit and Price",
+                "Méthode de sélection, note combinée la plus haute sur le plan du mérite technique et du prix",
+              ),
+              both(
+                "With mandatory and point-rated technical criteria and minimum points, the contracting officer inserts the percentages for technical merit and for price, and the responsive bid with the highest combined rating is recommended for award",
+                "Avec des critères techniques obligatoires et cotés et une cotation minimale, l'agent de négociation des contrats inscrit les pourcentages accordés au mérite technique et au prix, et la soumission recevable ayant la note combinée la plus élevée est recommandée pour l'attribution du contrat",
+              ),
+            ],
+          ],
+        },
+        p(
+          "CanadaBuys describes best overall value as often based on the lowest evaluated price per point, determined by dividing the bid price by the total points achieved in the technical evaluation; other approaches may be set out in the tender notice.",
+          "AchatsCanada décrit le meilleur rapport qualité-prix comme souvent fondé sur le prix évalué par point le plus bas, établi en divisant le prix de la soumission par le total des points obtenus lors de l'évaluation technique; d'autres approches peuvent être précisées dans l'avis d'appel d'offres.",
+        ),
+      ],
+    },
+    {
+      id: "example",
+      title: both("A Combined Rating, Worked Through", "Une note combinée, pas à pas"),
+      blocks: [
+        p(
+          "Clause A0027T and PSPC's seminar notes give the same example, with three responsive bids, a 60/40 ratio of technical merit and price, 135 points available and a lowest evaluated price of $45,000. In the example, the technical merit score is the points obtained over the points available, multiplied by 60, and the pricing score is the lowest evaluated price over the bid's evaluated price, multiplied by 40; the two are added.",
+          "La clause A0027T et les notes de séminaire de SPAC donnent le même exemple, avec trois soumissions recevables, un ratio de 60/40 entre le mérite technique et le prix, 135 points possibles et un prix évalué le plus bas de 45 000 $. Dans l'exemple, la note pour le mérite technique est le nombre de points obtenus divisé par le nombre de points possibles, multiplié par 60, et la note pour le prix est le prix évalué le plus bas divisé par le prix évalué de la soumission, multiplié par 40; les deux notes s'additionnent.",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "main", label: both("Item", "Élément") },
+            { kind: "label", label: both("Bidder 1", "Soumissionnaire 1") },
+            { kind: "label", label: both("Bidder 2", "Soumissionnaire 2") },
+            { kind: "label", label: both("Bidder 3", "Soumissionnaire 3") },
+          ],
+          rows: [
+            [both("Overall technical score", "Note technique globale"), both("115/135", "115/135"), both("89/135", "89/135"), both("92/135", "92/135")],
+            [both("Bid evaluated price", "Prix évalué de la soumission"), { money: 55_000 }, { money: 50_000 }, { money: 45_000 }],
+            [
+              both("Technical merit score", "Note pour le mérite technique"),
+              both("115/135 x 60 = 51.11", "115/135 x 60 = 51,11"), both("89/135 x 60 = 39.56", "89/135 x 60 = 39,56"), both("92/135 x 60 = 40.89", "92/135 x 60 = 40,89"),
+            ],
+            [
+              both("Pricing score", "Note pour le prix"),
+              both("45/55 x 40 = 32.73", "45/55 x 40 = 32,73"), both("45/50 x 40 = 36.00", "45/50 x 40 = 36,00"), both("45/45 x 40 = 40.00", "45/45 x 40 = 40,00"),
+            ],
+            [both("Combined rating", "Note combinée"), both("83.84", "83,84"), both("75.56", "75,56"), both("80.89", "80,89")],
+            [both("Overall rating", "Évaluation globale"), both("1st", "1er"), both("3rd", "3e"), both("2nd", "2e")],
+          ],
+        },
+        p(
+          "Bidder 3 has the lowest evaluated price; Bidder 1 has the highest combined rating and is the one the clause recommends for award.",
+          "Le soumissionnaire 3 a le prix évalué le plus bas; le soumissionnaire 1 a la note combinée la plus élevée et c'est celui que la clause recommande pour l'attribution du contrat.",
+        ),
+      ],
+    },
+    {
+      id: "records",
+      title: both("What the Notice and the Award Notice Show", "Ce que montrent l'avis et l'avis d'attribution"),
+      blocks: [
+        p(
+          "CanadaBuys' data dictionary has a selection criteria field, the method used to assess the bids and award a winner, in its tender notice, award notice and contract history files, and lists its possible values:",
+          "Le dictionnaire de données d'AchatsCanada comporte un champ des critères de sélection, la méthode utilisée pour évaluer les offres et attribuer un gagnant, dans ses fichiers des avis d'appel d'offres, des avis d'attribution et des contrats octroyés, et en énumère les valeurs possibles :",
+        ),
+        {
+          kind: "table",
+          cols: [{ kind: "main", label: both("Value of the field", "Valeur du champ") }],
+          rows: [
+            [both("Lowest Price", "Prix le plus bas")],
+            [both("Lowest Cost-per-Point", "Coût par point le plus bas")],
+            [both("Highest Combined Rating of Technical Merit and Price", "Cote combinée la plus élevée pour le mérite technique et le prix")],
+            [both("Highest Technical Merit within a Stipulated Maximum Budget", "Mérite technique le plus élevé dans les limites du budget maximal stipulé")],
+            [both("Government Objectives Representing Best Interests/Value to Govt", "Objectifs gouvern. représentant les meilleurs intérets/valeur pour l'État")],
+            [both("Rotational Sourcing", "Rotation des fournisseurs")],
+            [both("Subsequent/Follow-on Contracts", "Marchés subséquents")],
+            [both("Variations or combinations of the above methods", "Variations ou combinaisons des méthodes susmentionnées")],
+            [both("Not applicable", "Sans objet")],
+          ],
+        },
+        p(
+          "Award Watch shows the field under Selection criteria on tender notice and award notice pages. The buyer must specify the criteria themselves in the solicitation document. PSPC uses SAP Ariba to post tender notices on behalf of other departments; departments posting on their own post directly to CanadaBuys, where the notice's Bidding details tab holds the downloadable solicitation documents.",
+          "Award Watch l'affiche sous Critères de sélection sur les pages des avis d'appel d'offres et des avis d'attribution. L'acheteur doit préciser les critères eux-mêmes dans les documents de la demande. SPAC utilise SAP Ariba pour publier des avis d'appel d'offres au nom d'autres ministères; les ministères qui publient sans passer par SPAC le font directement dans AchatsCanada, où l'onglet Détails de l'offre de l'avis contient les documents d'appel d'offres téléchargeables.",
+        ),
+        figure(
+          "evaluation-selection", SAMPLE_NOTICE, "section.panel:has(> dl.wide)",
+          both(
+            "The Procurement panel of a tender notice's page on Award Watch: category, notice type, procurement method, selection criteria, trade agreements, regions and provinces.",
+            "Le panneau Approvisionnement de la page d'un avis d'appel d'offres sur Award Watch : catégorie, type d'avis, méthode d'approvisionnement, critères de sélection, accords commerciaux, régions et provinces.",
+          ),
+          both("A tender notice's selection criteria on Award Watch.", "Les critères de sélection d'un avis d'appel d'offres sur Award Watch."),
+          [
+            mark(field("dl.wide", 2),
+              "PSPC's seminar notes describe a request for proposal as a call for bids that describes the evaluation criteria that will be used to choose the winning bid.",
+              "Les notes de séminaire de SPAC décrivent une demande de propositions comme un appel d'offres qui décrit les critères d'évaluation qui s'appliquent au choix de la soumission retenue."),
+            mark(field("dl.wide", 4), "The selection criteria field holds the method used to assess the bids and award a winner.",
+              "Le champ des critères de sélection donne la méthode utilisée pour évaluer les offres et attribuer un gagnant."),
+            mark(field("dl.wide", 5), "A complaint to the CITT requires a procurement covered by at least one trade agreement.",
+              "Une plainte au TCCE exige un approvisionnement visé par au moins un accord commercial."),
+          ],
+        ),
+        p(
+          "This {example} from PSPC for National Defence states its selection criteria as Highest Combined Rating of Technical Merit and Price; its description says the full Submission of Offers and annexes can only be accessed and downloaded in SAP Ariba.",
+          "Cette {example} de SPAC pour la Défense nationale indique comme critères de sélection Cote combinée la plus élevée pour le mérite technique et le prix; sa description précise que la demande d'offres et les annexes ne peuvent être consultées et téléchargées que dans SAP Ariba.",
+          { example: a(EXAMPLE_EVALUATION, "request for proposal", "demande de propositions") },
+        ),
+        p(
+          "After the award, the dictionary's award notice fields include the supplier's legal name, the contract award date and the contract's value including taxes, with the same selection criteria field. A debriefing typically includes the overall evaluation result of the successful supplier and an outline of the reasons the debriefed supplier was not successful, referring back to the evaluation criteria and selection method.",
+          "Après l'attribution, les champs des avis d'attribution du dictionnaire comprennent la dénomination sociale du fournisseur, la date d'attribution du contrat et la valeur du contrat, taxes comprises, ainsi que le même champ des critères de sélection. Un compte rendu devrait comprendre le résultat global de l'évaluation du fournisseur retenu et un résumé des raisons pour lesquelles le fournisseur n'a pas été retenu, en renvoyant aux critères d'évaluation et à la méthode de sélection.",
+        ),
+      ],
+    },
+  ],
+  sources: [
+    SRC.bidEvaluation, SRC.methodSelection, SRC.evaluationCriteria, SRC.communicatingSelection, SRC.evaluationProcess, SRC.technicalEvaluation,
+    SRC.financialEvaluation, SRC.basisSelection, SRC.saccSelection, SRC.seminar, SRC.procurementDirective, SRC.followUp, SRC.howToBid, SRC.dictionary,
+    SRC.exampleEvaluation,
+  ],
+};
+
 // The order of the index, and of the sitemap's part.
-export const GUIDES: readonly Guide[] = [HOW_TO_BID, TENDER_NOTICE, TRADE, BUY_CANADIAN, SECURITY, ACAN, STANDING_OFFERS, PSIB, THREE_RECORDS, CONTRACT_END];
+export const GUIDES: readonly Guide[] = [
+  HOW_TO_BID, EVALUATION, TENDER_NOTICE, TRADE, BUY_CANADIAN, SECURITY, ACAN, STANDING_OFFERS, PSIB, THREE_RECORDS, CONTRACT_END,
+];
 
 export const GUIDE_SLUGS: ReadonlySet<string> = new Set(GUIDES.map((g) => g.slug));
 

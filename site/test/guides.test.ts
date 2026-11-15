@@ -11,8 +11,8 @@ import { app } from "../src/index";
 import { CLOSING_SOON_DAYS } from "../src/constants";
 import { referenceShard } from "../src/data";
 import {
-  EXAMPLE_ACAN, EXAMPLE_AWARD, EXAMPLE_BUY_CANADIAN, EXAMPLE_NOTICE, EXAMPLE_PROFILE, EXAMPLE_SET_ASIDE, GUIDES, type Block, type Both, type Guide,
-  type Link, type Text,
+  EXAMPLE_ACAN, EXAMPLE_AWARD, EXAMPLE_BUY_CANADIAN, EXAMPLE_EVALUATION, EXAMPLE_NOTICE, EXAMPLE_PROFILE, EXAMPLE_SET_ASIDE, GUIDES, type Block,
+  type Both, type Cell, type Guide, type Link, type Text,
 } from "../src/guides";
 import { allKeys, rawEntry } from "../src/i18n";
 import { EXPIRING_TEASER_ROWS } from "../src/pages/expiring";
@@ -166,7 +166,7 @@ const deeperWindows = Object.fromEntries(["6m", "12m"].flatMap((w) => [
 const exampleRecords: Record<string, unknown> = {};
 beforeAll(async () => {
   const tender = (FILES["tenders/20a.json"] as Record<string, any>)["cb-100-10000001"];
-  for (const reference of [EXAMPLE_NOTICE, EXAMPLE_ACAN, EXAMPLE_BUY_CANADIAN].map((p) => p.slice("/tenders/".length))) {
+  for (const reference of [EXAMPLE_NOTICE, EXAMPLE_ACAN, EXAMPLE_BUY_CANADIAN, EXAMPLE_EVALUATION].map((p) => p.slice("/tenders/".length))) {
     const path = `tenders/${await referenceShard(reference)}.json`;
     exampleRecords[path] = { ...((exampleRecords[path] as object) ?? {}), [reference]: { ...structuredClone(tender), reference } };
   }
@@ -288,12 +288,13 @@ describe("links and sources", () => {
     // Methodology's statuses and places, the standing offers list, a profile's sections, the Data page;
     // the open ACANs and the counting of competitive records; a contract reporting a set-aside; the three
     // lists of contracts ending and the overview of them; the new notices, the award notices, an example
-    // notice, ACAN and award, a notice stating a Buy Canadian policy; and the guides that link one another.
+    // notice, ACAN and award, a notice stating a Buy Canadian policy, a request for proposal stating its selection
+    // criteria; and the guides that link one another.
     for (const want of ["/tenders", "/methodology#statuses", "/methodology#places", "/methodology#counting", "/instruments", "/data#sources",
       `${EXAMPLE_PROFILE}#awards`, `${EXAMPLE_PROFILE}#history`, `${EXAMPLE_PROFILE}#contracts`, `${EXAMPLE_PROFILE}#instruments`,
       "/tenders?type=Advance%20Contract%20Award%20Notice", "/methodology#competitive", "/methodology#expiring", EXAMPLE_SET_ASIDE,
       "/expiring", "/expiring/3m", "/expiring/6m", "/expiring/12m", "/tenders/new", "/awards", EXAMPLE_NOTICE, EXAMPLE_ACAN, EXAMPLE_AWARD,
-      EXAMPLE_BUY_CANADIAN, ...GUIDES.map(pathOf)]) {
+      EXAMPLE_BUY_CANADIAN, EXAMPLE_EVALUATION, ...GUIDES.map(pathOf)]) {
       expect(targets.has(want), want).toBe(true);
     }
     expect([...targets].some((h) => h.startsWith("/tenders?type="))).toBe(true);
@@ -351,6 +352,30 @@ describe("links and sources", () => {
     const ending = pieces(g).filter((p) => p.where.includes("#ending"));
     expect(ending.some((p) => filled(p, "en").includes(`their first ${EXPIRING_TEASER_ROWS} contracts`))).toBe(true);
     expect(ending.some((p) => filled(p, "fr").includes(`les ${EXPIRING_TEASER_ROWS} premiers contrats`))).toBe(true);
+  });
+
+  it("hold the evaluation guide's worked combined rating to its own arithmetic, in both languages", () => {
+    // Clause A0027T's example as the guide's table gives it: 135 points available, a 60/40 ratio, each pricing score
+    // the lowest evaluated price over the bid's, and the combined rating their sum, ranked.
+    const g = GUIDES.find((x) => x.slug === "how-federal-bids-are-evaluated-and-selected")!;
+    const table = g.sections.find((s) => s.id === "example")!.blocks.find((b) => b.kind === "table") as Extract<Block, { kind: "table" }>;
+    const row = (label: string) => table.rows.find((r) => !("money" in r[0]) && r[0].en === label)!.slice(1);
+    const words = (c: Cell) => c as Both;
+    const prices = row("Bid evaluated price").map((c) => (c as { money: number }).money);
+    const points = row("Overall technical score").map((c) => Number(words(c).en.split("/")[0]));
+    const lowest = Math.min(...prices);
+    const round = (n: number) => Math.round(n * 100) / 100;
+    const technical = points.map((n) => round((n / 135) * 60));
+    const pricing = prices.map((n) => round((lowest / n) * 40));
+    const combined = technical.map((t, i) => round(t + pricing[i]));
+    const fr = (n: number) => n.toFixed(2).replace(".", ",");
+    expect(row("Technical merit score").map(words)).toEqual(points.map((n, i) => ({ en: `${n}/135 x 60 = ${technical[i].toFixed(2)}`, fr: `${n}/135 x 60 = ${fr(technical[i])}` })));
+    expect(row("Pricing score").map(words)).toEqual(prices.map((n, i) => ({
+      en: `${lowest / 1000}/${n / 1000} x 40 = ${pricing[i].toFixed(2)}`, fr: `${lowest / 1000}/${n / 1000} x 40 = ${fr(pricing[i])}`,
+    })));
+    expect(row("Combined rating").map(words)).toEqual(combined.map((n) => ({ en: n.toFixed(2), fr: fr(n) })));
+    const order = [...combined].sort((a, b) => b - a);
+    expect(row("Overall rating").map((c) => words(c).en)).toEqual(combined.map((n) => ["1st", "2nd", "3rd"][order.indexOf(n)]));
   });
 
   it("hold the closing-soon window to the one the pages use", () => {
