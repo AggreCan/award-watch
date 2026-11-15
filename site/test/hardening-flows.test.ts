@@ -175,7 +175,9 @@ describe("W2: the dashboard's and the saved views' posts, and a refusal a browse
     for (const path of ["/account/bug", "/account/billing/portal", "/corrections"]) expect(bucketFor("POST", path), path).toBe("form");
     expect(wranglerConfig).toContain('{ "name": "EDIT_LIMIT", "namespace_id": "2012", "simple": { "limit": 60, "period": 60 } }');
     const ids = [...wranglerConfig.matchAll(/"namespace_id": "(\d+)"/g)].map((m) => Number(m[1]));
-    expect(Math.max(...ids)).toBe(2012);
+    // 2012 was the next namespace when the bucket landed; PAID_DOWNLOAD_LIMIT took 2013 after it (recs-caps.test.ts).
+    expect(ids.filter((id) => id === 2012)).toEqual([2012]);
+    expect(Math.max(...ids.filter((id) => id !== 2013))).toBe(2012);
     expect(new Set(ids).size).toBe(ids.length);
   });
 

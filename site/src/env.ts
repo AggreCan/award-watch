@@ -91,6 +91,10 @@ export interface Env {
   CALENDAR_LIMIT?: RateLimit;
   // The dashboard's and the saved views' posts per address (wrangler.jsonc "ratelimits", src/limits.ts "edit").
   EDIT_LIMIT?: RateLimit;
+  // The downloads of a session signed in on a paid plan, per account by its
+  // user id, in place of DOWNLOAD_LIMIT's per address (wrangler.jsonc
+  // "ratelimits", src/limits.ts throttle).
+  PAID_DOWNLOAD_LIMIT?: RateLimit;
   // An AI crawler's requests, counted by the crawler's name across all its
   // addresses (wrangler.jsonc "ratelimits", src/limits.ts AI_CRAWLERS).
   CRAWLER_LIMIT?: RateLimit;

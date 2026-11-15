@@ -26,7 +26,9 @@ open-data files, refreshed every night.
 - https://awardwatch.ca/downloads/expiring-12m.csv: every contract ending within 12 months of the data date, each listed once across sources (part of Pro once accounts open)
 - https://awardwatch.ca/data: the source files the site reads, when each was last read, and the licence
 
-Downloads are limited to ten per minute per address.
+Downloads are limited to ten per minute per address. A signed-in account on a
+paid plan has its own limit of thirty downloads per minute, counted by the
+account.
 
 ## Pages worth reading
 

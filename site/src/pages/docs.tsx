@@ -22,6 +22,10 @@ export { CONTACT_EMAIL };
 
 // Requests a minute per address, as the rate-limit bindings in wrangler.jsonc set them.
 export const REQUEST_LIMITS = { page: 120, api: 60, download: 10 } as const;
+// Downloads a minute per account signed in on Pro or Ultra, counted by the
+// account in place of the address while the accounts switch is on, as
+// PAID_DOWNLOAD_LIMIT in wrangler.jsonc sets it (src/limits.ts throttle).
+export const PAID_DOWNLOADS_PER_MINUTE = 30;
 
 type Section = { id: string; title: Key; body: unknown };
 
@@ -133,6 +137,7 @@ const PAID_TERMS: [Key, Key][] = [
 export async function termsPage(c: Context<AppEnv>): Promise<Response> {
   const ultra = await ultraOnSale(c.env);
   const followsOn = followsPanelOn(c.env);
+  const accountsOpen = accountsEnabled(c.env);
   const parts = ultra ? PAID_TERMS : PRO_TERMS;
   return doc(c, "terms", "terms.title", "terms.lead", (lang) => [
     { id: "use", title: "terms.toc_use", body: <p>{t(lang, "terms.use")}</p> },
@@ -162,9 +167,10 @@ export async function termsPage(c: Context<AppEnv>): Promise<Response> {
     {
       id: "automated", title: "terms.toc_automated", body: (
         <p>
-          {tj(lang, "terms.automated", {
+          {/* A paying account's own download limit exists only while accounts are open; Ultra is named once on sale. */}
+          {tj(lang, !accountsOpen ? "terms.automated" : ultra ? "terms.automated_paid" : "terms.automated_pro", {
             robots: <a href="/robots.txt" class="mono">robots.txt</a>,
-            pages: REQUEST_LIMITS.page, api: REQUEST_LIMITS.api, downloads: REQUEST_LIMITS.download,
+            pages: REQUEST_LIMITS.page, api: REQUEST_LIMITS.api, downloads: REQUEST_LIMITS.download, paid: PAID_DOWNLOADS_PER_MINUTE,
           })}
         </p>
       ),

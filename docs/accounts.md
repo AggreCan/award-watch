@@ -181,9 +181,12 @@ record stays on the plan cards), the weekly email while the form offers its box,
 Pro's own figures linking `/pro`. The line that a Follow or a briefing rides
 along stays in the form's panel, above the list; the code step is unchanged.
 
-Both sign-in posts count against `AUTH_LIMIT` (5 a minute per address) while
-the switch is on. Every signed-in form carries a CSRF value derived from the
-cookie's secret, checked on the post. A post whose value is not the
+Both sign-in posts count against `AUTH_LIMIT` (10 a minute per address) while
+the switch is on. A sign-in is two posts (the address, then the code), so five
+people behind one office address can sign in within the same minute; the five
+codes an hour per email address and the wrong-code lock above are held in the
+database and do not depend on it. Every signed-in form carries a CSRF value
+derived from the cookie's secret, checked on the post. A post whose value is not the
 session's, most often a form opened before this browser signed in again (a
 sign-in revokes the session it replaces, and the open tabs keep its value),
 does nothing and answers 403 with a page in the site's shell: "This form was
@@ -519,15 +522,39 @@ the console is the safer way, since its batch is one transaction.
   database signs no one in and holds no usable key.
 - **Short-lived, single-use codes.** 15 minutes, one use, 5 wrong tries an
   hour per address, whatever requests it holds.
-- **Rate limits per address and per email.** `AUTH_LIMIT` (5 a minute per
-  IP address) on both sign-in posts; 5 requests an hour per email in the
-  database. The keyed API adds `KEY_LIMIT` (600 a minute per key, keyed by
+- **Rate limits per address, per account and per email.** `AUTH_LIMIT` (10
+  a minute per IP address) on both sign-in posts; 5 requests an hour per
+  email in the database. The keyed API adds `KEY_LIMIT` (600 a minute per key, keyed by
   the key's id) on top of `API_LIMIT` (60 a minute per address), and a
   daily quota per key in the database (*The keyed API*). The dashboard's
   posts and the saved views' count against `EDIT_LIMIT` (60 a minute per
   address, namespace 2012), apart from `FORM_LIMIT`'s 5, so a long
   rearrangement leaves the billing posts and the bug report their own
-  count. A refusal to a browser's navigation (a form post, or a page a
+  count. Which requests are downloads is `bucketFor`'s decision (the Data
+  page's files, the CSV files of the analytics views, the record tables,
+  the radar's filtered windows, the standing offers and the claimed
+  organization's blocks, and the one-event calendar files). A download
+  whose session is signed in on Pro or Ultra counts against
+  `PAID_DOWNLOAD_LIMIT` (30 a minute per account, namespace 2013), keyed
+  `account:<user id>`, in place of `DOWNLOAD_LIMIT` (10 a minute per
+  address), which every other download keeps: one buyer's analytics view
+  offers 8 tables, so a Pro analyst takes three buyers' tables and most of
+  a fourth in a minute, and colleagues behind one office address each have
+  their own count. The limiter learns the account from the request's one
+  session read (`readSession`, kept per request), which the route then
+  reuses, so a paid file that reads the plan anyway costs no second read;
+  a calendar file or a free Data page file reads no session of its own, so
+  for a reader signed in there the limiter's read is the request's one
+  read. A request without a session cookie reads nothing for it. A session
+  that does not stand, a free plan, a database that cannot answer, and a
+  session answered from the instance's memory through an outage are all
+  counted by address. The account's refusal says "Too many downloads from
+  this account." in place of the address's line. Cloudflare's counts are
+  per location and approximate (the binding's page: limits "are local to
+  the Cloudflare location", and "Requests can exceed your configured
+  limit"), so an account whose requests reach two locations has 30 at each,
+  and a burst can pass 30 before the count catches up. A refusal to a
+  browser's navigation (a form post, or a page a
   browser asks for: `Sec-Fetch-Mode: navigate` or an `Accept` naming
   `text/html`) is a page in the site's shell, in the reader's language, with
   the line and a link back to the page the browser came from (its `Referer`
@@ -1463,8 +1490,8 @@ saying the counts cannot be read. The tests are
 
 | Endpoint | Reads | Parameters | Bounds |
 |---|---|---|---|
-| `GET /api/v1/tenders/open` | `tenders/open.json`, filtered as the tender list filters it | `category`, `segment`, `province` (each repeatable), `national`, `code`, `buyer`, `type`, `method`, `closing`, `q`, `sort`, `page` | 100 rows a page; `q` at most 100 characters, matched in memory |
-| `GET /api/v1/tenders/new` | `tenders/new/<day>.json` | `day` (one of the 30 days to the data date, the newest by default), `page` | 100 rows a page |
+| `GET /api/v1/tenders/open` | `tenders/open.json`, filtered as the tender list filters it, at the start of the data date (*Paging the notice lists*) | `category`, `segment`, `province` (each repeatable), `national`, `code`, `buyer`, `type`, `method`, `closing`, `q`, `sort`, `page` | 100 rows a page; `q` at most 100 characters, matched in memory |
+| `GET /api/v1/tenders/new` | `tenders/new/<day>.json`, in the file's order with the notices closed at the start of the data date last | `day` (one of the 30 days to the data date, the newest by default), `page` | 100 rows a page |
 | `GET /api/v1/expiring/{3m,6m,12m}` | the window's index and one page file | `page` | 100 rows a page, inside one 500-row file; the deeper windows also need `radar_depth` |
 | `GET /api/v1/search` | the hosted search's own statements (`site/src/search_db.ts`) | `q` (required, at most 200 characters, folded to eight words), `page` (1 to 200) | 50 organizations a page; buyers on page 1 |
 | `GET /api/v1/organizations/{id}/records` | the records database (`ORG_RECORDS_SQL`) | `source` (required: `awards`, `history`, `contracts`, `grants`), `year`, `page` (1 to 50) | 100 rows a page; the ten fiscal years ending with the data date's, or the one asked for; through `records_org` |
@@ -1483,6 +1510,50 @@ place of a count that would read the whole range. Records carry the fiscal
 year and quarter, segment, value (dollars, with `value_note`), the
 competitive flag and the method, with the organization or the buyer they
 are paired with.
+
+### Paging the notice lists
+
+`/api/v1/tenders/open` and `/api/v1/tenders/new` keep one order for the
+whole data date, so a script that pages either list gets each notice once.
+Each request filters and sorts the night's file again, and until
+2026-11-14 it did so at its own time: a notice whose closing time passed
+between two pages (many close at 14:00 ET) moved to the end of the list,
+every later row moved up a place, and the crawl skipped one row and read
+the closed notice twice. Now the closing states and the closing window are
+taken at the start of the data date, 00:00 Eastern (`site/src/closing.ts`
+`dayStartClock`, `listClock` in `site/src/api_keyed.ts`), whatever the
+time of the request:
+
+- `sort=closing` (the default): soonest closing first by the closing time
+  as published, then the reference; a notice with no closing date last. The
+  night's open file holds only notices whose closing day is the data date
+  or later, so none has passed at that instant, and a notice keeps its
+  place after its closing time passes.
+- `sort=published`: newest published first, then the reference; a notice
+  with no published date last. This order never read the clock.
+- `closing=7` and `closing=30` keep the notices whose closing day falls
+  within that many days of the data date.
+- `/tenders/new`: the file's own order (newest published first, then the
+  reference), the notices closed at the start of the data date last (the
+  file writes their status as of the data date).
+
+Both orders are the ones the `sort` parameter has always promised, so the
+spec (`site/src/api_keyed_spec.ts`) keeps its parameters and the Data page
+its `sort` line (`keyed.p_sort`); only the moment the closing states are
+read changed, and the Data page's `closing` line (`keyed.p_closing`) now
+says the window counts from the data date. The reference alone would have
+broken the default order scripts rely on. The website's own tender list
+keeps the reader's clock and still moves a notice whose closing time has
+passed to the end.
+
+Every page carries `data_as_of`, the data date it was cut from. Pages with
+the same `data_as_of` are slices of one list. If `data_as_of` changes
+between two pages, the nightly run has published a new list and the
+earlier pages came from the old one: start again from page 1. The Data
+page's API section says the same (`keyed.answers`). A second export on the
+same data date (a nightly run started again by hand) would keep the same
+`data_as_of` while its file may differ; `total` changing between pages
+shows most such cases.
 
 ### Checks, in order
 

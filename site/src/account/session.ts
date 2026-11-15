@@ -24,7 +24,7 @@ import type { Context, Next } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { AppEnv, Env } from "../env";
 import type { Lang } from "../i18n";
-import { type Plan, lastKnownPlan, planFor } from "./entitlements";
+import { type Plan, isPaidPlan, lastKnownPlan, planFor } from "./entitlements";
 import { newId, plusDays, randomHex, sameHash, sha256Hex } from "./secrets";
 import { accountsEnabled } from "./switch";
 
@@ -234,6 +234,28 @@ export async function railAccount(c: Context<AppEnv>): Promise<RailAccount | und
     return read.state === "ok" ? { email: read.account.email, plan: read.account.plan } : { email: null, plan: null };
   } catch {
     return { email: null, plan: null };
+  }
+}
+
+// -- the paying account of a download, for the limiter ----------------------------------
+
+// The user id of the request's session when the database has just answered
+// for it and its plan is paid (Pro or Ultra): the key of that account's own
+// download cap (limits.ts throttle, PAID_DOWNLOAD_LIMIT). This is the
+// request's one read (readSession above), which the route then reuses, so a
+// download that reads the plan anyway costs nothing more. null, and nothing
+// read, while the switch is off or without a session cookie; null for a
+// session that does not stand, a free plan, a database that cannot answer,
+// and a session answered from this isolate's memory through an outage
+// (stale): each of those is counted by address. Never throws.
+export async function paidAccountOf(c: Context<AppEnv>): Promise<string | null> {
+  if (!accountsEnabled(c.env)) return null;
+  if (!getCookie(c, SESSION_COOKIE)) return null;
+  try {
+    const read = await readSession(c);
+    return read.state === "ok" && !read.account.stale && isPaidPlan(read.account.plan) ? read.account.userId : null;
+  } catch {
+    return null;
   }
 }
 

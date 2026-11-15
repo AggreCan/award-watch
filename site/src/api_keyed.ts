@@ -39,7 +39,7 @@ import { accountsEnabled } from "./account/switch";
 import { withoutContacts } from "./api";
 import { KEY_PER_DAY, KEY_PER_MINUTE, LIST_PAGES_MAX, OPEN_Q_MAX, PAGE_ROWS, RECORD_PAGES_MAX, keyQuota } from "./api_keyed_spec";
 import { REQUEST_LIMITS } from "./pages/docs";
-import { clockOf, closingPassed } from "./closing";
+import { closingPassed, dayStartClock } from "./closing";
 import { MONEY_SOURCES, PROVINCES, SEGMENT_CODES, type MoneySource } from "./constants";
 import {
   BUYER_ID_RE, DAY_RE, EXPIRING_WINDOWS, type ExpiringWindow, type TenderRow, loadAlias, loadBuyerAlias, loadExpiringPage,
@@ -194,12 +194,25 @@ function openQuery(p: Params): TenderQuery {
 // it anyway, the keyed API leaves it out as the open one does.
 const listRows = (rows: readonly TenderRow[]) => rows.map((r) => withoutContacts(r));
 
+// The open and new notice lists hold one order for the whole data date: their
+// closing states and the closing window are taken at the start of the data
+// date (closing.ts dayStartClock), never at the request's own time, so a
+// notice whose closing time passes between two pages of a crawl keeps its
+// place and the pages of one data date list each notice once. A page is cut
+// from the list of the data_as_of it carries; a script that sees data_as_of
+// change between two pages starts again from page 1 (docs/accounts.md,
+// "Paging the notice lists"). The website's own list (pages/tenders.tsx)
+// keeps the reader's clock.
+const listClock = (stats: { data_as_of: string | null }) => dayStartClock(todayOf(stats.data_as_of));
+
 keyedApi.get("/tenders/open", async (c) => {
   const p = readParams(new URL(c.req.url), OPEN_PARAMS);
   if (typeof p === "string") return bad(c, p);
   const [stats, rows] = await Promise.all([loadStats(c.env), loadOpenList(c.env)]);
   if (!stats || !rows) return unpublished(c);
-  const page = pageOf(filterTenders(rows, openQuery(p), clockOf(c.env)), pageNumber(p));
+  // The order asked for (soonest closing or newest published, then the
+  // reference), as filterTenders writes it, at the data date's clock.
+  const page = pageOf(filterTenders(rows, openQuery(p), listClock(stats)), pageNumber(p));
   if (!page) return notFound(c, "page past the last");
   return c.json({ data_as_of: stats.data_as_of, ...page, rows: listRows(page.rows) });
 });
@@ -220,8 +233,9 @@ keyedApi.get("/tenders/new", async (c) => {
   if (day > latest || day <= addDays(latest, -NEW_DAYS)) return notFound(c, `day: one of the ${NEW_DAYS} days to the data date`);
   const loaded = await loadNewTenders(c.env, day);
   if (!loaded) return notFound(c, "no file for that day");
-  // As the page orders them: a notice whose closing has passed goes last.
-  const clock = clockOf(c.env);
+  // As the file orders them (newest published first, then the reference),
+  // with the notices closed at the start of the data date last.
+  const clock = listClock(stats);
   const passed = (r: TenderRow) => r.status === "closed" || (r.status === "open" && closingPassed(r.closing, clock));
   const page = pageOf([...loaded.filter((r) => !passed(r)), ...loaded.filter(passed)], pageNumber(p));
   if (!page) return notFound(c, "page past the last");

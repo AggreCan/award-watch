@@ -100,12 +100,12 @@ describe("the sign-in request", () => {
     expect(await codeRows(email)).toHaveLength(CODES_PER_HOUR);
   });
 
-  it("caps sign-in posts at 5 a minute per address with AUTH_LIMIT", async () => {
+  it("caps sign-in posts at 10 a minute per address with AUTH_LIMIT", async () => {
     const ip = nextIp();
     const statuses: number[] = [];
-    for (let i = 0; i < 6; i++) statuses.push((await post("/account/sign-in", { email: newEmail() }, { ip })).status);
-    expect(statuses.slice(0, 5)).toEqual([200, 200, 200, 200, 200]);
-    expect(statuses[5]).toBe(429);
+    for (let i = 0; i < 11; i++) statuses.push((await post("/account/sign-in", { email: newEmail() }, { ip })).status);
+    expect(statuses.slice(0, 10)).toEqual([200, 200, 200, 200, 200, 200, 200, 200, 200, 200]);
+    expect(statuses[10]).toBe(429);
     expect(bucketFor("POST", "/account/sign-in")).toBe("auth");
     expect(bucketFor("POST", "/account/check")).toBe("auth");
     expect(bucketFor("GET", "/account/sign-in")).toBe("page");

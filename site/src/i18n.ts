@@ -298,6 +298,11 @@ const STRINGS = {
     en: "Too many requests from this address. Wait a minute and try again.",
     fr: "Trop de requêtes depuis cette adresse. Attendez une minute et réessayez.",
   },
+  // A paying reader's download past the account's own cap (src/limits.ts, PAID_DOWNLOAD_LIMIT).
+  "limits.too_many_account": {
+    en: "Too many downloads from this account. Wait a minute and try again.",
+    fr: "Trop de téléchargements depuis ce compte. Attendez une minute et réessayez.",
+  },
   // The page a browser gets in place of the line above (src/limit_page.tsx): its title and the link back.
   "limits.title": { en: "Too Many Requests", fr: "Trop de requêtes" },
   "limits.back": { en: "Back to the page", fr: "Retour à la page" },
@@ -2726,6 +2731,16 @@ const STRINGS = {
     en: "Automated access follows {robots}. Each address may make {pages} page requests, {api} API requests and {downloads} downloads a minute. For bulk use, start from the downloads.",
     fr: "L'accès automatisé suit le fichier {robots}. Chaque adresse peut faire {pages} requêtes de pages, {api} requêtes à l'API et {downloads} téléchargements par minute. Pour un usage en vrac, partez des téléchargements.",
   },
+  // The same while accounts are open: a paying account's downloads have their own limit (src/limits.ts,
+  // PAID_DOWNLOAD_LIMIT). Pro's line until Ultra is on sale (the Terms name no Ultra before), then both plans'.
+  "terms.automated_pro": {
+    en: "Automated access follows {robots}. Each address may make {pages} page requests, {api} API requests and {downloads} downloads a minute. A signed-in account on Pro has its own download limit, {paid} a minute, apart from its address's. For bulk use, start from the downloads.",
+    fr: "L'accès automatisé suit le fichier {robots}. Chaque adresse peut faire {pages} requêtes de pages, {api} requêtes à l'API et {downloads} téléchargements par minute. Un compte connecté au forfait Pro a sa propre limite de téléchargements, {paid} par minute, distincte de celle de son adresse. Pour un usage en vrac, partez des téléchargements.",
+  },
+  "terms.automated_paid": {
+    en: "Automated access follows {robots}. Each address may make {pages} page requests, {api} API requests and {downloads} downloads a minute. A signed-in account on Pro or Ultra has its own download limit, {paid} a minute on either plan, apart from its address's. For bulk use, start from the downloads.",
+    fr: "L'accès automatisé suit le fichier {robots}. Chaque adresse peut faire {pages} requêtes de pages, {api} requêtes à l'API et {downloads} téléchargements par minute. Un compte connecté au forfait Pro ou Ultra a sa propre limite de téléchargements, {paid} par minute avec l'un ou l'autre forfait, distincte de celle de son adresse. Pour un usage en vrac, partez des téléchargements.",
+  },
   "terms.toc_code": { en: "The Code", fr: "Le code" },
   "terms.code": {
     en: "The site's code is under its own source-available licence, described on the {about} page.",
@@ -3133,8 +3148,8 @@ const STRINGS = {
     fr: "Une méthode d'approvisionnement telle que publiée en anglais, comme Competitive - Open bidding",
   },
   "keyed.p_closing": {
-    en: "7 or 30, for the notices closing within that many days",
-    fr: "7 ou 30, pour les avis dont la clôture tombe dans ce nombre de jours",
+    en: "7 or 30, for the notices closing within that many days of the data date",
+    fr: "7 ou 30, pour les avis dont la clôture tombe dans ce nombre de jours suivant la date des données",
   },
   "keyed.p_q": {
     en: "Words to look for. On tenders/open, in titles, descriptions and references, at most {open} characters. On search, required: a name or a business number, of which the first eight words count.",
@@ -3160,9 +3175,10 @@ const STRINGS = {
     en: "The page, from 1. A records list stops at page {records}; for more, start from the downloads.",
     fr: "La page, à partir de 1. Une liste de dossiers s'arrête à la page {records}; pour aller plus loin, partez des téléchargements.",
   },
+  // The second half: the open and new notice lists' order holds through a data date (src/api_keyed.ts listClock).
   "keyed.answers": {
-    en: "A list answers total, page, pages, per_page and rows, with data_as_of, the data date. A records list gives next_page in place of a total.",
-    fr: "Une liste répond par total, page, pages, per_page et rows, avec data_as_of, la date des données. Une liste de dossiers donne next_page au lieu d'un total.",
+    en: "A list answers total, page, pages, per_page and rows, with data_as_of, the data date. A records list gives next_page in place of a total. The open and new notice lists keep one order for the whole data date: a notice whose closing time passes keeps its place, so the pages of one data date list each notice once. If data_as_of changes between two pages, a new night's list has replaced the one the earlier pages came from: start again from page 1.",
+    fr: "Une liste répond par total, page, pages, per_page et rows, avec data_as_of, la date des données. Une liste de dossiers donne next_page au lieu d'un total. Les listes des avis ouverts et des nouveaux avis gardent un même ordre pour toute la date des données : un avis dont l'heure de clôture passe garde sa place, de sorte que les pages d'une même date des données donnent chaque avis une fois. Si data_as_of change entre deux pages, la liste d'une nouvelle nuit a remplacé celle des pages précédentes : reprenez à la page 1.",
   },
   "keyed.limits": {
     en: "Each key may make {minute} requests a minute and {day} a day, counted by UTC day. The limit of {address} API requests a minute from one address applies as well.",

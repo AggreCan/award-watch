@@ -306,8 +306,12 @@ The CSV of a table is `<view address>/<table>.csv` with the same query
 `due`). The file's name gives the source and fiscal years, or for `due` the
 fiscal year it counts from (`pwgsc-tpsgc-due-from-2026.csv`). The growth
 file adds how many of the compared records grew. Pro only: any other request
-gets the site's 404. The files are downloads for the per-address limit (ten
-a minute) and are sent `private, no-store`.
+gets the site's 404. The files are downloads: a reader signed in on Pro or
+Ultra is counted by the account (`PAID_DOWNLOAD_LIMIT`, thirty a minute,
+`site/src/limits.ts`), so the 8 tables of a buyer's view leave room for
+two more buyers and most of a third in the same minute, and any other
+request by its address (`DOWNLOAD_LIMIT`, ten a minute). They are sent
+`private, no-store`.
 
 ## The index
 

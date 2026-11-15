@@ -1,6 +1,7 @@
 import type { Context, Next } from "hono";
 import type { AppEnv, Env } from "./env";
 import { t } from "./i18n";
+import { paidAccountOf } from "./account/session";
 import { accountsEnabled } from "./account/switch";
 import { isNavigation, refusalPage } from "./limit_page";
 
@@ -46,6 +47,11 @@ import { isNavigation, refusalPage } from "./limit_page";
 // accounts terms: each writes one row of the account's own, and rearranging
 // a dashboard of a dozen panels is a post a place, so the forms' 5 would stop
 // a reader mid-move and spend the cap a billing post or a bug report needs.
+//
+// Which requests are downloads is bucketFor's decision alone. Who they are
+// counted against is throttle's: a download whose session is signed in on Pro
+// or Ultra is counted by the account (PAID_DOWNLOAD_LIMIT, 30 a minute, keyed
+// by the user id), every other download by the address (DOWNLOAD_LIMIT, 10).
 //
 // A refusal to a browser's navigation (a form post, or a page a browser asks
 // for) is a page in the site's shell with a link back (limit_page.tsx); a
@@ -227,11 +233,27 @@ export async function throttle(c: Context<AppEnv>, next: Next): Promise<Response
   if (accountsOnly && !accountsEnabled(c.env)) bucket = "page";
   // A verified search engine's crawler reads the pages at its own pace.
   if (bucket === "page" && searchEngine(c.req.header("user-agent"), edgeCategory(c))) return next();
-  const limiter = c.env[BINDING[bucket]] as RateLimit | undefined;
+  let limiter = c.env[BINDING[bucket]] as RateLimit | undefined;
+  let key = `${bucket}:${clientKey(c)}`;
+  // A download by a session signed in on a paid plan counts against that
+  // account's own cap, keyed by its user id, in place of the address's
+  // (PAID_DOWNLOAD_LIMIT): one buyer's analytics view alone offers 8 files,
+  // and colleagues behind one office address each have their own. The
+  // account comes from the request's one session read, which the route
+  // reuses; without a session cookie nothing is read (paidAccountOf).
+  let paid = false;
+  if (bucket === "download" && c.env.PAID_DOWNLOAD_LIMIT) {
+    const userId = await paidAccountOf(c);
+    if (userId) {
+      limiter = c.env.PAID_DOWNLOAD_LIMIT;
+      key = `account:${userId}`;
+      paid = true;
+    }
+  }
   if (!limiter) return next();
   let allowed = true;
   try {
-    allowed = (await limiter.limit({ key: `${bucket}:${clientKey(c)}` })).success;
+    allowed = (await limiter.limit({ key })).success;
   } catch {
     allowed = true; // a limiter fault must never take the site down
   }
@@ -242,6 +264,8 @@ export async function throttle(c: Context<AppEnv>, next: Next): Promise<Response
   if (bucket === "api") {
     return c.json({ error: t(lang, "limits.too_many_api") }, 429);
   }
-  if (isNavigation(c)) return refusalPage(c, 429);
-  return c.text(t(lang, "limits.too_many"), 429);
+  // The account's refusal says the account, since its address may have made none of them.
+  const line = paid ? "limits.too_many_account" : "limits.too_many";
+  if (isNavigation(c)) return refusalPage(c, 429, line);
+  return c.text(t(lang, line), 429);
 }

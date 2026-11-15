@@ -114,6 +114,17 @@ export function clockOf(env: { NOW?: string } | undefined | null): Clock {
   return clockAt(Number.isFinite(fixed) ? fixed : Date.now());
 }
 
+// The clock at the start of a day (00:00 Eastern, the zone closing times are
+// read in), for a list that must not depend on the time it is asked: the
+// keyed API's notice lists take their closing states and their closing
+// window at the start of the data date (src/api_keyed.ts), so every request
+// of one data date gets the same list. The night's open file holds only
+// notices whose closing day is the data date or later, so none has passed
+// then.
+export function dayStartClock(day: string): Clock {
+  return clockAt(closingInstant(`${day}T00:00:00`) ?? Date.parse(`${day}T05:00:00Z`));
+}
+
 export function closingPassed(closing: string | null | undefined, clock: Clock): boolean {
   if (!closing) return false;
   return passedFast(closing, clock.now, daysAt(clock.now, CLOSING_SOON_DAYS));
