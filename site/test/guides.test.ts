@@ -11,8 +11,8 @@ import { app } from "../src/index";
 import { CLOSING_SOON_DAYS } from "../src/constants";
 import { referenceShard } from "../src/data";
 import {
-  EXAMPLE_ACAN, EXAMPLE_AWARD, EXAMPLE_BUY_CANADIAN, EXAMPLE_EVALUATION, EXAMPLE_NOTICE, EXAMPLE_PROFILE, EXAMPLE_SET_ASIDE, GUIDES, type Block,
-  type Both, type Cell, type Guide, type Link, type Text,
+  EXAMPLE_ACAN, EXAMPLE_AWARD, EXAMPLE_BUY_CANADIAN, EXAMPLE_DEBRIEF, EXAMPLE_EVALUATION, EXAMPLE_NOTICE, EXAMPLE_PROFILE, EXAMPLE_SET_ASIDE, GUIDES,
+  type Block, type Both, type Cell, type Guide, type Link, type Text,
 } from "../src/guides";
 import { allKeys, rawEntry } from "../src/i18n";
 import { EXPIRING_TEASER_ROWS } from "../src/pages/expiring";
@@ -171,8 +171,10 @@ beforeAll(async () => {
     exampleRecords[path] = { ...((exampleRecords[path] as object) ?? {}), [reference]: { ...structuredClone(tender), reference } };
   }
   const award = (FILES["contracts/637.json"] as Record<string, any>)["award:cb-400-40000004"];
-  const awardRef = EXAMPLE_AWARD.slice("/awards/".length);
-  exampleRecords[`contracts/${await referenceShard(awardRef)}.json`] = { [`award:${awardRef}`]: { ...structuredClone(award), reference: awardRef } };
+  for (const awardRef of [EXAMPLE_AWARD, EXAMPLE_DEBRIEF].map((p) => p.slice("/awards/".length))) {
+    const path = `contracts/${await referenceShard(awardRef)}.json`;
+    exampleRecords[path] = { ...((exampleRecords[path] as object) ?? {}), [`award:${awardRef}`]: { ...structuredClone(award), reference: awardRef } };
+  }
 });
 const linkEnv = () =>
   testEnv(makeFakeAssets({}, {
@@ -289,12 +291,13 @@ describe("links and sources", () => {
     // the open ACANs and the counting of competitive records; a contract reporting a set-aside; the three
     // lists of contracts ending and the overview of them; the new notices, the award notices, an example
     // notice, ACAN and award, a notice stating a Buy Canadian policy, a request for proposal stating its selection
-    // criteria; and the guides that link one another.
+    // criteria, an award notice showing the dates and the trade agreements line the complaint rules turn on; and the
+    // guides that link one another.
     for (const want of ["/tenders", "/methodology#statuses", "/methodology#places", "/methodology#counting", "/instruments", "/data#sources",
       `${EXAMPLE_PROFILE}#awards`, `${EXAMPLE_PROFILE}#history`, `${EXAMPLE_PROFILE}#contracts`, `${EXAMPLE_PROFILE}#instruments`,
       "/tenders?type=Advance%20Contract%20Award%20Notice", "/methodology#competitive", "/methodology#expiring", EXAMPLE_SET_ASIDE,
       "/expiring", "/expiring/3m", "/expiring/6m", "/expiring/12m", "/tenders/new", "/awards", EXAMPLE_NOTICE, EXAMPLE_ACAN, EXAMPLE_AWARD,
-      EXAMPLE_BUY_CANADIAN, EXAMPLE_EVALUATION, ...GUIDES.map(pathOf)]) {
+      EXAMPLE_BUY_CANADIAN, EXAMPLE_EVALUATION, EXAMPLE_DEBRIEF, ...GUIDES.map(pathOf)]) {
       expect(targets.has(want), want).toBe(true);
     }
     expect([...targets].some((h) => h.startsWith("/tenders?type="))).toBe(true);
@@ -376,6 +379,26 @@ describe("links and sources", () => {
     expect(row("Combined rating").map(words)).toEqual(combined.map((n) => ({ en: n.toFixed(2), fr: fr(n) })));
     const order = [...combined].sort((a, b) => b - a);
     expect(row("Overall rating").map((c) => words(c).en)).toEqual(combined.map((n) => ["1st", "2nd", "3rd"][order.indexOf(n)]));
+  });
+
+  it("hold the debriefings guide's thresholds to the CFTA row of the trade guide's table, and place it right after the evaluation guide", () => {
+    // Both guides state the CFTA thresholds of Contracting Policy Notice 2025-8 for departments and agencies; when the
+    // notice is revised, the two change together.
+    const trade = GUIDES.find((x) => x.slug === "trade-agreements-and-thresholds-on-federal-tenders")!;
+    const table = trade.sections.find((s) => s.id === "thresholds")!.blocks.find((b) => b.kind === "table") as Extract<Block, { kind: "table" }>;
+    const cfta = table.rows.find((r) => !("money" in r[0]) && r[0].en.startsWith("Canadian Free Trade Agreement"))!;
+    const [goods, services, construction] = cfta.slice(1).map((c) => (c as { money: number }).money);
+    expect(services).toBe(construction);
+    const g = GUIDES.find((x) => x.slug === "debriefings-and-bid-challenges-on-federal-contracts")!;
+    const text = (lang: "en" | "fr") => pieces(g).map((p) => filled(p, lang)).join("\n");
+    const en = (n: number) => `$${n.toLocaleString("en-CA")}`;
+    const fr = (n: number) => `${String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} $`;
+    expect(text("en")).toContain(`at ${en(goods)} for goods and ${en(services)} for services and construction`);
+    expect(text("en")).toContain(`less than ${en(goods)} for goods or less than ${en(services)} for services`);
+    expect(text("en")).toContain(`${en(goods)} and above for goods and ${en(services)} and above for services and construction`);
+    expect(text("fr")).toContain(`à ${fr(goods)} pour les biens et à ${fr(services)} pour les services et la construction`);
+    expect(text("fr")).toContain(`moins de ${fr(goods)} pour les biens ou moins de ${fr(services)} pour les services`);
+    expect(GUIDES.indexOf(g)).toBe(GUIDES.findIndex((x) => x.slug === "how-federal-bids-are-evaluated-and-selected") + 1);
   });
 
   it("hold the closing-soon window to the one the pages use", () => {

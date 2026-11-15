@@ -124,9 +124,10 @@ sample reference to those patterns. The samples' clock is their data date,
    suite of its own that `npm test` never runs);
 2. serves those pages beside `site/public` over local HTTP (nothing under
    `/data/`), so their stylesheet, scripts and fonts load as on the site;
-3. opens one headless browser (Edge; `FIGURES_BROWSER` names another, such
-   as Chrome) and loads each page in both languages, at two widths and in
-   both themes. The wide image is the desktop layout (from 1000 px) at the
+3. opens a headless browser (Edge; `FIGURES_BROWSER` names another, such
+   as Chrome), a fresh one for each capture, since one kept open across
+   many captures was seen to darken light pages, and loads each page in both
+   languages, at two widths and in both themes. The wide image is the desktop layout (from 1000 px) at the
    widest viewport whose crop fits the figure's room in the guide's column
    (846 px less the frame's 8 px indent, 838), shown at its own size; the
    phone image is a 390 px viewport, shown in 316 px (0.854 of its size for
@@ -156,10 +157,11 @@ when a mark would cover text (all such marks of the run are named at once).
 a figure at 1440 and 390 px, light and dark, in both languages, fails on a
 sideways scroll, a figure showing the wrong file or the wrong number of
 marks, or a fetched file of the hidden theme, and saves each figure as it
-shows into the folder. The browser runs on a debugging port nothing else
-answers on, so another headless browser on the machine is never touched. It
-is closed on every way out with its whole process tree, any process still
-carrying the run's debugging port or profile is stopped, and its profile is
+shows into the folder, again with a fresh browser for each page it loads.
+Each browser runs on a debugging port nothing else answers on, so another
+headless browser on the machine is never touched. It is closed before the
+next opens and on every way out, with its whole process tree; any process
+still carrying its debugging port or profile is stopped, and its profile is
 removed.
 
 The browser's WebP encoder is lossy at every quality; the tool uses 90.
@@ -197,8 +199,8 @@ before the sources, the same for every such reader: a band
 form (`InterestBody`), which posts to `/interest` as on the list pages and
 saves the list it was served with. Its line offering Pro is left out, since
 a guide links no account page. With the switch off, or for a signed-in
-reader, a guide is as it was. The eleven guides: the bidding, evaluation, tender notice, trade agreement, Buy Canadian,
-security and set-aside guides save every new tender notice; the ACAN guide the new notices of the type Advance Contract
+reader, a guide is as it was. The twelve guides: the bidding, evaluation, debriefing and bid challenge, tender notice,
+trade agreement, Buy Canadian, security and set-aside guides save every new tender notice; the ACAN guide the new notices of the type Advance Contract
 Award Notice, and the standing offers guide those of the type Request for
 Standing Offer, each while the open notices carry that type (otherwise
 every new tender notice, as on the tender list); the three-records and

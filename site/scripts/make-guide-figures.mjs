@@ -5,9 +5,10 @@
 //    temporary file.
 // 2. Those pages are served over local HTTP beside public/, so their stylesheet, scripts and fonts load as on
 //    the site. Nothing under /data/ is served.
-// 3. One headless browser (Edge by default; FIGURES_BROWSER names another, such as Chrome) loads each figure's
-//    page in each language, at each width and in each theme, waits for its fonts and layout, reads the box of
-//    the figure's region and of each callout's target, and captures the region as WebP at device scale 2. The
+// 3. A headless browser (Edge by default; FIGURES_BROWSER names another, such as Chrome), a fresh one for each
+//    capture, loads each figure's page in each language, at each width and in each theme, waits for its fonts
+//    and layout, reads the box of the figure's region and of each callout's target, and captures the region as
+//    WebP at device scale 2. The
 //    wide image is the desktop layout (from 1000 px) at the widest viewport that keeps the region within the
 //    figure's room in the guide's column (846 px less the frame's indent); the phone image is a 390 px
 //    viewport.
@@ -24,12 +25,14 @@
 // some language, width or theme, a region the column cannot hold, light and dark laid out apart, a mark on
 // text.
 //
-// --check <dir> then loads each guide holding a figure at 1440 and 390 px, light and dark, in both languages:
-// it fails on a horizontal scroll, on a figure showing the wrong file or the wrong number of marks, or on the
-// hidden theme's file having been fetched, and saves each figure as it shows into dir.
+// --check <dir> then loads each guide holding a figure at 1440 and 390 px, light and dark, in both languages
+// (a fresh browser for each load): it fails on a horizontal scroll, on a figure showing the wrong file or the
+// wrong number of marks, or on the hidden theme's file having been fetched, and saves each figure as it shows
+// into dir.
 //
-// The browser is closed on every way out by its whole process tree, then any process still carrying this
-// run's debugging port or profile is stopped, and the profile is removed. The local server is closed too.
+// Each browser is closed before the next opens and on every way out, by its whole process tree, then any
+// process still carrying its debugging port or profile is stopped, and the profile is removed. The local
+// server is closed too.
 
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, rmdirSync, statSync, writeFileSync } from "node:fs";
@@ -149,9 +152,9 @@ let browser = null;
 let server = null;
 let socket = null;
 
-// Every way out: the socket, the browser's whole tree, any process still carrying this run's port or
-// profile, the profile, the server. Safe to call more than once, and synchronous so an exit handler can.
-function closeAll() {
+// One browser closed: the socket, the browser's whole tree, any process still carrying its port or profile,
+// the profile. Safe to call more than once, and synchronous so an exit handler can.
+function closeBrowser() {
   try { socket?.close(); } catch {}
   socket = null;
   if (browser && browser.pid) {
@@ -177,6 +180,12 @@ function closeAll() {
   for (let i = 0; launched && i < 10 && existsSync(PROFILE); i++) {
     try { rmSync(PROFILE, { recursive: true, force: true }); } catch { spawnSync(process.execPath, ["-e", "setTimeout(()=>{},300)"]); }
   }
+  launched = false;
+}
+
+// Every way out: the browser as above, then the server.
+function closeAll() {
+  closeBrowser();
   if (server) {
     server.closeAllConnections?.();
     server.close();
@@ -282,6 +291,13 @@ async function openBrowser() {
     return r.result.value;
   };
   return { send, next, evaluate };
+}
+
+// A browser of its own for every capture and every page the check loads: a headless browser kept open across
+// many captures was seen to darken light pages. The one before is closed first, as on every way out.
+async function freshBrowser() {
+  closeBrowser();
+  return openBrowser();
 }
 
 // -- 4. measuring and capturing ------------------------------------------------------------
@@ -448,7 +464,7 @@ const misplaced = [];
 
 const pct = (v, whole) => Math.round((v / whole) * 10000) / 100;
 
-async function shootFigure(cdp, fig) {
+async function shootFigure(fig) {
   const out = { files: new Map(), entry: { slug: fig.slug, page: fig.page, region: fig.region, targets: fig.targets } };
   const lines = [];
   for (const lang of LANGS) {
@@ -458,6 +474,7 @@ async function shootFigure(cdp, fig) {
       let viewport = width === "phone" ? PHONE : WIDE_START;
       let height = 2400;
       const where = (theme) => `${fig.id} (${lang}, ${width}, ${theme})`;
+      let cdp = await freshBrowser();
       await load(cdp, path, viewport, height, "light");
       let m = await measure(cdp, fig, where("light"));
       // The widest desktop layout whose region the figure's room in the guide's column holds.
@@ -479,7 +496,9 @@ async function shootFigure(cdp, fig) {
       let first = null;
       for (const theme of THEMES) {
         if (theme !== "light") {
-          await setView(cdp, viewport, height, theme);
+          // The same page at the same size, in a browser of its own.
+          cdp = await freshBrowser();
+          await load(cdp, path, viewport, height, theme);
           m = await measure(cdp, fig, where(theme));
         }
         if (first) {
@@ -596,7 +615,7 @@ const CHECK = `(figures) => {
   return out;
 }`;
 
-async function check(cdp, manifest, dir) {
+async function check(manifest, dir) {
   mkdirSync(dir, { recursive: true });
   const guides = manifest.items.filter((i) => i.kind === "guide");
   for (const item of guides) {
@@ -605,6 +624,7 @@ async function check(cdp, manifest, dir) {
     for (const [viewport, width] of [[1440, "wide"], [PHONE, "phone"]]) {
       for (const theme of THEMES) {
         const where = `${item.path} at ${viewport} px, ${theme}`;
+        const cdp = await freshBrowser();
         await load(cdp, item.path, viewport, 1200, theme);
         // Bring each figure into view so its lazy image loads, then wait for it.
         for (const f of figs) {
@@ -664,9 +684,8 @@ async function main() {
   if (new Set(ids).size !== ids.length) fail("two figures share an id");
   server = await serve(pages);
   base = `http://127.0.0.1:${server.address().port}`;
-  const cdp = await openBrowser();
   const results = [];
-  for (const fig of manifest.figures) results.push({ id: fig.id, ...(await shootFigure(cdp, fig)) });
+  for (const fig of manifest.figures) results.push({ id: fig.id, ...(await shootFigure(fig)) });
   // Every mark on text, in every figure, at once.
   if (misplaced.length) fail(`${misplaced.length} marks would cover text or fall outside their room:\n  ${misplaced.join("\n  ")}`);
   writeAll(results);
@@ -674,7 +693,7 @@ async function main() {
     // The guides drawn again, now with the positions just written.
     const again = render();
     for (const [path, html] of again.pages) pages.set(path, html);
-    await check(cdp, again.manifest, resolve(checkAt));
+    await check(again.manifest, resolve(checkAt));
   }
 }
 

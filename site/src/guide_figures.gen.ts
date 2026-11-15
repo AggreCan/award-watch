@@ -54,6 +54,23 @@ export const GUIDE_FIGURES: Readonly<Record<string, FigureEntry>> = {
       phone: {"width":370,"height":737,"viewport":390,"boxes":[[1.89,11.26,96.22,5.02],[1.89,24.02,96.22,10.45],[1.89,34.46,96.22,40.3]]},
     },
   },
+  "award-procurement": {
+    slug: "debriefings-and-bid-challenges-on-federal-contracts", page: "/awards/cw9391528", region: ".panel-grid > section.panel",
+    targets: [
+      "dl > dt:nth-of-type(1), dl > dt:nth-of-type(1) + dd",
+      "dl > dt:nth-of-type(3), dl > dt:nth-of-type(3) + dd",
+      "dl > dt:nth-of-type(6), dl > dt:nth-of-type(6) + dd",
+      "dl > dt:nth-of-type(10), dl > dt:nth-of-type(10) + dd",
+    ],
+    en: {
+      wide: {"width":557,"height":525,"viewport":1440,"boxes":[[1.35,8.95,97.4,6.86],[1.35,22.86,97.4,7.05],[1.35,44,97.4,7.05],[1.35,72.19,97.4,8.57]]},
+      phone: {"width":370,"height":725,"viewport":390,"boxes":[[1.89,6.48,96.22,7.72],[1.89,22.07,96.22,7.86],[1.89,45.66,96.22,5.1],[1.89,71.59,96.22,8.97]]},
+    },
+    fr: {
+      wide: {"width":557,"height":565,"viewport":1440,"boxes":[[1.35,8.32,97.4,6.37],[1.35,24.78,97.4,6.55],[1.35,44.42,97.4,6.55],[1.35,74.16,97.4,7.96]]},
+      phone: {"width":370,"height":645,"viewport":390,"boxes":[[1.89,7.29,96.22,5.58],[1.89,21.71,96.22,8.84],[1.89,45.12,96.22,5.74],[1.89,71.16,96.22,10.08]]},
+    },
+  },
   "notice-head": {
     slug: "reading-a-canadabuys-tender-notice", page: "/tenders/cb-900-90000101", region: "header.page-head .page-head-row",
     targets: [

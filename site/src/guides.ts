@@ -92,6 +92,7 @@ const TBS = both("Treasury Board of Canada Secretariat", "Secrétariat du Consei
 const JUSTICE = both("Justice Laws Website, Department of Justice Canada", "Site Web de la législation, ministère de la Justice Canada");
 const ISC = both("Indigenous Services Canada", "Services aux Autochtones Canada");
 const OPO = both("Office of the Procurement Ombud", "Bureau de l'ombud de l'approvisionnement");
+const CITT = both("Canadian International Trade Tribunal", "Tribunal canadien du commerce extérieur");
 // PSPC's Buyer's Guide, in each language.
 const GUIDE_EN = "https://canadabuys.canada.ca/en/buyer-s-portal/buyer-s-guide";
 const GUIDE_FR = "https://achatscanada.canada.ca/fr/portail-de-l-acheteur/guide-de-l-acheteur";
@@ -720,6 +721,59 @@ const SRC = {
       url: "https://achatscanada.canada.ca/fr/occasions-de-marche/appels-d-offres/ws5933829424-doc5973518768",
     },
   },
+  // After the award: the Buyer's Guide's page on debriefings, the Procurement Ombud's questions on complaints and its
+  // regulations, and the Trade Tribunal's pages and its regulations (each read on 2026-11-14).
+  debriefing: {
+    title: "Debriefing and feedback sessions (Buyer's Guide)",
+    publisher: PSPC,
+    url: `${GUIDE_EN}/award/manage-evaluation-results/debriefing-and-feedback-sessions`,
+    fr: {
+      title: "Comptes rendus et rencontres de rétroaction (Guide de l'acheteur)",
+      url: `${GUIDE_FR}/attribuer/gestion-des-resultats-d-evaluation/comptes-rendus-et-rencontres-de-retroaction`,
+    },
+  },
+  opoComplaints: {
+    title: "Frequently asked questions on how to make a complaint",
+    publisher: OPO,
+    url: "https://opo-boa.gc.ca/plainte-complaint-eng.html",
+    fr: { title: "Foire aux questions sur la façon de déposer une plainte", url: "https://opo-boa.gc.ca/plainte-complaint-fra.html" },
+  },
+  ombudsmanRegulations: {
+    title: "Procurement Ombudsman Regulations (SOR/2008-143)",
+    publisher: JUSTICE,
+    url: "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2008-143/FullText.html",
+    fr: { title: "Règlement concernant l'ombudsman de l'approvisionnement (DORS/2008-143)", url: "https://laws-lois.justice.gc.ca/fra/reglements/DORS-2008-143/TexteComplet.html" },
+  },
+  cittComplaint: {
+    title: "File a complaint",
+    publisher: CITT,
+    url: "https://www.citt-tcce.gc.ca/en/procurement-inquiries/file-complaint",
+    fr: { title: "Déposer une plainte", url: "https://www.citt-tcce.gc.ca/fr/enquetes-sur-marches-publics/deposer-plainte" },
+  },
+  cittOmbud: {
+    title: "Working with the Office of the Procurement Ombud",
+    publisher: CITT,
+    url: "https://www.citt-tcce.gc.ca/en/procurement-inquiries/working-office-procurement-ombud",
+    fr: {
+      title: "Collaboration avec le Bureau de l'ombud de l'approvisionnement",
+      url: "https://www.citt-tcce.gc.ca/fr/enquetes-sur-marches-publics/collaboration-avec-bureau-ombud-approvisionnement",
+    },
+  },
+  cittGuide: {
+    title: "Procurement inquiries guide",
+    publisher: CITT,
+    url: "https://www.citt-tcce.gc.ca/en/procurement-inquiries/procurement-inquiries-guide",
+    fr: { title: "Guide des enquêtes sur les marchés publics", url: "https://www.citt-tcce.gc.ca/fr/enquetes-sur-marches-publics/guide-enquetes-sur-marches-publics" },
+  },
+  cittRegulations: {
+    title: "Canadian International Trade Tribunal Procurement Inquiry Regulations (SOR/93-602)",
+    publisher: JUSTICE,
+    url: "https://laws-lois.justice.gc.ca/eng/regulations/SOR-93-602/FullText.html",
+    fr: {
+      title: "Règlement sur les enquêtes du Tribunal canadien du commerce extérieur sur les marchés publics (DORS/93-602)",
+      url: "https://laws-lois.justice.gc.ca/fra/reglements/DORS-93-602/TexteComplet.html",
+    },
+  },
 } satisfies Record<string, Source>;
 
 // The site's own pages the guides link to.
@@ -747,6 +801,10 @@ export const EXAMPLE_BUY_CANADIAN = "/tenders/cb-342-43639893";
 // Technical Merit and Price, and whose description sends bidders to SAP Ariba for the solicitation and its annexes
 // (read on CanadaBuys, in the site's data and on awardwatch.ca on 2026-11-14; it closes 2026-12-31).
 export const EXAMPLE_EVALUATION = "/tenders/ws5933829424-doc5973518768";
+// An award notice from Agriculture and Agri-Food Canada for goods whose page shows an award date (2026-10-21) and a
+// publication date (2026-11-10) apart, a total contract value and a trade agreements line of eleven agreements, the
+// CFTA among them (read in the site's newest award notices and on awardwatch.ca on 2026-11-14).
+export const EXAMPLE_DEBRIEF = "/awards/cb-879-18498282";
 // The pages the figures are captured from, drawn from the sample records in site/figures/, made for the figures
 // and never real, their reference numbers in ranges the real series are nowhere near: three tender notices (the
 // second with security requirements in its description, a limited tendering reason of None and a trade
@@ -778,6 +836,7 @@ const SECURITY_PATH = "/guides/security-requirements-on-federal-contracts";
 const TRADE_PATH = "/guides/trade-agreements-and-thresholds-on-federal-tenders";
 const BUY_CANADIAN_PATH = "/guides/buy-canadian-policy-on-federal-tenders";
 const EVALUATION_PATH = "/guides/how-federal-bids-are-evaluated-and-selected";
+const DEBRIEF_PATH = "/guides/debriefings-and-bid-challenges-on-federal-contracts";
 
 // -- the guides ---------------------------------------------------------------------
 
@@ -2437,8 +2496,9 @@ const HOW_TO_BID: Guide = {
           ],
         ),
         p(
-          "After a competitive process, a bidder may ask the contracting officer for a debriefing once told of the results or of an award to someone else, a right CanadaBuys traces to the Directive on the Management of Procurement and some trade agreements. A debriefing typically gives the successful supplier's name, the contract value and an outline of why the bid was not successful.",
-          "Après un processus concurrentiel, un soumissionnaire peut demander un compte rendu à l'agent de négociation des contrats une fois informé des résultats ou de l'attribution du contrat à quelqu'un d'autre, un droit qu'AchatsCanada rattache à la Directive sur la gestion de l'approvisionnement et à certains accords commerciaux. Un compte rendu comprend en général le nom du fournisseur retenu, la valeur du contrat et un résumé des raisons pour lesquelles la soumission n'a pas été retenue.",
+          "After a competitive process, a bidder may ask the contracting officer for a {debriefing} once told of the results or of an award to someone else, a right CanadaBuys traces to the Directive on the Management of Procurement and some trade agreements. A debriefing typically gives the successful supplier's name, the contract value and an outline of why the bid was not successful.",
+          "Après un processus concurrentiel, un soumissionnaire peut demander un {debriefing} à l'agent de négociation des contrats une fois informé des résultats ou de l'attribution du contrat à quelqu'un d'autre, un droit qu'AchatsCanada rattache à la Directive sur la gestion de l'approvisionnement et à certains accords commerciaux. Un compte rendu comprend en général le nom du fournisseur retenu, la valeur du contrat et un résumé des raisons pour lesquelles la soumission n'a pas été retenue.",
+          { debriefing: a(DEBRIEF_PATH, "debriefing", "compte rendu") },
         ),
         p(
           "CanadaBuys recommends taking an objection to the contracting authority first. The Office of the Procurement Ombud can review complaints about the award of certain contracts below $34,700 for goods and $139,000 for services; a supplier has, in most cases, 30 working days after the public notice of award to file. The Canadian International Trade Tribunal takes complaints on procurements covered by at least one trade agreement, within 10 working days of that notice.",
@@ -2601,9 +2661,10 @@ const TRADE: Guide = {
           "L'avis 2025-8 exige des avis d'appel d'offres pour les approvisionnements assujettis aux accords de libre-échange, publiés par le Service électronique d'appels d'offres du gouvernement (SEAOG) sur AchatsCanada. Le Guide de l'acheteur exige que les marchés concurrentiels visés, y compris les mini-appels d'offres découlant d'un arrangement en matière d'approvisionnement, soient annoncés dans le SEAOG, à moins que des exceptions particulières ne s'appliquent; en cas d'incohérence entre les accords, l'acheteur suit la disposition qui offre la norme la plus élevée en matière de transparence, comme la plus longue de deux périodes de soumission.",
         ),
         p(
-          "After the award, a procurement subject to the international agreements and the CFTA needs an award notice within 72 days. A complaint to the Canadian International Trade Tribunal requires a procurement covered by at least one trade agreement. {bid} sets out the steps from registration to the award, and the {bc} explains how its measures sit with these agreements.",
-          "Après l'attribution, un approvisionnement assujetti aux accords internationaux et à l'ALEC exige un avis d'attribution dans les 72 jours. Une plainte au Tribunal canadien du commerce extérieur exige un approvisionnement visé par au moins un accord commercial. {bid} présente les étapes, de l'inscription à l'attribution, et le {bc} explique comment ses mesures s'articulent avec ces accords.",
+          "After the award, a procurement subject to the international agreements and the CFTA needs an award notice within 72 days. {complaint} requires a procurement covered by at least one trade agreement. {bid} sets out the steps from registration to the award, and the {bc} explains how its measures sit with these agreements.",
+          "Après l'attribution, un approvisionnement assujetti aux accords internationaux et à l'ALEC exige un avis d'attribution dans les 72 jours. {complaint} exige un approvisionnement visé par au moins un accord commercial. {bid} présente les étapes, de l'inscription à l'attribution, et le {bc} explique comment ses mesures s'articulent avec ces accords.",
           {
+            complaint: a(DEBRIEF_PATH, "A complaint to the Canadian International Trade Tribunal", "Une plainte au Tribunal canadien du commerce extérieur"),
             bid: a(BID_PATH, "How to Bid on Government of Canada Contracts", "Soumissionner sur les marchés du gouvernement du Canada"),
             bc: a(BUY_CANADIAN_PATH, "guide on the Buy Canadian Policy", "guide sur la Politique « Achetez canadien »"),
           },
@@ -3524,8 +3585,9 @@ const EVALUATION: Guide = {
           { example: a(EXAMPLE_EVALUATION, "request for proposal", "demande de propositions") },
         ),
         p(
-          "After the award, the dictionary's award notice fields include the supplier's legal name, the contract award date and the contract's value including taxes, with the same selection criteria field. A debriefing typically includes the overall evaluation result of the successful supplier and an outline of the reasons the debriefed supplier was not successful, referring back to the evaluation criteria and selection method.",
-          "Après l'attribution, les champs des avis d'attribution du dictionnaire comprennent la dénomination sociale du fournisseur, la date d'attribution du contrat et la valeur du contrat, taxes comprises, ainsi que le même champ des critères de sélection. Un compte rendu devrait comprendre le résultat global de l'évaluation du fournisseur retenu et un résumé des raisons pour lesquelles le fournisseur n'a pas été retenu, en renvoyant aux critères d'évaluation et à la méthode de sélection.",
+          "After the award, the dictionary's award notice fields include the supplier's legal name, the contract award date and the contract's value including taxes, with the same selection criteria field. {debriefing} typically includes the overall evaluation result of the successful supplier and an outline of the reasons the debriefed supplier was not successful, referring back to the evaluation criteria and selection method.",
+          "Après l'attribution, les champs des avis d'attribution du dictionnaire comprennent la dénomination sociale du fournisseur, la date d'attribution du contrat et la valeur du contrat, taxes comprises, ainsi que le même champ des critères de sélection. {debriefing} devrait comprendre le résultat global de l'évaluation du fournisseur retenu et un résumé des raisons pour lesquelles le fournisseur n'a pas été retenu, en renvoyant aux critères d'évaluation et à la méthode de sélection.",
+          { debriefing: a(DEBRIEF_PATH, "A debriefing", "Un compte rendu") },
         ),
       ],
     },
@@ -3537,9 +3599,226 @@ const EVALUATION: Guide = {
   ],
 };
 
+const DEBRIEF: Guide = {
+  slug: DEBRIEF_PATH.slice("/guides/".length),
+  title: both("After the Award: Debriefings and Bid Challenges on Federal Contracts", "Après l'attribution : comptes rendus et contestations des offres sur les marchés fédéraux"),
+  seoTitle: both("Debriefings and Bid Challenges on Federal Contracts", "Compte rendu et contestation d'une offre fédérale"),
+  summary: both(
+    "After a federal contract award: the debriefing, and the Procurement Ombud's and Trade Tribunal's thresholds, deadlines and recommendations.",
+    "Après une attribution fédérale : le compte rendu, et les seuils, délais et recommandations de l'ombud et du Tribunal canadien du commerce extérieur.",
+  ),
+  checked: "2026-11-14",
+  action: tenderList(
+    "To see the next federal tender notices as they are posted, save this list with your email address.",
+    "Pour voir les prochains avis d'appel d'offres fédéraux à mesure qu'ils sont publiés, enregistrez cette liste avec votre adresse courriel.",
+  ),
+  sections: [
+    {
+      id: "debriefing",
+      title: both("The Debriefing", "Le compte rendu"),
+      blocks: [
+        p(
+          "CanadaBuys says suppliers can ask the contracting officer responsible for the opportunity for a debriefing once a contract is awarded following a competition; {bid} gives when it may be asked and what a typical one includes. The Treasury Board's Directive on the Management of Procurement makes contracting authorities responsible for ensuring that bidders who request a debriefing receive one in a timely manner after a contract has been awarded.",
+          "AchatsCanada indique que les fournisseurs peuvent demander un compte rendu à l'agent de négociation des contrats responsable de l'occasion de marché une fois qu'un contrat est attribué à la suite d'un concours; {bid} précise quand le demander et ce que comprend en général un compte rendu. La Directive sur la gestion de l'approvisionnement du Conseil du Trésor charge les autorités contractantes de veiller à ce que les soumissionnaires qui demandent un compte rendu en reçoivent un rapidement après l'attribution du contrat.",
+          { bid: a(BID_PATH, "How to Bid on Government of Canada Contracts", "Soumissionner sur les marchés du gouvernement du Canada") },
+        ),
+        p(
+          "Under the Buyer's Guide of Public Services and Procurement Canada (PSPC), solicitations must clearly state that offerors are entitled to request a debriefing, which they may do upon the award of a contract or the issuance of a standing offer or supply arrangement. Offerors should request it within 15 working days of receiving the results of the solicitation process or its cancellation, and it should be conducted within 10 working days from the date the request is received. It can be provided in writing, by telephone or in person, depending on the most effective method for the specific procurement context.",
+          "Selon le Guide de l'acheteur de Services publics et Approvisionnement Canada (SPAC), les documents de demande d'offres doivent préciser clairement que les offrants ont le droit de demander un compte rendu, ce qu'ils peuvent faire après l'attribution d'un contrat ou l'émission d'une offre à commandes ou d'un arrangement en matière d'approvisionnement. Les offrants devraient le demander dans les 15 jours ouvrables suivant la réception des résultats du processus de demande d'offres ou de son annulation, et il devrait avoir lieu dans les 10 jours ouvrables suivant la date de réception de la demande. Il peut être fourni par écrit, par téléphone ou en personne, selon la méthode la plus efficace dans le contexte précis de l'approvisionnement.",
+        ),
+        p(
+          "Within the limits of information disclosure policies, the guide's list of what a debriefing will include, as applicable, runs from the names of the successful offerors to the scores the offeror achieved on all rated criteria, with sufficient details to understand why those scores were assigned; {evaluation} explains those criteria.",
+          "Dans les limites des politiques de divulgation de renseignements, la liste du guide de ce que comprendra un compte rendu, selon le cas, va des noms des offrants retenus aux résultats obtenus par l'offrant sur tous les critères cotés, avec suffisamment de détails pour comprendre pourquoi ces notes ont été attribuées; {evaluation} explique ces critères.",
+          { evaluation: a(EVALUATION_PATH, "How a Federal Bid Is Evaluated and the Basis of Selection", "L'évaluation d'une soumission fédérale et la méthode de sélection") },
+        ),
+      ],
+    },
+    {
+      id: "bodies",
+      title: both("Two Bodies, Split by Value", "Deux organismes, selon la valeur"),
+      blocks: [
+        p(
+          "For an objection or complaint about a rejected bid, CanadaBuys recommends first contacting the contracting authority, which does not prevent recourse elsewhere. It notes that the options do not apply to every procurement and supplier, and describes two bodies a supplier may complain to, the Office of the Procurement Ombud (OPO) and the Canadian International Trade Tribunal.",
+          "Pour une objection ou une plainte concernant une soumission rejetée, AchatsCanada recommande de communiquer d'abord avec l'autorité contractante, ce qui n'empêche pas d'exercer d'autres recours. Il précise que les options ne s'appliquent pas à tous les achats et fournisseurs, et décrit deux organismes auprès desquels un fournisseur peut porter plainte, le Bureau de l'ombud de l'approvisionnement (BOA) et le Tribunal canadien du commerce extérieur.",
+        ),
+        p(
+          "The Tribunal's page on working with OPO explains that Parliament created OPO to deal with matters under the lowest dollar-value threshold amounts of the Canadian Free Trade Agreement (CFTA). Treasury Board Contracting Policy Notice 2025-8, which notes that the thresholds in the free trade agreements are updated every two years, sets the CFTA's thresholds for departments and agencies at $34,700 for goods and $139,000 for services and construction for the period from January 1, 2026, to December 31, 2027.",
+          "La page du Tribunal sur la collaboration avec le BOA explique que le Parlement a créé le BOA pour traiter des questions qui relèvent du seuil monétaire le plus bas de l'Accord de libre-échange canadien (ALEC). L'Avis sur la Politique des marchés 2025-8 du Conseil du Trésor, qui rappelle que les seuils des accords de libre-échange sont mis à jour tous les deux ans, fixe les seuils de l'ALEC pour les ministères et organismes à 34 700 $ pour les biens et à 139 000 $ pour les services et la construction pour la période du 1er janvier 2026 au 31 décembre 2027.",
+        ),
+        p(
+          "The rules side by side, from OPO's questions on complaints, the Tribunal's page on filing a complaint and its procurement inquiries guide, the Procurement Ombudsman Regulations and the Canadian International Trade Tribunal Procurement Inquiry Regulations, both current to October 19, 2026:",
+          "Les règles côte à côte, d'après la foire aux questions du BOA sur les plaintes, la page du Tribunal sur le dépôt d'une plainte et son guide des enquêtes sur les marchés publics, le Règlement concernant l'ombudsman de l'approvisionnement et le Règlement sur les enquêtes du Tribunal canadien du commerce extérieur sur les marchés publics, tous deux à jour au 19 octobre 2026 :",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "label", label: both("Rule", "Règle") },
+            { kind: "main", label: both("Office of the Procurement Ombud", "Bureau de l'ombud de l'approvisionnement") },
+            { kind: "main", label: both("Canadian International Trade Tribunal", "Tribunal canadien du commerce extérieur") },
+          ],
+          rows: [
+            [
+              both("Who may file", "Qui peut porter plainte"),
+              both("A supplier that has a place of business in Canada", "Un fournisseur qui a un établissement au Canada"),
+              both("Canadian and foreign suppliers", "Les fournisseurs canadiens et étrangers"),
+            ],
+            [
+              both("Value", "Valeur"),
+              both(
+                "For a complaint about an award, less than $34,700 for goods or less than $139,000 for services; for one about the administration of a contract, no dollar threshold",
+                "Pour une plainte concernant l'attribution, moins de 34 700 $ pour les biens ou moins de 139 000 $ pour les services; pour une plainte concernant l'administration d'un contrat, aucun seuil monétaire",
+              ),
+              both(
+                "For a Canadian supplier, $34,700 and above for goods and $139,000 and above for services and construction; $100,000 and above for services relating to the Canada-Korea Free Trade Agreement",
+                "Pour un fournisseur canadien, 34 700 $ et plus pour les marchandises et 139 000 $ et plus pour les services et la construction; 100 000 $ et plus pour les services liés à l'Accord de libre-échange Canada-Corée",
+              ),
+            ],
+            [
+              both("Deadline to file", "Délai de dépôt"),
+              both(
+                "For a complaint about an award, 30 working days after public notice of the award; with no public notice, 30 working days after the day the award became known or reasonably should have become known to the complainant",
+                "Pour une plainte concernant l'attribution, 30 jours ouvrables suivant l'avis public de l'attribution; à défaut d'avis, 30 jours ouvrables suivant la date à laquelle le plaignant a eu connaissance de l'attribution ou aurait raisonnablement dû en avoir connaissance",
+              ),
+              both(
+                "Not later than 10 working days after the day the basis of the complaint became known or reasonably should have become known to the potential supplier",
+                "Dans les 10 jours ouvrables suivant la date où le fournisseur potentiel a découvert ou aurait dû vraisemblablement découvrir les faits à l'origine de la plainte",
+              ),
+            ],
+            [
+              both("After an objection to the buyer", "Après une opposition auprès de l'acheteur"),
+              both(
+                "30 working days after the day the contracting department denied the objection, if it was made within the period above",
+                "30 jours ouvrables suivant le refus du ministère contractant de donner suite à l'opposition, si elle a été présentée dans le délai ci-dessus",
+              ),
+              both(
+                "10 working days after the day of actual or constructive knowledge of the denial of relief, if the objection was made within 10 working days after the day its basis became known or reasonably should have become known",
+                "10 jours ouvrables suivant la date où le fournisseur a pris connaissance, directement ou par déduction, du refus de réparation, si l'opposition a été présentée dans les 10 jours ouvrables suivant la date où il a découvert ou aurait dû vraisemblablement découvrir les faits à son origine",
+              ),
+            ],
+            [
+              both("Later filing", "Dépôt tardif"),
+              both(
+                "Where, for reasons beyond its control, the complainant is not able to file within those periods, the Ombud may, at its request, extend them to a maximum of 90 working days",
+                "Si, pour des raisons hors de son contrôle, le plaignant n'a pas pu déposer sa plainte dans ces délais, l'ombud peut, sur demande du plaignant, les prolonger jusqu'à un maximum de 90 jours ouvrables",
+              ),
+              both(
+                "Not later than 30 days after the day the basis became known or reasonably should have become known, if the Tribunal determines, considering all the circumstances and the potential supplier's good faith, that the failure to file was attributable to a cause beyond its control at the time the complaint should have been filed, or that the complaint concerns an aspect of the procurement process of a systemic nature, relating to the contract, and compliance with the procurement provisions of one or more applicable trade agreements",
+                "Dans les 30 jours suivant la date où le fournisseur potentiel a découvert ou aurait dû vraisemblablement découvrir les faits à l'origine de la plainte, si le Tribunal conclut, compte tenu de toutes les circonstances et de la bonne foi du fournisseur potentiel, que la plainte n'a pas été déposée en raison de circonstances indépendantes de sa volonté au moment où elle aurait dû l'être, ou qu'elle porte sur l'un des aspects de nature systémique du processus des marchés publics ayant trait au contrat et sur la conformité aux dispositions relatives aux marchés publics de tout accord commercial applicable",
+              ),
+            ],
+            [
+              both("First determination", "Première décision"),
+              both("Whether to review the complaint, within 10 working days after the filing", "S'il examinera la plainte, dans les 10 jours ouvrables suivant le dépôt"),
+              both(
+                "Whether the information discloses a reasonable indication that the conditions for an inquiry are met, within five working days after the filing",
+                "Si les renseignements indiquent de façon raisonnable que les conditions d'une enquête sont remplies, dans les cinq jours ouvrables suivant le dépôt",
+              ),
+            ],
+            [
+              both("Findings and recommendations", "Conclusions et recommandations"),
+              both("Within 120 working days after the day the complaint is filed", "Dans les 120 jours ouvrables suivant le dépôt de la plainte"),
+              both(
+                "Within 90 days after the filing; 45 days after granting a request for an express option; 135 days after the filing where it authorizes an extension of time",
+                "Dans les 90 jours suivant le dépôt; dans les 45 jours après avoir agréé une demande de procédure expéditive; dans les 135 jours suivant le dépôt s'il autorise une procédure prolongée",
+              ),
+            ],
+            [
+              both("Recommendations", "Recommandations"),
+              both(
+                "It can recommend that a department compensate a supplier, for a complaint about an award, and does not have the authority to cancel or change the terms and conditions of contracts",
+                "Il peut recommander qu'un ministère verse une indemnité à un fournisseur, pour une plainte ayant trait à l'attribution d'un contrat, et n'a pas le pouvoir d'annuler un contrat ou d'en modifier les modalités",
+              ),
+              both(
+                "Where a complaint is valid, it may recommend such remedy as it considers appropriate, including a new solicitation, a re-evaluation of the bids, termination of the designated contract, its award to the complainant, or compensation of the complainant for lost profits or losses",
+                "Lorsqu'une plainte est fondée, il peut recommander les mesures correctives qu'il juge appropriées, notamment un nouvel appel d'offres, la réévaluation des soumissions, la résiliation du contrat spécifique, son attribution au plaignant ou le versement d'une indemnité au plaignant pour ses pertes de profits ou autres pertes",
+              ),
+            ],
+            [
+              both("Limits on amounts", "Plafonds des montants"),
+              both(
+                "For lost profit, the lesser of the net profit at the lower of the bid and the amount awarded, and 10% of the value of the contract awarded, each less the cost of submitting the bid; for the costs of submitting the bid, up to 10% of that value; options and extensions left out",
+                "Pour le bénéfice perdu, le moindre du bénéfice net, calculé à la moindre de la soumission et de la valeur d'attribution, et de 10 % de la valeur du marché attribué, moins les coûts de soumission dans les deux cas; pour les coûts de soumission, au plus 10 % de cette valeur; options et prolongations exclues",
+              ),
+              both(
+                "Compensation for lost profits up to 10% of the complainant's bid price, where the contract should have been awarded to it; where that cannot be determined, for the lost opportunity, up to 10% of the bid price of the awarded contract divided by the number of potential suppliers. The costs of preparing a response, only for a compliant response, up to 2% of the complainant's bid price, and then no re-evaluation, award or compensation. Bid prices leave out options and extensions",
+                "Une indemnité pour les profits perdus jusqu'à 10 % du prix offert par le plaignant, si le contrat aurait dû lui être accordé; s'il n'est pas possible de le décider, pour l'occasion perdue, jusqu'à 10 % du prix offert dans la soumission retenue divisé par le nombre de fournisseurs potentiels. Les frais de préparation d'une réponse, seulement pour une réponse conforme, jusqu'à 2 % du prix offert par le plaignant, et alors sans réévaluation, attribution ni indemnité. Les prix offerts excluent les options et les prolongations",
+              ),
+            ],
+          ],
+        },
+      ],
+    },
+    {
+      id: "ombud",
+      title: both("The Ombud's Review", "L'examen de l'ombud"),
+      blocks: [
+        p(
+          "A complaint to OPO must be filed in writing. Among the conditions the Ombudsman Regulations set for a review, the facts and grounds of the complaint are not and have not been the subject of an inquiry before the Tribunal or a proceeding in a court of competent jurisdiction, and there are reasonable grounds to believe that the contract was not awarded in accordance with the regulations made under the Financial Administration Act. For a recommendation of compensation where a competitive process was held, the complainant must have submitted a bid, unless the contracting department's actions prevented it.",
+          "Une plainte au BOA est déposée par écrit. Parmi les conditions que fixe le Règlement concernant l'ombudsman de l'approvisionnement pour un examen, les motifs et les faits de la plainte ne font pas, et n'ont pas fait, l'objet d'une enquête devant le Tribunal ni d'une procédure devant tout autre tribunal compétent, et il existe des motifs raisonnables de croire que le marché n'a pas été attribué conformément aux règlements pris en vertu de la Loi sur la gestion des finances publiques. Pour qu'une indemnité soit recommandée lorsqu'un appel d'offres a été lancé, le plaignant doit avoir soumissionné, à moins qu'il n'ait pu le faire en raison des actions du ministère contractant.",
+        ),
+      ],
+    },
+    {
+      id: "tribunal",
+      title: both("The Tribunal's Inquiry", "L'enquête du Tribunal"),
+      blocks: [
+        p(
+          "CanadaBuys says a complaint to the Tribunal requires a procurement covered by at least one of the trade agreements under which Canada has government procurement obligations; the {trade} explains each agreement's thresholds. The Tribunal's procurement inquiries guide says that by legislation the institution is to implement its recommendations to the greatest extent possible, and that the Tribunal does not have the power to delay the performance of a contract already awarded. When a complaint is accepted for inquiry prior to contract award, the guide adds, the Tribunal may order the institution to postpone any award of contract until the resolution of the complaint. The Tribunal is reviewing the guide after the Regulations changed in June and December 2025.",
+          "AchatsCanada indique qu'une plainte au Tribunal exige que l'approvisionnement soit visé par au moins un des accords commerciaux en vertu desquels le Canada a des obligations en matière d'approvisionnement gouvernemental; le {trade} explique les seuils de chaque accord. Le guide des enquêtes sur les marchés publics du Tribunal précise que, selon la loi, l'institution fédérale doit mettre en œuvre ses recommandations dans toute la mesure du possible, et que le Tribunal n'a pas le pouvoir de retarder l'exécution d'un marché déjà adjugé. Lorsqu'une plainte est acceptée aux fins d'enquête avant l'attribution du contrat, ajoute le guide, le Tribunal peut ordonner à l'institution fédérale de différer toute attribution du contrat jusqu'au règlement de la plainte. Le Tribunal révise ce guide à la suite des modifications apportées au Règlement en juin et décembre 2025.",
+          { trade: a(TRADE_PATH, "guide on trade agreements", "guide sur les accords commerciaux") },
+        ),
+        p(
+          "The Regulations bar the Tribunal from addressing or examining matters relating to measures that, among others, restrict participation in the procurement process to Canadian suppliers or favour them; the {bc} explains that policy's measures.",
+          "Le Règlement interdit au Tribunal d'aborder ou de traiter toute question relative à des mesures qui, notamment, restreignent la participation à la procédure de marchés publics aux fournisseurs canadiens ou favorisent ces fournisseurs; le {bc} explique les mesures de cette politique.",
+          { bc: a(BUY_CANADIAN_PATH, "guide on the Buy Canadian Policy", "guide sur la Politique « Achetez canadien »") },
+        ),
+      ],
+    },
+    {
+      id: "records",
+      title: both("What the Award Notice Shows", "Ce que montre l'avis d'attribution"),
+      blocks: [
+        p(
+          "CanadaBuys' data dictionary defines the contract award date as the date when a contract is awarded, and the publication date as the date a tender notice, award notice, or contract is publicly published; Award Watch shows them under Awarded and Published. Under the Ombudsman Regulations, a complaint is filed when the information and documents the Regulations list are submitted; one item is information identifying the contract, including the date of public notice of the award or, if there was none, the date of award, if known. The Tribunal's guide says a complaint must contain information on the procurement, which includes the solicitation number or file number, the contract number if known, the estimated contract value and the relevant dates, contract award among them.",
+          "Le dictionnaire de données d'AchatsCanada définit la date d'attribution du contrat comme la date à laquelle un contrat a été attribué, et la date de publication comme la date à laquelle un avis d'appel d'offres, un avis d'attribution ou un contrat est affiché publiquement; Award Watch les affiche sous Attribué le et Publié. Selon le Règlement concernant l'ombudsman de l'approvisionnement, la plainte est déposée lorsque les renseignements et documents que le Règlement énumère sont fournis; l'un d'eux est tout renseignement permettant d'identifier le marché, y compris la date de l'avis public de son attribution ou, à défaut, la date de son attribution si elle est connue. Le guide du Tribunal précise que toute plainte doit contenir des renseignements sur le marché public, dont le numéro de l'invitation à soumissionner ou le numéro du dossier, le numéro du contrat s'il est connu, la valeur estimative du contrat et les dates pertinentes, dont celle de l'adjudication du contrat.",
+        ),
+        figure(
+          "award-procurement", SAMPLE_AWARD, ".panel-grid > section.panel",
+          both(
+            "The Procurement panel of an award notice's page on Award Watch: contract number, procurement number, solicitation number, instrument type, amendment type, category, notice type, procurement method, selection criteria, trade agreements and the places of delivery.",
+            "Le panneau Approvisionnement de la page d'un avis d'attribution sur Award Watch : numéro de contrat, numéro d'approvisionnement, numéro de l'invitation, type d'instrument, type de modification, catégorie, type d'avis, méthode d'approvisionnement, critères de sélection, accords commerciaux et lieux de livraison.",
+          ),
+          both("An award notice's procurement details on Award Watch.", "Les détails d'approvisionnement d'un avis d'attribution sur Award Watch."),
+          [
+            mark(field("dl", 1), "A complaint to the Tribunal contains the contract number, if known.", "Une plainte au Tribunal contient le numéro du contrat, s'il est connu."),
+            mark(field("dl", 3), "A complaint to the Tribunal contains the solicitation number or file number.",
+              "Une plainte au Tribunal contient le numéro de l'invitation à soumissionner ou le numéro du dossier."),
+            mark(field("dl", 6), "The value that divides the two bodies differs for goods and for services.", "La valeur qui sépare les deux organismes diffère pour les biens et pour les services."),
+            mark(field("dl", 10), "A complaint to the Tribunal requires a procurement covered by at least one trade agreement.",
+              "Une plainte au Tribunal exige un approvisionnement visé par au moins un accord commercial."),
+          ],
+        ),
+        p(
+          "The dictionary defines the trade agreements field, shown under Trade agreements, as a list of any international trade agreements that apply to the procurement action, if applicable. Where the Tribunal requires a contract's value to be determined, its Regulations deem it the value the government institution established when a notice of proposed procurement was published in accordance with one or more trade agreements or, without one, when the solicitation documentation was made available to potential suppliers.",
+          "Le dictionnaire définit le champ des accords commerciaux, affiché sous Accords commerciaux, comme une liste de tous les accords commerciaux internationaux qui s'appliquent à l'action d'approvisionnement, le cas échéant. Lorsque le Tribunal exige que la valeur d'un contrat soit déterminée, son Règlement la considère égale à la valeur établie par l'institution fédérale à la date de publication d'un avis de projet de marché public conforme à un ou plusieurs accords commerciaux ou, à défaut, au moment où l'appel d'offres a été mis à la disposition des fournisseurs potentiels.",
+        ),
+        p(
+          "This {example} from Agriculture and Agri-Food Canada, for a liquid chromatography system, shows an award date of October 21, 2026, a publication date of November 10, 2026, Goods as its category, a total contract value of $272,865 and eleven agreements in its trade agreements line, the CFTA among them.",
+          "Cet {example} d'Agriculture et Agroalimentaire Canada, pour un système de chromatographie en phase liquide, indique une date d'attribution du 21 octobre 2026, une date de publication du 10 novembre 2026, la catégorie Biens, une valeur totale du contrat de 272 865 $ et onze accords dans sa ligne des accords commerciaux, dont l'ALEC.",
+          { example: a(EXAMPLE_DEBRIEF, "award notice", "avis d'attribution") },
+        ),
+      ],
+    },
+  ],
+  sources: [
+    SRC.followUp, SRC.debriefing, SRC.procurementDirective, SRC.opoComplaints, SRC.ombudsmanRegulations, SRC.cittComplaint, SRC.cittOmbud,
+    SRC.cittGuide, SRC.cittRegulations, SRC.thresholds, SRC.dictionary,
+  ],
+};
+
 // The order of the index, and of the sitemap's part.
 export const GUIDES: readonly Guide[] = [
-  HOW_TO_BID, EVALUATION, TENDER_NOTICE, TRADE, BUY_CANADIAN, SECURITY, ACAN, STANDING_OFFERS, PSIB, THREE_RECORDS, CONTRACT_END,
+  HOW_TO_BID, EVALUATION, DEBRIEF, TENDER_NOTICE, TRADE, BUY_CANADIAN, SECURITY, ACAN, STANDING_OFFERS, PSIB, THREE_RECORDS, CONTRACT_END,
 ];
 
 export const GUIDE_SLUGS: ReadonlySet<string> = new Set(GUIDES.map((g) => g.slug));
