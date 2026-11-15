@@ -238,12 +238,12 @@ body is left out.
 |---|---|
 | Tender notice | Advance contract award notices, for a notice of that type; standing offers and supply arrangements, for a request for either; then reading a tender notice and bidding; then trade agreements when the notice names one and there is room |
 | Award notice | Contracts without competition, when the page's competitive flag reads non-competitive; the three records of one contract; debriefings and bid challenges |
-| PSPC contract history record | The same first two; when a contract ends, if its end date is on or after the data date |
+| PSPC contract history record | The same first two; when a contract ends, if its end date is on or after the data date and the record is not cancelled |
 | Published contract | Contracts without competition, when non-competitive and the page shows no section 6 exception (that note links the same guide); Indigenous set-asides, for a set-aside under the strategy; the three records; when a contract ends, if its end date is on or after the data date and there is room |
 | The radar, every view that lists contracts | When a contract ends; the three records |
 | A standing offer or supply arrangement | Standing offers and supply arrangements |
 | `/tenders` (any filter) and `/tenders/new` | Reading a tender notice; bidding |
-| `/awards` | The three records; debriefings and bid challenges |
+| `/awards` and a year's list, `/awards/<year>` | The three records; debriefings and bid challenges |
 
 A notice's type is read by the tender list's own type filter (`isNoticeType`
 in `site/src/data.ts`), the filter the ACAN and standing offers guides save

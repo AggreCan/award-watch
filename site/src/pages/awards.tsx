@@ -257,6 +257,8 @@ export async function awardsYearPage(c: Context<AppEnv>, raw: string): Promise<R
             through the export's two orders of it (yearPageFile); the others stay plain. */}
         {shown.length ? <AwardTable lang={lang} rows={shown} sorting="server" sorts={sorts} /> : <p class="muted">{t(lang, "awards.none")}</p>}
       </Panel>
+      {/* As under the newest awards: the guides to one contract's records and to debriefings (src/guide_links.tsx). */}
+      <GuideLine lang={lang} slugs={awardListGuides()} />
     </Layout>,
   );
 }

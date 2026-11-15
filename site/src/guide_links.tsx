@@ -65,12 +65,15 @@ export function tenderGuides(n: {
 // guide on contracts without competition when the record's competitive flag
 // (the one its page shows) says non-competitive; the three records of one
 // contract; then debriefings and bid challenges for an award notice, or, for a
-// history record whose end date is on or after the data date, how a contract ends.
-export function contractGuides(kind: "award" | "history", r: { competitive: Competitive; end: string | null }, today: string): string[] {
+// history record whose end date is on or after the data date, how a contract ends;
+// a cancelled record has no end ahead of it (its page offers no calendar link either).
+export function contractGuides(
+  kind: "award" | "history", r: { competitive: Competitive; end: string | null; status?: string | null }, today: string,
+): string[] {
   return chosen([
     competitiveOf(r.competitive) === false && LIMITS,
     THREE,
-    kind === "award" ? DEBRIEF : endsOnOrAfter(r.end, today) && ENDING,
+    kind === "award" ? DEBRIEF : r.status !== "cancelled" && endsOnOrAfter(r.end, today) && ENDING,
   ]);
 }
 
@@ -107,7 +110,7 @@ export function tenderListGuides(): string[] {
   return chosen([READING, BID]);
 }
 
-// The newest award notices (pages/awards.tsx, /awards).
+// The award notices' lists (pages/awards.tsx: /awards, the newest, and a year's, /awards/<year>).
 export function awardListGuides(): string[] {
   return chosen([THREE, DEBRIEF]);
 }

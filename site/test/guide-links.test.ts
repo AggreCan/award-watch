@@ -118,6 +118,9 @@ describe("the rules", () => {
     expect(contractGuides("history", { competitive: 1, end: "2026-10-30" }, TODAY)).toEqual([THREE]);
     expect(contractGuides("history", { competitive: 1, end: null }, TODAY)).toEqual([THREE]);
     expect(contractGuides("history", { competitive: 1, end: "soon" }, TODAY)).toEqual([THREE]);
+    // A cancelled record has no end ahead of it, whatever date it carries; an active one does.
+    expect(contractGuides("history", { competitive: 1, end: "2027-03-31", status: "cancelled" }, TODAY)).toEqual([THREE]);
+    expect(contractGuides("history", { competitive: 1, end: "2027-03-31", status: "active" }, TODAY)).toEqual([THREE, ENDING]);
   });
 
   it("give a published contract the limits guide only while its exception's note does not link it, then set-asides, three records and the end", () => {
@@ -308,12 +311,15 @@ describe("the radar and the lists", () => {
       const at = expectLine(awards, lang, [THREE, DEBRIEF], `awards ${lang}`).at;
       expect(awards.lastIndexOf('class="pagination"')).toBeLessThan(at);
       expect(awards.lastIndexOf('class="panel')).toBeLessThan(at);
+      // A year's list ends the same way.
+      const year = (await read(withLang("/awards/2026", lang))).html;
+      expect(year.lastIndexOf('class="panel')).toBeLessThan(expectLine(year, lang, [THREE, DEBRIEF], `awards 2026 ${lang}`).at);
     }
   });
 
   it("stays off the pages it was not made for", async () => {
     for (const path of [
-      "/organizations/org-a000000001", "/buyers/pwgsc-tpsgc", "/guides", `/guides/${GUIDES[0].slug}`, "/awards/2026", "/tenders/same-day",
+      "/organizations/org-a000000001", "/buyers/pwgsc-tpsgc", "/guides", `/guides/${GUIDES[0].slug}`, "/tenders/same-day",
       "/segments/82", "/methodology",
     ]) {
       expect(lineOf((await read(path)).html), path).toBeNull();
