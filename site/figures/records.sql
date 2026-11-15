@@ -26,7 +26,8 @@ INSERT INTO records (k, src, fy, fq, bid, oid, cents, vnote, comp, meth, ref, ti
   (101, 3, 2026, 2, 1, 1, 9875000, 0, 0, 'AC', 'nrcan-rncan:C-2026-2027-Q2-90231', 'Licence for seismic interpretation software'),
   (102, 3, 2026, 2, 2, 2, 18645000, 0, 1, 'OB', 'isc-sac:C-2026-2027-Q2-90117', 'Water treatment plant operator training'),
   (103, 3, 2025, 3, 3, 3, 21300000, 0, 1, 'OB', 'dfo-mpo:C-2025-2026-Q3-90412', 'Vessel hull inspection services'),
-  (104, 3, 2026, 2, 3, 3, 3450000, 0, 1, 'OB', 'dfo-mpo:C-2026-2027-Q2-90088', 'Vessel hull inspection services');
+  (104, 3, 2026, 2, 3, 3, 3450000, 0, 1, 'OB', 'dfo-mpo:C-2026-2027-Q2-90088', 'Vessel hull inspection services'),
+  (105, 3, 2026, 2, 1, 1, 8642500, 0, 0, 'TN', 'nrcan-rncan:C-2026-2027-Q2-90345', 'Laboratory software maintenance and support renewal');
 
 -- A contract awarded after an advance contract award notice (the guide on ACANs); one under a mandatory set-aside
 -- (the guide on set-asides); and an original row and its amendment, one contract by its procurement number (the
@@ -40,6 +41,12 @@ INSERT INTO rec_contracts (k, dept, ref, pid, bid, oid, wh, cdate, start, endd, 
     '2025-2026-Q3', 3, 'Vessel hull inspection services', 'Services d''inspection de coques de navires'),
   (104, 'dfo-mpo', 'C-2026-2027-Q2-90088', 'CW9391528', 3, 3, 0, '2026-08-05', '2025-12-01', '2027-05-31', 24750000, 21300000, 3450000, 'OB', 1, 'S', 'A',
     '2026-2027-Q2', 3, 'Vessel hull inspection services', 'Services d''inspection de coques de navires');
+
+-- A contract awarded without soliciting bids (the guide on contracts without competition), with the trade agreements,
+-- the limited tendering reason and the number of bids its department reported, as codes.
+INSERT INTO rec_contracts (k, dept, ref, pid, bid, oid, wh, cdate, start, endd, value, orig, amend, proc, comp, ctype, trade, ltr, inst, period, bids, desc_en, desc_fr) VALUES
+  (105, 'nrcan-rncan', 'C-2026-2027-Q2-90345', '5099900345', 1, 1, 0, '2026-09-24', '2026-10-01', '2027-09-30', 8642500, 8642500, NULL, 'TN', 0, 'G', 'CA, KR', '71', 'C',
+    '2026-2027-Q2', 1, 'Laboratory software maintenance and support renewal', 'Renouvellement de la maintenance et du soutien de logiciels de laboratoire');
 
 INSERT INTO rec_contract_indigenous (k, psib, ib) VALUES (102, 'MS', 0);
 

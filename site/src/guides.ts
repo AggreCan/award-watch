@@ -381,6 +381,29 @@ const SRC = {
       url: "https://www.canada.ca/fr/secretariat-conseil-tresor/services/avis-politique/2026-1.html",
     },
   },
+  // The Minister responsible for PSPC's exclusive authority over procurement (read on 2026-11-14).
+  authorityNotice: {
+    title:
+      "Contracting Policy Notice 2026-2: Amendments to the Department of Public Works and Government Services Act to provide Ministerial Procurement Authority for Services and Construction Services and consequential amendments to the Directive on the Management of Procurement",
+    publisher: TBS,
+    url: "https://www.canada.ca/en/treasury-board-secretariat/services/policy-notice/2026-2.html",
+    fr: {
+      title:
+        "Avis sur la Politique des marchés 2026-2 : Modifications à la Loi sur le ministère des Travaux publics et des Services gouvernementaux afin de conférer au ministre le pouvoir en matière d'approvisionnement pour les services et la construction, ainsi que les modifications corrélatives à la Directive sur la gestion de l'approvisionnement",
+      url: "https://www.canada.ca/fr/secretariat-conseil-tresor/services/avis-politique/2026-2.html",
+    },
+  },
+  // The example award notice of the guide on contracts without competition, on CanadaBuys (read there on 2026-11-14).
+  // Its French title joins its parts with a dash, which the guides never print; a comma stands in, in both.
+  exampleDirected: {
+    title: "51019-270050, JetBrains Maintenance and Support Software Renewal (award notice CW2454835)",
+    publisher: PSPC,
+    url: "https://canadabuys.canada.ca/en/tender-opportunities/award-notice/cw2454835",
+    fr: {
+      title: "51019-270050, Renouvellement du logiciel de maintenance et de soutien de JetBrains (avis d'attribution CW2454835)",
+      url: "https://achatscanada.canada.ca/fr/occasions-de-marche/avis-d-attribution/cw2454835",
+    },
+  },
   policyNotices: {
     title: "Contracting policy notices",
     publisher: TBS,
@@ -838,14 +861,18 @@ export const EXAMPLE_DEBRIEF = "/awards/cb-879-18498282";
 // trade agreements line of twelve agreements, CETA and the Canada-UK Trade Continuity Agreement among them (awarded
 // 2026-11-13; read in the site's newest award notices, on awardwatch.ca and on CanadaBuys on 2026-11-14).
 export const EXAMPLE_SBPP = "/awards/cw2460403";
+// A PSPC award notice for the Department of Veterans Affairs whose page shows Directed Contract as its notice type,
+// Non-competitive as its procurement method and Exclusive Rights as its limited tendering reason (awarded 2026-11-10,
+// published 2026-11-13; read in the site's newest award notices, on awardwatch.ca and on CanadaBuys on 2026-11-14).
+export const EXAMPLE_LIMITS = "/awards/cw2454835";
 // The pages the figures are captured from, drawn from the sample records in site/figures/, made for the figures
 // and never real, their reference numbers in ranges the real series are nowhere near: three tender notices (the
 // second with security requirements in its description, a limited tendering reason of None and a trade
 // agreements line that names NAFTA; the third with a Buy Canadian statement in its description), an advance
 // contract award notice, one day's new notices, one contract's award notice (linking the tender notice it
 // followed) and PSPC contract history record, a second contract history record that gives its supplier's
-// employees, published contracts (the same contract's amendment, one after an ACAN, one under a set-aside), a
-// standing offer and the 3-month list of contracts ending.
+// employees, published contracts (the same contract's amendment, one after an ACAN, one under a set-aside, one awarded
+// without soliciting bids), a standing offer and the 3-month list of contracts ending.
 const SAMPLE_NOTICE = "/tenders/cb-900-90000101";
 const SAMPLE_NOTICE_SECURITY = "/tenders/cb-900-90000303";
 const SAMPLE_NOTICE_BUY_CANADIAN = "/tenders/cb-900-90000606";
@@ -857,6 +884,7 @@ const SAMPLE_HISTORY_EMPLOYEES = "/history/cw9391744";
 const SAMPLE_PUBLISHED = "/contracts/dfo-mpo/C-2026-2027-Q2-90088";
 const SAMPLE_PUBLISHED_ACAN = "/contracts/nrcan-rncan/C-2026-2027-Q2-90231";
 const SAMPLE_PUBLISHED_PSIB = "/contracts/isc-sac/C-2026-2027-Q2-90117";
+const SAMPLE_PUBLISHED_TN = "/contracts/nrcan-rncan/C-2026-2027-Q2-90345";
 const SAMPLE_INSTRUMENT = `/instruments/${encodeURIComponent("EN578-991533/001/ZT")}`;
 const SAMPLE_ENDING = "/expiring/3m";
 // The addresses of the guides that link one another.
@@ -873,6 +901,7 @@ const BUY_CANADIAN_PATH = "/guides/buy-canadian-policy-on-federal-tenders";
 const EVALUATION_PATH = "/guides/how-federal-bids-are-evaluated-and-selected";
 const DEBRIEF_PATH = "/guides/debriefings-and-bid-challenges-on-federal-contracts";
 const SBPP_PATH = "/guides/small-business-procurement-program-sbpp";
+const LIMITS_PATH = "/guides/federal-contracts-without-competition-and-contracting-limits";
 
 // -- the guides ---------------------------------------------------------------------
 
@@ -1668,8 +1697,9 @@ const ACAN: Guide = {
       title: both("When a Department May Use One", "Quand un ministère peut y recourir"),
       blocks: [
         p(
-          "The Government Contracts Regulations require a contracting authority to solicit bids before it enters into a contract (section 5). Section 6 allows a contract without soliciting bids in four cases:",
-          "Le Règlement sur les marchés de l'État oblige l'autorité contractante à lancer un appel d'offres avant de conclure un marché (article 5). L'article 6 permet de conclure un marché sans appel d'offres dans quatre cas :",
+          "The Government Contracts Regulations require a contracting authority to solicit bids before it enters into a contract (section 5). Section 6 allows a contract without soliciting bids in four cases, which the {limits} gives in the Regulations' words:",
+          "Le Règlement sur les marchés de l'État oblige l'autorité contractante à lancer un appel d'offres avant de conclure un marché (article 5). L'article 6 permet de conclure un marché sans appel d'offres dans quatre cas, que le {limits} donne dans les termes du Règlement :",
+          { limits: a(LIMITS_PATH, "guide on contracts awarded without competition", "guide sur les marchés conclus sans appel d'offres") },
         ),
         {
           kind: "list",
@@ -1862,6 +1892,279 @@ const ACAN: Guide = {
     },
   ],
   sources: [SRC.gcr, SRC.acan, SRC.psibNotices, SRC.dictionary, SRC.contractsSchema],
+};
+
+const LIMITS: Guide = {
+  slug: LIMITS_PATH.slice("/guides/".length),
+  title: both(
+    "Federal Contracts Awarded Without Competition, and the Contracting Limits",
+    "Marchés fédéraux conclus sans appel d'offres et limites contractuelles",
+  ),
+  seoTitle: both("Non-Competitive Federal Contracts and Limits", "Marchés sans appel d'offres et limites"),
+  summary: both(
+    "The four exceptions to soliciting bids in section 6 of the Government Contracts Regulations, how the records show them, and the contracting limits.",
+    "Les quatre exceptions à l'appel d'offres de l'article 6 du Règlement sur les marchés de l'État, leur trace dans les dossiers et les limites contractuelles.",
+  ),
+  checked: "2026-11-14",
+  action: tenderList(
+    "To follow new advance contract award notices as they are posted, save this list with your email address.",
+    "Pour suivre les nouveaux préavis d'adjudication de contrat à mesure qu'ils sont publiés, enregistrez cette liste avec votre adresse courriel.",
+    "Advance Contract Award Notice",
+  ),
+  sections: [
+    {
+      id: "exceptions",
+      title: both("The Four Exceptions to Soliciting Bids", "Les quatre exceptions à l'appel d'offres"),
+      blocks: [
+        p(
+          "Under section 5 of the Government Contracts Regulations, before any contract is entered into, the contracting authority shall solicit bids, by giving public notice of a call for bids, in a manner consistent with generally accepted trade practices, or by inviting bids from suppliers on the suppliers' list (section 7). Notwithstanding section 5, section 6 lets a contracting authority enter into a contract without soliciting bids in four cases. The Regulations are current to October 19, 2026, and were last amended on December 16, 2024.",
+          "Selon l'article 5 du Règlement sur les marchés de l'État, avant la conclusion d'un marché, l'autorité contractante doit lancer un appel d'offres, soit en donnant un avis public à cet effet conformément aux pratiques commerciales généralement reconnues, soit en s'adressant aux fournisseurs dont le nom figure sur la liste de fournisseurs (article 7). Malgré l'article 5, l'article 6 permet à l'autorité contractante de conclure un marché sans lancer d'appel d'offres dans quatre cas. Le Règlement est à jour au 19 octobre 2026, et sa dernière modification date du 16 décembre 2024.",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "label", label: both("Paragraph", "Alinéa") },
+            { kind: "main", label: both("The Regulations' words", "Les termes du Règlement") },
+            { kind: "main", label: both("Code in the published contracts' section 6 field", "Code du champ de l'article 6 des contrats publiés") },
+          ],
+          rows: [
+            [
+              both("(a)", "a)"),
+              both(
+                "the need is one of pressing emergency in which delay would be injurious to the public interest",
+                "les cas d'extrême urgence où un retard serait préjudiciable à l'intérêt public",
+              ),
+              both(
+                "1: Pressing emergency in which delay would be injurious to the public interest",
+                "1 : Extrême urgence où un retard serait préjudiciable à l'intérêt public",
+              ),
+            ],
+            [
+              both("(b)", "b)"),
+              both(
+                "the estimated expenditure does not exceed (i) in the case of a goods contract, $25,000, (ii) in the case of a contract to be entered into by the Minister for International Development for the acquisition of architectural, engineering or other services required in respect of the planning, design, preparation or supervision of an international development assistance program or project, $100,000, (iii) in the case of a contract for the acquisition of architectural, engineering or other services required in respect of the planning, design, preparation or supervision of the construction, repair, renovation or restoration of a work, $100,000, and (iv) in the case of any other contract to which these Regulations apply, $40,000",
+                "les cas où le montant estimatif de la dépense ne dépasse pas selon le cas : (i) 25 000 $, s'il s'agit d'un marché de fournitures, (ii) 100 000 $, s'il s'agit d'un marché que doit conclure le ministre du Développement international et qui porte sur la prestation de services d'ingénieurs ou d'architectes ou d'autres services nécessaires à la planification, à la conception, à la préparation ou à la surveillance d'un programme ou projet d'aide au développement international, (iii) 100 000 $, s'il s'agit d'un marché portant sur la prestation de services d'ingénieurs ou d'architectes ou d'autres services nécessaires à la planification, à la conception, à la préparation ou à la surveillance de la construction, de la réparation, de la rénovation ou de la restauration d'un ouvrage, (iv) 40 000 $, s'il s'agit de tout autre marché visé par le présent règlement",
+              ),
+              both(
+                "2: Does not exceed s.6 (b) Government Contracts Regulations prescribed dollar limits",
+                "2 : N'excède pas la limite financière prescrite à l'alinéa 6 b) du Règlement sur les marchés de l'État",
+              ),
+            ],
+            [
+              both("(c)", "c)"),
+              both(
+                "the nature of the work to be contracted for is such that it would not be in the public interest to solicit bids",
+                "les cas où la nature du marché est telle qu'un appel d'offres ne servirait pas l'intérêt public",
+              ),
+              both("3: Not in the public interest to solicit bids", "3 : Situation dans laquelle un appel d'offres ne servirait pas l'intérêt public"),
+            ],
+            [
+              both("(d)", "d)"),
+              both("only one person is capable of performing the contract", "les cas où le marché ne peut être exécuté que par une seule personne"),
+              both("4: Only one person is capable of performing the contract", "4 : Une seule personne est en mesure d'exécuter le marché"),
+            ],
+          ],
+        },
+        p(
+          "Limited tendering is one of the tendering approaches under the trade agreements. For procurements subject to them, PSPC's Buyer's Guide allows a contract without soliciting offers only if it aligns with one of the limited tendering reasons outlined in the applicable agreement; the {trade} explains them.",
+          "L'appel d'offres limité est l'une des approches d'appel d'offres dans le cadre des accords commerciaux. Pour les approvisionnements qui y sont assujettis, le Guide de l'acheteur de SPAC ne permet d'attribuer un contrat sans solliciter d'offres que s'il correspond à l'une des justifications d'un appel d'offres limité décrites dans l'accord applicable; le {trade} les explique.",
+          { trade: a(TRADE_PATH, "guide on trade agreements", "guide sur les accords commerciaux") },
+        ),
+      ],
+    },
+    {
+      id: "justification",
+      title: both("Justifying a Contract Without Bids", "Justifier un marché sans appel d'offres"),
+      blocks: [
+        p(
+          "PSPC's Buyer's Guide says that when offers are not solicited, the buyer must ensure that the client thoroughly justifies the use of any exception to the competitive solicitation, citing the relevant exception under the Regulations. For procurements above $25,000 for goods and $40,000 for services and construction, greater diligence is required when invoking the exception where only one entity is capable of performing the work; the buyer must then answer the Treasury Board questions for sole source, with support from the client.",
+          "Selon le Guide de l'acheteur de SPAC, lorsque les offres ne sont pas sollicitées, l'acheteur doit s'assurer que le client justifie pleinement l'utilisation de toute exception à une demande d'offres concurrentielle, en citant l'exception pertinente en vertu du Règlement. Pour les approvisionnements d'une valeur supérieure à 25 000 $ pour les biens et 40 000 $ pour les services et la construction, une plus grande diligence est requise lors de l'invocation de l'exception lorsqu'une seule entité est capable d'exécuter le travail; l'acheteur doit alors répondre aux questions du Conseil du Trésor relatives à un fournisseur unique, avec l'appui du client.",
+        ),
+        p(
+          "The Treasury Board of Canada Secretariat's Contracting Policy Notice 2026-1, dated January 16, 2026, reminds departments of their obligations to ensure that decisions related to procurement, including decisions to use a non-competitive process, are fully justified and documented.",
+          "L'Avis sur la Politique des marchés 2026-1 du Secrétariat du Conseil du Trésor du Canada, daté du 16 janvier 2026, rappelle aux ministères qu'ils doivent toujours s'assurer que leurs décisions relatives à l'approvisionnement, y compris les décisions d'avoir recours à un processus non concurrentiel, sont parfaitement justifiées et documentées.",
+        ),
+      ],
+    },
+    {
+      id: "limits",
+      title: both("Contracting Limits Without Treasury Board Approval", "Limites contractuelles sans approbation du Conseil du Trésor"),
+      blocks: [
+        p(
+          "The Treasury Board's Directive on the Management of Procurement sets contracting limits in its Appendix A: Contracting Approvals. A contract or contractual arrangement may be entered into without the approval of the Treasury Board if the amount payable, including all applicable taxes, fees and amendments, does not exceed the stated limit in Canadian dollars for the contracting authority identified in the basic limits schedules. Contracting authorities are responsible for seeking Treasury Board approval prior to entering into or amending a contract when its estimated value, including taxes, expected amendments, and follow-on contract or contractual arrangement, exceeds the limits.",
+          "La Directive sur la gestion de l'approvisionnement du Conseil du Trésor fixe des limites contractuelles à son annexe A, Approbations contractuelles. Il est possible de conclure un contrat ou une entente contractuelle sans l'approbation du Conseil du Trésor si le montant payable, qui inclut l'ensemble des taxes, des droits et des modifications applicables, ne dépasse pas la limite en dollars canadiens énoncée pour l'autorité contractante dans les annexes sur les limites de base. Les autorités contractantes ont la responsabilité de demander l'approbation du Conseil du Trésor avant de conclure ou de modifier un contrat lorsque sa valeur estimée, y compris les taxes, les modifications prévues et le contrat ou l'entente contractuelle subséquent, excède les limites.",
+        ),
+        p(
+          "For the appendix, the term competitive includes the publishing of an advance contract award notice ({acan}). The schedules below are as read on the directive's page on November 14, 2026 (modified September 4, 2026). Notice 2026-1 says the directive was amended, effective December 15, 2025, to increase most contracting limits in Appendix A to reflect inflation; the {ending} explains contract amendments.",
+          "Aux termes de l'annexe A, le terme « concurrentiel » comprend la publication d'un préavis d'adjudication de contrat ({acan}). Les annexes ci-dessous sont telles que lues sur la page de la directive le 14 novembre 2026 (modifiée le 4 septembre 2026). L'avis 2026-1 indique que, le 15 décembre 2025, la directive a été modifiée pour augmenter la plupart des limites contractuelles figurant à l'annexe A afin de tenir compte de l'inflation; le {ending} explique les modifications de contrats.",
+          {
+            acan: a(ACAN_PATH, "guide on ACANs", "guide sur les PAC"),
+            ending: a(ENDING_PATH, "guide on contracts ending", "guide sur la fin des contrats"),
+          },
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "text", label: both("Schedule", "Annexe") },
+            { kind: "main", label: both("Department", "Ministère ou organisme") },
+            { kind: "value", label: both("Competitive", "Concurrentiel") },
+            { kind: "value", label: both("Non-competitive", "Non concurrentiel") },
+          ],
+          rows: [
+            [both("Schedule 1: Construction", "Annexe 1. Construction"), both("Public Services and Procurement Canada", "Services publics et Approvisionnement Canada"), { money: 100_000_000 }, { money: 1_750_000 }],
+            [both("Schedule 1: Construction", "Annexe 1. Construction"), both("All other departments", "Tous les autres ministères et organismes"), { money: 1_000_000 }, { money: 140_000 }],
+            [both("Schedule 2: Goods", "Annexe 2. Biens"), both("Public Services and Procurement Canada", "Services publics et Approvisionnement Canada"), { money: 90_000_000 }, { money: 4_500_000 }],
+            [both("Schedule 2: Goods", "Annexe 2. Biens"), both("Shared Services Canada", "Services partagés Canada"), { money: 90_000_000 }, { money: 4_500_000 }],
+            [both("Schedule 2: Goods", "Annexe 2. Biens"), both("National Defence", "Défense nationale"), { money: 9_000_000 }, { money: 450_000 }],
+            [both("Schedule 2: Goods", "Annexe 2. Biens"), both("All other departments", "Tous les autres ministères et organismes"), { money: 900_000 }, { money: 120_000 }],
+            [both("Schedule 3: Services", "Annexe 3. Services"), both("Public Services and Procurement Canada", "Services publics et Approvisionnement Canada"), { money: 45_000_000 }, { money: 7_000_000 }],
+            [both("Schedule 3: Services", "Annexe 3. Services"), both("Shared Services Canada", "Services partagés Canada"), { money: 45_000_000 }, { money: 7_000_000 }],
+            [both("Schedule 3: Services", "Annexe 3. Services"), both("National Defence", "Défense nationale"), { money: 9_000_000 }, { money: 450_000 }],
+            [both("Schedule 3: Services", "Annexe 3. Services"), both("Transport Canada", "Transports Canada"), { money: 9_000_000 }, { money: 300_000 }],
+            [both("Schedule 3: Services", "Annexe 3. Services"), both("Fisheries and Oceans Canada", "Pêches et Océans Canada"), { money: 9_000_000 }, { money: 250_000 }],
+            [both("Schedule 3: Services", "Annexe 3. Services"), both("All other departments", "Tous les autres ministères et organismes"), { money: 4_500_000 }, { money: 250_000 }],
+            [
+              both("Schedule 3A: Specialized services, architectural and engineering services", "Annexe 3A. Services spécialisés, services d'architectes et d'ingénieurs"),
+              both("Public Services and Procurement Canada", "Services publics et Approvisionnement Canada"), { money: 9_500_000 }, { money: 500_000 },
+            ],
+            [
+              both("Schedule 3A: Specialized services, architectural and engineering services", "Annexe 3A. Services spécialisés, services d'architectes et d'ingénieurs"),
+              both("All other departments", "Tous les autres ministères et organismes"), { money: 120_000 }, { money: 120_000 },
+            ],
+          ],
+        },
+        p(
+          "Schedule 4 sets limits for contractual arrangements, all commodities: $27,500,000 for PSPC and $550,000 for all other departments. All references to PSPC in the appendix include the Defence Investment Agency, and thresholds for contracting in the Regulations and in trade agreements must be adhered to, where applicable.",
+          "L'annexe 4 fixe des limites pour les ententes contractuelles, tous les produits : 27 500 000 $ pour SPAC et 550 000 $ pour tous les autres ministères et organismes. Toutes les références à SPAC dans l'annexe A comprennent l'Agence de l'investissement pour la défense, et les seuils d'octroi de contrats du Règlement et des accords commerciaux doivent être respectés, s'il y a lieu.",
+        ),
+      ],
+    },
+    {
+      id: "authority",
+      title: both("What a Department May Contract for Itself", "Ce qu'un ministère peut conclure lui-même"),
+      blocks: [
+        p(
+          "The appendix says its contracting limits do not confer a legal authority to contract, and that contracting authority is subject to ministerial delegation and, except for delegations provided by common service providers, may not be delegated between ministers. Contracting Policy Notice 2026-2, dated February 20, 2026, says the Department of Public Works and Government Services Act was amended to provide the Minister responsible for PSPC with exclusive authority over services and construction procurements for the Government of Canada, effective June 9, 2025, in addition to the Minister's pre-existing exclusive authority for procurement of goods. The notice says the directive and the contracting limits outlined in it continue to apply.",
+          "L'annexe précise que ses limites contractuelles ne confèrent pas de pouvoir légal de conclure ou de modifier un contrat ou une entente contractuelle, et que l'autorité contractante est assujettie à la délégation ministérielle et, à l'exception des délégations par les fournisseurs de services communs, ne peut pas être déléguée entre ministres. Selon l'Avis sur la Politique des marchés 2026-2, daté du 20 février 2026, la Loi sur le ministère des Travaux publics et des Services gouvernementaux a été modifiée afin de conférer au ministre responsable de SPAC le pouvoir exclusif concernant les approvisionnements en services et en construction pour le gouvernement du Canada, en vigueur depuis le 9 juin 2025, ce pouvoir s'ajoutant à son pouvoir exclusif préexistant en matière d'approvisionnement de biens. L'avis indique que la directive et les limites contractuelles qui y sont énoncées continuent de s'appliquer.",
+        ),
+      ],
+    },
+    {
+      id: "exceptional",
+      title: both("Exceptional and Emergency Limits", "Limites exceptionnelles et limites en cas d'urgence"),
+      blocks: [
+        p(
+          "Under section A.2 of the appendix, Treasury Board approval is required when the Minister (or their delegated authority) enters into a contract (or contractual arrangement when stated) above the exceptional limit specified for a listed department, including all applicable taxes, fees and amendments, unless otherwise indicated. When an exceptional limit is different from the basic contracting limit for its corresponding schedule, the exceptional limit applies. Among those limits:",
+          "Selon la section A.2 de l'annexe, l'approbation du Conseil du Trésor est requise lorsque le ministre (ou son pouvoir délégué) conclut un contrat (ou une entente contractuelle, lorsque mentionnée) supérieur à la limite exceptionnelle précisée pour un ministère énuméré, y compris toutes les taxes applicables, les frais et les modifications, à moins qu'il ne soit indiqué autrement. Lorsqu'une limite exceptionnelle est différente de la limite contractuelle de base pour son annexe correspondante, la limite exceptionnelle s'applique. Parmi ces limites :",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "text", label: both("Department", "Ministère ou organisme") },
+            { kind: "main", label: both("Exceptional limit (section A.2)", "Limite exceptionnelle (section A.2)") },
+          ],
+          rows: [
+            [
+              both("Correctional Service Canada", "Service correctionnel Canada"),
+              both(
+                "Non-competitive contract for provision of educational and health care services for inmates, and for the provision of residential and non-residential after-care services to conditionally released offenders up to $1,000,000",
+                "Contrat non concurrentiel pour la prestation de services éducatifs et de soins de santé pour les détenus, et pour la prestation de services après soins résidentiels et non résidentiels à des délinquants libérés sous conditions, jusqu'à concurrence de 1 000 000 $",
+              ),
+            ],
+            [
+              both("Indigenous Services Canada", "Services aux Autochtones Canada"),
+              both(
+                "Non-competitive contract for the delivery of health care services to Indigenous Peoples in Canada up to $4,000,000",
+                "Contrat non concurrentiel de services pour la prestation de services de soins de santé aux peuples autochtones du Canada jusqu'à concurrence de 4 000 000 $",
+              ),
+            ],
+            [
+              both("Library and Archives Canada", "Bibliothèque et Archives Canada"),
+              both(
+                "Non-competitive goods contract for historical material, books and other publications up to $300,000",
+                "Contrat non concurrentiel de biens pour des documents historiques, des livres et d'autres publications jusqu'à concurrence de 300 000 $",
+              ),
+            ],
+            [
+              both("National Defence", "Défense nationale"),
+              both(
+                "Non-competitive services contract for flying and glider training for air cadets up to $4,000,000",
+                "Contrat non concurrentiel de services visant la formation au pilotage d'avion et de planeur pour les cadets de l'air jusqu'à concurrence de 4 000 000 $",
+              ),
+            ],
+            [
+              both("Public Services and Procurement Canada (including the Defence Investment Agency)", "Services publics et Approvisionnement Canada (incluant l'Agence de l'investissement pour la défense)"),
+              both(
+                "Services contract for repair and overhaul of military equipment up to $100,000,000",
+                "Contrat de services pour les réparations et les réfections de matériel militaire jusqu'à concurrence de 100 000 000 $",
+              ),
+            ],
+            [
+              both("Public Services and Procurement Canada (including the Defence Investment Agency)", "Services publics et Approvisionnement Canada (incluant l'Agence de l'investissement pour la défense)"),
+              both(
+                "Goods or services contract for ammunition under the Munitions Supply Program up to $200,000,000",
+                "Contrat de biens ou de services pour des munitions en vertu du Programme d'approvisionnement en munitions jusqu'à concurrence de 200 000 000 $",
+              ),
+            ],
+            [
+              both("Public Services and Procurement Canada (including the Defence Investment Agency)", "Services publics et Approvisionnement Canada (incluant l'Agence de l'investissement pour la défense)"),
+              both(
+                "Contract with the three selected shipyards for goods and services associated with large ships projects under the National Shipbuilding Strategy up to $155,000,000",
+                "Contrat avec les trois chantiers navals portant sur les biens et les services liés à des projets de grands navires dans le cadre de la Stratégie nationale de construction navale jusqu'à concurrence de 155 000 000 $",
+              ),
+            ],
+          ],
+        },
+        p(
+          "Emergency contracting limits are supplementary to basic and exceptional limits. Section A.3 makes contracting authorities responsible for entering into or amending a contract or contractual arrangement in response to a pressing emergency where a delay in approval would be injurious to the public interest and when the expected value is up to $3,000,000, including applicable taxes and fees, provided that its five conditions are met. Treasury Board approval is sought above the limits it specifies for listed departments, among them $25,000,000 for a non-competitive contract by PSPC on behalf of any department, including PSPC.",
+          "Les limites contractuelles d'urgence sont complémentaires aux limites de base et exceptionnelles. La section A.3 charge les autorités contractantes de conclure ou de modifier un contrat ou une entente contractuelle en réponse à une situation d'extrême urgence où un retard dans l'approbation serait préjudiciable à l'intérêt public et lorsque la valeur prévue est inférieure ou égale à 3 000 000 $, taxes et droits applicables compris, sous réserve de ses cinq conditions. L'approbation du Conseil du Trésor est demandée au-delà des limites qu'elle précise pour les ministères énumérés, dont 25 000 000 $ pour un contrat non concurrentiel conclu par SPAC au nom d'un ministère, dont SPAC.",
+        ),
+      ],
+    },
+    {
+      id: "records",
+      title: both("What the Records Show", "Ce que montrent les dossiers"),
+      blocks: [
+        p(
+          "CanadaBuys' data dictionary, in its file last modified on March 24, 2026, lists nine procurement methods, Non-competitive among them, and defines the limited tendering reason as the reason for a given contract not being awarded through competitive solicitation, blank or None for records it doesn't apply to. Award Watch shows both on an award notice's page and counts Non-competitive and Advance contract award notice as non-competitive ({competitive}).",
+          "Le dictionnaire de données d'AchatsCanada, dans son fichier modifié pour la dernière fois le 24 mars 2026, énumère neuf méthodes d'approvisionnement, dont Non concurrentielle, et définit le motif de l'appel d'offres limité comme la raison pour laquelle un contrat donné n'a pas été attribué par voie concurrentielle, vide ou Aucune pour les enregistrements auxquels il ne s'applique pas. Award Watch affiche l'un et l'autre sur la page d'un avis d'attribution et compte Non concurrentielle et Préavis d'adjudication de contrat comme non concurrentiels ({competitive}).",
+          { competitive: a(`${METHODOLOGY}#competitive`, "Methodology", "Méthodologie") },
+        ),
+        p(
+          "In the published contracts over $10,000, the Treasury Board's schema gives the solicitation procedure TN to a contract awarded to a supplier without soliciting bids, and recommends reporting one bid for a non-competitive contract; the field must read 1 for TN or AC. For a contract after January 1, 2022, with TC, TN or AC as its procedure and a trade agreement other than XX (None), a limited tendering reason other than 00 (none) must be entered. For its section 6 field, coded as in the table above, it is recommended that one of the exceptions be given if bids have not been solicited for the contract. A published contract's page on Award Watch shows the solicitation procedure, the limited tendering reason's code and the number of bids, and leaves out the section 6 field.",
+          "Dans les contrats publiés de plus de 10 000 $, le schéma du Conseil du Trésor attribue la méthode d'invitation à soumissionner TN à un marché attribué à un fournisseur sans appel d'offres, et recommande de déclarer une soumission pour un marché non concurrentiel; le champ doit contenir 1 pour TN ou AC. Pour un marché conclu après le 1er janvier 2022 dont la méthode est TC, TN ou AC et dont l'accord commercial a une valeur autre que XX (Aucune), une raison justifiant le recours à l'appel d'offres limité autre que 00 (aucune) doit être inscrite. Pour son champ de l'article 6, codé comme dans le tableau ci-dessus, il est recommandé d'inscrire l'une des exceptions si aucun appel d'offres n'a été lancé à l'égard du marché. La page d'un contrat publié sur Award Watch affiche la méthode d'invitation, le code de la raison de l'appel d'offres limité et le nombre de soumissions, et omet le champ de l'article 6.",
+        ),
+        figure(
+          "noncompetitive-published", SAMPLE_PUBLISHED_TN, ".panel-grid > section.panel",
+          both(
+            "The Procurement panel of a published contract's page on Award Watch, for a contract awarded without soliciting bids: the solicitation procedure TN, the competition, the instrument type, the commodity type, the trade agreements, the limited tendering reason, the number of bids and the procurement number.",
+            "Le panneau Approvisionnement de la page d'un contrat publié sur Award Watch, pour un contrat attribué sans appel d'offres : le mode d'invitation TN, la mise en concurrence, le type d'instrument, le type de marchandise, les accords commerciaux, la raison de l'appel d'offres limité, le nombre de soumissions et le numéro d'approvisionnement.",
+          ),
+          both("A published contract awarded without soliciting bids, on Award Watch.", "Un contrat publié attribué sans appel d'offres, sur Award Watch."),
+          [
+            mark(field(":scope > dl", 1), "The schema gives the solicitation procedure TN to a contract awarded to a supplier without soliciting bids.",
+              "Le schéma attribue la méthode d'invitation à soumissionner TN à un marché attribué à un fournisseur sans appel d'offres."),
+            mark(field(":scope > dl", 5),
+              "For a contract after January 1, 2022, with TN as its procedure and a trade agreement other than XX (None), a limited tendering reason other than 00 (none) must be entered.",
+              "Pour un marché conclu après le 1er janvier 2022 dont la méthode est TN et dont l'accord commercial a une valeur autre que XX (Aucune), une raison autre que 00 (aucune) doit être inscrite."),
+            mark(field(":scope > dl", 6), "Award Watch shows the limited tendering reason's code.",
+              "Award Watch affiche le code de la raison de l'appel d'offres limité."),
+            mark(field(":scope > dl", 7), "For a non-competitive contract, the schema recommends reporting one bid, and the field must read 1 for TN.",
+              "Pour un marché non concurrentiel, le schéma recommande de déclarer une soumission, et le champ doit contenir 1 pour TN."),
+          ],
+        ),
+        p(
+          "This {example} from PSPC, awarded November 10, 2026, shows Directed Contract as its notice type, Non-competitive as its procurement method, Exclusive Rights as its limited tendering reason, a value of $103,467 and the Canadian Free Trade Agreement and the Canada-Korea Free Trade Agreement in its trade agreements line.",
+          "Cet {example} de SPAC, attribué le 10 novembre 2026, indique Contrat prescrit comme type d'avis, Non concurrentielle comme méthode d'approvisionnement, Droits exclusifs comme motif de l'appel d'offres limité, une valeur de 103 467 $ et, dans sa ligne des accords commerciaux, l'Accord de libre-échange canadien et l'Accord de libre-échange Canada-Corée.",
+          { example: a(EXAMPLE_LIMITS, "award notice", "avis d'attribution") },
+        ),
+      ],
+    },
+  ],
+  sources: [
+    SRC.gcr, SRC.sourcing, SRC.limitsNotice, SRC.policyNotices, SRC.procurementDirective, SRC.authorityNotice, SRC.dictionary,
+    SRC.contractsSchema, SRC.exampleDirected,
+  ],
 };
 
 const PSIB: Guide = {
@@ -2194,8 +2497,9 @@ const CONTRACT_END: Guide = {
       title: both("Limits on Amending", "Limites des modifications"),
       blocks: [
         p(
-          "A department must have the legal authority to amend a contract, and must follow the Treasury Board's requirements for approval. Most of the contracting limits in Appendix A of the Directive on the Management of Procurement were raised for inflation effective December 15, 2025. PSPC's limits cover both contract entry and amendments, and a submission beyond them needs Treasury Board approval.",
-          "Un ministère doit détenir le pouvoir légal de modifier un contrat et respecter les exigences du Conseil du Trésor en matière d'approbation. La plupart des limites contractuelles de l'annexe A de la Directive sur la gestion de l'approvisionnement ont été augmentées pour tenir compte de l'inflation, avec effet le 15 décembre 2025. Les limites de SPAC visent à la fois la conclusion et la modification des contrats, et une présentation qui les dépasse nécessite l'approbation du Conseil du Trésor.",
+          "A department must have the legal authority to amend a contract, and must follow the Treasury Board's requirements for approval. Most of the contracting limits in Appendix A of the Directive on the Management of Procurement were raised for inflation effective December 15, 2025; the {limits} explains them. PSPC's limits cover both contract entry and amendments, and a submission beyond them needs Treasury Board approval.",
+          "Un ministère doit détenir le pouvoir légal de modifier un contrat et respecter les exigences du Conseil du Trésor en matière d'approbation. La plupart des limites contractuelles de l'annexe A de la Directive sur la gestion de l'approvisionnement ont été augmentées pour tenir compte de l'inflation, avec effet le 15 décembre 2025; le {limits} les explique. Les limites de SPAC visent à la fois la conclusion et la modification des contrats, et une présentation qui les dépasse nécessite l'approbation du Conseil du Trésor.",
+          { limits: a(LIMITS_PATH, "guide on contracts awarded without competition", "guide sur les marchés conclus sans appel d'offres") },
         ),
         p(
           "The Buyer's Guide, citing Treasury Board Contracting Policy Notice 2000-3, allows the end date of a contract the Treasury Board approved to be extended without returning to the Board only when all of these hold:",
@@ -4079,7 +4383,8 @@ const DEBRIEF: Guide = {
 
 // The order of the index, and of the sitemap's part.
 export const GUIDES: readonly Guide[] = [
-  HOW_TO_BID, EVALUATION, DEBRIEF, TENDER_NOTICE, TRADE, BUY_CANADIAN, SBPP, SECURITY, ACAN, STANDING_OFFERS, PSIB, THREE_RECORDS, CONTRACT_END,
+  HOW_TO_BID, EVALUATION, DEBRIEF, TENDER_NOTICE, TRADE, BUY_CANADIAN, SBPP, SECURITY, ACAN, LIMITS, STANDING_OFFERS, PSIB, THREE_RECORDS,
+  CONTRACT_END,
 ];
 
 export const GUIDE_SLUGS: ReadonlySet<string> = new Set(GUIDES.map((g) => g.slug));

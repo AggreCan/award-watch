@@ -33,7 +33,7 @@ const PAGES = [
   "/guides/how-to-bid-on-government-of-canada-contracts", "/guides/trade-agreements-and-thresholds-on-federal-tenders",
   "/guides/security-requirements-on-federal-contracts", "/guides/buy-canadian-policy-on-federal-tenders",
   "/guides/how-federal-bids-are-evaluated-and-selected", "/guides/debriefings-and-bid-challenges-on-federal-contracts",
-  "/guides/small-business-procurement-program-sbpp",
+  "/guides/small-business-procurement-program-sbpp", "/guides/federal-contracts-without-competition-and-contracting-limits",
 ];
 
 describe("column widths", () => {

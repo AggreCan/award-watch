@@ -415,7 +415,9 @@ describe("a guide's email list", () => {
       "security-requirements-on-federal-contracts", "indigenous-business-set-asides-psib"]) {
       expect(await params(slug, env), slug).toBe("/tenders");
     }
-    expect(await params("advance-contract-award-notices-acan", env)).toBe(`/tenders?type=${encodeURIComponent(ACAN_TYPE).replace(/%20/g, "+")}`);
+    for (const slug of ["advance-contract-award-notices-acan", "federal-contracts-without-competition-and-contracting-limits"]) {
+      expect(await params(slug, env), slug).toBe(`/tenders?type=${encodeURIComponent(ACAN_TYPE).replace(/%20/g, "+")}`);
+    }
     expect(await params("standing-offers-and-supply-arrangements", env)).toBe(`/tenders?type=${encodeURIComponent(RFSO_TYPE).replace(/%20/g, "+")}`);
     const ending = (await interestFilter(env as never, "en", "expiring", "/expiring"))!.params;
     expect(await params("three-records-of-one-federal-contract", env)).toBe(ending);
@@ -441,7 +443,7 @@ describe("a guide's email list", () => {
       "small-business-procurement-program-sbpp", "security-requirements-on-federal-contracts"]) {
       expect(await seen(slug, true), slug).toEqual(await seen(slug, false));
     }
-    for (const slug of ["advance-contract-award-notices-acan", "standing-offers-and-supply-arrangements"]) {
+    for (const slug of ["advance-contract-award-notices-acan", "federal-contracts-without-competition-and-contracting-limits", "standing-offers-and-supply-arrangements"]) {
       expect(await seen(slug, true), slug).toEqual([...(await seen(slug, false)), "/data/tenders/open-first.json"].sort());
     }
   });

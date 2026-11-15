@@ -11,7 +11,8 @@ import { app } from "../src/index";
 import { CLOSING_SOON_DAYS } from "../src/constants";
 import { referenceShard } from "../src/data";
 import {
-  EXAMPLE_ACAN, EXAMPLE_AWARD, EXAMPLE_BUY_CANADIAN, EXAMPLE_DEBRIEF, EXAMPLE_EVALUATION, EXAMPLE_NOTICE, EXAMPLE_PROFILE, EXAMPLE_SBPP, EXAMPLE_SET_ASIDE,
+  EXAMPLE_ACAN, EXAMPLE_AWARD, EXAMPLE_BUY_CANADIAN, EXAMPLE_DEBRIEF, EXAMPLE_EVALUATION, EXAMPLE_LIMITS, EXAMPLE_NOTICE, EXAMPLE_PROFILE, EXAMPLE_SBPP,
+  EXAMPLE_SET_ASIDE,
   GUIDES,
   type Block, type Both, type Cell, type Guide, type Link, type Text,
 } from "../src/guides";
@@ -172,7 +173,7 @@ beforeAll(async () => {
     exampleRecords[path] = { ...((exampleRecords[path] as object) ?? {}), [reference]: { ...structuredClone(tender), reference } };
   }
   const award = (FILES["contracts/637.json"] as Record<string, any>)["award:cb-400-40000004"];
-  for (const awardRef of [EXAMPLE_AWARD, EXAMPLE_DEBRIEF, EXAMPLE_SBPP].map((p) => p.slice("/awards/".length))) {
+  for (const awardRef of [EXAMPLE_AWARD, EXAMPLE_DEBRIEF, EXAMPLE_SBPP, EXAMPLE_LIMITS].map((p) => p.slice("/awards/".length))) {
     const path = `contracts/${await referenceShard(awardRef)}.json`;
     exampleRecords[path] = { ...((exampleRecords[path] as object) ?? {}), [`award:${awardRef}`]: { ...structuredClone(award), reference: awardRef } };
   }
@@ -293,13 +294,13 @@ describe("links and sources", () => {
     // lists of contracts ending and the overview of them; the new notices, the award notices, an example
     // notice, ACAN and award, a notice stating a Buy Canadian policy, a request for proposal stating its selection
     // criteria, an award notice showing the dates and the trade agreements line the complaint rules turn on, an award notice
-    // showing the category, value and trade agreements line the guide on the Small Business Procurement Program names; and
-    // the guides that link one another.
+    // showing the category, value and trade agreements line the guide on the Small Business Procurement Program names, an award
+    // notice showing a non-competitive method and a limited tendering reason; and the guides that link one another.
     for (const want of ["/tenders", "/methodology#statuses", "/methodology#places", "/methodology#counting", "/instruments", "/data#sources",
       `${EXAMPLE_PROFILE}#awards`, `${EXAMPLE_PROFILE}#history`, `${EXAMPLE_PROFILE}#contracts`, `${EXAMPLE_PROFILE}#instruments`,
       "/tenders?type=Advance%20Contract%20Award%20Notice", "/methodology#competitive", "/methodology#expiring", EXAMPLE_SET_ASIDE,
       "/expiring", "/expiring/3m", "/expiring/6m", "/expiring/12m", "/tenders/new", "/awards", EXAMPLE_NOTICE, EXAMPLE_ACAN, EXAMPLE_AWARD,
-      EXAMPLE_BUY_CANADIAN, EXAMPLE_EVALUATION, EXAMPLE_DEBRIEF, EXAMPLE_SBPP, ...GUIDES.map(pathOf)]) {
+      EXAMPLE_BUY_CANADIAN, EXAMPLE_EVALUATION, EXAMPLE_DEBRIEF, EXAMPLE_SBPP, EXAMPLE_LIMITS, ...GUIDES.map(pathOf)]) {
       expect(targets.has(want), want).toBe(true);
     }
     expect([...targets].some((h) => h.startsWith("/tenders?type="))).toBe(true);
@@ -421,6 +422,39 @@ describe("links and sources", () => {
     expect(g.sources.map((s) => s.url)).toEqual(expect.arrayContaining([
       "https://www.canada.ca/en/treasury-board-secretariat/services/policy-notice/2026-4.html",
       "https://laws-lois.justice.gc.ca/eng/regulations/SOR-93-602/FullText.html",
+    ]));
+  });
+
+  it("hold the guide on contracts without competition to the ACAN guide's section 6 amounts and the contract-end guide's day, and place it right after the ACAN guide", () => {
+    const g = GUIDES.find((x) => x.slug === "federal-contracts-without-competition-and-contracting-limits")!;
+    const acan = GUIDES.find((x) => x.slug === "advance-contract-award-notices-acan")!;
+    const ending = GUIDES.find((x) => x.slug === "when-a-federal-contract-ends")!;
+    // Both guides give the amounts of paragraph 6(b) of the Government Contracts Regulations; when the Regulations
+    // change them, the two change together.
+    const list = acan.sections.find((s) => s.id === "when")!.blocks.find((b) => b.kind === "list") as Extract<Block, { kind: "list" }>;
+    const item = list.items.find((i) => i.en.includes("estimated expenditure"))!;
+    const table = g.sections.find((s) => s.id === "exceptions")!.blocks.find((b) => b.kind === "table") as Extract<Block, { kind: "table" }>;
+    const words = table.rows.find((r) => !("money" in r[0]) && r[0].en === "(b)")![1] as Both;
+    for (const lang of ["en", "fr"] as const) {
+      expect(new Set(figures(words[lang], lang)), lang).toEqual(new Set(figures(item[lang], lang)));
+      expect(figures(words[lang], lang), lang).toEqual([25_000, 40_000, 100_000, 100_000]);
+    }
+    // Both give the day Contracting Policy Notice 2026-1 says the directive's limits were raised for inflation.
+    const text = (x: Guide, lang: "en" | "fr") => pieces(x).map((p) => filled(p, lang)).join("\n");
+    const en = /raised for inflation effective (\w+ \d{1,2}, \d{4})/.exec(text(ending, "en"))?.[1];
+    const frDay = /avec effet le (\d{1,2} \S+ \d{4})/.exec(text(ending, "fr"))?.[1];
+    expect([en, frDay]).toEqual(["December 15, 2025", "15 décembre 2025"]);
+    expect(text(g, "en")).toContain(`amended, effective ${en}, to increase most contracting limits`);
+    expect(text(g, "fr")).toContain(`le ${frDay}, la directive a été modifiée pour augmenter la plupart des limites contractuelles`);
+    expect(GUIDES.indexOf(g)).toBe(GUIDES.indexOf(acan) + 1);
+    expect(internalLinks(g)).toEqual(expect.arrayContaining([pathOf(acan), pathOf(ending), "/guides/trade-agreements-and-thresholds-on-federal-tenders"]));
+    // It rests on the Regulations, the directive and the Treasury Board Secretariat's notices on the limits and on PSPC's authority.
+    expect(g.sources.map((s) => s.url)).toEqual(expect.arrayContaining([
+      "https://laws-lois.justice.gc.ca/eng/regulations/SOR-87-402/FullText.html",
+      "https://www.tbs-sct.canada.ca/pol/doc-eng.aspx?id=32692",
+      "https://www.canada.ca/en/treasury-board-secretariat/services/policy-notice/2026-1.html",
+      "https://www.canada.ca/en/treasury-board-secretariat/services/policy-notice/2026-2.html",
+      "https://open.canada.ca/data/recombinant-published-schema/contracts.json",
     ]));
   });
 

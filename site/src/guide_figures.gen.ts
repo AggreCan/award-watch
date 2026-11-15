@@ -219,6 +219,23 @@ export const GUIDE_FIGURES: Readonly<Record<string, FigureEntry>> = {
       phone: {"width":370,"height":420,"viewport":390,"boxes":[[1.89,11.19,96.22,8.57],[1.89,19.76,96.22,13.57],[1.89,55.71,96.22,13.57]]},
     },
   },
+  "noncompetitive-published": {
+    slug: "federal-contracts-without-competition-and-contracting-limits", page: "/contracts/nrcan-rncan/C-2026-2027-Q2-90345", region: ".panel-grid > section.panel",
+    targets: [
+      ":scope > dl > dt:nth-of-type(1), :scope > dl > dt:nth-of-type(1) + dd",
+      ":scope > dl > dt:nth-of-type(5), :scope > dl > dt:nth-of-type(5) + dd",
+      ":scope > dl > dt:nth-of-type(6), :scope > dl > dt:nth-of-type(6) + dd",
+      ":scope > dl > dt:nth-of-type(7), :scope > dl > dt:nth-of-type(7) + dd",
+    ],
+    en: {
+      wide: {"width":557,"height":402,"viewport":1440,"boxes":[[1.35,11.69,97.4,8.96],[1.35,49.25,97.4,9.2],[1.35,58.46,97.4,9.2],[1.35,67.66,97.4,9.2]]},
+      phone: {"width":370,"height":578,"viewport":390,"boxes":[[1.89,8.13,96.22,9.69],[1.89,44.64,96.22,9.86],[1.89,54.5,96.22,13.32],[1.89,67.82,96.22,9.86]]},
+    },
+    fr: {
+      wide: {"width":557,"height":458,"viewport":1440,"boxes":[[1.35,10.26,97.4,7.86],[1.35,43.23,97.4,8.08],[1.35,51.31,97.4,12.45],[1.35,63.76,97.4,8.08]]},
+      phone: {"width":370,"height":534,"viewport":390,"boxes":[[1.89,8.8,96.22,6.74],[1.89,43.82,96.22,10.67],[1.89,54.49,96.22,10.67],[1.89,65.17,96.22,10.67]]},
+    },
+  },
   "instrument-details": {
     slug: "standing-offers-and-supply-arrangements", page: "/instruments/EN578-991533%2F001%2FZT", region: "section.panel:has(> dl.wide)",
     targets: [
