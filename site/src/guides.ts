@@ -93,6 +93,7 @@ const JUSTICE = both("Justice Laws Website, Department of Justice Canada", "Site
 const ISC = both("Indigenous Services Canada", "Services aux Autochtones Canada");
 const OPO = both("Office of the Procurement Ombud", "Bureau de l'ombud de l'approvisionnement");
 const CITT = both("Canadian International Trade Tribunal", "Tribunal canadien du commerce extérieur");
+const CYBER_CENTRE = both("Canadian Centre for Cyber Security", "Centre canadien pour la cybersécurité");
 // PSPC's Buyer's Guide, in each language.
 const GUIDE_EN = "https://canadabuys.canada.ca/en/buyer-s-portal/buyer-s-guide";
 const GUIDE_FR = "https://achatscanada.canada.ca/fr/portail-de-l-acheteur/guide-de-l-acheteur";
@@ -826,6 +827,88 @@ const SRC = {
       url: "https://laws-lois.justice.gc.ca/fra/reglements/DORS-93-602/TexteComplet.html",
     },
   },
+  // The cyber security certification of defence suppliers: PSPC's pages on the program, its news releases and
+  // backgrounder, the Canadian Centre for Cyber Security's standard and PSPC's page on security requirements for
+  // contracting, which lists the program (each read on 2026-11-15).
+  cpcscOverview: {
+    title: "Program Overview (Canadian Program for Cyber Security Certification)",
+    publisher: PSPC,
+    url: `${CSP_EN}/cyber-security-certification-defence-suppliers-canada/program-overview.html`,
+    fr: {
+      title: "Aperçu du programme (Programme canadien de certification en cybersécurité)",
+      url: `${CSP_FR}/certification-fournisseurs-secteur-defense-canada-concernant-cybersecurite/apercu-programme.html`,
+    },
+  },
+  cpcscLevel1: {
+    title: "How to meet Level 1 cyber security certification requirements",
+    publisher: PSPC,
+    url: `${CSP_EN}/cyber-security-certification-defence-suppliers-canada/meet-level1-certification-requirements.html`,
+    fr: {
+      title: "Comment satisfaire aux exigences de certification en cybersécurité de niveau 1",
+      url: `${CSP_FR}/certification-fournisseurs-secteur-defense-canada-concernant-cybersecurite/exigences-certification-niveau1.html`,
+    },
+  },
+  cpcscMore: {
+    title: "Additional information and support for suppliers about cyber security",
+    publisher: PSPC,
+    url: `${CSP_EN}/cyber-security-certification-defence-suppliers-canada/additional-information-support.html`,
+    fr: {
+      title: "Renseignements et soutien supplémentaires en matière de cybersécurité à l'intention des fournisseurs",
+      url: `${CSP_FR}/certification-fournisseurs-secteur-defense-canada-concernant-cybersecurite/renseignments-soutien-supplementaires.html`,
+    },
+  },
+  cpcscNews: {
+    title: "Government of Canada introduces Level 1 of Canadian Program for Cyber Security Certification",
+    publisher: PSPC,
+    url: "https://www.canada.ca/en/public-services-procurement/news/2026/04/government-of-canada-introduces-level-1-of-canadian-program-for-cyber-security-certification.html",
+    fr: {
+      title: "Le gouvernement du Canada lance le niveau 1 du Programme canadien de certification en cybersécurité",
+      url: "https://www.canada.ca/fr/services-publics-approvisionnement/nouvelles/2026/04/le-gouvernement-du-canada-lance-le-niveau-1-du-programme-canadien-de-certification-en-cybersecurite.html",
+    },
+  },
+  // The French title joins its parts with a dash, which the guides never print; a comma stands in.
+  cpcscBackgrounder: {
+    title: "Canadian Program for Cyber Security Certification: Level 1",
+    publisher: PSPC,
+    url: "https://www.canada.ca/en/public-services-procurement/news/2026/04/canadian-program-for-cyber-security-certification-level-1.html",
+    fr: {
+      title: "Programme canadien de certification en cybersécurité, niveau 1",
+      url: "https://www.canada.ca/fr/services-publics-approvisionnement/nouvelles/2026/04/programme-canadien-de-certification-en-cybersecurite--niveau-1.html",
+    },
+  },
+  cpcsc2025: {
+    title: "Government of Canada announces first phase of Canadian Program for Cyber Security Certification",
+    publisher: PSPC,
+    url: "https://www.canada.ca/en/public-services-procurement/news/2025/03/government-of-canada-announces-first-phase-of-canadian-program-for-cyber-security-certification.html",
+    fr: {
+      title: "Le gouvernement du Canada annonce la première phase du Programme canadien de certification en cybersécurité",
+      url: "https://www.canada.ca/fr/services-publics-approvisionnement/nouvelles/2025/03/le-gouvernement-du-canada-annonce-la-premiere-phase-du-programme-canadien-de-certification-en-cybersecurite.html",
+    },
+  },
+  cpcsc2023: {
+    title: "Government of Canada helping defence industry protect itself from cyber security threats",
+    publisher: PSPC,
+    url: "https://www.canada.ca/en/public-services-procurement/news/2023/05/government-of-canada-helping-defence-industry-protect-itself-from-cyber-security-threats.html",
+    fr: {
+      title: "Le gouvernement du Canada aide l'industrie de la défense à se protéger contre les menaces à la cybersécurité",
+      url: "https://www.canada.ca/fr/services-publics-approvisionnement/nouvelles/2023/05/le-gouvernement-du-canada-aide-lindustrie-de-la-defense-a-se-proteger-contre-les-menaces-a-la-cybersecurite.html",
+    },
+  },
+  itsp10171: {
+    title: "Protecting specified information in non-Government of Canada systems and organizations (ITSP.10.171)",
+    publisher: CYBER_CENTRE,
+    url: "https://www.cyber.gc.ca/en/guidance/protecting-specified-information-non-government-canada-systems-and-organizations-itsp10171",
+    fr: {
+      title: "Protection de l'information désignée dans les organisations et les systèmes ne relevant pas du gouvernement du Canada (ITSP.10.171)",
+      url: "https://www.cyber.gc.ca/fr/orientation/protection-linformation-designee-organisations-systemes-ne-relevant-pas-gouvernement-canada-itsp10171",
+    },
+  },
+  cspIndex: {
+    title: "Security requirements for contracting with the Government of Canada",
+    publisher: PSPC,
+    url: `${CSP_EN}.html`,
+    fr: { title: "Exigences de sécurité des contrats du gouvernement du Canada", url: `${CSP_FR}.html` },
+  },
 } satisfies Record<string, Source>;
 
 // The site's own pages the guides link to.
@@ -865,10 +948,16 @@ export const EXAMPLE_SBPP = "/awards/cw2460403";
 // Non-competitive as its procurement method and Exclusive Rights as its limited tendering reason (awarded 2026-11-10,
 // published 2026-11-13; read in the site's newest award notices, on awardwatch.ca and on CanadaBuys on 2026-11-14).
 export const EXAMPLE_LIMITS = "/awards/cw2454835";
+// A request for proposal from National Defence for a radar signal stimulator whose page shows nine documents (the
+// request for proposal in English and in French among them) and the link to the notice on CanadaBuys, and whose
+// description does not mention the cyber security certification (read in the site's open notices and on
+// awardwatch.ca on 2026-11-15; it closes 2027-01-04). CanadaBuys' own page for it refused an automated reading.
+export const EXAMPLE_CYBER = "/tenders/cb-768-40670607";
 // The pages the figures are captured from, drawn from the sample records in site/figures/, made for the figures
-// and never real, their reference numbers in ranges the real series are nowhere near: three tender notices (the
+// and never real, their reference numbers in ranges the real series are nowhere near: four tender notices (the
 // second with security requirements in its description, a limited tendering reason of None and a trade
-// agreements line that names NAFTA; the third with a Buy Canadian statement in its description), an advance
+// agreements line that names NAFTA; the third with a Buy Canadian statement in its description; the fourth, from
+// National Defence, with three documents), an advance
 // contract award notice, one day's new notices, one contract's award notice (linking the tender notice it
 // followed) and PSPC contract history record, a second contract history record that gives its supplier's
 // employees, published contracts (the same contract's amendment, one after an ACAN, one under a set-aside, one awarded
@@ -876,6 +965,7 @@ export const EXAMPLE_LIMITS = "/awards/cw2454835";
 const SAMPLE_NOTICE = "/tenders/cb-900-90000101";
 const SAMPLE_NOTICE_SECURITY = "/tenders/cb-900-90000303";
 const SAMPLE_NOTICE_BUY_CANADIAN = "/tenders/cb-900-90000606";
+const SAMPLE_NOTICE_DOCUMENTS = "/tenders/cb-900-90000707";
 const SAMPLE_NEW = "/tenders/new";
 const SAMPLE_ACAN = "/tenders/cb-900-90000202";
 const SAMPLE_AWARD = "/awards/cw9391528";
@@ -902,6 +992,7 @@ const EVALUATION_PATH = "/guides/how-federal-bids-are-evaluated-and-selected";
 const DEBRIEF_PATH = "/guides/debriefings-and-bid-challenges-on-federal-contracts";
 const SBPP_PATH = "/guides/small-business-procurement-program-sbpp";
 const LIMITS_PATH = "/guides/federal-contracts-without-competition-and-contracting-limits";
+const CYBER_PATH = "/guides/cyber-security-certification-for-defence-suppliers-cpcsc";
 
 // -- the guides ---------------------------------------------------------------------
 
@@ -3155,6 +3246,11 @@ const SECURITY: Guide = {
           "An organization needs a security screening to take part in a solicitation or contract with security requirements, typically before it is awarded the resulting contract. Organization screening determines whether it meets those requirements; personnel screening determines whether an employee can be trusted with protected or classified information, assets or work sites.",
           "Une organisation a besoin d'une enquête de sécurité pour participer à un appel d'offres ou à un contrat comportant des exigences de sécurité, généralement avant l'attribution du contrat subséquent. L'enquête sur l'organisation détermine si elle satisfait à ces exigences; l'enquête sur le personnel détermine si un employé est digne de confiance avec des renseignements, des biens ou des lieux de travail protégés ou classifiés.",
         ),
+        p(
+          "PSPC's page on security requirements for contracting also lists {cyber}.",
+          "La page de SPAC sur les exigences de sécurité des contrats présente aussi {cyber}.",
+          { cyber: a(CYBER_PATH, "the cyber security certification of defence suppliers", "la certification en cybersécurité des fournisseurs de la défense") },
+        ),
       ],
     },
     {
@@ -3350,7 +3446,387 @@ const SECURITY: Guide = {
   ],
   sources: [
     SRC.cspScreening, SRC.cspOrganization, SRC.cspProvisional, SRC.cspSponsorship, SRC.cspLevels, SRC.cspPersonnel, SRC.cspTimes,
-    SRC.securitySolicitations, SRC.seminar, SRC.dictionary, SRC.exampleNotice,
+    SRC.securitySolicitations, SRC.seminar, SRC.dictionary, SRC.exampleNotice, SRC.cspIndex,
+  ],
+};
+
+const CYBER: Guide = {
+  slug: CYBER_PATH.slice("/guides/".length),
+  title: both("Cyber Security Certification for Defence Suppliers (CPCSC)", "La certification en cybersécurité des fournisseurs de la défense (PCCC)"),
+  seoTitle: both("Cyber Security Certification for Defence Suppliers", "Certification en cybersécurité des fournisseurs de défense"),
+  summary: both(
+    "The Canadian Program for Cyber Security Certification: its three levels, the standard, the phases and dates, and where a solicitation states it.",
+    "Le Programme canadien de certification en cybersécurité : ses trois niveaux, la norme, les étapes et les dates, et où une demande de soumissions l'indique.",
+  ),
+  checked: "2026-11-15",
+  action: tenderList(
+    "To follow new federal tender notices as they are posted, National Defence's among them, save this list with your email address.",
+    "Pour suivre les nouveaux avis d'appel d'offres fédéraux à mesure qu'ils sont publiés, y compris ceux de la Défense nationale, enregistrez cette liste avec votre adresse courriel.",
+  ),
+  sections: [
+    {
+      id: "program",
+      title: both("What the Program Is", "Ce qu'est le programme"),
+      blocks: [
+        p(
+          "Public Services and Procurement Canada (PSPC) describes the Canadian Program for Cyber Security Certification (CPCSC) as an official cyber security certification in Canada for defence suppliers. Managed by PSPC, it is made up of accredited bodies, certified assessors and government oversight. PSPC's backgrounder of April 14, 2026, says Budget 2023 allocated $25 million over three years to establish the program, led by PSPC and National Defence.",
+          "Services publics et Approvisionnement Canada (SPAC) décrit le Programme canadien de certification en cybersécurité (PCCC) comme une certification officielle en matière de cybersécurité au Canada pour les fournisseurs du secteur de la défense. Géré par SPAC, il est composé d'organismes accrédités, d'évaluateurs certifiés et d'une surveillance gouvernementale. Le document d'information de SPAC du 14 avril 2026 indique que le budget de 2023 a affecté 25 millions de dollars sur trois ans à la mise sur pied du programme, dirigé par SPAC et la Défense nationale.",
+        ),
+        p("PSPC's program overview gives the bodies involved these roles:", "L'aperçu du programme de SPAC donne aux organismes participants les rôles suivants :"),
+        {
+          kind: "table",
+          cols: [
+            { kind: "text", label: both("Body", "Organisme") },
+            { kind: "main", label: both("Role under the program overview", "Rôle selon l'aperçu du programme") },
+          ],
+          rows: [
+            [
+              both("Public Services and Procurement Canada", "Services publics et Approvisionnement Canada"),
+              both(
+                "The federal lead, responsible for program coordination across government, development of certification processes and overall implementation",
+                "Le responsable fédéral, chargé de la coordination des programmes à l'échelle du gouvernement, de l'élaboration des processus de certification et de la mise en œuvre globale",
+              ),
+            ],
+            [
+              both("National Defence", "Défense nationale"),
+              both(
+                "Performs the highest level of cyber security assessments (Level 3) and collaborates with PSPC to ensure that cyber security requirements reflect the needs of the defence community",
+                "Effectue le plus haut niveau d'évaluation de la cybersécurité (niveau 3) et collabore avec SPAC pour s'assurer que les exigences en matière de cybersécurité tiennent compte des besoins de la communauté de la défense",
+              ),
+            ],
+            [
+              both("Standards Council of Canada", "Conseil canadien des normes"),
+              both(
+                "Accredits the certification bodies that conduct external assessments (Level 2)",
+                "Accrédite les organismes de certification qui effectuent des évaluations externes (niveau 2)",
+              ),
+            ],
+            [
+              both("Canadian Centre for Cyber Security, part of the Communications Security Establishment", "Centre canadien pour la cybersécurité, qui relève du Centre de la sécurité des télécommunications"),
+              both(
+                "Developed the Canadian cyber security standard (ITSP.10.171) that forms the foundation of the program's controls",
+                "A élaboré la norme canadienne sur la cybersécurité (ITSP.10.171) qui constitue le fondement des contrôles du programme",
+              ),
+            ],
+          ],
+        },
+      ],
+    },
+    {
+      id: "information",
+      title: both("The Information and Contracts It Covers", "Les renseignements et les contrats visés"),
+      blocks: [
+        p(
+          "The program protects federal specified information on suppliers' networks, systems and applications. PSPC's Level 1 page defines specified information as sensitive, non-classified, government information that must be protected when handled, processed, or stored by non-Government of Canada organizations; a Government of Canada authority identifies and qualifies in a contract which information requires safeguarding. Specified information may include:",
+          "Le programme protège l'information désignée du gouvernement fédéral sur les réseaux, les systèmes et les applications des fournisseurs. La page de SPAC sur le niveau 1 définit l'information désignée comme de l'information gouvernementale de nature délicate et non classifiée qui doit être protégée lorsqu'elle est manipulée, traitée ou consignée par des organisations ne relevant pas du gouvernement du Canada; un responsable du gouvernement du Canada détermine et qualifie dans un contrat les renseignements qui doivent être protégés. L'information désignée peut comprendre :",
+        ),
+        {
+          kind: "list",
+          items: [
+            tx(
+              "unclassified information with contract details not intended for public release, between the contractor and the Department of National Defence",
+              "des renseignements non classifiés comportant des détails sur le contrat entre l'entrepreneur et le ministère de la Défense nationale, qui ne sont pas destinés au grand public",
+            ),
+            tx("controlled goods information", "des renseignements sur les marchandises contrôlées"),
+            tx("protected information", "des renseignements protégés"),
+          ],
+        },
+        p(
+          "The same page says that not all defence contracts will require Level 1; for example, commercial off the shelf contracts may not be subject to cyber security certification requirements. Going forward, it says, defence contracts, and other sensitive contracts outside defence, will need to be certified under the CPCSC ITSP.10.171 standard, based on their risk level.",
+          "La même page indique que ce ne sont pas tous les contrats de défense qui nécessiteront le niveau 1; par exemple, les contrats commerciaux disponibles sur le marché peuvent ne pas être soumis aux exigences de certification en matière de cybersécurité. À l'avenir, selon elle, les contrats de défense et d'autres contrats de nature délicate non liés à la défense devront être assortis d'une certification conformément à la norme ITSP.10.171 du PCCC, en fonction de leur niveau de risque.",
+        ),
+        p(
+          "PSPC's page of additional information sets out the roles of contractors and subcontractors:",
+          "La page de SPAC sur les renseignements supplémentaires énonce les rôles des entrepreneurs et des sous-traitants :",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "label", label: both("Party", "Partie") },
+            { kind: "main", label: both("What the page says", "Ce que dit la page") },
+          ],
+          rows: [
+            [
+              both("Contractor", "Entrepreneur"),
+              both(
+                "Before permitting a subcontractor to access, process, transmit or store specified information, must determine whether the subcontract requires access to specified information and identify the applicable CPCSC requirements. Is responsible for flowing the applicable requirements into the subcontract and confirming that the subcontractor holds a current and appropriately scoped CPCSC declaration or certification before access to specified information is granted. Must document the basis for its subcontractor applicability decisions",
+                "Avant de permettre à un sous-traitant d'accéder à de l'information désignée, de la traiter, de la transmettre ou de la stocker, doit déterminer si le contrat de sous-traitance exige l'accès à l'information désignée et déterminer les exigences applicables du PCCC. Il lui incombe d'intégrer les exigences applicables dans le contrat de sous-traitance et de confirmer que le sous-traitant détient une déclaration ou une certification du PCCC à jour et dont la portée est appropriée avant que l'accès à l'information désignée ne soit accordé. Doit documenter le fondement de ses décisions quant à l'applicabilité aux sous-traitants",
+              ),
+            ],
+            [
+              both("Subcontractor", "Sous-traitant"),
+              both(
+                "Is responsible for defining the systems, assets, personnel, facilities and activities within its assessment scope; implementing and maintaining the applicable CPCSC requirements; completing the required self-assessment or third-party assessment; retaining records and evidence supporting its CPCSC status; and renewing its declaration or certification before it expires",
+                "Est responsable de définir les systèmes, les biens, le personnel, les installations et les activités compris dans la portée de son évaluation; de mettre en œuvre et de maintenir les exigences applicables du PCCC; d'effectuer l'autoévaluation requise ou l'évaluation par un tiers; de conserver les dossiers et les preuves à l'appui de son statut au PCCC; et de renouveler sa déclaration ou sa certification avant son expiration",
+              ),
+            ],
+          ],
+        },
+      ],
+    },
+    {
+      id: "levels",
+      title: both("The Three Levels", "Les trois niveaux"),
+      blocks: [
+        p(
+          "Under the program overview, the program's mandatory cyber security certification requirements are organized into 3 levels, with Level 1 launched in April 2026. Levels 2 and 3 are under development; their rows give what PSPC says they will require once they become available.",
+          "Selon l'aperçu du programme, les exigences obligatoires du programme en matière de certification en cybersécurité sont organisées en 3 niveaux, le niveau 1 ayant été lancé en avril 2026. Les niveaux 2 et 3 sont en cours d'élaboration; leurs lignes donnent ce que SPAC indique qu'ils exigeront une fois disponibles.",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "label", label: both("Level", "Niveau") },
+            { kind: "main", label: both("What it requires", "Ce qu'il exige") },
+            { kind: "count", label: both("Controls", "Contrôles") },
+          ],
+          rows: [
+            [
+              both("Level 1", "Niveau 1"),
+              both(
+                "An annual cyber security self-assessment, which confirms the implementation status of 13 security requirements and controls found in the standard. Suppliers can attest that they meet the 13 controls without using the online self-assessment tool; its use is encouraged",
+                "Une autoévaluation annuelle de la cybersécurité, qui confirme l'état d'avancement de la mise en œuvre de 13 exigences et contrôles de sécurité figurant dans la norme. Les fournisseurs peuvent attester qu'ils répondent aux 13 contrôles sans utiliser l'outil d'autoévaluation en ligne; son utilisation est conseillée",
+              ),
+              both("13", "13"),
+            ],
+            [
+              both("Level 2", "Niveau 2"),
+              both(
+                "External cyber security assessments led by an accredited certification body, plus an annual affirmation. Third-party assessors will be accredited by the Standards Council of Canada, as the chosen accreditation body for the program",
+                "Des évaluations externes de la cybersécurité dirigées par un organisme de certification accrédité, plus une confirmation annuelle. Les évaluateurs tiers seront accrédités par le Conseil canadien des normes, en tant qu'organisme d'accréditation désigné du programme",
+              ),
+              both("98", "98"),
+            ],
+            [
+              both("Level 3", "Niveau 3"),
+              both(
+                "Cyber security assessments conducted by the Government of Canada, plus an annual affirmation",
+                "Des évaluations de la cybersécurité menées par le gouvernement du Canada, plus une confirmation annuelle",
+              ),
+              both("130+", "Plus de 130"),
+            ],
+          ],
+        },
+        p(
+          "For Level 3, the program overview, modified September 29, 2026, names National Defence as the assessor, and the page of additional information, modified October 14, 2026, the Government of Canada; the backgrounder of April 14, 2026, uses both. The backgrounder sets the Level 2 and Level 3 assessments at every three years.",
+          "Pour le niveau 3, l'aperçu du programme, modifié le 29 septembre 2026, désigne la Défense nationale comme évaluateur, et la page des renseignements supplémentaires, modifiée le 14 octobre 2026, le gouvernement du Canada; le document d'information du 14 avril 2026 emploie l'un et l'autre. Le document d'information prévoit les évaluations des niveaux 2 et 3 tous les trois ans.",
+        ),
+      ],
+    },
+    {
+      id: "standard",
+      title: both("The Standard", "La norme"),
+      blocks: [
+        p(
+          "The standard is the Canadian Centre for Cyber Security's ITSP.10.171, which PSPC calls the Canadian industrial security standard. The publication says:",
+          "La norme est l'ITSP.10.171 du Centre canadien pour la cybersécurité, que SPAC appelle la norme canadienne sur la sécurité industrielle. La publication indique :",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "label", label: both("Item", "Élément") },
+            { kind: "main", label: both("What the standard says", "Ce que dit la norme") },
+          ],
+          rows: [
+            [
+              both("Title", "Titre"),
+              both(
+                "Protecting specified information in non-Government of Canada systems and organizations",
+                "Protection de l'information désignée dans les organisations et les systèmes ne relevant pas du gouvernement du Canada",
+              ),
+            ],
+            [
+              both("Effective date and releases", "Entrée en vigueur et versions"),
+              both(
+                "The publication takes effect on April 2, 2025. Its revision history gives a first release on April 2, 2025, and a second release on October 28, 2025",
+                "Le document entre en vigueur le 2 avril 2025. Son historique des révisions indique une première version le 2 avril 2025 et une deuxième version le 28 octobre 2025",
+              ),
+            ],
+            [
+              both("Basis", "Fondement"),
+              both(
+                "A Canadian version of NIST SP 800-171, Protecting Controlled Unclassified Information in Nonfederal Systems and Organizations, with no substantial technical changes; it uses the term specified information in place of controlled unclassified information",
+                "La version canadienne du document NIST SP 800-171, Protecting Controlled Unclassified Information in Nonfederal Systems and Organizations, sans changement technique important; elle emploie le terme « information désignée » à la place du terme anglais « controlled unclassified information »",
+              ),
+            ],
+            [
+              both("Specified information", "Information désignée"),
+              both(
+                "Includes any information, other than classified, that a Government of Canada authority identifies and qualifies in a contract as requiring safeguarding",
+                "Comprend toute information autre que classifiée qu'une autorité du gouvernement du Canada désigne et mentionne dans un contrat comme devant faire l'objet d'une sauvegarde",
+              ),
+            ],
+            [
+              both("Scope", "Portée"),
+              both(
+                "The security requirements are only applicable to components of non-Government of Canada systems that handle, process, store, or transmit specified information or that provide protection for such components",
+                "Les exigences de sécurité ne s'appliquent qu'aux composants des systèmes ne relevant pas du gouvernement du Canada qui gèrent, traitent, stockent ou transmettent de l'information désignée ou qui protègent de tels composants",
+              ),
+            ],
+            [
+              both("Use", "Utilisation"),
+              both(
+                "The requirements are intended to be used by Government of Canada departments and agencies in contractual vehicles or other agreements established with non-Government of Canada organizations",
+                "Les exigences serviront aux ministères et aux organismes du gouvernement du Canada dans le cadre de contrats ou d'autres ententes établies avec des organisations ne relevant pas du gouvernement du Canada",
+              ),
+            ],
+          ],
+        },
+      ],
+    },
+    {
+      id: "phases",
+      title: both("Phases and Dates", "Étapes et dates"),
+      blocks: [
+        p(
+          "PSPC says the requirement will be implemented in phases, starting with the inclusion of Level 1 requirements in select National Defence contracts. The dates, with the page that gives each:",
+          "SPAC indique que l'exigence sera mise en œuvre par étapes, en commençant par l'inclusion des exigences de niveau 1 dans certains contrats de la Défense nationale. Les dates, avec la page qui donne chacune :",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "label", label: both("When", "Quand") },
+            { kind: "main", label: both("What the page says", "Ce que dit la page") },
+            { kind: "text", label: both("Page", "Page") },
+          ],
+          rows: [
+            [
+              both("March 12, 2025", "12 mars 2025"),
+              both(
+                "The program was officially introduced to the public, which launched a new Canadian industrial cyber security standard, the opening of the accreditation ecosystem and a pilot program focusing on select defence contracts through self-assessment",
+                "Le programme a été présenté officiellement au public, ce qui a lancé une nouvelle norme canadienne sur la cybersécurité industrielle, le système d'accréditation et un programme pilote mettant à l'essai l'autoévaluation pour certains contrats de défense",
+              ),
+              both("Backgrounder, April 14, 2026", "Document d'information, 14 avril 2026"),
+            ],
+            [
+              both("April 1, 2026", "1er avril 2026"),
+              both("Level 1 available to suppliers", "Niveau 1 accessible aux fournisseurs"),
+              both("Backgrounder, April 14, 2026", "Document d'information, 14 avril 2026"),
+            ],
+            [
+              both("Beginning in summer 2026", "À compter de l'été 2026"),
+              both("Level 1 will be required in select defence contracts", "Le niveau 1 sera exigé dans certains contrats de défense"),
+              both("News release, April 14, 2026", "Communiqué, 14 avril 2026"),
+            ],
+            [
+              both("Spring 2026 to spring 2027", "Du printemps 2026 au printemps 2027"),
+              both(
+                "The Government of Canada introduces a Level 1 self-assessment tool and support materials; National Defence contracts will be assessed using a new contract \"Cyber Security Risk Assessment\"; Level 1 to 3 certification requirements may be identified in select defence contracts as early as summer 2026, and compliance will be required at a later date; guidance for Levels 2 and 3 will be provided in advance",
+                "Le gouvernement du Canada met en place un outil d'autoévaluation de niveau 1 et des documents d'appui; les contrats de la Défense nationale seront évalués au moyen d'une nouvelle « Évaluation des risques liés à la cybersécurité »; des exigences de certification de niveaux 1 à 3 pourraient être définies dans certains contrats de défense dès l'été 2026, et la conformité ne sera exigée qu'à une date ultérieure; des directives pour les niveaux 2 et 3 seront communiquées à l'avance",
+              ),
+              both("Additional information, modified October 14, 2026", "Renseignements supplémentaires, modifiée le 14 octobre 2026"),
+            ],
+            [
+              both("Beginning in spring 2027", "À compter du printemps 2027"),
+              both("Level 2 will be added to select defence contracts", "Le niveau 2 sera intégré à certains contrats de défense"),
+              both("Backgrounder, April 14, 2026", "Document d'information, 14 avril 2026"),
+            ],
+            [
+              both("Spring 2027 to spring 2028", "Du printemps 2027 au printemps 2028"),
+              both(
+                "The requirement to have Level 2 or 3 certification will be gradually incorporated into select defence contracts; Level 3 requirements and certification compliance activities will be conducted by Government of Canada authorities",
+                "L'exigence d'avoir une certification de niveau 2 ou 3 sera graduellement intégrée à certains contrats de défense; les exigences de niveau 3 et les activités de conformité relatives aux certifications seront menées par les responsables du gouvernement du Canada",
+              ),
+              both("Additional information, modified October 14, 2026", "Renseignements supplémentaires, modifiée le 14 octobre 2026"),
+            ],
+          ],
+        },
+        p(
+          "PSPC's Level 1 page, modified September 29, 2026, says that beginning in summer 2026, suppliers bidding on select defence contracts may need to obtain Level 1 certification. None of the pages read says which contracts have required it. PSPC's earlier news releases gave earlier dates:",
+          "La page de SPAC sur le niveau 1, modifiée le 29 septembre 2026, indique qu'à compter de l'été 2026, les fournisseurs qui soumissionnent pour certains contrats de défense pourraient devoir obtenir une certification de niveau 1. Aucune des pages lues n'indique quels contrats l'ont exigée. Les communiqués antérieurs de SPAC donnaient des dates antérieures :",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "label", label: both("Release", "Communiqué") },
+            { kind: "main", label: both("What it said", "Ce qu'il indiquait") },
+          ],
+          rows: [
+            [
+              both("May 31, 2023", "31 mai 2023"),
+              both(
+                "The Government of Canada will develop and implement a Canadian program for cyber security certification that will result in mandatory certification requirements in select federal defence contracts as early as winter 2024",
+                "Le gouvernement du Canada élaborera et mettra en œuvre un programme canadien de certification en matière de cybersécurité qui se traduira par la mise en place d'exigences de certification obligatoires dans certains contrats de défense fédéraux, et ce, dès l'hiver 2024",
+              ),
+            ],
+            [
+              both("March 12, 2025", "12 mars 2025"),
+              both(
+                "Phase 2 (fall 2025): some defence contracts will require level 1 certification, achieved through a self-assessment, and level 2 certification will be tested in certain defence contracts. Phase 3 (spring 2026): some defence contracts will start requiring level 2 certification, and level 3 certification will officially begin following publication of the additional level 3 controls. Phase 4 (2027): for a small number of contracts, level 3 certification requirements will gradually be incorporated into select defence requests for proposals",
+                "Phase 2 (automne 2025) : certains contrats de défense nécessiteront une certification de niveau 1 réalisée par autoévaluation, et la certification de niveau 2 sera mise à l'essai pour certains contrats de défense. Phase 3 (printemps 2026) : la certification de niveau 2 commencera à être exigée pour certains contrats de défense, et la certification de niveau 3 sera officiellement lancée à la suite de la publication des contrôles supplémentaires liés au niveau 3. Phase 4 (2027) : pour un petit nombre de contrats, les exigences liées à la certification de niveau 3 seront intégrées graduellement dans un certain nombre de demandes de propositions concernant la défense",
+              ),
+            ],
+          ],
+        },
+      ],
+    },
+    {
+      id: "solicitation",
+      title: both("How a Solicitation States It", "Comment une demande de soumissions l'indique"),
+      blocks: [
+        p(
+          "Once Levels 2 and 3 are established, PSPC says, a standardized cyber security risk assessment will evaluate each National Defence contract and determine which certification level is required. The required level will be set on a contract-by-contract basis and clearly communicated in requests for proposals and contract clauses. The risk assessment process will serve as an addendum to the Security Requirements Checklist to document CPCSC requirements in the contract, and mandatory sections or provisions in National Defence procurement documents, such as requests for proposals, will specify the required level. Suppliers seeking certification must always refer to the requirements outlined in their specific contracts or solicitation documents.",
+          "Une fois les niveaux 2 et 3 établis, selon SPAC, une évaluation normalisée des risques en matière de cybersécurité permettra d'évaluer chaque contrat de la Défense nationale et de déterminer le niveau de certification requis. Le niveau requis sera établi contrat par contrat et clairement communiqué dans les demandes de propositions et les clauses contractuelles. Le processus d'évaluation des risques servira d'addenda à la Liste de vérification des exigences relatives à la sécurité pour documenter les exigences du PCCC dans le contrat, et des sections ou dispositions obligatoires des documents d'approvisionnement de la Défense nationale, comme les demandes de propositions, préciseront le niveau requis. Les fournisseurs qui souhaitent obtenir la certification doivent toujours se référer aux exigences décrites dans leurs contrats ou leurs documents d'appel d'offres.",
+        ),
+        p(
+          "PSPC's Level 1 page says the Level 1 self-assessment will be required at contract award, and not during the bidding process. Once it is completed, suppliers must provide proof of self-attestation and its expiry date to their CanadaBuys profile, and when they submit a bid. Before awarding a contract that requires Level 1, PSPC will confirm that the supplier has recorded a current Level 1 self-assessment declaration in its CanadaBuys Supplier Profile. PSPC calls this an administrative confirmation of the supplier's CPCSC status that does not represent an independent technical assessment or certification of the supplier's systems, security controls or supporting evidence.",
+          "La page de SPAC sur le niveau 1 indique que l'autoévaluation de niveau 1 sera requise à l'attribution du contrat, et non pendant le processus d'appel d'offres. Une fois l'autoévaluation terminée, les fournisseurs doivent fournir une preuve d'autoévaluation et sa date d'expiration dans leur profil sur AchatsCanada, et lorsqu'ils présentent une soumission. Avant d'attribuer un contrat qui exige le niveau 1, SPAC confirmera que le fournisseur a enregistré une déclaration d'autoévaluation de niveau 1 à jour dans son profil de fournisseur AchatsCanada. SPAC précise qu'il s'agit d'une confirmation administrative du statut du fournisseur au PCCC, qui ne constitue pas une évaluation technique indépendante ou une certification de ses systèmes, de ses contrôles de sécurité ou des preuves à l'appui.",
+        ),
+      ],
+    },
+    {
+      id: "beside",
+      title: both("Beside Security Screening and the U.S. Program", "À côté des enquêtes de sécurité et du programme américain"),
+      blocks: [
+        p(
+          "PSPC's page on security requirements for contracting with the Government of Canada lists the certification under safeguards for sensitive information, on the same page as its links on security screening, which the {security} explains. Its page of additional information says suspected or confirmed cyber security incidents must be reported in accordance with the authorities, procedures and timelines established in the contract and applicable Contract Security Program guidance, and that a lapse in CPCSC status or a failure to maintain an applicable requirement is distinct from such an incident. None of the pages read says how a certification relates to an organization's security screening.",
+          "La page de SPAC sur les exigences de sécurité des contrats du gouvernement du Canada range la certification sous la protection des renseignements de nature délicate, sur la même page que ses liens sur les enquêtes de sécurité, qu'explique le {security}. Sa page sur les renseignements supplémentaires indique que les incidents de cybersécurité soupçonnés ou confirmés doivent être signalés conformément aux autorisations, aux procédures et aux échéanciers établis dans le contrat et aux directives applicables du Programme de sécurité des contrats, et qu'une défaillance du statut au PCCC ou un défaut de maintenir une exigence applicable est distinct d'un tel incident. Aucune des pages lues n'indique comment une certification s'articule avec l'enquête de sécurité d'une organisation.",
+          { security: a(SECURITY_PATH, "guide on security requirements", "guide sur les exigences de sécurité") },
+        ),
+        p(
+          "PSPC's Level 1 page says the program aligns with the United States' Cybersecurity Maturity Model Certification (CMMC) requirements and does not duplicate the U.S. certification system, and that both countries use the same technical controls. The backgrounder says the Canadian industrial cyber security standards are technically identical to the 172 controls in NIST Special Publications 800-171 and 800-172, which form the backbone of the U.S. CMMC program.",
+          "La page de SPAC sur le niveau 1 indique que le programme s'aligne sur les exigences de la Cybersecurity Maturity Model Certification (CMMC) des États-Unis et ne reproduit pas le système de certification américain, et que les deux pays utilisent les mêmes contrôles techniques. Le document d'information indique que les normes canadiennes sur la cybersécurité industrielle sont identiques sur le plan technique aux 172 contrôles des publications spéciales 800-171 et 800-172 du NIST, qui constituent la base du programme CMMC des États-Unis.",
+        ),
+        p(
+          "Under the Level 1 page, the Government of Canada may accept a contractor's valid CMMC certification on a case-by-case basis, after confirming that the assessment covers the required scope, and Canada reserves the right to verify compliance with specific CMMC controls when necessary; any verification would be carried out by the contract technical authority. PSPC's news release of May 31, 2023, said the program would aim to reduce industry burden by pursuing mutual recognition between Canada and the U.S.; none of the later pages read uses that term.",
+          "Selon la page sur le niveau 1, le gouvernement du Canada peut accepter au cas par cas une certification CMMC valide d'un entrepreneur, après avoir confirmé que l'évaluation englobe la portée requise, et le Canada se réserve le droit de vérifier, au besoin, la conformité à des contrôles précis de la CMMC; toute vérification serait effectuée par le responsable technique du contrat. Le communiqué de SPAC du 31 mai 2023 indiquait que le programme viserait à réduire la charge de l'industrie au moyen de la reconnaissance mutuelle entre le Canada et les États-Unis; aucune des pages plus récentes lues n'emploie ce terme.",
+        ),
+      ],
+    },
+    {
+      id: "records",
+      title: both("What the Records Show", "Ce que montrent les dossiers"),
+      blocks: [
+        p(
+          "CanadaBuys' data dictionary, in its file last modified on March 24, 2026, has no field that marks a cyber security certification requirement. It says a tender notice's description does not duplicate the information or details found in the attachments, such as clauses or sample documents. Award Watch lists on a notice's page the documents the CanadaBuys data names for it, each linked where the government keeps it.",
+          "Le dictionnaire de données d'AchatsCanada, dans son fichier modifié pour la dernière fois le 24 mars 2026, ne comporte aucun champ qui indique une exigence de certification en cybersécurité. Il précise que la description d'un avis d'appel d'offres ne reproduit pas les renseignements ou les détails se trouvant dans les pièces jointes, telles que des clauses ou des modèles de documents. Award Watch énumère sur la page d'un avis les documents que les données d'AchatsCanada lui associent, chacun lié à l'endroit où le gouvernement le conserve.",
+        ),
+        figure(
+          "cyber-documents", SAMPLE_NOTICE_DOCUMENTS, "section.panel.tender-documents",
+          both(
+            "The Documents panel of a National Defence tender notice's page on Award Watch: the number of documents, the closing line, three document links and the line that they are on CanadaBuys.",
+            "Le panneau Documents de la page d'un avis d'appel d'offres de la Défense nationale sur Award Watch : le nombre de documents, la ligne de clôture, trois liens vers des documents et la mention qu'ils se trouvent sur AchatsCanada.",
+          ),
+          both("A tender notice's documents on Award Watch.", "Les documents d'un avis d'appel d'offres sur Award Watch."),
+          [
+            mark(".panel-head h2", "CanadaBuys' data dictionary has no field that marks a cyber security certification requirement.",
+              "Le dictionnaire de données d'AchatsCanada ne comporte aucun champ qui indique une exigence de certification en cybersécurité."),
+            mark("ul.documents", "Once Levels 2 and 3 are established, PSPC says the required level will be clearly communicated in requests for proposals and contract clauses.",
+              "Une fois les niveaux 2 et 3 établis, selon SPAC, le niveau requis sera clairement communiqué dans les demandes de propositions et les clauses contractuelles."),
+            mark(".panel-foot", "Suppliers seeking certification must always refer to the requirements outlined in their specific contracts or solicitation documents.",
+              "Les fournisseurs qui souhaitent obtenir la certification doivent toujours se référer aux exigences décrites dans leurs contrats ou leurs documents d'appel d'offres."),
+          ],
+        ),
+        p(
+          "This {example} from National Defence, a request for proposal for a radar signal stimulator closing January 4, 2027, links nine documents on CanadaBuys and the notice itself there. Its description does not mention the certification.",
+          "Cet {example} de la Défense nationale, une demande de propositions pour un simulateur de signaux radar dont la clôture est fixée au 4 janvier 2027, renvoie à neuf documents sur AchatsCanada et à l'avis lui-même. Sa description ne mentionne pas la certification.",
+          { example: a(EXAMPLE_CYBER, "tender notice", "avis d'appel d'offres") },
+        ),
+      ],
+    },
+  ],
+  sources: [
+    SRC.cpcscOverview, SRC.cpcscLevel1, SRC.cpcscMore, SRC.cpcscNews, SRC.cpcscBackgrounder, SRC.cpcsc2025, SRC.cpcsc2023, SRC.itsp10171,
+    SRC.cspIndex, SRC.dictionary,
   ],
 };
 
@@ -4383,8 +4859,8 @@ const DEBRIEF: Guide = {
 
 // The order of the index, and of the sitemap's part.
 export const GUIDES: readonly Guide[] = [
-  HOW_TO_BID, EVALUATION, DEBRIEF, TENDER_NOTICE, TRADE, BUY_CANADIAN, SBPP, SECURITY, ACAN, LIMITS, STANDING_OFFERS, PSIB, THREE_RECORDS,
-  CONTRACT_END,
+  HOW_TO_BID, EVALUATION, DEBRIEF, TENDER_NOTICE, TRADE, BUY_CANADIAN, SBPP, SECURITY, CYBER, ACAN, LIMITS, STANDING_OFFERS, PSIB,
+  THREE_RECORDS, CONTRACT_END,
 ];
 
 export const GUIDE_SLUGS: ReadonlySet<string> = new Set(GUIDES.map((g) => g.slug));

@@ -11,8 +11,8 @@ import { app } from "../src/index";
 import { CLOSING_SOON_DAYS } from "../src/constants";
 import { referenceShard } from "../src/data";
 import {
-  EXAMPLE_ACAN, EXAMPLE_AWARD, EXAMPLE_BUY_CANADIAN, EXAMPLE_DEBRIEF, EXAMPLE_EVALUATION, EXAMPLE_LIMITS, EXAMPLE_NOTICE, EXAMPLE_PROFILE, EXAMPLE_SBPP,
-  EXAMPLE_SET_ASIDE,
+  EXAMPLE_ACAN, EXAMPLE_AWARD, EXAMPLE_BUY_CANADIAN, EXAMPLE_CYBER, EXAMPLE_DEBRIEF, EXAMPLE_EVALUATION, EXAMPLE_LIMITS, EXAMPLE_NOTICE, EXAMPLE_PROFILE,
+  EXAMPLE_SBPP, EXAMPLE_SET_ASIDE,
   GUIDES,
   type Block, type Both, type Cell, type Guide, type Link, type Text,
 } from "../src/guides";
@@ -168,7 +168,7 @@ const deeperWindows = Object.fromEntries(["6m", "12m"].flatMap((w) => [
 const exampleRecords: Record<string, unknown> = {};
 beforeAll(async () => {
   const tender = (FILES["tenders/20a.json"] as Record<string, any>)["cb-100-10000001"];
-  for (const reference of [EXAMPLE_NOTICE, EXAMPLE_ACAN, EXAMPLE_BUY_CANADIAN, EXAMPLE_EVALUATION].map((p) => p.slice("/tenders/".length))) {
+  for (const reference of [EXAMPLE_NOTICE, EXAMPLE_ACAN, EXAMPLE_BUY_CANADIAN, EXAMPLE_EVALUATION, EXAMPLE_CYBER].map((p) => p.slice("/tenders/".length))) {
     const path = `tenders/${await referenceShard(reference)}.json`;
     exampleRecords[path] = { ...((exampleRecords[path] as object) ?? {}), [reference]: { ...structuredClone(tender), reference } };
   }
@@ -295,12 +295,13 @@ describe("links and sources", () => {
     // notice, ACAN and award, a notice stating a Buy Canadian policy, a request for proposal stating its selection
     // criteria, an award notice showing the dates and the trade agreements line the complaint rules turn on, an award notice
     // showing the category, value and trade agreements line the guide on the Small Business Procurement Program names, an award
-    // notice showing a non-competitive method and a limited tendering reason; and the guides that link one another.
+    // notice showing a non-competitive method and a limited tendering reason; a National Defence request for proposal
+    // with its documents; and the guides that link one another.
     for (const want of ["/tenders", "/methodology#statuses", "/methodology#places", "/methodology#counting", "/instruments", "/data#sources",
       `${EXAMPLE_PROFILE}#awards`, `${EXAMPLE_PROFILE}#history`, `${EXAMPLE_PROFILE}#contracts`, `${EXAMPLE_PROFILE}#instruments`,
       "/tenders?type=Advance%20Contract%20Award%20Notice", "/methodology#competitive", "/methodology#expiring", EXAMPLE_SET_ASIDE,
       "/expiring", "/expiring/3m", "/expiring/6m", "/expiring/12m", "/tenders/new", "/awards", EXAMPLE_NOTICE, EXAMPLE_ACAN, EXAMPLE_AWARD,
-      EXAMPLE_BUY_CANADIAN, EXAMPLE_EVALUATION, EXAMPLE_DEBRIEF, EXAMPLE_SBPP, EXAMPLE_LIMITS, ...GUIDES.map(pathOf)]) {
+      EXAMPLE_BUY_CANADIAN, EXAMPLE_EVALUATION, EXAMPLE_DEBRIEF, EXAMPLE_SBPP, EXAMPLE_LIMITS, EXAMPLE_CYBER, ...GUIDES.map(pathOf)]) {
       expect(targets.has(want), want).toBe(true);
     }
     expect([...targets].some((h) => h.startsWith("/tenders?type="))).toBe(true);
@@ -456,6 +457,31 @@ describe("links and sources", () => {
       "https://www.canada.ca/en/treasury-board-secretariat/services/policy-notice/2026-2.html",
       "https://open.canada.ca/data/recombinant-published-schema/contracts.json",
     ]));
+  });
+
+  it("place the cyber security certification guide right after the security guide, link the two both ways, and keep its dates with their pages", () => {
+    const g = GUIDES.find((x) => x.slug === "cyber-security-certification-for-defence-suppliers-cpcsc")!;
+    const security = GUIDES.find((x) => x.slug === "security-requirements-on-federal-contracts")!;
+    expect(GUIDES.indexOf(g)).toBe(GUIDES.indexOf(security) + 1);
+    expect(internalLinks(g)).toContain(pathOf(security));
+    expect(internalLinks(security)).toContain(pathOf(g));
+    expect(internalLinks(g)).toContain(EXAMPLE_CYBER);
+    // The program is being phased in: every date in the phases table names the page that gives it, and that page is a source.
+    const table = g.sections.find((s) => s.id === "phases")!.blocks.find((b) => b.kind === "table") as Extract<Block, { kind: "table" }>;
+    expect(table.cols.map((c) => c.label.en)).toEqual(["When", "What the page says", "Page"]);
+    for (const row of table.rows) expect((row[2] as Both).en, (row[0] as Both).en).toMatch(/^(Backgrounder|News release|Additional information), (modified )?\w+ \d{1,2}, \d{4}$/);
+    // It rests on PSPC's pages on the program, its releases, the Cyber Centre's standard and PSPC's page on security requirements for
+    // contracting, and the guide on security requirements cites that page for its link here.
+    const urls = g.sources.map((s) => s.url);
+    expect(urls).toEqual(expect.arrayContaining([
+      "https://www.canada.ca/en/public-services-procurement/services/industrial-security/security-requirements-contracting/cyber-security-certification-defence-suppliers-canada/program-overview.html",
+      "https://www.canada.ca/en/public-services-procurement/services/industrial-security/security-requirements-contracting/cyber-security-certification-defence-suppliers-canada/meet-level1-certification-requirements.html",
+      "https://www.canada.ca/en/public-services-procurement/services/industrial-security/security-requirements-contracting/cyber-security-certification-defence-suppliers-canada/additional-information-support.html",
+      "https://www.canada.ca/en/public-services-procurement/news/2026/04/canadian-program-for-cyber-security-certification-level-1.html",
+      "https://www.cyber.gc.ca/en/guidance/protecting-specified-information-non-government-canada-systems-and-organizations-itsp10171",
+      "https://www.canada.ca/en/public-services-procurement/services/industrial-security/security-requirements-contracting.html",
+    ]));
+    expect(security.sources.map((s) => s.url)).toContain("https://www.canada.ca/en/public-services-procurement/services/industrial-security/security-requirements-contracting.html");
   });
 
   it("hold the closing-soon window to the one the pages use", () => {

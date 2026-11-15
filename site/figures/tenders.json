@@ -382,5 +382,112 @@
       "Accord économique et commercial global (AECG) entre le Canada et l'Union européenne (UE)"
     ],
     "description_cut": {}
+  },
+  "cb-900-90000707": {
+    "reference": "cb-900-90000707",
+    "amendment": 1,
+    "amended": "2026-11-09",
+    "amendments": [
+      {
+        "amendment": 0,
+        "amended": null,
+        "closing": "2026-12-15T14:00:00",
+        "first_seen": "2026-11-03",
+        "published": "2026-11-02",
+        "status": "open",
+        "title_en": "Electronic test equipment",
+        "title_fr": "Équipement d'essai électronique"
+      },
+      {
+        "amendment": 1,
+        "amended": "2026-11-09",
+        "closing": "2026-12-15T14:00:00",
+        "first_seen": "2026-11-10",
+        "published": "2026-11-02",
+        "status": "open",
+        "title_en": "Electronic test equipment",
+        "title_fr": "Équipement d'essai électronique"
+      }
+    ],
+    "attachments": [
+      {
+        "name": "w8472-990707-a-rfp-english.pdf",
+        "url": "https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/99707/w8472-990707-a-rfp-english.pdf"
+      },
+      {
+        "name": "w8472-990707-a-rfp-francais.pdf",
+        "url": "https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/99707/w8472-990707-a-rfp-francais.pdf"
+      },
+      {
+        "name": "w8472-990707-a-amendment-001.pdf",
+        "url": "https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/99707/w8472-990707-a-amendment-001.pdf"
+      }
+    ],
+    "buyer_en": "National Defence",
+    "buyer_fr": "Défense nationale",
+    "buyer_id": "dnd-mdn",
+    "category": [
+      "GD"
+    ],
+    "closing": "2026-12-15T14:00:00",
+    "codes": [
+      {
+        "code": "41113600",
+        "desc_en": "Electrical measuring and testing equipment",
+        "desc_fr": "Équipement de mesure et d'essai électrique"
+      }
+    ],
+    "description_en": "This sample notice seeks electronic test equipment for National Defence.\n\nThe solicitation documents are attached to the notice.",
+    "description_fr": "Cet avis fictif vise de l'équipement d'essai électronique pour la Défense nationale.\n\nLes documents de la demande de soumissions sont joints à l'avis.",
+    "end_expected": null,
+    "end_users_en": [
+      "Department of National Defence (DND)"
+    ],
+    "end_users_fr": [
+      "Ministère de la Défense nationale (MDN)"
+    ],
+    "first_seen": "2026-11-03",
+    "gsin": null,
+    "gsin_desc_en": null,
+    "gsin_desc_fr": null,
+    "last_seen": "2026-11-13",
+    "limited_reason_en": null,
+    "limited_reason_fr": null,
+    "method_en": "Competitive - Open bidding",
+    "method_fr": "Concurrentielle - Invitation ouverte à soumissionner",
+    "notice_type_en": "Request for Proposal",
+    "notice_type_fr": "Demande de propositions",
+    "provinces": [
+      "ON"
+    ],
+    "published": "2026-11-02",
+    "regions_delivery_en": [
+      "Ontario (except NCR)"
+    ],
+    "regions_delivery_fr": [
+      "Ontario (sauf RCN)"
+    ],
+    "regions_opportunity_en": [
+      "Canada"
+    ],
+    "regions_opportunity_fr": [
+      "Canada"
+    ],
+    "related_awards": [],
+    "selection_en": "Highest Combined Rating of Technical Merit and Price",
+    "selection_fr": "Cote combinée la plus élevée pour le mérite technique et le prix",
+    "solicitation": "W8472-990707",
+    "source_file": "openTenderNotice-ouvertAvisAppelOffres.csv",
+    "start_expected": null,
+    "status": "open",
+    "title_en": "Electronic test equipment",
+    "title_fr": "Équipement d'essai électronique",
+    "trade_agreements_en": [
+      "Canadian Free Trade Agreement (CFTA)"
+    ],
+    "trade_agreements_fr": [
+      "Accord de libre-échange canadien (ALEC)"
+    ],
+    "description_cut": {}
   }
 }

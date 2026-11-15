@@ -187,6 +187,22 @@ export const GUIDE_FIGURES: Readonly<Record<string, FigureEntry>> = {
       phone: {"width":370,"height":318,"viewport":390,"boxes":[[6.22,5.82,40.93,5.03],[6.22,44.97,87.57,15.09],[6.22,62.58,87.57,30.19]]},
     },
   },
+  "cyber-documents": {
+    slug: "cyber-security-certification-for-defence-suppliers-cpcsc", page: "/tenders/cb-900-90000707", region: "section.panel.tender-documents",
+    targets: [
+      ".panel-head h2",
+      "ul.documents",
+      ".panel-foot",
+    ],
+    en: {
+      wide: {"width":838,"height":231,"viewport":1153,"boxes":[[2.74,8.01,10.42,6.93],[2.74,41.13,94.51,34.63],[0.84,82.68,98.33,14.29]]},
+      phone: {"width":370,"height":231,"viewport":390,"boxes":[[6.22,8.01,23.61,6.93],[6.22,41.13,87.57,34.63],[1.89,82.68,96.22,14.29]]},
+    },
+    fr: {
+      wide: {"width":838,"height":231,"viewport":1153,"boxes":[[2.74,8.01,10.42,6.93],[2.74,41.13,94.51,34.63],[0.84,82.68,98.33,14.29]]},
+      phone: {"width":370,"height":231,"viewport":390,"boxes":[[6.22,8.01,23.61,6.93],[6.22,41.13,87.57,34.63],[1.89,82.68,96.22,14.29]]},
+    },
+  },
   "acan-dates": {
     slug: "advance-contract-award-notices-acan", page: "/tenders/cb-900-90000202", region: ".panel-grid",
     targets: [
