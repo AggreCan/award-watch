@@ -195,6 +195,23 @@ short "What You Can Do Here" section has four lines, each led by its link:
 watch tenders, find who wins, see what ends soon, and get it by email with
 Pro.
 
+## Profile titles
+
+The first Search Console reading (2026-11-01 to 2026-11-13: 70 clicks, 3,719
+impressions) showed where the site is found: of 262 queries Google named, 253
+were the names of organizations, each landing on a profile. Nine were
+descriptive searches, low on the fifth page or lower, and none held the
+site's own name.
+
+A profile's title therefore says what the organization holds, in the words
+a person adds to a name when they want this page: "Federal Contracts" for a
+supplier, "Federal Grants" for a recipient of grants and contributions,
+"Federal Contracts and Grants" for an organization that is both (in French
+"contrats fédéraux", "subventions fédérales", "contrats et subventions
+fédéraux"). The name comes first and is never changed; a long name drops
+the site's name, then the words, to stay within 60 characters. A buyer's
+title is unchanged.
+
 ## The site's name
 
 Checked 2026-11-15. A search for the site's two words returns another site,

@@ -731,14 +731,33 @@ export function organizationDescription(profile: Profile, lang: Lang): string {
 // it meets a search for a department's or a supplier's contracts. A long
 // name drops the site's name, then the words, rather than pass TITLE_MAX.
 // The name is used exactly as recorded, never retouched by the French
-// typography.
-const RECORD_TITLE_WORDS: Record<"organization" | "buyer", Both> = {
+// typography. An organization's words follow the records it holds, since
+// nearly every search that shows a profile is a search for the
+// organization's own name (Search Console, November 2026): a supplier's
+// title says federal contracts, a recipient's federal grants, and one that
+// is both says both. A caller that does not say what the organization
+// holds, or a profile with neither, keeps the plain pair.
+export type Holds = "contracts" | "grants" | "both";
+const RECORD_TITLE_WORDS: Record<"organization" | "buyer" | Holds, Both> = {
   organization: { en: "Contracts and Grants", fr: "contrats et subventions" },
   buyer: { en: "Contracts and Tenders", fr: "contrats et appels d'offres" },
+  contracts: { en: "Federal Contracts", fr: "contrats fédéraux" },
+  grants: { en: "Federal Grants", fr: "subventions fédérales" },
+  both: { en: "Federal Contracts and Grants", fr: "contrats et subventions fédéraux" },
 };
 
-export function recordTitle(name: string, kind: "organization" | "buyer", lang: Lang): string {
-  const named = `${name}${lang === "fr" ? FR_COLON : ": "}${local(lang, RECORD_TITLE_WORDS[kind])}`;
+// What an organization holds, for its title: contracts (award notices, PSPC
+// contract history, published contracts), grants and contributions, both,
+// or neither (undefined). A count the profile does not carry reads as none.
+export function holdsOf(o: { n_awards?: number; n_history?: number; n_contracts?: number; n_grants?: number }): Holds | undefined {
+  const contracts = (o.n_awards ?? 0) + (o.n_history ?? 0) + (o.n_contracts ?? 0) > 0;
+  const grants = (o.n_grants ?? 0) > 0;
+  return contracts && grants ? "both" : contracts ? "contracts" : grants ? "grants" : undefined;
+}
+
+export function recordTitle(name: string, kind: "organization" | "buyer", lang: Lang, holds?: Holds): string {
+  const words = RECORD_TITLE_WORDS[kind === "organization" && holds ? holds : kind];
+  const named = `${name}${lang === "fr" ? FR_COLON : ": "}${local(lang, words)}`;
   return [pageTitle(named), named].find((s) => s.length <= TITLE_MAX) ?? pageTitle(name);
 }
 
@@ -746,7 +765,7 @@ export function organizationSeo(profile: Profile, lang: Lang, crumbs: { name: st
   const o = profile.organization;
   return {
     path: `/organizations/${o.id}`,
-    title: recordTitle(o.display_name, "organization", lang),
+    title: recordTitle(o.display_name, "organization", lang, holdsOf(o)),
     description: organizationDescription(profile, lang),
     socialTitle: o.display_name,
     jsonLd: [breadcrumbJsonLd(crumbs)],

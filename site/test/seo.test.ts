@@ -4,7 +4,7 @@ import type { Profile } from "../src/data";
 import { app } from "../src/index";
 import { DOWNLOADS } from "../src/pages/data";
 import { scriptJson } from "../src/layout";
-import { DESCRIPTION_MAX, SITE_ORIGIN, TITLE_MAX, breadcrumbJsonLd, organizationDescription, recordTitle } from "../src/seo";
+import { DESCRIPTION_MAX, SITE_ORIGIN, TITLE_MAX, breadcrumbJsonLd, holdsOf, organizationDescription, recordTitle } from "../src/seo";
 import { withGuidesPart } from "../src/sitemaps";
 import { emptyAssets, fakeAssets, testEnv } from "./assets";
 import profileFixtures from "./fixtures/profiles-a00.json";
@@ -47,7 +47,7 @@ const PAGES: [string, string, string][] = [
   ["/history/w8472-000633", `${O}/history/w8472-000633`, "Vessel refit, mid-shore patrol | Award Watch"],
   ["/organizations", `${O}/organizations`, "Federal Suppliers and Grant Recipients | Award Watch"],
   ["/organizations/directory/on", `${O}/organizations/directory/on`, "Organizations A to Z: Ontario | Award Watch"],
-  ["/organizations/org-a000000001", `${O}/organizations/org-a000000001`, "Exemplar Translation Services Inc.: Contracts and Grants"],
+  ["/organizations/org-a000000001", `${O}/organizations/org-a000000001`, "Exemplar Translation Services Inc.: Federal Contracts"],
   ["/buyers", `${O}/buyers`, "Federal Buyers: Departments and Agencies | Award Watch"],
   ["/buyers/pwgsc-tpsgc", `${O}/buyers/pwgsc-tpsgc`, "Public Services and Procurement Canada | Award Watch"],
   ["/segments", `${O}/segments`, "Federal Tenders and Awards by UNSPSC Segment | Award Watch"],
@@ -133,6 +133,28 @@ describe("page metadata", () => {
     expect(recordTitle("Exemplar Works Ltd.", "organization", "en")).toBe("Exemplar Works Ltd.: Contracts and Grants | Award Watch");
     expect(recordTitle("Exemplar Translation Services Inc.", "organization", "en")).toBe("Exemplar Translation Services Inc.: Contracts and Grants");
     expect(recordTitle("Public Services and Procurement Canada", "buyer", "en")).toBe("Public Services and Procurement Canada | Award Watch");
+    // An organization's words follow what it holds: a supplier, a recipient, one that is both.
+    expect(recordTitle("Exemplar Works Ltd.", "organization", "en", "contracts")).toBe("Exemplar Works Ltd.: Federal Contracts | Award Watch");
+    expect(recordTitle("Exemplar Works Ltd.", "organization", "en", "grants")).toBe("Exemplar Works Ltd.: Federal Grants | Award Watch");
+    expect(recordTitle("Exemplar Works", "organization", "en", "both")).toBe("Exemplar Works: Federal Contracts and Grants | Award Watch");
+    expect(recordTitle("Exemplar Works Ltd.", "organization", "en", "both")).toBe("Exemplar Works Ltd.: Federal Contracts and Grants");
+    expect(recordTitle("Exemplar Works Ltd.", "organization", "fr", "contracts").replace(/[\u00a0\u202f]/g, " "))
+      .toBe("Exemplar Works Ltd. : contrats fédéraux | Award Watch");
+    expect(recordTitle("Exemplar Works Ltd.", "organization", "fr", "grants").replace(/[\u00a0\u202f]/g, " "))
+      .toBe("Exemplar Works Ltd. : subventions fédérales | Award Watch");
+    // A buyer's words never change with it.
+    expect(recordTitle("National Defence", "buyer", "en", "grants")).toBe("National Defence: Contracts and Tenders | Award Watch");
+    expect(holdsOf({ n_awards: 2, n_history: 0, n_contracts: 0, n_grants: 0 })).toBe("contracts");
+    expect(holdsOf({ n_awards: 0, n_history: 0, n_contracts: 5, n_grants: 0 })).toBe("contracts");
+    expect(holdsOf({ n_awards: 0, n_history: 0, n_contracts: 0, n_grants: 3 })).toBe("grants");
+    expect(holdsOf({ n_awards: 0, n_history: 1, n_contracts: 0, n_grants: 1 })).toBe("both");
+    expect(holdsOf({ n_awards: 0, n_history: 0, n_contracts: 0, n_grants: 0 })).toBeUndefined();
+    expect(holdsOf({})).toBeUndefined();
+    for (const lang of ["en", "fr"] as const) {
+      for (const holds of ["contracts", "grants", "both"] as const) {
+        for (const n of [1, 16, 30, 45, 70]) expect(recordTitle("A".repeat(n), "organization", lang, holds).length).toBeLessThanOrEqual(Math.max(TITLE_MAX, n + 14));
+      }
+    }
     for (const lang of ["en", "fr"] as const) {
       for (const n of [1, 20, 37, 45]) expect(recordTitle("A".repeat(n), "buyer", lang).length).toBeLessThanOrEqual(TITLE_MAX);
     }
