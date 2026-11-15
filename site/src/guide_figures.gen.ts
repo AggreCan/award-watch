@@ -203,6 +203,23 @@ export const GUIDE_FIGURES: Readonly<Record<string, FigureEntry>> = {
       phone: {"width":370,"height":231,"viewport":390,"boxes":[[6.22,8.01,23.61,6.93],[6.22,41.13,87.57,34.63],[1.89,82.68,96.22,14.29]]},
     },
   },
+  "integrity-documents": {
+    slug: "supplier-integrity-ineligibility-and-suspension-policy", page: "/tenders/cb-900-90000808", region: "section.panel.tender-documents",
+    targets: [
+      ".panel-head h2",
+      ".documents-closing",
+      "ul.documents",
+      ".panel-foot",
+    ],
+    en: {
+      wide: {"width":838,"height":203,"viewport":1153,"boxes":[[2.74,9.11,10.42,7.88],[2.74,31.03,94.51,7.88],[2.74,46.8,94.51,25.62],[0.84,80.3,98.33,16.26]]},
+      phone: {"width":370,"height":203,"viewport":390,"boxes":[[6.22,9.11,23.61,7.88],[6.22,31.03,87.57,7.88],[6.22,46.8,87.57,25.62],[1.89,80.3,96.22,16.26]]},
+    },
+    fr: {
+      wide: {"width":838,"height":203,"viewport":1153,"boxes":[[2.74,9.11,10.42,7.88],[2.74,31.03,94.51,7.88],[2.74,46.8,94.51,25.62],[0.84,80.3,98.33,16.26]]},
+      phone: {"width":370,"height":203,"viewport":390,"boxes":[[6.22,9.11,23.61,7.88],[6.22,31.03,87.57,7.88],[6.22,46.8,87.57,25.62],[1.89,80.3,96.22,16.26]]},
+    },
+  },
   "acan-dates": {
     slug: "advance-contract-award-notices-acan", page: "/tenders/cb-900-90000202", region: ".panel-grid",
     targets: [

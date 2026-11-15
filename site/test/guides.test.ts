@@ -11,8 +11,8 @@ import { app } from "../src/index";
 import { CLOSING_SOON_DAYS } from "../src/constants";
 import { referenceShard } from "../src/data";
 import {
-  EXAMPLE_ACAN, EXAMPLE_AWARD, EXAMPLE_BUY_CANADIAN, EXAMPLE_CYBER, EXAMPLE_DEBRIEF, EXAMPLE_EVALUATION, EXAMPLE_LIMITS, EXAMPLE_NOTICE, EXAMPLE_PROFILE,
-  EXAMPLE_SBPP, EXAMPLE_SET_ASIDE,
+  EXAMPLE_ACAN, EXAMPLE_AWARD, EXAMPLE_BUY_CANADIAN, EXAMPLE_CYBER, EXAMPLE_DEBRIEF, EXAMPLE_EVALUATION, EXAMPLE_INTEGRITY, EXAMPLE_LIMITS, EXAMPLE_NOTICE,
+  EXAMPLE_PROFILE, EXAMPLE_SBPP, EXAMPLE_SET_ASIDE,
   GUIDES,
   type Block, type Both, type Cell, type Guide, type Link, type Text,
 } from "../src/guides";
@@ -22,6 +22,7 @@ import { guideText } from "../src/pages/guides";
 import { DESCRIPTION_MAX, TITLE_MAX } from "../src/seo";
 import { routeTemplate } from "../src/views";
 import { nextIp, onEnv, useAccountsDb } from "./accounts-helpers";
+import sampleTenders from "../figures/tenders.json";
 import { FILES, makeFakeAssets, testEnv } from "./assets";
 import { applySql } from "./setup";
 import { expectTablesFit } from "./table-fit";
@@ -168,7 +169,7 @@ const deeperWindows = Object.fromEntries(["6m", "12m"].flatMap((w) => [
 const exampleRecords: Record<string, unknown> = {};
 beforeAll(async () => {
   const tender = (FILES["tenders/20a.json"] as Record<string, any>)["cb-100-10000001"];
-  for (const reference of [EXAMPLE_NOTICE, EXAMPLE_ACAN, EXAMPLE_BUY_CANADIAN, EXAMPLE_EVALUATION, EXAMPLE_CYBER].map((p) => p.slice("/tenders/".length))) {
+  for (const reference of [EXAMPLE_NOTICE, EXAMPLE_ACAN, EXAMPLE_BUY_CANADIAN, EXAMPLE_EVALUATION, EXAMPLE_CYBER, EXAMPLE_INTEGRITY].map((p) => p.slice("/tenders/".length))) {
     const path = `tenders/${await referenceShard(reference)}.json`;
     exampleRecords[path] = { ...((exampleRecords[path] as object) ?? {}), [reference]: { ...structuredClone(tender), reference } };
   }
@@ -295,13 +296,13 @@ describe("links and sources", () => {
     // notice, ACAN and award, a notice stating a Buy Canadian policy, a request for proposal stating its selection
     // criteria, an award notice showing the dates and the trade agreements line the complaint rules turn on, an award notice
     // showing the category, value and trade agreements line the guide on the Small Business Procurement Program names, an award
-    // notice showing a non-competitive method and a limited tendering reason; a National Defence request for proposal
-    // with its documents; and the guides that link one another.
+    // notice showing a non-competitive method and a limited tendering reason; two National Defence requests for proposal
+    // with their documents; and the guides that link one another.
     for (const want of ["/tenders", "/methodology#statuses", "/methodology#places", "/methodology#counting", "/instruments", "/data#sources",
       `${EXAMPLE_PROFILE}#awards`, `${EXAMPLE_PROFILE}#history`, `${EXAMPLE_PROFILE}#contracts`, `${EXAMPLE_PROFILE}#instruments`,
       "/tenders?type=Advance%20Contract%20Award%20Notice", "/methodology#competitive", "/methodology#expiring", EXAMPLE_SET_ASIDE,
       "/expiring", "/expiring/3m", "/expiring/6m", "/expiring/12m", "/tenders/new", "/awards", EXAMPLE_NOTICE, EXAMPLE_ACAN, EXAMPLE_AWARD,
-      EXAMPLE_BUY_CANADIAN, EXAMPLE_EVALUATION, EXAMPLE_DEBRIEF, EXAMPLE_SBPP, EXAMPLE_LIMITS, EXAMPLE_CYBER, ...GUIDES.map(pathOf)]) {
+      EXAMPLE_BUY_CANADIAN, EXAMPLE_EVALUATION, EXAMPLE_DEBRIEF, EXAMPLE_SBPP, EXAMPLE_LIMITS, EXAMPLE_CYBER, EXAMPLE_INTEGRITY, ...GUIDES.map(pathOf)]) {
       expect(targets.has(want), want).toBe(true);
     }
     expect([...targets].some((h) => h.startsWith("/tenders?type="))).toBe(true);
@@ -482,6 +483,58 @@ describe("links and sources", () => {
       "https://www.canada.ca/en/public-services-procurement/services/industrial-security/security-requirements-contracting.html",
     ]));
     expect(security.sources.map((s) => s.url)).toContain("https://www.canada.ca/en/public-services-procurement/services/industrial-security/security-requirements-contracting.html");
+  });
+
+  it("place the supplier integrity guide right after the cyber security guide, link it both ways with the bidding guide, and keep the policy's grounds and periods", () => {
+    const g = GUIDES.find((x) => x.slug === "supplier-integrity-ineligibility-and-suspension-policy")!;
+    const cyber = GUIDES.find((x) => x.slug === "cyber-security-certification-for-defence-suppliers-cpcsc")!;
+    const bid = GUIDES.find((x) => x.slug === "how-to-bid-on-government-of-canada-contracts")!;
+    expect(GUIDES.indexOf(g)).toBe(GUIDES.indexOf(cyber) + 1);
+    expect(internalLinks(g)).toContain(pathOf(bid));
+    expect(internalLinks(bid)).toContain(pathOf(g));
+    expect(internalLinks(g)).toContain(EXAMPLE_INTEGRITY);
+    // Appendix 2's thirteen paragraphs, (1)(a) to (1)(m), each in the policy's words.
+    const grounds = g.sections.find((s) => s.id === "grounds")!.blocks.find((b) => b.kind === "table") as Extract<Block, { kind: "table" }>;
+    expect(grounds.rows.map((r) => (r[0] as Both).en)).toEqual([..."abcdefghijklm"].map((l) => `(1)(${l})`));
+    // The English and French texts of paragraph (1)(d) give different periods; both languages say so.
+    const d = grounds.rows[3][1] as Both;
+    expect(d.en).toContain("within 1 business day");
+    expect(d.en).toContain("the French text of the policy gives 5 business days");
+    expect(d.fr).toContain("dans un délai de 5 jours ouvrables");
+    expect(d.fr).toContain("le texte anglais de la politique indique 1 jour ouvrable");
+    // The periods, each with the event it runs from, in the comparison.
+    const compared = g.sections.find((s) => s.id === "compared")!.blocks.find((b) => b.kind === "table") as Extract<Block, { kind: "table" }>;
+    const period = compared.rows.find((r) => (r[0] as Both).en === "Period")!;
+    expect((period[1] as Both).en).toContain("no more than 10 years from the date the Notice of Ineligibility is delivered");
+    expect((period[2] as Both).en).toContain("18 months following such notice, which can be longer if a legal process is underway");
+    // It rests on the policy and OSIC's pages, read in both languages, and the two data descriptions.
+    expect(g.sources.every((s) => s.fr)).toBe(true);
+    expect(g.sources.map((s) => s.url)).toEqual(expect.arrayContaining([
+      "https://www.canada.ca/en/public-services-procurement/services/standards-oversight/supplier-integrity-compliance/policy-directives/ineligibility-suspension-policy.html",
+      "https://www.canada.ca/en/public-services-procurement/services/standards-oversight/supplier-integrity-compliance.html",
+      "https://www.canada.ca/en/public-services-procurement/services/standards-oversight/supplier-integrity-compliance/ineligibility-suspension-clauses/procurement-contracts.html",
+      "https://www.canada.ca/en/public-services-procurement/services/standards-oversight/supplier-integrity-compliance/supplier-guidance/application-subcontractor.html",
+      "https://www.canada.ca/en/public-services-procurement/services/standards-oversight/supplier-integrity-compliance/ineligible-suspended-suppliers.html",
+      "https://donnees-data.tpsgc-pwgsc.gc.ca/ba2/ac-cb/achatscanada-canadabuys-dd.xml",
+      "https://open.canada.ca/data/recombinant-published-schema/contracts.json",
+    ]));
+  });
+
+  it("name no organization but government bodies in the supplier integrity guide: its text, tables, figure, sources and sample record", () => {
+    const g = GUIDES.find((x) => x.slug === "supplier-integrity-ineligibility-and-suspension-policy")!;
+    // A company's legal suffix, as a word: none appears anywhere in the guide or in the sample its figure is drawn from.
+    const SUFFIX = /\b(?:Inc|Ltd|Ltée|Corp|LLP|Limited)\b/;
+    const figure = g.sections.flatMap((s) => s.blocks).find((b) => b.kind === "figure") as Extract<Block, { kind: "figure" }>;
+    const sample = (sampleTenders as Record<string, unknown>)[figure.shot.page.slice("/tenders/".length)];
+    expect(sample).toBeDefined();
+    const strings = [
+      ...pieces(g).flatMap((p) => [filled(p, "en"), filled(p, "fr")]),
+      ...g.sources.flatMap((s) => [s.title, s.fr?.title ?? ""]),
+      g.action!.text.en, g.action!.text.fr,
+      JSON.stringify(sample),
+    ];
+    expect(strings.length).toBeGreaterThan(100);
+    for (const s of strings) expect(SUFFIX.test(s), s).toBe(false);
   });
 
   it("hold the closing-soon window to the one the pages use", () => {

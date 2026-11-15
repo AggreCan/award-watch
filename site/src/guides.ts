@@ -100,6 +100,10 @@ const GUIDE_FR = "https://achatscanada.canada.ca/fr/portail-de-l-acheteur/guide-
 // The Contract Security Program's section of PSPC's pages, in each language.
 const CSP_EN = "https://www.canada.ca/en/public-services-procurement/services/industrial-security/security-requirements-contracting";
 const CSP_FR = "https://www.canada.ca/fr/services-publics-approvisionnement/services/securite-industrielle/exigences-securite-contrats";
+// The Office of Supplier Integrity and Compliance's section of PSPC's pages, in each language.
+const OSIC_EN = "https://www.canada.ca/en/public-services-procurement/services/standards-oversight/supplier-integrity-compliance";
+const OSIC_FR = "https://www.canada.ca/fr/services-publics-approvisionnement/services/normes-surveillance/integrite-conformite-fournisseurs";
+const DND = both("National Defence", "Défense nationale");
 
 const SRC = {
   dictionary: {
@@ -909,6 +913,94 @@ const SRC = {
     url: `${CSP_EN}.html`,
     fr: { title: "Exigences de sécurité des contrats du gouvernement du Canada", url: `${CSP_FR}.html` },
   },
+  // Supplier integrity: the Ineligibility and Suspension Policy and the pages of PSPC's Office of Supplier Integrity and
+  // Compliance (each read on 2026-11-15, in English and in French). The list of ineligible and suspended suppliers is cited
+  // for what it is and what its columns hold; the guide names no supplier on it.
+  isPolicy: {
+    title: "Ineligibility and Suspension Policy",
+    publisher: PSPC,
+    url: `${OSIC_EN}/policy-directives/ineligibility-suspension-policy.html`,
+    fr: { title: "Politique d'inadmissibilité et de suspension", url: `${OSIC_FR}/politique-directives/politique-inadmissibilite-suspension.html` },
+  },
+  osic: {
+    title: "Office of Supplier Integrity and Compliance (OSIC)",
+    publisher: PSPC,
+    url: `${OSIC_EN}.html`,
+    fr: { title: "Bureau de l'intégrité et de la conformité des fournisseurs (BICF)", url: `${OSIC_FR}.html` },
+  },
+  osicAbout: {
+    title: "Overview of supplier integrity and compliance",
+    publisher: PSPC,
+    url: `${OSIC_EN}/about.html`,
+    fr: { title: "Aperçu de l'intégrité et de la conformité des fournisseurs", url: `${OSIC_FR}/au-sujet.html` },
+  },
+  osicPolicies: {
+    title: "Ineligibility and Suspension Policy and directives",
+    publisher: PSPC,
+    url: `${OSIC_EN}/policy-directives.html`,
+    fr: { title: "Politique d'inadmissibilité et de suspension et directives", url: `${OSIC_FR}/politique-directives.html` },
+  },
+  osicNews: {
+    title: "Coming into force of the Office of Supplier Integrity and Compliance",
+    publisher: PSPC,
+    url: "https://www.canada.ca/en/public-services-procurement/news/2024/05/coming-into-force-of-the-office-of-supplier-integrity-and-compliance.html",
+    fr: {
+      title: "Entrée en vigueur du Bureau de l'intégrité et de la conformité des fournisseurs",
+      url: "https://www.canada.ca/fr/services-publics-approvisionnement/nouvelles/2024/05/entree-en-vigueur-du-bureau-de-lintegrite-et-de-la-conformite-des-fournisseurs.html",
+    },
+  },
+  osicDepartments: {
+    title: "Departments and agencies that apply the Ineligibility and Suspension Policy",
+    publisher: PSPC,
+    url: `${OSIC_EN}/departments-agencies-apply-ineligibility-suspension-policy.html`,
+    fr: {
+      title: "Ministères et organismes qui appliquent la Politique d'inadmissibilité et de suspension",
+      url: `${OSIC_FR}/ministeres-organismes-appliquent-politique-inadmissibilite-suspension.html`,
+    },
+  },
+  osicClauses: {
+    title: "Clauses for procurement contracts: Ineligibility and Suspension Policy",
+    publisher: PSPC,
+    url: `${OSIC_EN}/ineligibility-suspension-clauses/procurement-contracts.html`,
+    fr: {
+      title: "Clauses pour les contrats d'approvisionnement : Politique d'inadmissibilité et de suspension",
+      url: `${OSIC_FR}/clauses-inadmissibilite-suspension/contrats-approvisionnement.html`,
+    },
+  },
+  osicSubcontractors: {
+    title: "Application of the Ineligibility and Suspension Policy to subcontractors",
+    publisher: PSPC,
+    url: `${OSIC_EN}/supplier-guidance/application-subcontractor.html`,
+    fr: {
+      title: "Application de la Politique d'inadmissibilité et de suspension aux sous-traitants",
+      url: `${OSIC_FR}/conseils-fournisseurs/application-sous-traitant.html`,
+    },
+  },
+  osicActions: {
+    title: "Administrative actions taken",
+    publisher: PSPC,
+    url: `${OSIC_EN}/administrative-actions.html`,
+    fr: { title: "Mesures administratives prises", url: `${OSIC_FR}/mesures-administratives.html` },
+  },
+  osicList: {
+    title: "Ineligible and suspended suppliers under the Ineligibility and Suspension Policy",
+    publisher: PSPC,
+    url: `${OSIC_EN}/ineligible-suspended-suppliers.html`,
+    fr: {
+      title: "Fournisseurs inadmissibles et suspendus en vertu de la Politique d'inadmissibilité et de suspension",
+      url: `${OSIC_FR}/fournisseurs-inadmissibles-suspendus.html`,
+    },
+  },
+  // The integrity guide's example notice's request for proposal, in each language, on CanadaBuys (read there on 2026-11-15).
+  exampleIntegrity: {
+    title: "Provision of high-visibility fire protective coveralls to the Department of National Defence, request for proposal W3010-27M007/A",
+    publisher: DND,
+    url: "https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/113275/w3010-27m007a---rfp-e.pdf",
+    fr: {
+      title: "Fournir des Combinaisons de protection de feu à haute visibilité à Ministère de la Défense nationale, demande de propositions W3010-27M007/A",
+      url: "https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/113275/w3010-27m007a---rfp-f.pdf",
+    },
+  },
 } satisfies Record<string, Source>;
 
 // The site's own pages the guides link to.
@@ -953,11 +1045,16 @@ export const EXAMPLE_LIMITS = "/awards/cw2454835";
 // description does not mention the cyber security certification (read in the site's open notices and on
 // awardwatch.ca on 2026-11-15; it closes 2027-01-04). CanadaBuys' own page for it refused an automated reading.
 export const EXAMPLE_CYBER = "/tenders/cb-768-40670607";
+// A request for proposal from National Defence for high-visibility fire protective coveralls whose page shows two
+// documents, its request for proposal in English and in French, on CanadaBuys; the English one holds the Ineligibility and
+// Suspension Policy's clause for offers (section 3.4) and its resulting contract clause (16.9). Chosen as an ordinary open
+// notice from the site's open notices (read with its documents and on awardwatch.ca on 2026-11-15; it closes 2027-01-07).
+export const EXAMPLE_INTEGRITY = "/tenders/cb-854-90375469";
 // The pages the figures are captured from, drawn from the sample records in site/figures/, made for the figures
-// and never real, their reference numbers in ranges the real series are nowhere near: four tender notices (the
+// and never real, their reference numbers in ranges the real series are nowhere near: five tender notices (the
 // second with security requirements in its description, a limited tendering reason of None and a trade
 // agreements line that names NAFTA; the third with a Buy Canadian statement in its description; the fourth, from
-// National Defence, with three documents), an advance
+// National Defence, with three documents; the fifth, from Fisheries and Oceans Canada, with two), an advance
 // contract award notice, one day's new notices, one contract's award notice (linking the tender notice it
 // followed) and PSPC contract history record, a second contract history record that gives its supplier's
 // employees, published contracts (the same contract's amendment, one after an ACAN, one under a set-aside, one awarded
@@ -966,6 +1063,7 @@ const SAMPLE_NOTICE = "/tenders/cb-900-90000101";
 const SAMPLE_NOTICE_SECURITY = "/tenders/cb-900-90000303";
 const SAMPLE_NOTICE_BUY_CANADIAN = "/tenders/cb-900-90000606";
 const SAMPLE_NOTICE_DOCUMENTS = "/tenders/cb-900-90000707";
+const SAMPLE_NOTICE_INTEGRITY = "/tenders/cb-900-90000808";
 const SAMPLE_NEW = "/tenders/new";
 const SAMPLE_ACAN = "/tenders/cb-900-90000202";
 const SAMPLE_AWARD = "/awards/cw9391528";
@@ -993,6 +1091,7 @@ const DEBRIEF_PATH = "/guides/debriefings-and-bid-challenges-on-federal-contract
 const SBPP_PATH = "/guides/small-business-procurement-program-sbpp";
 const LIMITS_PATH = "/guides/federal-contracts-without-competition-and-contracting-limits";
 const CYBER_PATH = "/guides/cyber-security-certification-for-defence-suppliers-cpcsc";
+const INTEGRITY_PATH = "/guides/supplier-integrity-ineligibility-and-suspension-policy";
 
 // -- the guides ---------------------------------------------------------------------
 
@@ -2871,11 +2970,12 @@ const HOW_TO_BID: Guide = {
           "Les notes demandent d'adresser les questions par écrit, avant la date limite prévue, à l'autorité contractante nommée dans le document de demande de soumissions, le seul point de contact; les réponses paraissent comme modifications sur la page de l'avis.",
         ),
         p(
-          "A security clearance is needed when a contract requires personnel to access classified or protected information, assets or sensitive sites, and the tender opportunity identifies the {security}. {psib} covers set-asides for Indigenous businesses.",
-          "Une attestation de sécurité est nécessaire lorsqu'un contrat exige que le personnel accède à des renseignements, à des biens ou à des lieux protégés ou classifiés, et l'appel d'offres indique les {security}. {psib} traite des marchés réservés aux entreprises autochtones.",
+          "A security clearance is needed when a contract requires personnel to access classified or protected information, assets or sensitive sites, and the tender opportunity identifies the {security}. Other guides cover {psib} and {integrity}.",
+          "Une attestation de sécurité est nécessaire lorsqu'un contrat exige que le personnel accède à des renseignements, à des biens ou à des lieux protégés ou classifiés, et l'appel d'offres indique les {security}. D'autres guides traitent des {psib} et de l'{integrity}.",
           {
             security: a(SECURITY_PATH, "security requirements", "exigences de sécurité"),
-            psib: a(PSIB_PATH, "Indigenous Business Set-Asides in Federal Procurement (PSIB)", "Marchés réservés aux entreprises autochtones dans les achats fédéraux (SAEA)"),
+            psib: a(PSIB_PATH, "Indigenous set-asides", "marchés réservés aux entreprises autochtones"),
+            integrity: a(INTEGRITY_PATH, "supplier integrity", "intégrité des fournisseurs"),
           },
         ),
       ],
@@ -3827,6 +3927,727 @@ const CYBER: Guide = {
   sources: [
     SRC.cpcscOverview, SRC.cpcscLevel1, SRC.cpcscMore, SRC.cpcscNews, SRC.cpcscBackgrounder, SRC.cpcsc2025, SRC.cpcsc2023, SRC.itsp10171,
     SRC.cspIndex, SRC.dictionary,
+  ],
+};
+
+// The Ineligibility and Suspension Policy. The guide names no supplier: the public list is cited for what it is and what
+// its columns hold, and the example notice is an ordinary one, chosen for the documents its page shows.
+const INTEGRITY: Guide = {
+  slug: INTEGRITY_PATH.slice("/guides/".length),
+  title: both(
+    "Supplier Integrity on Federal Contracts: The Ineligibility and Suspension Rules",
+    "L'intégrité des fournisseurs dans les marchés fédéraux : les règles d'inadmissibilité et de suspension",
+  ),
+  seoTitle: both("Supplier Ineligibility and Suspension Rules", "Inadmissibilité et suspension des fournisseurs"),
+  summary: both(
+    "The Ineligibility and Suspension Policy: who decides, the grounds and periods, what a bid certifies, subcontracting and the public list.",
+    "La Politique d'inadmissibilité et de suspension : qui décide, motifs et périodes, ce qu'une soumission atteste, la sous-traitance et la liste publique.",
+  ),
+  checked: "2026-11-15",
+  action: tenderList(
+    "To follow new federal tender notices and the solicitations they link as they are posted, save this list with your email address.",
+    "Pour suivre les nouveaux avis d'appel d'offres fédéraux et les demandes de soumissions qui y sont liées à mesure qu'ils sont publiés, enregistrez cette liste avec votre adresse courriel.",
+  ),
+  sections: [
+    {
+      id: "policy",
+      title: both("The Policy and Who Decides", "La politique et qui décide"),
+      blocks: [
+        p(
+          "The Office of Supplier Integrity and Compliance (OSIC) of Public Services and Procurement Canada (PSPC) administers the Ineligibility and Suspension Policy, which sets out how and when a supplier may be suspended or declared ineligible from doing business with the Government of Canada. PSPC's overview says the office replaces the previous Integrity Regime.",
+          "Le Bureau de l'intégrité et de la conformité des fournisseurs (BICF) de Services publics et Approvisionnement Canada (SPAC) administre la Politique d'inadmissibilité et de suspension, qui établit comment et quand un fournisseur peut être suspendu ou déclaré inadmissible à faire affaire avec le gouvernement du Canada. L'aperçu de SPAC indique que le Bureau remplace le Régime d'intégrité.",
+        ),
+        p(
+          "The current policy is effective as of May 31, 2024, and supersedes previous versions of the policy and any associated directives; its page was last modified on May 16, 2025. PSPC's news release of May 31, 2024, says the revised policy was posted online on May 1, 2024. For contracts dated prior to May 31, 2024, OSIC says a previous version of the policy, effective July 3, 2015, or April 4, 2016, or former directives may still apply. Under section 17, the current policy does not apply to contracts, including solicitations that have not been awarded, that reference either earlier policy, save and except that any determination of ineligibility or suspension under such policy will also be one under the current policy, and that, upon the request of a supplier, any period of ineligibility determined under it will be reassessed under section 6.3, with no retroactive reduction and not exceeding the earlier period.",
+          "La version actuelle de la politique est entrée en vigueur le 31 mai 2024 et remplace les versions antérieures de la politique et toute directive connexe; sa page a été modifiée pour la dernière fois le 16 mai 2025. Le communiqué de SPAC du 31 mai 2024 indique que la politique révisée a été publiée en ligne le 1er mai 2024. Pour les contrats conclus avant le 31 mai 2024, le BICF indique qu'une version antérieure de la politique, entrée en vigueur le 3 juillet 2015 ou le 4 avril 2016, ou des directives antérieures peuvent continuer de s'appliquer. Selon l'article 17, la politique actuelle ne s'applique pas aux contrats, y compris aux demandes de soumissions n'ayant pas été attribuées, qui font référence à l'une ou l'autre politique antérieure, sous réserve que toute détermination d'inadmissibilité ou de suspension au titre de cette politique vaut aussi au titre de la politique actuelle, et qu'à la demande d'un fournisseur, toute période d'inadmissibilité déterminée dans son cadre est réévaluée selon l'article 6.3, sans réduction rétroactive et sans dépasser la période antérieure.",
+        ),
+        p(
+          "The policy names Public Works and Government Services Canada (PWGSC); its section 16.2 gives PWGSC's address as OSIC, care of PSPC's Departmental Oversight Branch. Its section 5 sets the roles:",
+          "La politique nomme Travaux publics et Services gouvernementaux Canada (TPSGC); son article 16.2 donne comme coordonnées de TPSGC le BICF, aux soins de la Direction générale de la surveillance ministérielle de SPAC. Son article 5 fixe les rôles :",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "text", label: both("Who", "Qui") },
+            { kind: "main", label: both("The policy's words", "Les termes de la politique") },
+          ],
+          rows: [
+            [
+              both("Registrar of Ineligibility and Suspension", "Registraire d'inadmissibilité et de suspension"),
+              both(
+                "An independent position responsible for making determinations of ineligibility, suspension, setting periods of ineligibility and suspension, and entering into administrative agreements (section 5.1); the Assistant Deputy Minister of Public Services and Procurement Canada responsible for this Policy (Appendix 1). The Registrar makes no determination of eligibility, only of ineligibility (section 3)",
+                "Un poste indépendant, responsable de déterminer l'inadmissibilité, la suspension, de fixer les périodes d'inadmissibilité et de suspension, et de conclure des ententes administratives (article 5.1); le sous-ministre adjoint de Services publics et Approvisionnement Canada responsable de la présente politique (annexe 1). Le registraire ne se prononce pas sur l'admissibilité d'un fournisseur, mais uniquement sur son inadmissibilité (article 3)",
+              ),
+            ],
+            [
+              both("PWGSC", "TPSGC"),
+              both(
+                "Responsible for administering this policy on behalf of Canada, which includes making recommendations to the Registrar regarding ineligibility, suspension, periods of ineligibility and suspension, and terms and conditions of administrative agreements (section 5.2)",
+                "Doit administrer la présente politique au nom du Canada, notamment formuler des recommandations au registraire sur l'inadmissibilité, la suspension, les périodes d'inadmissibilité et de suspension, et les modalités des ententes administratives (article 5.2)",
+              ),
+            ],
+            [
+              both("Departments, agencies and other federal entities", "Ministères, organismes et autres entités fédérales"),
+              both(
+                "Will rely on the Registrar's determinations when making a decision on whether to enter into a contract with a supplier (section 5.1); may make certain decisions as noted under the policy, the Public Interest Exception for instance, and may exercise the right to terminate a contract, if provided for under such contract (section 5.3)",
+                "Se fieront aux déterminations du registraire lorsque viendra le temps de décider de conclure ou non un contrat avec un fournisseur (article 5.1); peuvent prendre certaines décisions prévues par la politique, par exemple l'exception destinée à protéger l'intérêt public, et peuvent exercer le droit de résilier un contrat, dans la mesure où ce droit est établi dans ledit contrat (article 5.3)",
+              ),
+            ],
+          ],
+        },
+      ],
+    },
+    {
+      id: "application",
+      title: both("The Contracts It Applies To", "Les contrats visés"),
+      blocks: [
+        p(
+          "Under section 2, the policy applies to all procurement processes, standing offers, supply arrangements, contracts and other instruments entered into or commenced by a department or agency identified in Schedules I, I.1 or II to the Financial Administration Act or another federal entity that voluntarily adopts it, other than the 23 exclusions the section lists. Appendix 1 defines:",
+          "Selon l'article 2, la politique s'applique à tout processus d'approvisionnement, offre à commandes, arrangement en matière d'approvisionnement, contrat et autre instrument conclu ou établi par un ministère ou un organisme mentionné aux annexes I, I.1 ou II de la Loi sur la gestion des finances publiques ou par toute autre entité fédérale qui l'adopte sur une base volontaire, exception faite des 23 exclusions que l'article énumère. L'annexe 1 définit :",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "label", label: both("Term", "Terme") },
+            { kind: "main", label: both("Definition in Appendix 1", "Définition à l'annexe 1") },
+          ],
+          rows: [
+            [
+              both("Contract", "Contrat"),
+              both(
+                "An agreement between a contracting authority and a person or firm to provide a good, perform a service, sell or dispose of a good, or construct a work, or a real property agreement between a contracting authority and a person or firm for appropriate consideration",
+                "Une entente entre une autorité contractante et une personne ou une firme pour fournir un bien, fournir un service, vendre ou aliéner un bien, ou mener des travaux, ou un accord immobilier entre une autorité contractante et une personne ou une firme, pour une contrepartie appropriée",
+              ),
+            ],
+            [
+              both("Real property agreement", "Accord immobilier"),
+              both(
+                "Includes offer to purchase, offer for sale, agreement of purchase and sale, leases and licences",
+                "S'entend des offres d'achat et de vente, des conventions d'achat et de vente, des locations à bail et des permis",
+              ),
+            ],
+          ],
+        },
+        p("Among the exclusions of section 2:", "Parmi les exclusions de l'article 2 :"),
+        {
+          kind: "table",
+          cols: [
+            { kind: "label", label: both("Section", "Article") },
+            { kind: "main", label: both("Excluded, in the policy's words", "Exclusion, selon les termes de la politique") },
+          ],
+          rows: [
+            [both("2.4", "2.4"), both("Inter-governmental and intra-governmental agreements and memoranda of understanding", "Les ententes et les protocoles d'entente intergouvernementaux et intragouvernementaux")],
+            [both("2.5", "2.5"), both("Financial contracts", "Les contrats financiers")],
+            [both("2.7", "2.7"), both("Contracts of employment", "Les contrats d'emploi")],
+            [both("2.11", "2.11"), both("Transfer payments (that is, grants, contributions and other transfer payments)", "Les paiements de transfert (c'est-à-dire les subventions, les contributions et d'autres paiements de transfert)")],
+            [
+              both("2.20", "2.20"),
+              both(
+                "Goods, services and construction contracts, first-tier subcontracts and real property agreements with a transaction value below $10,000",
+                "Les contrats de biens, de services et de construction, les premiers contrats de sous-traitance et les accords immobiliers dont la valeur transactionnelle est inférieure à 10 000 $",
+              ),
+            ],
+            [
+              both("2.23", "2.23"),
+              both(
+                "Such further and other exclusion contained in directives issued by Public Works and Government Services Canada (PWGSC) under this policy",
+                "Toute autre exclusion figurant dans les directives établies par Travaux publics et Services gouvernementaux Canada (TPSGC) dans le cadre de la présente politique",
+              ),
+            ],
+          ],
+        },
+        p(
+          "OSIC's page of the departments and agencies that apply the policy, modified August 15, 2024, says the policy is governed by memoranda of understanding between PSPC and other federal institutions, and lists 89 institutions currently holding one.",
+          "La page du BICF sur les ministères et organismes qui appliquent la politique, modifiée le 15 août 2024, indique que la politique est régie par des protocoles d'entente entre SPAC et d'autres institutions fédérales, et énumère 89 institutions qui en détiennent actuellement un.",
+        ),
+      ],
+    },
+    {
+      id: "grounds",
+      title: both("The Grounds in Appendix 2", "Les motifs de l'annexe 2"),
+      blocks: [
+        p(
+          "Under section 6.2, the Registrar will determine that a supplier is ineligible if any of the Material Events listed in Appendix 2 are found to apply in respect of the supplier. Appendix 2 says its grounds include the events that will trigger the determination of ineligibility and, when relating to certain charges, may be considered when determining a suspension. Its paragraphs follow, in the policy's words or condensed from them; where a paragraph lists offences by section, the policy gives each:",
+          "Selon l'article 6.2, le registraire déterminera qu'un fournisseur est inadmissible si tout évènement important figurant à l'annexe 2 survient à l'égard dudit fournisseur. L'annexe 2 indique que ses motifs comprennent les évènements qui déclencheront la détermination d'inadmissibilité et qui, dans le cas de certaines accusations, peuvent être pris en considération dans le cadre du processus de détermination de suspension. Ses alinéas suivent, selon les termes de la politique ou condensés à partir de ceux-ci; lorsqu'un alinéa énumère des infractions par article, la politique donne chacune :",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "label", label: both("Paragraph", "Alinéa") },
+            { kind: "main", label: both("The policy's words", "Les termes de la politique") },
+          ],
+          rows: [
+            [
+              both("(1)(a)", "(1)(a)"),
+              both(
+                "The supplier has a loss of capacity to contract with His Majesty or to receive any benefit under a contract between His Majesty and any other person under subsection 750(3) of the Criminal Code, which, for greater clarity, relates to convictions of offences under paragraph 80(1)(d), subsection 80(2) or section 154.01 of the Financial Administration Act, or section 121, section 124, section 380 for fraud committed against His Majesty, or section 418 of the Criminal Code",
+                "Le fournisseur a perdu sa capacité de conclure un contrat avec Sa Majesté ou de tirer profit de tout contrat conclu entre Sa Majesté et toute autre personne en vertu du paragraphe 750(3) du Code criminel, lequel, il est entendu, se rapporte aux condamnations relatives aux infractions visées par l'alinéa 80(1)d), le paragraphe 80(2) ou l'article 154.01 de la Loi sur la gestion des finances publiques, ou l'article 121, l'article 124, l'article 380, pour ce qui est d'une fraude commise à l'égard de Sa Majesté, ou l'article 418 du Code criminel",
+              ),
+            ],
+            [
+              both("(1)(b)", "(1)(b)"),
+              both(
+                "The supplier has, in the past 3 years, been convicted of or pleaded guilty to any of the offences the paragraph lists, by section, of the Criminal Code; of sections 463, 464 or 465 of the Criminal Code, each solely to the extent that it relates to an offence listed under paragraph (1)(b)(i); of the sections it lists of the Competition Act, the Income Tax Act, the Excise Tax Act, the Corruption of Foreign Public Officials Act, the Controlled Drugs and Substances Act, the Canada Elections Act, the Financial Administration Act and the Immigration and Refugee Protection Act; or any offence under the Canada Labour Code, Part II and Part III",
+                "Le fournisseur a, au cours des 3 dernières années, été reconnu coupable ou a enregistré un plaidoyer de culpabilité relativement aux infractions que l'alinéa énumère, par article, du Code criminel; des articles 463, 464 ou 465 du Code criminel, dans chacun des cas, dans la mesure où cela s'applique à une infraction énoncée à l'alinéa (1)(b)(i); des articles qu'il énumère de la Loi sur la concurrence, de la Loi de l'impôt sur le revenu, de la Loi sur la taxe d'accise, de la Loi sur la corruption d'agents publics étrangers, de la Loi réglementant certaines drogues et autres substances, de la Loi électorale du Canada, de la Loi sur la gestion des finances publiques et de la Loi sur l'immigration et la protection des réfugiés; ou les infractions énumérées dans les partie II et partie III du Code canadien du travail",
+              ),
+            ],
+            [
+              both("(1)(c)", "(1)(c)"),
+              both(
+                "The supplier has, in the past 3 years, been convicted of or pleaded guilty to an offence pursuant to subsection 14(1), with respect to sections 5 or 7, of the Lobbying Act",
+                "Le fournisseur a, au cours des 3 dernières années, été reconnu coupable ou plaidé coupable relativement à une infraction visée par le paragraphe 14(1), en ce qui concerne l'article 5 ou 7 de la Loi sur le lobbying",
+              ),
+            ],
+            [
+              both("(1)(d)", "(1)(d)"),
+              both(
+                "The supplier has, in the past 3 years, failed to terminate a first-tier subcontract within 1 business day of when the supplier knew or ought to have known that a first-tier subcontractor lacks the capacity to contract with Canada or receive any benefit under a contract with Canada and another party, pursuant to subsection 750(3) of the Criminal Code (the French text of the policy gives 5 business days); or entered into a contract with an ineligible or suspended first-tier subcontractor, unless one of the four exceptions the paragraph lists applies",
+                "Au cours des 3 dernières années, le fournisseur n'a pas résilié de premier contrat de sous-traitance dans un délai de 5 jours ouvrables suivant le jour où il a appris ou aurait dû apprendre qu'un premier sous-traitant a perdu la capacité de conclure un contrat avec le Canada ou de tirer profit de tout contrat conclu avec le Canada et une autre partie, conformément au paragraphe 750(3) du Code criminel (le texte anglais de la politique indique 1 jour ouvrable); ou a conclu un contrat avec un premier sous-traitant inadmissible ou suspendu, sauf si l'une des quatre exceptions que l'alinéa énumère s'applique",
+              ),
+            ],
+            [
+              both("(1)(e)", "(1)(e)"),
+              both(
+                "The Registrar determines, in the Registrar's discretion that the supplier has, at any time, provided a certification or declaration to PWGSC in relation to this policy which is false or misleading, in a material respect",
+                "Le registraire détermine, à sa discrétion, que le fournisseur a, à un moment ou à un autre, fourni à TPSGC une attestation ou une déclaration fausse ou trompeuse sur un point important concernant la présente politique",
+              ),
+            ],
+            [
+              both("(1)(f)", "(1)(f)"),
+              both(
+                "The supplier, or the supplier's affiliate, has, in the past 3 years, been convicted of a Foreign Offence, or pleaded guilty to a Foreign Offence, or is the subject of a foreign judicial determination whether civil or criminal that the Registrar determines, in the Registrar's discretion, to be a Similar Foreign Offence, or agreed to a statement of facts, in relation to having committed an act or omission outside of Canada, and the Registrar determines, in the Registrar's discretion, that if such act or omission had occurred in Canada, it would likely lead to a conviction of an offence listed in paragraph (1)(a), (1)(b)(i), (ii), (iii), (iv), (vi), (ix) and (x), or (1)(c) of Appendix 2. The Registrar will consider the actions or omissions of affiliates only if the Registrar determines, in the Registrar's discretion, that the supplier directed, influenced, authorized, assented to, acquiesced to, or participated in those actions or omissions",
+                "Au cours des 3 dernières années, le fournisseur ou une affiliée du fournisseur a été reconnu coupable ou a plaidé coupable relativement à une infraction étrangère, ou fait l'objet d'une détermination judiciaire étrangère, civile ou criminelle, que le registraire détermine, à sa discrétion, comme étant une infraction étrangère de même nature, ou a approuvé un énoncé de faits, relativement à une action ou une omission à l'étranger, et le registraire détermine, à sa discrétion, que si cette action ou omission avait été commise au Canada, elle aurait probablement donné lieu à une condamnation relativement à une infraction énoncée aux alinéas et sous-alinéas (1)(a), (1)(b)(i), (ii), (iii), (iv), (vi), (ix) et (x), ou (1)(c) de l'annexe 2. Le registraire ne prendra en considération les actions ou les omissions des affiliées que si le registraire détermine, à sa discrétion, que le fournisseur a participé ou consenti à celles-ci ou qu'il les a acceptées, autorisées, encouragées ou dirigées",
+              ),
+            ],
+            [
+              both("(1)(g)", "(1)(g)"),
+              both(
+                "The supplier, or the supplier's affiliate, has, in the past 3 years, either been convicted of, pleaded guilty to, or agreed to a statement of facts, in relation to having committed an act or omission in Canada that is a Similar Provincial Offence, or that is a Provincial Offence and the Registrar determines, in the Registrar's discretion, that such act or omission is similar to an act which would likely lead to a conviction for an offence listed in paragraph (1)(a)(i), (1)(b)(iv), (v), and (ix), or (1)(c) of Appendix 2; or been convicted, or pleaded guilty, under provincial securities legislation relating to fraud, collusion or insider trading. The Registrar will consider the actions or omissions of affiliates only if the Registrar determines, in the Registrar's discretion, that the supplier directed, influenced, authorized, assented to, acquiesced to, or participated in those actions or omissions",
+                "Au cours des 3 dernières années, le fournisseur ou une affiliée du fournisseur a été reconnu coupable, a plaidé coupable ou a approuvé un énoncé de faits relativement à une action ou une omission au Canada qui constitue une infraction provinciale de même nature, ou qui constitue une infraction provinciale et que le registraire détermine, à sa discrétion, comme semblable à un acte qui aurait probablement donné lieu à une condamnation relativement à une infraction énoncée aux alinéas et sous-alinéas (1)(a)(i), (1)(b)(iv), (v) et (ix), ou (1)(c) de l'annexe 2; ou a été reconnu coupable ou a plaidé coupable relativement à une infraction dans le cadre de la législation provinciale en matière de valeurs mobilières liée à la fraude, à la collusion ou aux délits d'initié. Le registraire ne prendra en considération les actions ou les omissions des affiliées que si le registraire détermine, à sa discrétion, que le fournisseur a participé ou consenti à celles-ci ou qu'il les a acceptées, autorisées, encouragées ou dirigées",
+              ),
+            ],
+            [
+              both("(1)(h)", "(1)(h)"),
+              both(
+                "The supplier's affiliate, in the past 3 years, was convicted of or pleaded guilty to an offence identified in paragraphs (1)(a), (1)(b) or (1)(c) of Appendix 2 and the Registrar determines, in the Registrar's discretion, that the supplier directed, influenced, authorized, assented to, acquiesced in or participated in any action or omission, which directly or indirectly enabled the underlying action(s) or omission(s) that relate to the offence, where the supplier knew or ought to have known that its affiliate was involved in the offence",
+                "Une affiliée du fournisseur a, au cours des 3 dernières années, été reconnue coupable ou a plaidé coupable relativement à une infraction énoncée aux alinéas (1)(a), (1)(b) ou (1)(c) de l'annexe 2, et le registraire détermine, à sa discrétion, que le fournisseur a accepté, autorisé, encouragé ou dirigé une action ou une omission, ou y a participé ou consenti, laquelle a favorisé directement ou indirectement une action ou une omission sous-jacente à l'infraction alors que le fournisseur savait ou aurait dû savoir que son affiliée était impliquée dans l'infraction",
+              ),
+            ],
+            [
+              both("(1)(i)", "(1)(i)"),
+              both(
+                "The supplier is a person listed or designated under regulations made pursuant to the United Nations Act, Special Economic Measures Act, the Justice for Victims of Corrupt Foreign Officials Act or the Freezing Assets of Corrupt Foreign Officials Act, or is owned or controlled by such a person; or has engaged in any activity prohibited under regulations made pursuant to the United Nations Act, Special Economic Measures Act, the Justice for Victims of Corrupt Foreign Officials Act or the Freezing Assets of Corrupt Foreign Officials Act",
+                "Le fournisseur est une personne inscrite ou désignée en vertu de règlements pris en application de la Loi sur les Nations Unies, de la Loi sur les mesures économiques spéciales, de la Loi sur la justice pour les victimes de dirigeants étrangers corrompus ou de la Loi sur le blocage des biens de dirigeants étrangers corrompus, appartient à une telle personne ou est contrôlé par celle-ci; ou s'est livré à toute activité interdite par les règlements pris en vertu de la Loi sur les Nations Unies, de la Loi sur les mesures économiques spéciales, de la Loi sur la justice pour les victimes de dirigeants étrangers corrompus ou de la Loi sur le blocage des biens de dirigeants étrangers corrompus",
+              ),
+            ],
+            [
+              both("(1)(j)", "(1)(j)"),
+              both(
+                "The Registrar determines, at any time and in the Registrar's discretion, that contracting with the supplier may bring the Federal procurement system into public disrepute or otherwise be contrary to Canadian public policy; or that the supplier lacks business integrity or business honesty in a manner that seriously and directly affects the present responsibility of the supplier; with the Registrar considering the foregoing in situations where the supplier, within the past 3 years, breached the Code of Conduct for Procurement, or is determined to be ineligible or debarred by any provincial or foreign jurisdiction, or international organization (such as, the World Bank)",
+                "Le registraire détermine, à tout moment et à sa discrétion, que le fait de conclure un contrat avec le fournisseur pourrait porter préjudice à la réputation du système d'approvisionnement fédéral ou serait autrement contraire à la politique publique canadienne; ou que le fournisseur manque d'intégrité ou d'honnêteté en affaires d'une manière qui nuit gravement et directement à la responsabilité actuelle du fournisseur; le registraire en tenant compte dans les situations où le fournisseur a, au cours des 3 dernières années, enfreint le Code de conduite pour l'approvisionnement, ou est déterminé inadmissible ou exclu par une autorité provinciale ou étrangère ou par une organisation internationale (par exemple la Banque mondiale)",
+              ),
+            ],
+            [
+              both("(1)(k)", "(1)(k)"),
+              both(
+                "The supplier has, within the past 3 years been convicted of an offence that resulted in being listed on the Environmental Offenders Registry; and the Registrar determines, in the Registrar's discretion, that the foregoing is serious, repetitive or otherwise egregious",
+                "Le fournisseur a, au cours des 3 dernières années, été reconnu coupable d'une infraction qui a entraîné son inscription au Registre des contrevenants environnementaux, et le registraire détermine, à sa discrétion, que ce qui précède est grave, répétitif ou inacceptable",
+              ),
+            ],
+            [
+              both("(1)(l)", "(1)(l)"),
+              both(
+                "The supplier has within the last 3 years received a poor performance evaluation pursuant to PWGSC's Vendor Performance Corrective Measure Policy or its successor, and the Registrar determines, in the Registrar's discretion, that the foregoing is serious, repetitive or otherwise egregious",
+                "Le fournisseur a, au cours des 3 dernières années, reçu une évaluation de rendement médiocre dans le cadre de la Politique sur les mesures correctives du rendement des fournisseurs de TPSGC ou de la politique qui lui succède, et le registraire détermine, à sa discrétion, que ce qui précède est grave, répétitif ou inacceptable",
+              ),
+            ],
+            [
+              both("(1)(m)", "(1)(m)"),
+              both(
+                "An owner, trustee, director, manager or senior officer of the supplier has, in the past 3 years, been convicted of or pleaded guilty to an offence identified in paragraphs (1)(a), (1)(b) or (1)(c) of Appendix 2 or is otherwise suspended under this policy and the Registrar determines, in the Registrar's discretion, that such owner, trustee, director, manager or senior officer has an opportunity to direct or influence the supplier",
+                "Un propriétaire, un fiduciaire, un directeur, un gestionnaire ou un cadre supérieur du fournisseur a, au cours des 3 dernières années, été reconnu coupable ou a plaidé coupable relativement à une infraction énoncée aux alinéas (1)(a), (1)(b) ou (1)(c) de l'annexe 2 ou est suspendu au titre de la présente politique, et le registraire détermine, à sa discrétion, que le propriétaire, fiduciaire, directeur, gestionnaire ou cadre supérieur est en mesure de diriger ou d'influencer le fournisseur",
+              ),
+            ],
+          ],
+        },
+        p("The appendix's footnote sets the date the 3 year period is determined from:", "La note de l'annexe fixe la date à partir de laquelle la période de 3 ans est déterminée :"),
+        {
+          kind: "table",
+          cols: [
+            { kind: "text", label: both("Assessment", "Évaluation") },
+            { kind: "main", label: both("Date", "Date") },
+          ],
+          rows: [
+            [
+              both("In response to a particular procurement process", "À la suite d'un processus d'approvisionnement donné"),
+              both(
+                "The date on which the contracting authority receives an offer/bid from a supplier in response to such procurement process",
+                "La date à laquelle l'autorité contractante reçoit l'offre ou la soumission d'un fournisseur en réponse à ce processus d'approvisionnement",
+              ),
+            ],
+            [
+              both("At a supplier's request", "À la demande d'un fournisseur"),
+              both(
+                "The date that the Registrar receives such a request from the supplier to determine whether it is ineligible for award of a contract",
+                "La date à laquelle le registraire reçoit la demande du fournisseur visant à déterminer s'il est inadmissible à l'attribution d'un contrat",
+              ),
+            ],
+            [
+              both("All other determinations", "Toute autre détermination"),
+              both(
+                "The date that the Registrar issues the supplier a Notice of Intention to Declare Ineligible",
+                "La date à laquelle le registraire délivre au fournisseur un avis d'intention de déclarer inadmissible",
+              ),
+            ],
+          ],
+        },
+      ],
+    },
+    {
+      id: "compared",
+      title: both("Ineligibility and Suspension Compared", "Inadmissibilité et suspension comparées"),
+      blocks: [
+        p("The two side by side, condensed from the policy's words:", "Les deux côte à côte, condensés à partir des termes de la politique :"),
+        {
+          kind: "table",
+          cols: [
+            { kind: "label", label: both("Rule", "Règle") },
+            { kind: "main", label: both("Ineligibility", "Inadmissibilité") },
+            { kind: "main", label: both("Suspension", "Suspension") },
+          ],
+          rows: [
+            [
+              both("Notice", "Avis"),
+              both(
+                "A Notice of Ineligibility is a notice by the Registrar to a supplier declaring the supplier ineligible to be awarded a contract or real property agreement for a specific period of time (Appendix 1)",
+                "L'avis d'inadmissibilité désigne un avis délivré par le registraire à un fournisseur qui déclare le fournisseur inadmissible à l'attribution d'un contrat ou d'un accord immobilier durant une période précise (annexe 1)",
+              ),
+              both(
+                "A Notice of Suspension is a notice by the Registrar to a supplier declaring the supplier suspended from being able to be awarded a contract or real property agreement for a specific period of time (Appendix 1)",
+                "L'avis de suspension désigne un avis délivré par le registraire à un fournisseur qui déclare le fournisseur suspendu et prévoit que ce dernier ne peut pas conclure de contrat ou d'accord immobilier durant une période précise (annexe 1)",
+              ),
+            ],
+            [
+              both("Basis", "Fondement"),
+              both(
+                "The Registrar will determine that a supplier is ineligible if any of the Material Events listed in Appendix 2 are found to apply in respect of the supplier (section 6.2)",
+                "Le registraire déterminera qu'un fournisseur est inadmissible si tout évènement important figurant à l'annexe 2 survient à l'égard dudit fournisseur (article 6.2)",
+              ),
+              both(
+                "If the Registrar determines, in the Registrar's discretion, that there is a professional misconduct or acts or omissions of the supplier which adversely reflect on the commercial integrity of the supplier, the Registrar may, in the Registrar's discretion and upon giving a supplier a Notice of Suspension, suspend a supplier. The following charges or proceedings against the supplier may, in the Registrar's discretion, be considered as evidence of such misconduct, acts or omissions: any of the offences identified in paragraphs (1)(a), (b) or (c) of Appendix 2; a Provincial Offence which the Registrar determines, in the Registrar's discretion, is a Similar Provincial Offence as defined in Appendix 1 or pursuant to paragraph (1)(g) of Appendix 2; or a Foreign Offence which the Registrar determines, in the Registrar's discretion, is a Similar Foreign Offence to those offences; each to the extent that the foregoing poses a risk to Canada (section 7.1.1)",
+                "Si le registraire détermine, à sa discrétion, qu'une faute professionnelle, des actes ou des omissions du fournisseur ont porté atteinte à l'intégrité commerciale de ce dernier, le registraire peut, à sa discrétion et après avoir délivré un avis de suspension au fournisseur, suspendre le fournisseur. Les accusations ou les procédures judiciaires suivantes à l'encontre du fournisseur peuvent, à la discrétion du registraire, être considérées comme indices d'une telle faute, de tels actes ou de telles omissions : toute infraction prévue aux alinéas (1)(a), (b) ou (c) de l'annexe 2; une infraction provinciale que le registraire juge, à sa discrétion, comme une infraction provinciale de même nature au sens de l'annexe 1 ou en vertu de l'alinéa (1)(g) de l'annexe 2; ou une infraction étrangère que le registraire juge, à sa discrétion, comme une infraction étrangère de même nature que ces infractions; dans chacun des cas, dans la mesure où cela pose un risque pour le Canada (article 7.1.1)",
+              ),
+            ],
+            [
+              both("Notice first", "Avis préalable"),
+              both(
+                "A Notice of Intention to Declare Ineligible will be delivered to the supplier before the Registrar makes a determination of ineligibility; the supplier has 10 business days following its delivery to file information and written submissions to the Registrar, or longer if it requests an extension in writing within those 10 business days and PWGSC agrees in writing (sections 6.2.5 and 6.2.6)",
+                "Un avis d'intention de déclarer inadmissible sera délivré avant que le registraire détermine le fournisseur inadmissible; le fournisseur dispose de 10 jours ouvrables suivant la livraison de l'avis pour produire des informations et des soumissions écrites au registraire, ou d'un délai plus long s'il présente une demande de prolongation par écrit avant la fin de ces 10 jours ouvrables et que TPSGC y consent par écrit (articles 6.2.5 et 6.2.6)",
+              ),
+              both(
+                "If the Registrar believes there are grounds to suspend a supplier, the Registrar will deliver a Notice of Intention to Suspend, which gives the supplier the same 10 business days, and the same extension (section 7.2.1)",
+                "Si le registraire croit qu'il existe des motifs justifiant la suspension d'un fournisseur, il doit lui envoyer un avis d'intention de suspendre, qui accorde au fournisseur les mêmes 10 jours ouvrables et la même prolongation (article 7.2.1)",
+              ),
+            ],
+            [
+              both("Period", "Période"),
+              both(
+                "Begins on the date that the Notice of Ineligibility is delivered and ends: for a Material Event in paragraph (1)(a) of Appendix 2, on the date provided by an order of restoration made by the Governor in Council pursuant to subsection 750(5) of the Criminal Code, but only to the extent provided for in that or, if applicable, any subsequent such order; for paragraph (1)(i), on the date the sanction is no longer applicable (if ever); for all other Material Events, on the date the Registrar determines, considering, among other things, the guidelines in Appendix 3, no more than 10 years from the date the Notice of Ineligibility is delivered (section 6.3.1). Within 10 business days of delivery of the Notice of Ineligibility, the supplier may deliver written information and submissions, and the Registrar may, at the Registrar's discretion, reconsider, reduce or confirm the period of ineligibility (sections 6.3.4 and 6.3.5)",
+                "Débute à la date de délivrance de l'avis d'inadmissibilité et se termine : dans le cas d'un évènement important décrit à l'alinéa (1)(a) de l'annexe 2, à la date indiquée par un ordre de rétablissement rendu par le gouverneur en conseil en vertu du paragraphe 750(5) du Code criminel, mais uniquement dans la mesure prévue dans cet ordre ou, s'il y a lieu, dans tout ordre ultérieur; dans le cas de l'alinéa (1)(i), à la date à laquelle la sanction cesse d'avoir effet (le cas échéant); dans le cas de tout autre évènement important, à la date déterminée par le registraire en tenant compte, entre autres, des lignes directrices de l'annexe 3, au plus 10 années suivant la date de délivrance de l'avis d'inadmissibilité (article 6.3.1). Dans les 10 jours ouvrables suivant la délivrance de l'avis d'inadmissibilité, le fournisseur peut présenter des informations et des soumissions écrites au registraire, qui pourra, à sa discrétion, réévaluer, réduire ou confirmer la période d'inadmissibilité (articles 6.3.4 et 6.3.5)",
+              ),
+              both(
+                "Lasts from the day that the Registrar issues a Notice of Suspension until and including the earlier of 18 months following such notice, which can be longer if a legal process is underway, and, if applicable, the date that the Registrar determines that the professional misconduct or acts or omissions no longer apply or have been addressed to the satisfaction of the Registrar (section 7.3.2)",
+                "Dure du jour où le registraire émet l'avis de suspension jusqu'à la première des occurrences suivantes : 18 mois après l'émission de l'avis, ou une période plus longue si un processus judiciaire est en cours; le cas échéant, la date à laquelle le registraire détermine que la faute professionnelle, les actes ou les omissions ne s'appliquent plus ou ont été abordés à sa satisfaction (article 7.3.2)",
+              ),
+            ],
+            [
+              both("Public list", "Liste publique"),
+              both(
+                "If the supplier is not an individual, PWGSC will publish the name of the supplier on its public Ineligibility and Suspension List, together with the supplier's address, and the start and end dates of the period of ineligibility (section 6.5.2)",
+                "Si le fournisseur n'est pas un individu, TPSGC publiera son nom sur la Liste des fournisseurs inadmissibles et suspendus publique, ainsi que son adresse, et la date de début et la date de la fin de la période d'inadmissibilité (article 6.5.2)",
+              ),
+              both(
+                "As under section 6.5.2, for a supplier that is not an individual, the name will be published on the list with reference to a suspended status rather than an ineligible status (sections 6.5.2 and 7.1.1)",
+                "Comme à l'article 6.5.2, pour un fournisseur qui n'est pas un particulier, le nom sera publié sur la liste avec mention du statut « suspendu » au lieu du statut « inadmissible » (articles 6.5.2 et 7.1.1)",
+              ),
+            ],
+            [
+              both("Bids", "Soumissions"),
+              both(
+                "Subject to the Public Interest Exception being invoked in a particular transaction, a response to a competitive solicitation from an ineligible supplier will be declared non-responsive and will receive no further consideration, and an ineligible supplier is unable to enter into a contract awarded through a non-competitive process (section 6.5.3)",
+                "Sauf si l'exception destinée à protéger l'intérêt public est invoquée dans le cadre d'une transaction donnée, une réponse à un processus concurrentiel de la part d'un fournisseur inadmissible sera déclarée non recevable et sera rejetée d'emblée, et un fournisseur inadmissible ne peut pas conclure un contrat attribué dans le cadre d'un processus non concurrentiel (article 6.5.3)",
+              ),
+              both(
+                "The effect of a suspension will be the same as the effect of a determination of ineligibility under section 6.5, with the exception of the length of the suspension period (section 7.3.1)",
+                "L'effet de la suspension sera équivalent à l'effet de la détermination d'inadmissibilité au titre de l'article 6.5, à l'exception de la longueur de la période de suspension (article 7.3.1)",
+              ),
+            ],
+            [
+              both("Existing contracts", "Contrats en cours"),
+              both(
+                "With at least 2 weeks advance notice to the supplier, a contracting authority may terminate any or all of the supplier's contracts that are subject to the policy. During the notice period, the supplier may give written representations as to why they should not be terminated, and the Registrar may request the supplier to enter into an administrative agreement as an alternative; if one is executed, or the contracting authority finds the reasons persuasive, it may revoke the advance notice and the termination. Any such termination will be deemed a termination for default of the supplier, with Canada paying no costs, expenses, damages, lost profits or other amounts related to it; Canada will remain liable to pay for any services or goods already received (section 6.5.4)",
+                "Sur préavis d'au moins 2 semaines au fournisseur, l'autorité contractante peut résilier une partie ou la totalité des contrats du fournisseur qui sont assujettis à la politique. Pendant la période de préavis, le fournisseur peut soumettre des observations écrites justifiant pourquoi ils ne devraient pas être résiliés, et le registraire peut lui demander de conclure une entente administrative en remplacement; si une telle entente est conclue, ou si l'autorité contractante juge les raisons convaincantes, celle-ci peut annuler le préavis et la résiliation. Toute résiliation de cette nature sera réputée être une résiliation pour manquement du fournisseur, sans que le Canada paie de frais, de dépenses, de dommages, de manque à gagner ou d'autres montants qui y sont liés; le Canada demeure tenu de payer les services ou les biens déjà reçus (article 6.5.4)",
+              ),
+              both(
+                "There will be no right to terminate contracts pursuant to section 6.5.4 (section 7.1.1)",
+                "Il n'existera aucun droit de résilier des contrats conformément à l'article 6.5.4 (article 7.1.1)",
+              ),
+            ],
+          ],
+        },
+        p("Two rules reach both:", "Deux règles touchent l'une et l'autre :"),
+        {
+          kind: "table",
+          cols: [
+            { kind: "text", label: both("Rule", "Règle") },
+            { kind: "main", label: both("The policy's words", "Les termes de la politique") },
+          ],
+          rows: [
+            [
+              both("Provisional suspension (section 7.1.2)", "Suspension provisoire (article 7.1.2)"),
+              both(
+                "If the Registrar, exercising their discretion, determines that the alleged misconduct, acts or omissions of the supplier, pose immediate and significant risk to the Government of Canada, the Registrar may impose a provisional suspension on the supplier that will take effect on the day it is issued and remain in place for up to 90 days. A provisional suspension may be renewed if required. A supplier will be informed of it as a part of a Notice of Intention to Declare Ineligible, a Notice of Intention to Suspend, or by way of a Notice of Provisional Suspension",
+                "Si le registraire, lors de l'exercice de son pouvoir discrétionnaire, détermine que la faute, les omissions ou les actes présumés du fournisseur posent un risque immédiat et significatif au gouvernement du Canada, le registraire peut imposer une suspension provisoire au fournisseur qui entrera en vigueur le jour de son émission et demeurera en place jusqu'à 90 jours. Une suspension provisoire peut être renouvelée au besoin. Le fournisseur en sera informé au moyen d'un avis d'intention de déclarer inadmissible, d'un avis d'intention de suspendre ou d'un avis de suspension provisoire",
+              ),
+            ],
+            [
+              both("Public interest exception (section 9.1)", "Exception destinée à protéger l'intérêt public (article 9.1)"),
+              both(
+                "Unless the supplier has no capacity to contract with Canada, or receive any benefit under a contract with Canada and any other person pursuant to subsection 750(3) of the Criminal Code or is otherwise prohibited from contracting with Canada pursuant to a sanction listed in paragraph (1)(i) of Appendix 2, a contracting authority may enter into a contract with an ineligible or suspended supplier if the relevant Deputy Head or equivalent considers that doing so is in the public interest",
+                "À moins que le fournisseur n'ait pas la capacité de conclure un contrat avec le Canada ou de tirer profit de tout contrat conclu entre le Canada et toute autre personne en vertu du paragraphe 750(3) du Code criminel ou qu'il lui soit interdit de conclure un contrat avec le Canada en application d'une sanction prévue par l'alinéa (1)(i) de l'annexe 2, une autorité contractante peut conclure un contrat avec un fournisseur inadmissible ou suspendu si l'administrateur général (ou une personne occupant un poste équivalent) concerné considère que ce contrat est dans l'intérêt public",
+              ),
+            ],
+          ],
+        },
+      ],
+    },
+    {
+      id: "bid",
+      title: both("What a Bid Certifies and Discloses", "Ce qu'une soumission atteste et communique"),
+      blocks: [
+        p(
+          "OSIC's page of clauses for procurement contracts, modified April 23, 2025, says departments and agencies that apply the policy incorporate it by reference to procurement contracts through the addition of its clauses. Clause 1.1, in its words; the {bid} gives the steps of a bid:",
+          "La page du BICF sur les clauses pour les contrats d'approvisionnement, modifiée le 23 avril 2025, indique que les ministères et organismes qui appliquent la politique l'incorporent par renvoi aux contrats d'approvisionnement par l'ajout de ses clauses. La clause 1.1, selon ses termes; le {bid} donne les étapes d'une soumission :",
+          { bid: a(BID_PATH, "guide on bidding", "guide sur les soumissions") },
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "text", label: both("Subsection", "Paragraphe") },
+            { kind: "main", label: both("The clause's words", "Les termes de la clause") },
+          ],
+          rows: [
+            [
+              both("(a) Mandatory Compliance", "a) Conformité obligatoire"),
+              both(
+                "The Ineligibility and Suspension Policy (the Policy) in effect on the date the solicitation of offers is issued, and all related Directives in effect on that date, are incorporated by reference into, and form a binding part of the solicitation of offers. The Offeror must comply with the Policy and Directives, which can be found at the Office of Supplier Integrity and Compliance website",
+                "La Politique d'inadmissibilité et de suspension (la Politique) en vigueur à la date d'émission de la demande d'offres ainsi que toutes les directives connexes en vigueur à cette date sont incorporées par renvoi à la demande d'offres et en font partie intégrante. L'Offrant doit respecter la Politique et les directives, lesquelles se trouvent sur le site Web du Bureau de l'intégrité et de la conformité des fournisseurs",
+              ),
+            ],
+            [
+              both("(b) Policy Summary", "b) Résumé de la Politique"),
+              both(
+                "The Policy sets out the circumstances under which Canada may determine that the Supplier is ineligible to enter, or is suspended from entering into a Contract with Canada. The list of ineligible and suspended Suppliers is maintained on the Office of Supplier Integrity and Compliance website",
+                "La Politique décrit les circonstances selon lesquelles le Canada pourrait déterminer qu'un fournisseur est inadmissible ou suspendu à conclure un contrat avec le Canada. La liste des fournisseurs inadmissibles et suspendus figure sur le site Web du Bureau de l'intégrité et de la conformité des fournisseurs",
+              ),
+            ],
+            [
+              both("(c) Offeror Responsibilities", "c) Responsabilités de l'Offrant"),
+              both(
+                "The Offeror must provide a List of names for integrity verification that includes all information required by the Policy (section 13, Disclosure); and, if the Offeror is unable to certify all of the statements in subsection d, a completed Integrity declaration form providing all requested information and details of any material event that may affect the status of itself, its affiliates or its proposed first-tier subcontractors under the Policy",
+                "L'Offrant doit fournir une liste des noms pour la vérification de l'intégrité qui comprend tous les renseignements exigés dans la Politique (article 13, Communication des renseignements); et, s'il n'est pas en mesure d'attester tous les énoncés figurant au paragraphe d, un formulaire de déclaration d'intégrité comprenant tous les renseignements et les détails de tout événement important qui pourrait toucher son statut ou celui de ses affiliés ou des premiers sous-traitants qu'il propose en vertu de la Politique",
+              ),
+            ],
+            [
+              both("(d) Offeror Certifications", "d) Attestations de l'Offrant"),
+              both(
+                "Subject to subsection e, by submitting an offer in response to this solicitation of offers, the Offeror certifies that: it has read and understands the Ineligibility and Suspension Policy; it understands that certain circumstances, as described in the Policy, will or may result in a determination of ineligibility or suspension under the Policy; it is aware that Canada may request additional information, certifications, and validations from the Offeror or a third party for the purpose of making a determination of ineligibility or suspension; none of the circumstances described in Appendix 2 of the Policy that will or may result in a determination of ineligibility or suspension, apply to itself, its affiliates or its proposed first tier subcontractors; and it is not aware of a determination of ineligibility or suspension issued by Canada that applies to it",
+                "Conformément au paragraphe e, en présentant une offre en réponse à la présente demande d'offres, l'Offrant atteste : qu'il a lu et qu'il comprend la Politique d'inadmissibilité et de suspension; qu'il comprend que certaines circonstances, décrites dans la Politique, entraîneront ou peuvent entraîner une décision d'inadmissibilité ou de suspension conformément à la Politique; qu'il est au courant que le Canada peut demander des renseignements, des attestations et des validations supplémentaires auprès de l'Offrant ou d'un tiers, afin de prendre une décision à l'égard de son inadmissibilité ou de sa suspension; qu'aucune des circonstances décrites dans l'annexe 2 de la Politique et susceptible d'entraîner une détermination d'inadmissibilité ou de suspension ne s'applique à lui, à ses affiliés ou aux premiers sous-traitants qu'il propose; et qu'il n'est au courant d'aucune décision d'inadmissibilité ou de suspension rendue par le Canada à son sujet",
+              ),
+            ],
+            [
+              both("(e) Integrity Declaration Form", "e) Formulaire de déclaration d'intégrité"),
+              both(
+                "Where an Offeror is unable to provide all of the certifications required by subsection d, at the time of its offer it must submit a completed Integrity declaration form",
+                "Lorsqu'un Offrant est incapable de fournir toutes les attestations exigées au paragraphe d, au moment de présenter son offre, il doit soumettre un formulaire de déclaration d'intégrité dûment rempli",
+              ),
+            ],
+            [
+              both("(f) Compliance with Certifications", "f) Conformité avec les attestations"),
+              both(
+                "Canada will declare non-compliant any offer in respect of which the information requested is incomplete or inaccurate, or in respect of which the information contained in a certification or declaration is found by Canada to be false or misleading in any respect. If Canada establishes after award of the Contract that the Offeror provided a false or misleading certification or declaration, Canada may terminate the Contract for default. Pursuant to the Policy, Canada may also determine the Offeror to be ineligible for award of a Contract for providing a false or misleading certification or declaration",
+                "Le Canada déclarera une offre non conforme s'il constate que les renseignements exigés sont incomplets ou inexacts, ou que les renseignements contenus dans une attestation ou une déclaration sont faux ou trompeurs, à quelque égard que ce soit. Si, après l'attribution du contrat, le Canada établit que l'Offrant a fourni une attestation ou une déclaration fausse ou trompeuse, il pourrait résilier le contrat pour manquement. Conformément à la Politique, le Canada pourrait également déterminer que l'Offrant est inadmissible à l'attribution d'un contrat parce qu'il a fourni une attestation ou une déclaration fausse ou trompeuse",
+              ),
+            ],
+          ],
+        },
+        p(
+          "Section 13 sets what all suppliers, regardless of their status under the policy, will submit:",
+          "L'article 13 fixe ce que tous les fournisseurs, quel que soit leur statut dans le cadre de la politique, doivent fournir :",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "text", label: both("Supplier", "Fournisseur") },
+            { kind: "main", label: both("Names, under section 13.1", "Noms, selon l'article 13.1") },
+          ],
+          rows: [
+            [
+              both("When", "Quand"),
+              both(
+                "To the contracting authority when responding to a procurement, applying for a standing offer or supply arrangement and, to the extent not included as part of such a process, before entering into a contract or other instrument to which the policy applies; all the parties to a joint venture are required to submit them",
+                "À l'autorité contractante, lorsque le fournisseur participe à un processus d'approvisionnement, à une offre à commandes ou à un arrangement en matière d'approvisionnement et, dans la mesure où ils ne sont pas déjà fournis dans le cadre d'un tel processus, avant la conclusion d'un contrat ou d'un autre instrument auquel s'applique la politique; toutes les parties à une coentreprise doivent les communiquer",
+              ),
+            ],
+            [both("Sole proprietor", "Propriétaire unique"), both("The name of the owner", "Le nom du propriétaire")],
+            [
+              both("Private corporation", "Société privée"),
+              both(
+                "The names of all directors and the names of all individuals and entities that hold 5% or more ownership",
+                "Le nom de tous les administrateurs et de toutes les personnes et les entités qui détiennent 5 % des actions ou plus",
+              ),
+            ],
+            [both("Non-profit corporation", "Société à but non lucratif"), both("The names of all directors", "Le nom de tous les administrateurs")],
+            [both("Publicly traded corporation", "Société cotée en bourse"), both("The names of all directors", "Le nom de tous les administrateurs")],
+            [both("General partnership", "Société en nom collectif"), both("The names of the partners", "Le nom de tous les partenaires")],
+            [
+              both("Partnership, limited and limited liability", "Société en commandite et société à responsabilité limitée"),
+              both(
+                "The name(s) of the general partner(s) and, if a corporation, the information required for the corporation",
+                "Le nom de l'associé général et, dans le cas d'une société, les informations requises pour cette société",
+              ),
+            ],
+            [
+              both("Trust", "Fiducie"),
+              both(
+                "The name(s) of the trustee(s) and, if a corporation, the information required for the corporation",
+                "Le nom des fiduciaires et, dans le cas d'une société, les informations requises pour cette société",
+              ),
+            ],
+            [
+              both("Not received", "Non reçus"),
+              both(
+                "If the information has not been received by the time the evaluation of bids or offers is completed, the contracting authority will inform the supplier of a time within which to provide it. Failure to provide it within such specified period will render a bid or offer non-responsive, or the supplier otherwise disqualified for award of a contract",
+                "Si les renseignements n'ont pas été reçus avant la fin de l'évaluation des soumissions ou des offres, l'autorité contractante doit informer le fournisseur du délai pour leur communication. S'ils ne sont pas communiqués dans le délai prescrit, la soumission ou l'offre sera jugée non recevable ou le fournisseur sera exclu de l'attribution d'un contrat",
+              ),
+            ],
+          ],
+        },
+        p(
+          "Under section 13.2, the supplier will give PWGSC written notice of any change to that information, any new charge with respect to the supplier, and any new conviction or other circumstance with respect to itself, its affiliates and its first-tier subcontractors, each to the extent relevant to the policy:",
+          "Selon l'article 13.2, le fournisseur doit fournir à TPSGC un avis écrit de toute modification à ces renseignements, de toute nouvelle accusation le concernant et de toute nouvelle condamnation ou autre circonstance le concernant, ou concernant ses affiliées et ses premiers sous-traitants, dans la mesure où cela s'applique dans le cadre de la politique :",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "main", label: both("Instruments", "Instruments") },
+            { kind: "text", label: both("Notice within", "Avis dans les") },
+          ],
+          rows: [
+            [
+              both("Procurements, standing offers, supply arrangements, contracts and other instruments not executed, entered into or otherwise awarded", "Processus d'approvisionnement, appels d'offres, offres à commandes, arrangements en matière d'approvisionnement, contrats ou autres instruments n'ayant pas été exécutés, établis ou attribués"),
+              both("10 business days of any such change", "10 jours ouvrables suivant toute modification"),
+            ],
+            [
+              both("Procurements, standing offers, supply arrangements, contracts and other instruments executed, entered into or otherwise awarded", "Appels d'offres, offres à commandes, arrangements en matière d'approvisionnement, contrats ou autres instruments exécutés, établis ou attribués"),
+              both("22 business days of any such change", "22 jours ouvrables suivant toute modification"),
+            ],
+          ],
+        },
+      ],
+    },
+    {
+      id: "subcontractors",
+      title: both("First-Tier Subcontractors", "Premiers sous-traitants"),
+      blocks: [
+        p(
+          "Section 12 sets the policy's obligations with respect to first-tier subcontractors. OSIC's page on subcontractors, modified December 12, 2025, says suppliers are required to verify the status of their prospective first-tier subcontractors prior to bid submission and before entering into a direct contractual relationship. In the policy's words:",
+          "L'article 12 fixe les obligations de la politique à l'égard des premiers sous-traitants. La page du BICF sur les sous-traitants, modifiée le 12 décembre 2025, indique que les fournisseurs doivent vérifier la situation de leurs premiers sous-traitants éventuels avant la présentation d'une soumission et avant d'établir une relation contractuelle directe. Selon les termes de la politique :",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "label", label: both("Section", "Article") },
+            { kind: "main", label: both("The policy's words", "Les termes de la politique") },
+          ],
+          rows: [
+            [
+              both("Appendix 1", "Annexe 1"),
+              both(
+                "A first-tier subcontract means a contract made between the supplier and a person (other than Canada) for carrying out or supplying goods for part or all of another contract between the supplier and Canada, and a sublease made between the supplier and a person (other than Canada) for part of or all of premises leased by Canada to the supplier; a first-tier subcontractor means a contractor to a first-tier subcontract",
+                "Le premier contrat de sous-traitance s'entend d'un contrat conclu entre le fournisseur et une personne (autre que le Canada) pour l'exécution de travaux ou la fourniture de biens dans le cadre d'une partie ou de l'ensemble d'un autre contrat entre le fournisseur et le Canada, et d'un sous-bail conclu entre le fournisseur et une personne (autre que le Canada) pour une partie ou l'ensemble des lieux loués du fournisseur par le Canada; le premier sous-traitant s'entend d'un entrepreneur dans le cadre d'un premier contrat de sous-traitance",
+              ),
+            ],
+            [
+              both("12.1.1", "12.1.1"),
+              both(
+                "A supplier will not subcontract with a first-tier subcontractor, which is ineligible or suspended under this policy, to perform work under a contract that the supplier has with Canada, save and except if the supplier obtains advance written consent from the relevant Deputy Head or equivalent and provides a copy thereof to the Registrar (the Deputy Head or equivalent may not provide such consent when the first-tier subcontractor has no capacity to contract with Canada, or receive any benefit under a contract with Canada and any other person pursuant to subsection 750(3) of the Criminal Code or is otherwise prohibited to contract with Canada pursuant to a sanction listed in paragraph (1)(i) of Appendix 2), or if, during the period from when an offer/bid is received to and including the date when the offer/bid is awarded, accepted or called-up, unbeknownst to the supplier any or all of the supplier's first-tier subcontractors are determined to be ineligible, in which case section 12.3 is applicable",
+                "Il est interdit à un fournisseur de conclure un premier contrat de sous-traitance avec un premier sous-traitant inadmissible ou suspendu au titre de la présente politique pour l'exécution de travaux dans le cadre d'un contrat entre le fournisseur et le Canada, sauf si le fournisseur obtient au préalable le consentement écrit de l'administrateur général (ou d'une personne occupant un poste équivalent) concerné et en fournit une copie au registraire (l'administrateur général ou la personne occupant un poste équivalent ne peut donner ce consentement lorsque le premier sous-traitant n'a pas la capacité de conclure un contrat avec le Canada, ou de recevoir un avantage en vertu d'un contrat entre le Canada et toute autre personne, aux termes du paragraphe 750(3) du Code criminel, ou qu'il lui est autrement interdit de conclure un contrat avec le Canada en raison d'une sanction énumérée à l'alinéa (1)(i) de l'annexe 2), ou si, entre la réception d'une offre ou d'une soumission et la date de son attribution, de son acceptation ou de la commande subséquente, un ou plusieurs premiers sous-traitants du fournisseur sont déclarés inadmissibles à son insu, auquel cas l'article 12.3 s'applique",
+              ),
+            ],
+            [
+              both("12.1.2", "12.1.2"),
+              both(
+                "Suppliers are required to verify whether a first-tier subcontractor has been declared to be ineligible or suspended: in the case of an individual, by a written request to the Registrar, along with a signed consent form from the prospective first-tier subcontractor; in the case of one that is not an individual, by consulting the public Ineligibility and Suspension List",
+                "Les fournisseurs sont tenus de vérifier si un premier sous-traitant a été déclaré inadmissible ou suspendu : si c'est un particulier, par une demande écrite au registraire, accompagnée d'un formulaire de consentement signé par le premier sous-traitant potentiel; si ce n'est pas un particulier, en consultant la liste publique des fournisseurs inadmissibles et suspendus",
+              ),
+            ],
+            [
+              both("12.1.3", "12.1.3"),
+              both(
+                "A supplier that enters such a contract with a declared ineligible or suspended first-tier subcontractor, without written consent of the Deputy Head or equivalent, will, upon notice from the Registrar, be ineligible, with the period of ineligibility being determined in accordance with section 6.3",
+                "Un fournisseur qui conclut un contrat de cette nature avec un premier sous-traitant inadmissible ou suspendu sans le consentement écrit de l'administrateur général (ou d'une personne occupant un poste équivalent) est, après avis du registraire, inadmissible durant la période d'inadmissibilité déterminée conformément à l'article 6.3",
+              ),
+            ],
+            [
+              both("12.2", "12.2"),
+              both(
+                "If, after a contract is entered into or the related bid/offer is awarded or accepted, any or all of a supplier's first-tier subcontractors become ineligible, the supplier will, as soon as the same becomes known by the supplier, terminate all such subcontracts with the first-tier subcontractors which have no capacity to contract with Canada, or receive any benefit under a contract with Canada and any other person pursuant to subsection 750(3) of the Criminal Code or which are otherwise prohibited to contract with Canada pursuant to a sanction listed in paragraph (1)(i) of Appendix 2, failing which, upon notice of the contracting authority, the contract will terminate; and may choose to maintain or terminate any or all other first-tier subcontracts",
+                "Si, après la conclusion d'un contrat ou l'attribution ou l'acceptation de l'offre ou de la soumission, un ou plusieurs premiers sous-traitants du fournisseur deviennent inadmissibles, le fournisseur doit, aussitôt qu'il a connaissance de la situation, résilier tout contrat de sous-traitance avec le premier sous-traitant qui n'a pas la capacité de conclure un contrat avec le Canada, ou de tirer profit de tout contrat conclu entre le Canada et toute autre personne en vertu du paragraphe 750(3) du Code criminel ou à qui il est interdit de conclure un contrat avec le Canada en application d'une sanction énoncée à l'alinéa (1)(i) de l'annexe 2, faute de quoi, après avis de l'autorité contractante, le contrat sera résilié; et peut choisir de maintenir ou de résilier tout autre premier contrat de sous-traitance",
+              ),
+            ],
+            [
+              both("12.4", "12.4"),
+              both(
+                "The contracting authority may advise a supplier identified as the top-ranked bidder/offeror according to the evaluation criteria that it is required (or the supplier may decide) to verify the status of all proposed first-tier subcontractors before its bid/offer is awarded, accepted or called-up. If requested by the contracting authority, the supplier must advise the contracting authority in writing within 5 business days of the request, of the results of the integrity verification",
+                "L'autorité contractante peut aviser le fournisseur classé au premier rang selon les critères d'évaluation qu'il est tenu (ou le fournisseur peut décider) de vérifier le statut de tous les premiers sous-traitants proposés avant que son offre ou sa soumission ne soit attribuée, acceptée ou ne fasse l'objet d'une commande subséquente. Si l'autorité contractante le demande, le fournisseur doit l'informer par écrit des résultats de la vérification de l'intégrité dans les 5 jours ouvrables suivant la demande",
+              ),
+            ],
+          ],
+        },
+      ],
+    },
+    {
+      id: "agreements",
+      title: both("Administrative Agreements", "Ententes administratives"),
+      blocks: [
+        p(
+          "Appendix 1 defines an administrative agreement as a negotiated agreement between a supplier and the Registrar. OSIC's page of administrative actions, modified May 14, 2026, links a list of the suppliers with administrative agreements under the policy. The policy holds more than this guide covers, among it pardons (section 6.6), a limited review where ineligibility results from the actions of affiliates (section 8), and contracts awarded with first-tier subcontractors that became ineligible or suspended between an offer and its award (section 12.3). Section 10, in the policy's words:",
+          "L'annexe 1 définit l'entente administrative comme une entente négociée entre un fournisseur et le registraire. La page du BICF sur les mesures administratives, modifiée le 14 mai 2026, renvoie à une liste des fournisseurs ayant conclu une entente administrative en vertu de la politique. La politique contient plus que ce que ce guide présente, notamment les pardons (article 6.6), un examen restreint lorsque l'inadmissibilité découle des actes d'affiliés (article 8) et les contrats attribués alors que des premiers sous-traitants sont devenus inadmissibles ou suspendus entre une offre et son attribution (article 12.3). L'article 10, selon les termes de la politique :",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "label", label: both("Section", "Article") },
+            { kind: "main", label: both("The policy's words", "Les termes de la politique") },
+          ],
+          rows: [
+            [
+              both("10.1.1", "10.1.1"),
+              both(
+                "At any time after sending a Notice of Intention to Declare Ineligible, or a Notice of Intention to Suspend, the Registrar may, in the Registrar's discretion, enter into an administrative agreement with a supplier: to suspend the period of a supplier's ineligibility; in lieu of or to stay a suspension in accordance with section 10.2; in lieu of terminating an existing contract due to a determination of ineligibility; or as a condition of entering into a contract under a Public Interest Exception as provided in section 9.2",
+                "Après avoir envoyé un avis d'intention de déclarer inadmissible ou un avis d'intention de suspendre, le registraire peut, à sa discrétion, conclure une entente administrative avec un fournisseur : pour suspendre la période d'inadmissibilité du fournisseur; au lieu d'une suspension ou pour surseoir à une suspension, conformément à l'article 10.2; en remplacement de la résiliation d'un contrat existant en raison d'une détermination d'inadmissibilité; ou comme condition à la conclusion d'un contrat dans le cadre de l'exception destinée à protéger l'intérêt public prévue à l'article 9.2",
+              ),
+            ],
+            [
+              both("10.1.2", "10.1.2"),
+              both(
+                "An ineligible supplier can request an administrative agreement after 36 months from the delivery of the Notice of Ineligibility. In order for the request to be considered, the supplier is required to demonstrate that it cooperated with law enforcement authorities where applicable and/or has undertaken remedial action(s) to address the wrongdoing that led to the supplier's ineligibility",
+                "Un fournisseur inadmissible peut demander à conclure une entente administrative après la fin des 36 mois suivant la délivrance de l'avis d'inadmissibilité. Pour que la demande soit examinée, le fournisseur doit prouver qu'il a coopéré avec les autorités chargées de l'application des lois, le cas échéant, et/ou a appliqué des mesures correctives à l'égard des actes répréhensibles à l'origine de son inadmissibilité",
+              ),
+            ],
+            [
+              both("10.2.2", "10.2.2"),
+              both(
+                "Such administrative agreements may be entered into before or after a Notice of Suspension and a supplier may request, at any time, to enter into an administrative agreement for the purposes of staying or avoiding a suspension",
+                "Ces ententes administratives peuvent être conclues avant ou après un avis de suspension, et un fournisseur peut demander, en tout temps, à conclure une entente administrative afin de surseoir à une suspension ou de l'éviter",
+              ),
+            ],
+            [
+              both("10.3.4", "10.3.4"),
+              both(
+                "An administrative agreement will have no retroactive effect nor will it rectify or otherwise correct any actions of a supplier during any period of ineligibility or suspension before the entering into of an administrative agreement",
+                "Une entente administrative n'a aucun effet rétroactif et ne rectifie ni ne corrige autrement les actes d'un fournisseur pendant toute période d'inadmissibilité ou de suspension antérieure à sa conclusion",
+              ),
+            ],
+            [
+              both("10.3.7", "10.3.7"),
+              both(
+                "The existence of an administrative agreement will be made public, while the content of the agreement will remain confidential to the extent permitted by law",
+                "L'existence d'une entente administrative sera rendue publique, mais le contenu de l'entente demeurera confidentiel dans la mesure permise par la loi",
+              ),
+            ],
+            [
+              both("10.4", "10.4"),
+              both(
+                "If the supplier is ineligible or suspended and does not enter into such an administrative agreement or the Registrar is not prepared to enter into an administrative agreement with the supplier, the supplier will remain ineligible or suspended, as the case may be",
+                "Si le fournisseur est inadmissible ou suspendu et ne conclut pas une telle entente administrative, ou si le registraire n'est pas prêt à conclure une entente administrative avec lui, le fournisseur demeure inadmissible ou suspendu, selon le cas",
+              ),
+            ],
+          ],
+        },
+      ],
+    },
+    {
+      id: "list",
+      title: both("The Public List", "La liste publique"),
+      blocks: [
+        p(
+          "OSIC's page of ineligible and suspended suppliers, modified September 3, 2026, holds the list; its columns are Supplier name, Address, Status, Start date of ineligibility or suspension, and End date of ineligibility or suspension. Appendix 1 defines:",
+          "La page du BICF sur les fournisseurs inadmissibles et suspendus, modifiée le 3 septembre 2026, contient la liste; ses colonnes sont Nom du fournisseur, Adresse, Statut, Date de début de la période d'inadmissibilité ou de suspension, et Date de fin de la période d'inadmissibilité ou de suspension. L'annexe 1 définit :",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "text", label: both("Term", "Terme") },
+            { kind: "main", label: both("Definition in Appendix 1", "Définition à l'annexe 1") },
+          ],
+          rows: [
+            [
+              both("Ineligibility and Suspension List", "Liste de fournisseurs inadmissibles et suspendus"),
+              both(
+                "The public list of companies that have been determined to be ineligible or suspended by the Registrar under this policy",
+                "La liste publique d'entreprises qui ont été déterminées inadmissibles ou suspendues par le registraire dans le cadre de la présente politique",
+              ),
+            ],
+            [
+              both("Integrity Database", "Base de données sur l'intégrité"),
+              both(
+                "A list to be maintained by PWGSC that records all determinations of ineligibility and suspension, including companies and individuals, and the period of ineligibility that applies to that supplier",
+                "La liste tenue à jour par TPSGC et dans laquelle sont consignées toutes les déterminations d'inadmissibilité et de suspension, que ce soit pour des entreprises ou des particuliers, ainsi que la période d'inadmissibilité qui touche le fournisseur",
+              ),
+            ],
+          ],
+        },
+      ],
+    },
+    {
+      id: "records",
+      title: both("What the Records Show", "Ce que montrent les dossiers"),
+      blocks: [
+        p(
+          "CanadaBuys' data dictionary, in its file last modified on March 24, 2026, has no field that marks integrity provisions, an ineligibility or a suspension; it says a tender notice's description does not duplicate the information or details found in the attachments, such as clauses or sample documents. The Treasury Board's schema of the published contracts over $10,000 has no such field either. Award Watch does not show whether a supplier is ineligible, suspended or party to an administrative agreement; PSPC's list is the source. On a notice's page, Award Watch lists the documents the CanadaBuys data names for it, each linked where the government keeps it, and does not show what they say.",
+          "Le dictionnaire de données d'AchatsCanada, dans son fichier modifié pour la dernière fois le 24 mars 2026, ne comporte aucun champ qui indique des dispositions en matière d'intégrité, une inadmissibilité ou une suspension; il précise que la description d'un avis d'appel d'offres ne reproduit pas les renseignements ou les détails se trouvant dans les pièces jointes, telles que des clauses ou des modèles de documents. Le schéma du Conseil du Trésor des contrats publiés de plus de 10 000 $ n'en comporte pas non plus. Award Watch n'indique pas si un fournisseur est inadmissible, suspendu ou partie à une entente administrative; la liste de SPAC fait foi. Sur la page d'un avis, Award Watch énumère les documents que les données d'AchatsCanada lui associent, chacun lié à l'endroit où le gouvernement le conserve, sans afficher leur contenu.",
+        ),
+        figure(
+          "integrity-documents", SAMPLE_NOTICE_INTEGRITY, "section.panel.tender-documents",
+          both(
+            "The Documents panel of a Fisheries and Oceans Canada tender notice's page on Award Watch: the number of documents, the closing line, the request for proposal in English and in French, and the line that they are on CanadaBuys.",
+            "Le panneau Documents de la page d'un avis d'appel d'offres de Pêches et Océans Canada sur Award Watch : le nombre de documents, la ligne de clôture, la demande de propositions en anglais et en français, et la mention qu'ils se trouvent sur AchatsCanada.",
+          ),
+          both("The solicitation documents of a tender notice on Award Watch.", "Les documents de la demande de soumissions d'un avis d'appel d'offres sur Award Watch."),
+          [
+            mark(".panel-head h2", "CanadaBuys' data dictionary has no field that marks integrity provisions, an ineligibility or a suspension.",
+              "Le dictionnaire de données d'AchatsCanada ne comporte aucun champ qui indique des dispositions en matière d'intégrité, une inadmissibilité ou une suspension."),
+            mark(".documents-closing", "An offeror unable to provide all of the certifications must submit a completed Integrity declaration form at the time of its offer.",
+              "L'offrant incapable de fournir toutes les attestations doit soumettre un formulaire de déclaration d'intégrité dûment rempli au moment de présenter son offre."),
+            mark("ul.documents", "Under clause 1.1, the policy in effect on the date the solicitation of offers is issued is incorporated by reference into, and forms a binding part of, the solicitation.",
+              "Selon la clause 1.1, la politique en vigueur à la date de publication de la demande d'offres est incorporée par renvoi à la demande d'offres et en fait partie intégrante."),
+            mark(".panel-foot", "Award Watch lists the documents the CanadaBuys data names, each linked where the government keeps it, and does not show what they say.",
+              "Award Watch énumère les documents que les données d'AchatsCanada nomment, chacun lié à l'endroit où le gouvernement le conserve, sans afficher leur contenu."),
+          ],
+        ),
+        p(
+          "This {example} from National Defence, a request for proposal for high-visibility fire protective coveralls closing January 7, 2027, links its request for proposal in English and in French on CanadaBuys. In the English document, dated November 12, 2026, section 3.4, Ineligibility and Suspension Policy, holds subsections a to f, from Mandatory Compliance to Compliance with Certifications, and clause 16.9 of the resulting contract incorporates the policy and all related directives incorporated by reference into the solicitation of offers on its closing date.",
+          "Cet {example} de la Défense nationale, une demande de propositions pour des combinaisons de protection de feu à haute visibilité dont la clôture est fixée au 7 janvier 2027, renvoie à sa demande de propositions en anglais et en français sur AchatsCanada. Dans le document anglais, daté du 12 novembre 2026, la section 3.4, Politique d'inadmissibilité et de suspension, comporte les paragraphes a à f, de Conformité obligatoire à Conformité avec les attestations, et la clause 16.9 du contrat subséquent intègre la politique et toutes les directives connexes incorporées par renvoi à la demande d'offres à sa date de clôture.",
+          { example: a(EXAMPLE_INTEGRITY, "tender notice", "avis d'appel d'offres") },
+        ),
+      ],
+    },
+  ],
+  sources: [
+    SRC.osic, SRC.osicAbout, SRC.isPolicy, SRC.osicPolicies, SRC.osicNews, SRC.osicDepartments, SRC.osicClauses, SRC.osicSubcontractors,
+    SRC.osicActions, SRC.osicList, SRC.dictionary, SRC.contractsSchema, SRC.exampleIntegrity,
   ],
 };
 
@@ -4859,8 +5680,8 @@ const DEBRIEF: Guide = {
 
 // The order of the index, and of the sitemap's part.
 export const GUIDES: readonly Guide[] = [
-  HOW_TO_BID, EVALUATION, DEBRIEF, TENDER_NOTICE, TRADE, BUY_CANADIAN, SBPP, SECURITY, CYBER, ACAN, LIMITS, STANDING_OFFERS, PSIB,
-  THREE_RECORDS, CONTRACT_END,
+  HOW_TO_BID, EVALUATION, DEBRIEF, TENDER_NOTICE, TRADE, BUY_CANADIAN, SBPP, SECURITY, CYBER, INTEGRITY, ACAN, LIMITS, STANDING_OFFERS,
+  PSIB, THREE_RECORDS, CONTRACT_END,
 ];
 
 export const GUIDE_SLUGS: ReadonlySet<string> = new Set(GUIDES.map((g) => g.slug));

@@ -199,9 +199,9 @@ before the sources, the same for every such reader: a band
 form (`InterestBody`), which posts to `/interest` as on the list pages and
 saves the list it was served with. Its line offering Pro is left out, since
 a guide links no account page. With the switch off, or for a signed-in
-reader, a guide is as it was. The fifteen guides: the bidding, evaluation, debriefing and bid challenge, tender notice,
+reader, a guide is as it was. The sixteen guides: the bidding, evaluation, debriefing and bid challenge, tender notice,
 trade agreement, Buy Canadian, Small Business Procurement Program, security, defence supplier cyber security
-certification and set-aside guides save every new tender notice; the ACAN guide and the guide on contracts awarded without competition the new notices of the type Advance
+certification, supplier integrity and set-aside guides save every new tender notice; the ACAN guide and the guide on contracts awarded without competition the new notices of the type Advance
 Contract Award Notice, and the standing offers guide those of the type Request for
 Standing Offer, each while the open notices carry that type (otherwise
 every new tender notice, as on the tender list); the three-records and

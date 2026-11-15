@@ -32,6 +32,7 @@ const PAGES = [
   "/guides/advance-contract-award-notices-acan", "/guides/indigenous-business-set-asides-psib", "/guides/when-a-federal-contract-ends",
   "/guides/how-to-bid-on-government-of-canada-contracts", "/guides/trade-agreements-and-thresholds-on-federal-tenders",
   "/guides/security-requirements-on-federal-contracts", "/guides/cyber-security-certification-for-defence-suppliers-cpcsc",
+  "/guides/supplier-integrity-ineligibility-and-suspension-policy",
   "/guides/buy-canadian-policy-on-federal-tenders",
   "/guides/how-federal-bids-are-evaluated-and-selected", "/guides/debriefings-and-bid-challenges-on-federal-contracts",
   "/guides/small-business-procurement-program-sbpp", "/guides/federal-contracts-without-competition-and-contracting-limits",

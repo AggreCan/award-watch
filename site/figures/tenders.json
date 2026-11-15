@@ -489,5 +489,98 @@
       "Accord de libre-échange canadien (ALEC)"
     ],
     "description_cut": {}
+  },
+  "cb-900-90000808": {
+    "reference": "cb-900-90000808",
+    "amendment": 0,
+    "amended": null,
+    "amendments": [
+      {
+        "amendment": 0,
+        "amended": null,
+        "closing": "2026-12-18T14:00:00",
+        "first_seen": "2026-11-06",
+        "published": "2026-11-05",
+        "status": "open",
+        "title_en": "Water sampling equipment",
+        "title_fr": "Équipement d'échantillonnage d'eau"
+      }
+    ],
+    "attachments": [
+      {
+        "name": "f5211-990808-rfp-english.pdf",
+        "url": "https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/99808/f5211-990808-rfp-english.pdf"
+      },
+      {
+        "name": "f5211-990808-rfp-francais.pdf",
+        "url": "https://canadabuys.canada.ca/sites/default/files/webform/tender_notice/99808/f5211-990808-rfp-francais.pdf"
+      }
+    ],
+    "buyer_en": "Fisheries and Oceans Canada",
+    "buyer_fr": "Pêches et Océans Canada",
+    "buyer_id": "dfo-mpo",
+    "category": [
+      "GD"
+    ],
+    "closing": "2026-12-18T14:00:00",
+    "codes": [
+      {
+        "code": "4110",
+        "desc_en": "Laboratory and scientific equipment",
+        "desc_fr": "Équipements scientifiques et de laboratoire"
+      }
+    ],
+    "description_en": "This sample notice seeks water sampling equipment for Fisheries and Oceans Canada.\n\nThe solicitation documents are attached to the notice.",
+    "description_fr": "Cet avis fictif vise de l'équipement d'échantillonnage d'eau pour Pêches et Océans Canada.\n\nLes documents de la demande de soumissions sont joints à l'avis.",
+    "end_expected": null,
+    "end_users_en": [
+      "Fisheries and Oceans Canada (DFO)"
+    ],
+    "end_users_fr": [
+      "Pêches et Océans Canada (MPO)"
+    ],
+    "first_seen": "2026-11-06",
+    "gsin": null,
+    "gsin_desc_en": null,
+    "gsin_desc_fr": null,
+    "last_seen": "2026-11-13",
+    "limited_reason_en": null,
+    "limited_reason_fr": null,
+    "method_en": "Competitive - Open bidding",
+    "method_fr": "Concurrentielle - Invitation ouverte à soumissionner",
+    "notice_type_en": "Request for Proposal",
+    "notice_type_fr": "Demande de propositions",
+    "provinces": [
+      "NS"
+    ],
+    "published": "2026-11-05",
+    "regions_delivery_en": [
+      "Nova Scotia"
+    ],
+    "regions_delivery_fr": [
+      "Nouvelle-Écosse"
+    ],
+    "regions_opportunity_en": [
+      "Canada"
+    ],
+    "regions_opportunity_fr": [
+      "Canada"
+    ],
+    "related_awards": [],
+    "selection_en": "Lowest Price",
+    "selection_fr": "Prix le plus bas",
+    "solicitation": "F5211-990808",
+    "source_file": "openTenderNotice-ouvertAvisAppelOffres.csv",
+    "start_expected": null,
+    "status": "open",
+    "title_en": "Water sampling equipment",
+    "title_fr": "Équipement d'échantillonnage d'eau",
+    "trade_agreements_en": [
+      "Canadian Free Trade Agreement (CFTA)"
+    ],
+    "trade_agreements_fr": [
+      "Accord de libre-échange canadien (ALEC)"
+    ],
+    "description_cut": {}
   }
 }
