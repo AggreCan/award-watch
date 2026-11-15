@@ -867,7 +867,9 @@ and segment kinds is `site/src/account/records_deliveries.ts`; the tests are
 sending ceiling and the order of the lists in `site/test/recs-ops.test.ts`,
 and the grouped message, its stop link and the searches passed over in
 `site/test/recs-group.test.ts` (its size and layout in the mail suite,
-`site/test-mail/group.test.ts`).
+`site/test-mail/group.test.ts`), and a radar search's contracts first seen
+since its last delivery in `site/test/recs-radar.test.ts` (the pipeline's
+side in `pipeline/tests/test_expiring_first_seen.py`).
 
 ### When it runs
 
@@ -924,23 +926,79 @@ the data date alone, a first weekly one the last seven days.
 | Kind | Read from | Items |
 |---|---|---|
 | `tenders` | `tenders/new/<day>.json` for each day after the previous delivery's data date up to today's | the notices first seen on those days that match the saved filter, read by the same parser as `/tenders` (`readTenderQuery`, `filterTenders`), still open at the run's time, soonest closing first; a notice closing within 7 days of the data date shows its time left in amber |
-| `expiring` | `expiring/<window>/index.json` and its pages, read from the last page back | the window's contracts whose end date is inside the window at today's data date and was outside it at the previous delivery's data date (the window's length is the radar's, 91, 182 or 365 days), filtered as the radar's form saved them (`readExpiringQuery`, `filterExpiring`), newest end first |
+| `expiring` | `expiring/<window>/index.json`, its pages read from the last page back, and its list of new rows (`expiring/<window>/new/<n>.json`) read from the first page | the window's contracts that entered it since the previous delivery's data date, each listed once: those whose end date is inside the window at today's data date and was outside it at the previous delivery's data date (the window's length is the radar's, 91, 182 or 365 days), and those inside it at today's data date that the site first saw after the previous delivery's data date, up to today's (*Contracts first seen since the last delivery*, below); filtered as the radar's form saved them (`readExpiringQuery`, `filterExpiring`), newest end first |
 | `organization` | the records database (`RECORDS`): `records` through `records_org`, rows with `extra = 0` | award notices, PSPC contract history, published contracts and grants naming the organization: each source and fiscal year whose count rose since the last delivery |
 | `buyer` | the records database: `rec_buyer_quarters` | the buyer's award notices, contract history and published contracts (its label names no grants), the same way |
 | `segment` | the records database: `rec_segment_years`; and `tenders/new/<day>.json` as for a tender search on `/tenders?segment=<nn>` | award notices and contract history in the segment, the same way, and the segment's new tender notices, which its label names too |
 
 A file that does not read (today's new-notice file, a window's index or
-page) ends the run with one log line naming it; the next hour tries again.
-An account's searches are all read before any of them is sent, so the
-searches of the account whose file did not read wait with it.
+page, a page of its list of new rows) ends the run with one log line naming
+it; the next hour tries again. An account's searches are all read before any
+of them is sent, so the searches of the account whose file did not read wait
+with it.
+
+#### Contracts first seen since the last delivery
+
+A contract enters a radar window in one of two ways: its end date comes
+within the window's length of the data date, or the site first sees it while
+it already ends inside the window. The second is a new award notice, a
+month's PSPC contract history, or a week's published contracts (the
+contracts stage reads its file once a week), ending for instance 40 days
+after the data date. The radar page lists such a contract the night it
+arrives, and a radar search mails it with the next delivery.
+
+- The nightly writes the day the site first saw each radar row's contract
+  as `expiring_contracts.first_seen` (`expiring.py`). A record's own day is
+  the earliest `first_seen` of its versions for an award notice or a history
+  record (set when the CanadaBuys loader first inserts a version and kept by
+  every later upsert), or of its group's rows for a published contract
+  (`contracts.first_seen`: the run date the row's department and reference
+  first appeared in the table, carried over each time the weekly load
+  rewrites the table whole). The row's day is the earliest of its record's
+  and of the records the radar's duplicate rule dropped against it, so a new
+  award notice for a contract a department published months ago is not new.
+- A row has no day, and nothing about it is mailed as new, when one of those
+  records has none or was read on its table's first night: an award notice
+  or history record whose `first_seen` is its table's earliest (the first
+  load saw every record of the files at once), or a published contract
+  stored before the column existed or loaded into an empty table.
+- Nor on or before the day the radar began keeping it, the meta value
+  `expiring_first_seen_from`, set by the first build that has the field and
+  again by any build whose previous table was empty. The night this first
+  runs, and a night the database is rebuilt from nothing, therefore mail
+  nothing beyond what the end-date rule mails.
+- A build in which more than half of a window's rows, and more than 500
+  (`NEW_SHARE_MAX`, `NEW_FLOOR`), would count as first seen in the last 7
+  days is taken for records loaded again some other way: no row keeps a day,
+  the day the radar began moves to that night, and the run log carries a
+  notice.
+- The export writes each window's rows first seen in the 7 days to the data
+  date (`NEW_SPAN_DAYS`, equal to the delivery's `SPAN_DAYS_MAX`) as
+  `expiring/<window>/new/<n>.json`: the window's row with `seen`, the day,
+  beside it, newest day first, 500 a page, with `new_pages` and `new_rows` in
+  the window's index. The window's own pages do not change.
+- The delivery reads that list from its first page and stops at the first
+  page that reaches back to the previous delivery's data date, so a
+  delivery the day after the previous one reads the pages holding the data
+  date's rows and one more at most.
+  Each file is read once a run, however many searches name the window
+  (`publishedFiles`). A window index without `new_pages`, written before the
+  list, gives none, and its searches send what they sent before.
+- The message keeps its lines: "3 contracts now within 3 months of their
+  end" holds for both ways in.
+- A database restored from an older backup loses the nights after it; their
+  records are inserted again with the night they come back as their day, so
+  a search may mail them a second time, as the new tender notices of those
+  nights are listed again.
 
 #### Organizations, buyers and segments
 
 The records database holds one row per counted record with its source and
 fiscal year, but no day the record was first seen, no title and no
-reference, and no published file dates a record's first sighting either. So
-these kinds cannot list the records added since the last delivery one by
-one. What the database can say exactly is how many records each source
+reference, and no published file dates a record's first sighting either
+(the radar's lists of new rows date only the contracts ending within 12
+months, the past week's). So these kinds cannot list the records added since
+the last delivery one by one. What the database can say exactly is how many records each source
 holds in each fiscal year for one organization, buyer or segment, and that
 is what is delivered:
 

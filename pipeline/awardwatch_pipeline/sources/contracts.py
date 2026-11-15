@@ -33,6 +33,14 @@ vendor_withheld set; only the count is logged, and the first names are listed
 for the operator in data/out/review/contracts-persons.txt. The buyer is the
 reporting department (buyers.for_owner_org). The buyer_name column holds the
 name of the public servant who bought, so it is never stored.
+
+first_seen is the run date a row's department and reference first appeared
+in the table. The rewrite carries it over by that key (rewrite,
+keep_first_seen): a key the table held keeps its day, NULL included, and a
+key new to the table takes the load's date. A load into an empty table (the
+first load, or a database rebuilt from nothing) gives every row NULL, since
+none of its rows is news; so do the rows stored before the column. The
+expiring-contracts radar reads it (expiring.py first_seen).
 """
 
 from __future__ import annotations
@@ -96,8 +104,10 @@ COLUMNS = (
     "indigenous_business", "indigenous_business_excluding_psib", "intellectual_property",
     "potential_commercial_exploitation", "former_public_servant", "standing_offer_number", "instrument_type",
     "ministers_office", "number_of_bids", "article_6_exceptions", "award_criteria", "socioeconomic_indicator",
-    "reporting_period", "organization_id", "loaded_at",
+    "reporting_period", "organization_id", "loaded_at", "first_seen",
 )
+# The key rewrite carries first_seen over by.
+KEY = ("owner_org", "reference")
 
 
 # ---------------------------------------------------------------------------
@@ -427,14 +437,24 @@ def _record_validators(conn: sqlite3.Connection, spec: WeeklyFile, etag: str | N
 
 
 def rewrite(conn: sqlite3.Connection, table: str, columns: tuple[str, ...], rows: Iterator[tuple],
-            stats: LoadStats) -> None:
+            stats: LoadStats, *, keep_first_seen: tuple[str, ...] = ()) -> None:
     """Replace the table's rows with rows, in batches, inside one transaction; commit only at the end.
 
     A key repeated later in the file replaces the earlier row. Nothing is
     committed when rows raises; the previous rows come back on the rollback.
+
+    keep_first_seen names the key of a table with a first_seen column: each
+    row then takes the first_seen its key had before the rewrite (NULL stays
+    NULL), a key new to the table keeps the day its row carries, and every row
+    of a load into an empty table gets NULL, since none of a first load is news.
     """
     marks = ", ".join("?" * len(columns))
     sql = f"INSERT OR REPLACE INTO {table} ({', '.join(columns)}) VALUES ({marks})"
+    if keep_first_seen:
+        keys = ", ".join(keep_first_seen)
+        conn.execute("DROP TABLE IF EXISTS temp.rewrite_seen")
+        conn.execute(f"CREATE TEMP TABLE rewrite_seen AS SELECT {keys}, first_seen FROM {table}")
+        conn.execute(f"CREATE UNIQUE INDEX temp.rewrite_seen_key ON rewrite_seen ({keys})")
     try:
         conn.execute(f"DELETE FROM {table}")
         batch: list[tuple] = []
@@ -449,11 +469,20 @@ def rewrite(conn: sqlite3.Connection, table: str, columns: tuple[str, ...], rows
             stats.written += len(batch)
         if not stats.written:
             raise LayoutError(f"no {table} rows could be read; the previous rows are kept")
+        if keep_first_seen:
+            if conn.execute("SELECT EXISTS (SELECT 1 FROM temp.rewrite_seen)").fetchone()[0]:
+                match = " AND ".join(f"p.{k} = {table}.{k}" for k in keep_first_seen)
+                conn.execute(f"UPDATE {table} SET first_seen = p.first_seen FROM temp.rewrite_seen p WHERE {match}")
+            else:
+                conn.execute(f"UPDATE {table} SET first_seen = NULL")
         stats.stored = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
         conn.commit()
     except BaseException:
         conn.rollback()
         raise
+    finally:
+        if keep_first_seen:
+            conn.execute("DROP TABLE IF EXISTS temp.rewrite_seen")
 
 
 def finish(conn: sqlite3.Connection, result: StageResult, drops: matching.PersonDrops, *, stamp: str,
@@ -567,6 +596,8 @@ def _rows(conn: sqlite3.Connection, getters: Iterator[Callable[[str], str]], sta
             "reporting_period": text(get("reporting_period")),
             "organization_id": org,
             "loaded_at": stamp,
+            # The day of a key new to the table; rewrite carries the old day over for a key it held.
+            "first_seen": stamp[:10],
         }
         if person or filed:
             # The description and comments may name the vendor too.
@@ -582,7 +613,7 @@ def load_file(conn: sqlite3.Connection, path: Path, *, now: str | None = None,
     stats = LoadStats()
     person_drops = drops if drops is not None else matching.PersonDrops()
     with csv_rows(path, REQUIRED, OPTIONAL, label, stats, partial_tail=partial_tail) as getters:
-        rewrite(conn, "contracts", COLUMNS, _rows(conn, getters, stats, person_drops, stamp), stats)
+        rewrite(conn, "contracts", COLUMNS, _rows(conn, getters, stats, person_drops, stamp), stats, keep_first_seen=KEY)
     log.info("contracts: %d rows read, %d stored, %d withheld, %d skipped", stats.rows, stats.stored,
              stats.withheld, stats.skipped)
     return stats

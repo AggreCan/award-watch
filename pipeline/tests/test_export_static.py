@@ -306,6 +306,14 @@ def test_every_file_passes_the_site_checks(exported):
         rows = [r for n in range(1, meta["pages"] + 1) for r in load(out, f"expiring/{w['window']}/{n}.json")]
         assert len(rows) == meta["rows"] and every(rows, expiring_row)
         assert [r["end"] for r in rows] == sorted(r["end"] for r in rows)
+        # The window's list of new rows (site/src/data.ts loadExpiringNewPage): each a row of the window with
+        # the day its contract was first seen, newest first.
+        assert count(meta["new_pages"]) and count(meta["new_rows"]) and meta["new_rows"] >= meta["new_pages"]
+        fresh = [r for n in range(1, meta["new_pages"] + 1) for r in load(out, f"expiring/{w['window']}/new/{n}.json")]
+        assert len(fresh) == meta["new_rows"] and every(fresh, expiring_row)
+        assert all(s(r["seen"]) and re.match(r"^\d{4}-\d{2}-\d{2}$", r["seen"]) for r in fresh)
+        assert [r["seen"] for r in fresh] == sorted((r["seen"] for r in fresh), reverse=True)
+        assert all({k: v for k, v in r.items() if k != "seen"} in rows for r in fresh)
     for b in buyers:
         assert expiring_part(load(out, f"buyers/{b['id']}.json")["expiring"])
     directories = load(out, "directory/index.json")["directories"]

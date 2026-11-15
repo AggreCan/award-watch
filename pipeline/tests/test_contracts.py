@@ -65,6 +65,8 @@ def test_every_row_is_kept_with_its_fields(conn, fixtures):
         "instrument_type": "A", "ministers_office": "N", "number_of_bids": None, "article_6_exceptions": None,
         "award_criteria": None, "socioeconomic_indicator": None, "reporting_period": "2019-2020-Q4",
         "organization_id": org_id(norm_name("Simzer Design Inc.")), "loaded_at": DAY1,
+        # Loaded into an empty table: the first load, so no row has a day it was first seen as news.
+        "first_seen": None,
     }
     # Lists split on commas; bids as a number; open bidding is competitive.
     listed = rows["C-2020-2021-Q4-00004"]

@@ -21,7 +21,9 @@
 // A tender or radar search's items are the records since the previous
 // delivery's data date, at most SPAN_DAYS_MAX days back (one day for a first
 // daily delivery, seven for a first weekly one), read from the published
-// files. An organization, buyer or segment search reads the records database
+// files; for the radar, the contracts whose end date came inside the window
+// and those first seen while they already ended inside it (expiringItems).
+// An organization, buyer or segment search reads the records database
 // instead (records_deliveries.ts): the sources and fiscal years whose count
 // rose since the counts its previous delivery kept, plus, for a segment, the
 // segment's new tender notices from the files. Until that database is ready
@@ -89,7 +91,8 @@
 import { addDays } from "../../public/closing.js";
 import { clockAt, closingPassed, type Clock } from "../closing";
 import {
-  type ExpiringRow, type ExpiringWindow, type TenderRow, isExpiringWindow, loadExpiringPage, loadExpiringWindow, loadNewTenders, loadStats,
+  type ExpiringRow, type ExpiringWindow, type ExpiringWindowIndex, type TenderRow, isExpiringWindow, loadExpiringNewPage, loadExpiringPage,
+  loadExpiringWindow, loadNewTenders, loadStats, newRowPages,
 } from "../data";
 import { type Env, type MailCeiling, mailCeiling } from "../env";
 import { pick, segmentShort, type Lang } from "../i18n";
@@ -529,7 +532,28 @@ export function byAccount<T extends { user_id: string }>(rows: readonly T[]): T[
 
 export function publishedFiles(env: Env) {
   const days = new Map<string, readonly TenderRow[]>();
+  const indexes = new Map<ExpiringWindow, ExpiringWindowIndex>();
   const pages = new Map<string, readonly ExpiringRow[]>();
+  const windowIndex = async (window: ExpiringWindow): Promise<ExpiringWindowIndex> => {
+    let index = indexes.get(window);
+    if (!index) {
+      const loaded = await loadExpiringWindow(env, window);
+      if (!loaded) throw new Fault(`expiring/${window}/index.json could not be read; the next hour tries again`);
+      index = loaded;
+      indexes.set(window, index);
+    }
+    return index;
+  };
+  const page = async (key: string, load: () => Promise<ExpiringRow[] | null>): Promise<readonly ExpiringRow[]> => {
+    let rows = pages.get(key);
+    if (!rows) {
+      const loaded = await load();
+      if (!loaded) throw new Fault(`expiring/${key}.json could not be read; the next hour tries again`);
+      rows = loaded;
+      pages.set(key, rows);
+    }
+    return rows;
+  };
   return {
     // Every day of the last 30 has a file (an empty list on a day with no new
     // notice), so a day that does not read is a fault, not a quiet day.
@@ -547,21 +571,35 @@ export function publishedFiles(env: Env) {
     // so they are read from the last, and reading stops at the first page
     // that reaches back to `after`: every page before it ends earlier still.
     async endingAfter(window: ExpiringWindow, after: string): Promise<ExpiringRow[]> {
-      const index = await loadExpiringWindow(env, window);
-      if (!index) throw new Fault(`expiring/${window}/index.json could not be read; the next hour tries again`);
+      const index = await windowIndex(window);
       const out: ExpiringRow[] = [];
       for (let n = index.pages; n >= 1; n--) {
-        const key = `${window}/${n}`;
-        let rows = pages.get(key);
-        if (!rows) {
-          const loaded = await loadExpiringPage(env, window, n);
-          if (!loaded) throw new Fault(`expiring/${key}.json could not be read; the next hour tries again`);
-          rows = loaded;
-          pages.set(key, rows);
-        }
+        const rows = await page(`${window}/${n}`, () => loadExpiringPage(env, window, n));
         let reachesBack = rows.length === 0;
         for (const r of rows) {
           if (r.end.slice(0, 10) > after) out.push(r);
+          else reachesBack = true;
+        }
+        if (reachesBack) break;
+      }
+      return out;
+    },
+    // A window's rows whose contract the site first saw after `after`, from
+    // its list of new rows (expiring/<window>/new/<n>.json). That list holds
+    // the rows first seen in the SPAN_DAYS_MAX days to the data date, newest
+    // day first, so it is read from its first page and reading stops at the
+    // first page that reaches back to `after`: a delivery the day after the
+    // previous one reads the pages holding the data date's rows and one more
+    // at most. A window index without the list (written before it) gives none.
+    async seenAfter(window: ExpiringWindow, after: string): Promise<ExpiringRow[]> {
+      const index = await windowIndex(window);
+      const count = newRowPages(index) ?? 0;
+      const out: ExpiringRow[] = [];
+      for (let n = 1; n <= count; n++) {
+        const rows = await page(`${window}/new/${n}`, () => loadExpiringNewPage(env, window, n));
+        let reachesBack = rows.length === 0;
+        for (const r of rows) {
+          if (r.seen! > after) out.push(r);
           else reachesBack = true;
         }
         if (reachesBack) break;
@@ -599,20 +637,29 @@ export async function tenderItems(files: Files, params: string, start: string, d
 
 const KIND_ORDER: Record<ExpiringRow["kind"], number> = { award: 0, history: 1, contract: 2 };
 
-// The saved window's rows that entered it since `start`: inside the window
-// at the data date (end at most its length past it) and outside at `start`
-// (end more than its length past that), with the filters the radar's form
-// saved. Newest end first.
+// The saved window's rows that entered it since `start`, with the filters
+// the radar's form saved: each row inside the window at the data date (end
+// from the data date to the window's length past it) that was outside it at
+// `start` (end more than the window's length past that), or whose contract
+// the site first saw after `start` and by the data date (a new award notice
+// or history record, or a published contract: the window's list of new
+// rows). A row that entered both ways is listed once. Newest end first.
 export async function expiringItems(files: Files, window: ExpiringWindow, params: string, start: string, dataDate: string): Promise<ExpiringRow[]> {
   const q = readExpiringQuery(new URL(params, BASE));
   const days = WINDOW_DAYS[window];
   const outsideBefore = addDays(start, days);
   const insideNow = addDays(dataDate, days);
-  const rows = (await files.endingAfter(window, outsideBefore)).filter((r) => {
+  const inside = (r: ExpiringRow) => {
     const end = r.end.slice(0, 10);
     return end <= insideNow && end >= dataDate;
-  });
-  return filterExpiring(rows, q).sort((a, b) => {
+  };
+  const entered = new Map<string, ExpiringRow>();
+  for (const r of await files.endingAfter(window, outsideBefore)) if (inside(r)) entered.set(`${r.kind}:${r.reference}`, r);
+  for (const r of await files.seenAfter(window, start)) {
+    const key = `${r.kind}:${r.reference}`;
+    if (!entered.has(key) && r.seen! <= dataDate && inside(r)) entered.set(key, r);
+  }
+  return filterExpiring([...entered.values()], q).sort((a, b) => {
     const x = a.end.slice(0, 10);
     const y = b.end.slice(0, 10);
     if (x !== y) return x < y ? 1 : -1;

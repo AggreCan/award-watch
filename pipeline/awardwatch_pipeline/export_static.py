@@ -120,7 +120,14 @@ change there. Output tree (under data/out/static):
   expiring/index.json           the expiring-contracts radar (expiring.py): the three windows' counts and
                                 totals, the top buyers, the segments
   expiring/<window>/index.json, expiring/<window>/<n>.json   a window's rows, soonest end first, 500 a page
-                                (buyer files and profiles carry their own first 25 as "expiring")
+                                (buyer files and profiles carry their own first 25 as "expiring"); the index
+                                also gives new_pages and new_rows, the window's list of new rows below
+  expiring/<window>/new/<n>.json   the window's rows whose contract the site first saw in the
+                                expiring.NEW_SPAN_DAYS (7) to the data date, each the window's row with seen
+                                beside it ("2026-11-14", expiring.py first_seen), newest day first, 500 a page,
+                                and no file when no row was first seen in those days. A saved search of the
+                                radar reads it for the contracts that entered its window by being published
+                                (site/src/account/deliveries.ts)
   feeds/...                     Atom feeds (feeds.py)
   instruments/index.json        the standing offers and supply arrangements with an active holder
                                 (sosa_export.py, which also names what profiles, segment and buyer files and
@@ -610,6 +617,9 @@ class Model:
         self.flags = value_checks.flagged(conn)
         self.loaded = sources_loaded(conn)
         self._expiring: list[tuple[dict, float | None]] | None = None
+        # Beside each of those rows, the day the site first saw its contract when that is news (expiring.py
+        # first_seen), else None.
+        self.expiring_seen: list[str | None] = []
         self._expiring_by: dict[str, dict[str, list[tuple[dict, float | None]]]] = {}
         _materialize(conn, self.as_of)
         # The buyers the export lists (export.LISTED_BUYER): a page, a row in
@@ -644,8 +654,11 @@ class Model:
     def expiring(self) -> list[tuple[dict, float | None]]:
         """The radar's rows as the site lists them, soonest end first, each with the value its totals add (CAD only)."""
         if self._expiring is None:
-            self._expiring = [item for r in self.conn.execute("SELECT * FROM expiring_contracts ORDER BY end, source_key")
-                              if (item := expiring_row(self, r)) is not None]
+            self._expiring, self.expiring_seen = [], []
+            for r in self.conn.execute("SELECT * FROM expiring_contracts ORDER BY end, source_key"):
+                if (item := expiring_row(self, r)) is not None:
+                    self._expiring.append(item)
+                    self.expiring_seen.append(_day(r["first_seen"]))
         return self._expiring
 
     def expiring_part(self, column: str, key: str) -> dict:
@@ -2171,13 +2184,21 @@ def write_categories(m: Model, out: Path, open_rows: list[dict]) -> dict[str, in
 
 
 def write_expiring(m: Model, out: Path) -> dict[str, int]:
-    """expiring/index.json and each window's pages (expiring.py builds the rows).
+    """expiring/index.json, each window's pages, and each window's list of new rows (expiring.py builds the rows).
 
     Totals add each row's counted value, CAD only, once: the radar's duplicate
     rule leaves one source per contract, which is why these totals may add
     rows from different sources (the stated exception to CLAUDE.md rule 5).
+
+    A window's list of new rows (expiring/<window>/new/<n>.json) holds its
+    rows whose contract the site first saw in the expiring.NEW_SPAN_DAYS to
+    the data date, each with seen, that day, newest day first and then as the
+    window orders them, EXPIRING_PAGE to a page; the window's index gives
+    new_pages and new_rows. A saved search of the radar reads it for the
+    contracts that entered its window by being published.
     """
     items = m.expiring()
+    first_new = (m.today - timedelta(days=expiring.NEW_SPAN_DAYS - 1)).isoformat()
     windows = []
     counts: dict[str, int] = {"expiring_rows": len(items)}
     for name, days in expiring.WINDOWS:
@@ -2186,10 +2207,19 @@ def write_expiring(m: Model, out: Path) -> dict[str, int]:
         pages = [chosen[i:i + EXPIRING_PAGE] for i in range(0, len(chosen), EXPIRING_PAGE)]
         for n, page in enumerate(pages, start=1):
             _dump(out / "expiring" / name / f"{n}.json", [r for r, _ in page])
+        # The sort is stable, so rows first seen the same day keep the window's order.
+        fresh = sorted(({**row, "seen": seen} for (row, _), seen in zip(items, m.expiring_seen)
+                        if row["days_left"] <= days and seen and first_new <= seen <= m.as_of),
+                       key=lambda r: r["seen"], reverse=True)
+        new_pages = [fresh[i:i + EXPIRING_PAGE] for i in range(0, len(fresh), EXPIRING_PAGE)]
+        for n, page in enumerate(new_pages, start=1):
+            _dump(out / "expiring" / name / "new" / f"{n}.json", page)
         _dump(out / "expiring" / name / "index.json", {"window": name, "pages": len(pages), "rows": len(chosen),
-                                                        "total": total, "n_no_value": _no_value(chosen)})
+                                                        "total": total, "n_no_value": _no_value(chosen),
+                                                        "new_pages": len(new_pages), "new_rows": len(fresh)})
         windows.append({"window": name, "n": len(chosen), "total": total, "n_no_value": _no_value(chosen)})
         counts[f"expiring_{name}"] = len(chosen)
+        counts[f"expiring_{name}_new"] = len(fresh)
     by_buyer: dict[str | None, list[tuple[dict, float | None]]] = defaultdict(list)
     by_segment: dict[str, list[tuple[dict, float | None]]] = defaultdict(list)
     for row, counted in items:

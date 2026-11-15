@@ -835,6 +835,10 @@ export interface ExpiringRow extends DerivedPlaces {
   provinces: string[];
   // The published contracts' Indigenous business mark; read through indigenousMark.
   indigenous?: unknown;
+  // The day the site first saw the contract (pipeline expiring.py
+  // first_seen), on the rows of a window's list of new rows
+  // (expiring/<window>/new/<n>.json) only; a window's own pages never carry it.
+  seen?: string;
 }
 
 // The mark a radar row carries when its published contract reports a
@@ -889,12 +893,24 @@ export interface ExpiringIndex {
 }
 
 // expiring/<window>/index.json: how many pages of rows the window has (500
-// to a page, soonest end first), how many rows in all and their value.
+// to a page, soonest end first), how many rows in all and their value; and
+// how many pages and rows its list of new rows has (expiring/<window>/new/,
+// read through newRowPages), absent from an index written before the list.
 export interface ExpiringWindowIndex {
   window: ExpiringWindow;
   pages: number;
   rows: number;
   total: number | null;
+  new_pages?: unknown;
+  new_rows?: unknown;
+}
+
+// The pages of a window's list of new rows, or null when the index has no
+// list (written before it) or a count that does not read: the saved searches
+// then send what they sent before the list.
+export function newRowPages(index: ExpiringWindowIndex): number | null {
+  const { new_pages: pages, new_rows: rows } = index;
+  return isCount(pages) && isCount(rows) && rows >= pages && pages <= 100_000 ? pages : null;
 }
 
 // What a buyer file and a profile carry of the radar: the number of rows,
@@ -1619,7 +1635,9 @@ export const isExpiringRow = (r: unknown): r is ExpiringRow => isObj(r) && isExp
   isCompetitive(r.competitive) && isStrOrNull(r.method_en) && isStrOrNull(r.method_fr) && isStrOrNull(r.instrument_en) &&
   isStrOrNull(r.instrument_fr) && isCount(r.n_amendments) && isNumOrNull(r.value_growth) &&
   optional(r.tender_reference, (x) => x === null || isRef(x)) && isStrList(r.segments) && isStrList(r.provinces) &&
-  isDerivedPlaces(r);
+  isDerivedPlaces(r) && optional(r.seen, isSeenDay);
+
+const isSeenDay = (v: unknown): v is string => isStr(v) && DAY_RE.test(v);
 
 // The part of a buyer file or a profile: never more rows than it counts.
 const isExpiringPart = (v: unknown): v is ExpiringPart => isObj(v) && isCount(v.n) && isNumOrNull(v.total) &&
@@ -1652,6 +1670,16 @@ export async function loadExpiringPage(env: Env, window: string, n: number): Pro
   const v = await loadJson<unknown>(env, `expiring/${window}/${n}.json`);
   const rows = isObj(v) ? v.rows : v;
   return checkOnce(rows, "expiring", (r) => isListOf(r, isExpiringRow)) ? (rows as ExpiringRow[]) : null;
+}
+
+// One page of a window's list of new rows (expiring/<window>/new/<n>.json,
+// newest first-seen day first): every row a window row with its day.
+export async function loadExpiringNewPage(env: Env, window: string, n: number): Promise<ExpiringRow[] | null> {
+  if (!isExpiringWindow(window) || !Number.isInteger(n) || n < 1 || n > 100_000) return null;
+  const rows = await loadJson<unknown>(env, `expiring/${window}/new/${n}.json`);
+  return checkOnce(rows, "expiring_new", (r) => isListOf(r, (x) => isExpiringRow(x) && isSeenDay(x.seen)))
+    ? (rows as ExpiringRow[])
+    : null;
 }
 
 // -- the rail ---------------------------------------------------------------------

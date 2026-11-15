@@ -54,6 +54,26 @@ CLAUDE.md "Expiring-contracts radar" is the rule; this module follows it:
 * entered_3m is the data date on which a row first came within FEED_DAYS of
   its end, carried over from the previous build while the row stays in that
   window, so the feed lists each contract once, on the night it entered.
+* first_seen is the day the site first saw the contract, for a saved search
+  of the radar, which mails the contracts first seen since its last delivery
+  that already end inside its window beside those whose end date came inside
+  it (docs/accounts.md, What each kind delivers). A record's own day is the
+  earliest first_seen of its versions (award notices, contract history) or of
+  its group's rows (published contracts, contracts.first_seen, none while a
+  row of the group has none). It is news only when it is after the night its
+  table was first loaded, which is the table's earliest first_seen (that night
+  saw every record of the files at once); a published contract read on its
+  table's first load has none. The row's day is the earliest of its record's
+  and of the records the duplicate rule dropped against it, and none when one
+  of them is not news, since the site then knew the contract already. Last,
+  the day must be after SEEN_FROM_KEY's, the day the radar began keeping it:
+  set on the first build that has the field and again on any build whose
+  previous table was empty, so the night the field first appears and a night
+  the database is rebuilt from nothing list nothing as new. A build in which
+  more than NEW_SHARE_MAX of a window's rows, and more than NEW_FLOOR, would
+  count as first seen in the NEW_SPAN_DAYS to the data date reads as records
+  loaded again by some other way: no row keeps a day, the day the radar began
+  moves to the build's, and the run log says so.
 
 Windows and totals are the export's (export_static.write_expiring): the rows
 are stored with their end date, and days_left is counted again from the
@@ -72,7 +92,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from . import config, organizations, places
-from .db import log_run, now_iso
+from .db import get_meta, log_run, now_iso, set_meta
 from .normalize import indigenous_mark
 from .sources.buyers import public_spelling
 
@@ -80,6 +100,18 @@ log = logging.getLogger(__name__)
 
 HORIZON_DAYS = 365
 FEED_DAYS = 91
+# The days to the data date, the data date included, whose first-seen rows a
+# window lists as new (export_static, expiring/<window>/new/<n>.json): a saved
+# search's delivery reaches back as far, at most (site/src/account/deliveries.ts
+# SPAN_DAYS_MAX, which site/test/recs-radar.test.ts holds equal to this).
+NEW_SPAN_DAYS = 7
+# The meta key holding the day the radar began keeping first_seen; a day on or
+# before it is never news.
+SEEN_FROM_KEY = "expiring_first_seen_from"
+# Past this share of a window's rows, and this many rows, first seen in
+# NEW_SPAN_DAYS is taken for records loaded again rather than a week's news.
+NEW_SHARE_MAX = 0.5
+NEW_FLOOR = 500
 # The windows the site shows, cumulative, in days from the data date.
 WINDOWS = (("3m", 91), ("6m", 182), ("12m", 365))
 END_DAYS = 3
@@ -101,7 +133,7 @@ COLUMNS = ("source_key", "kind", "reference", "title_en", "title_fr", "organizat
            "competitive", "method_en", "method_fr", "instrument_en", "instrument_fr", "n_amendments", "value_growth",
            "contract_number", "tender_reference", "segments", "provinces", "provinces_derived", "provinces_from",
            "entered_3m", "client_buyer_id", "client_buyer_name", "client_buyer_name_fr", "value_flag", "indigenous",
-           "computed_at")
+           "first_seen", "computed_at")
 REVIEW_FILE = "expiring-duplicates.txt"
 
 
@@ -117,6 +149,8 @@ class Candidate:
     numbers: tuple[str, ...]
     value: float | None
     client: tuple[str | None, str | None, str | None] = (None, None, None)   # id, English name, French name
+    # The record's own first-seen day: its versions' earliest, or its group's earliest while every row has one.
+    sight: str | None = None
 
 
 @dataclass(frozen=True)
@@ -218,6 +252,7 @@ def notice_candidates(conn: sqlite3.Connection, kind: str, names: _Names, first:
         f"(SELECT COUNT(*) FROM {table} z WHERE z.reference = n.reference) AS versions, "
         f"(SELECT CASE WHEN z.total_value > 0 THEN z.total_value ELSE z.amount END FROM {table} z "
         "WHERE z.reference = n.reference ORDER BY z.amendment LIMIT 1) AS original, "
+        f"(SELECT MIN(z.first_seen) FROM {table} z WHERE z.reference = n.reference) AS sight, "
         f"(SELECT group_concat(c.unspsc, ' ') FROM {codes} c WHERE c.reference = n.reference "
         "AND c.amendment = n.amendment) AS codes "
         "FROM newest n WHERE substr(n.\"end\", 1, 10) BETWEEN ? AND ? AND COALESCE(n.status, '') != 'cancelled' "
@@ -260,8 +295,14 @@ def notice_candidates(conn: sqlite3.Connection, kind: str, names: _Names, first:
         else:
             client = names.end_user(r["end_users_en"], r["end_users_fr"])
         out.append(Candidate(kind, f"{kind}:{r['reference']}", r["reference"], end, row, org, buyers, numbers, value,
-                             client))
+                             client, _day_text(r["sight"])))
     return out
+
+
+def _day_text(value: object) -> str | None:
+    """The date part of a stored day or time, or None."""
+    day = _day(value)
+    return day.isoformat() if day else None
 
 
 def _first_raw(text: object) -> str | None:
@@ -297,12 +338,14 @@ def contract_candidates(conn: sqlite3.Connection, names: _Names, first: str, las
         "FIRST_VALUE(COALESCE(original_value, value)) OVER (PARTITION BY owner_org, gk "
         "ORDER BY contract_date, reference) AS original, "
         "MIN(CASE WHEN instrument_type != 'A' THEN instrument_type END) OVER (PARTITION BY owner_org, gk) AS instrument, "
+        "MIN(first_seen) OVER (PARTITION BY owner_org, gk) AS seen_min, "
+        "COUNT(first_seen) OVER (PARTITION BY owner_org, gk) AS seen_rows, "
         f"{_newest_stated('indigenous_business')} AS set_aside, "
         f"{_newest_stated('indigenous_business_excluding_psib')} AS outside_psib "
         "FROM g) "
         "SELECT owner_org, reference, procurement_id, vendor_withheld, organization_id, buyer_id, period_start, "
         "substr(delivery_date, 1, 10) AS end_day, competitive, description_en, description_fr, versions, group_value, "
-        "original, instrument, land_claims, set_aside, outside_psib FROM r WHERE rn = 1 "
+        "original, instrument, land_claims, set_aside, outside_psib, seen_min, seen_rows FROM r WHERE rn = 1 "
         "AND substr(delivery_date, 1, 10) BETWEEN ? AND ? ORDER BY end_day, owner_org, reference"
     )
     out: list[Candidate] = []
@@ -336,8 +379,11 @@ def contract_candidates(conn: sqlite3.Connection, names: _Names, first: str, las
             "indigenous": None if withheld else indigenous_mark(r["set_aside"], r["outside_psib"]),
         }
         buyers = frozenset([r["buyer_id"]]) if r["buyer_id"] else frozenset()
+        # A row of the group with no day (stored before the column, or read on the table's first load) leaves
+        # the contract with none: the site held it before.
+        sight = _day_text(r["seen_min"]) if r["seen_rows"] == r["versions"] else None
         out.append(Candidate("contract", f"contract:{reference}", reference, end, row, org, buyers, numbers, value,
-                             names.client(r["buyer_id"])))
+                             names.client(r["buyer_id"]), sight))
     return out
 
 
@@ -447,6 +493,57 @@ def write_review(pairs: list[Pair], path: Path, *, stamp: str) -> str | None:
     return f"{len(pairs)} radar rows dropped as duplicates; the pairs are listed in {shown}"
 
 
+# The record tables whose first night is their earliest first_seen; a published contract read on its table's
+# first load has no day at all (sources/contracts.py rewrite).
+FIRST_LOAD_TABLES = {"award": "awards", "history": "contract_history"}
+
+
+def first_loads(conn: sqlite3.Connection) -> dict[str, str | None]:
+    """The night each of FIRST_LOAD_TABLES was first loaded: its earliest first_seen, since that night saw every
+    record of the files at once. None for an empty table."""
+    return {kind: _day_text(conn.execute(f"SELECT MIN(first_seen) FROM {table}").fetchone()[0])
+            for kind, table in FIRST_LOAD_TABLES.items()}
+
+
+def news_day(c: Candidate, loads: dict[str, str | None]) -> str | None:
+    """A record's first-seen day when it says the record is news: None when it has none, or when it is its table's
+    first night."""
+    if c.sight is None:
+        return None
+    if c.kind in loads:
+        load = loads[c.kind]
+        if load is None or c.sight <= load:
+            return None
+    return c.sight
+
+
+def first_seen(kept: list[Candidate], pairs: list[Pair], loads: dict[str, str | None],
+               seen_from: str) -> dict[str, str | None]:
+    """Each kept row's first_seen: the earliest news day of its record and of the records dropped against it, when
+    every one of them has one and that day is after seen_from; else None."""
+    twins: dict[str, list[Candidate]] = defaultdict(list)
+    for p in pairs:
+        twins[p.kept.source_key].append(p.dropped)
+    out: dict[str, str | None] = {}
+    for c in kept:
+        days = [news_day(x, loads) for x in (c, *twins.get(c.source_key, []))]
+        earliest = None if None in days else min(d for d in days if d)
+        out[c.source_key] = earliest if earliest is not None and earliest > seen_from else None
+    return out
+
+
+def reload_window(kept: list[Candidate], seen: dict[str, str | None], day: date) -> tuple[str, int, int] | None:
+    """The first window in which the rows first seen in the NEW_SPAN_DAYS to day pass NEW_SHARE_MAX of its rows
+    and NEW_FLOOR: (the window, those rows, the window's rows); None when no window does."""
+    recent = (day - timedelta(days=NEW_SPAN_DAYS - 1)).isoformat()
+    for name, days in WINDOWS:
+        inside = [c for c in kept if (c.end - day).days <= days]
+        news = sum(1 for c in inside if (s := seen[c.source_key]) is not None and s >= recent)
+        if news > NEW_FLOOR and news > NEW_SHARE_MAX * len(inside):
+            return name, news, len(inside)
+    return None
+
+
 def compute(conn: sqlite3.Connection, *, today: date | None = None, now: str | None = None,
             review_dir: Path | None = None) -> dict[str, int]:
     """Rebuild expiring_contracts; returns the counts."""
@@ -468,6 +565,22 @@ def _build(conn: sqlite3.Connection, *, today: date | None, now: str | None,
     client = clients(kept, pairs)
     marks = indigenous_marks(kept, pairs)
     entered = dict(conn.execute("SELECT source_key, entered_3m FROM expiring_contracts WHERE entered_3m IS NOT NULL"))
+    # The day the radar began keeping first_seen: tonight on the first build that has the field, and again when
+    # the previous table is empty (a database rebuilt from nothing), so neither night lists anything as new.
+    seen_from = get_meta(conn, SEEN_FROM_KEY)
+    if not seen_from or not conn.execute("SELECT EXISTS (SELECT 1 FROM expiring_contracts)").fetchone()[0]:
+        seen_from = first
+    seen = first_seen(kept, pairs, first_loads(conn), seen_from)
+    notices: list[str] = []
+    held = 0
+    tripped = reload_window(kept, seen, day)
+    if tripped:
+        name, n, total = tripped
+        held = sum(1 for v in seen.values() if v is not None)
+        seen, seen_from = dict.fromkeys(seen), first
+        notices.append(f"the radar's first-seen days were held back: {n} of the {total} rows of the {name} window "
+                       f"counted as first seen in the {NEW_SPAN_DAYS} days to {first}, which reads as records loaded "
+                       "again; none is mailed as new, and the days count again from the next night")
     rows = []
     new_in_window = 0
     for c in sorted(kept, key=lambda c: (c.end, KINDS.index(c.kind), c.source_key)):
@@ -478,7 +591,7 @@ def _build(conn: sqlite3.Connection, *, today: date | None, now: str | None,
         cid, cen, cfr = client[c.source_key]
         row.update(source_key=c.source_key, entered_3m=(entered.get(c.source_key) or first) if in_window else None,
                    client_buyer_id=cid, client_buyer_name=cen, client_buyer_name_fr=cfr,
-                   indigenous=marks[c.source_key], computed_at=stamp)
+                   indigenous=marks[c.source_key], first_seen=seen[c.source_key], computed_at=stamp)
         rows.append(tuple(row[k] for k in COLUMNS))
     # The pairs the duplicate rule collapsed, kept row first: the holder's
     # record (lines.py) counts a kept row in each source that holds it.
@@ -489,17 +602,19 @@ def _build(conn: sqlite3.Connection, *, today: date | None, now: str | None,
                          rows)
         conn.execute("DELETE FROM expiring_twins")
         conn.executemany("INSERT OR IGNORE INTO expiring_twins (source_key, twin_key, trigger) VALUES (?, ?, ?)", twins)
+        set_meta(conn, SEEN_FROM_KEY, seen_from)
         conn.commit()
     except BaseException:
         conn.rollback()
         raise
-    notice = write_review(pairs, (review_dir or config.OUT_DIR / "review") / REVIEW_FILE, stamp=stamp)
+    review = write_review(pairs, (review_dir or config.OUT_DIR / "review") / REVIEW_FILE, stamp=stamp)
     counts = {f"candidates_{k}": len(v) for k, v in by_kind.items()}
     counts.update({"kept": len(kept), "dropped_number": dropped["number"], "dropped_match": dropped["match"],
-                   "entered_3m": new_in_window})
+                   "entered_3m": new_in_window, "first_seen_today": sum(1 for v in seen.values() if v == first),
+                   "first_seen_held": held})
     for name, days in WINDOWS:
         counts[f"window_{name}"] = sum(1 for c in kept if (c.end - day).days <= days)
-    return counts, notice
+    return counts, " | ".join([*notices, *([review] if review else [])]) or None
 
 
 def run(conn: sqlite3.Connection, *, today: date | None = None, now: str | None = None,

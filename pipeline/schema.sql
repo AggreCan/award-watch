@@ -520,6 +520,10 @@ CREATE TABLE IF NOT EXISTS contracts (
   reporting_period TEXT,                         -- 2025-2026-Q2
   organization_id TEXT REFERENCES organizations(id),
   loaded_at TEXT NOT NULL,
+  first_seen TEXT,                               -- the run date this department and reference first appeared in
+                                                 -- the table, carried over each time it is rewritten; NULL for a
+                                                 -- row stored before the column and for every row of a load into
+                                                 -- an empty table (sources/contracts.py rewrite)
   PRIMARY KEY (owner_org, reference)
 );
 CREATE INDEX IF NOT EXISTS idx_contracts_org ON contracts(organization_id, contract_date);
@@ -841,9 +845,14 @@ CREATE TABLE IF NOT EXISTS expiring_contracts (
   client_buyer_name_fr TEXT,
   value_flag TEXT,                               -- 'check' when value_flags lists the contract (value_checks.py)
   computed_at TEXT NOT NULL,
-  indigenous TEXT                                -- the published contracts' Indigenous business mark: MS | VS (a set-aside
+  indigenous TEXT,                               -- the published contracts' Indigenous business mark: MS | VS (a set-aside
                                                  -- under the Procurement Strategy for Indigenous Business) | IB (an
                                                  -- Indigenous business outside one) | NULL (expiring.py)
+  first_seen TEXT                                -- the day the site first saw the contract, the earliest of the row's
+                                                 -- record and the records dropped against it, when that day is news:
+                                                 -- NULL when one of them has none, was read on its table's first
+                                                 -- load, or was seen by the day the radar began keeping it
+                                                 -- (expiring.py, meta expiring_first_seen_from)
 );
 CREATE INDEX IF NOT EXISTS idx_expiring_end ON expiring_contracts(end);
 
