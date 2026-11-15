@@ -132,7 +132,7 @@ button of each tease panel. The side menu is unchanged.
 
 | Page | Markup |
 |---|---|
-| Home | `Organization`: Allwater Software Inc., publisher, with the site's mark as logo and its British Columbia address region; `WebSite` with a `SearchAction` on the site search |
+| Home | `Organization`: Award Watch, publisher, with the site's mark as logo and its British Columbia address region; `WebSite` with a `SearchAction` on the site search |
 | Data | one `Dataset` for the whole site, with a `Dataset` part for each downloadable set (open tenders, award notices, PSPC contract history, published contracts and grants by year, organizations, buyers, contracts ending within 3 months), each with its files, its licence (Open Government Licence, Canada) and the government dataset it is read from |
 | Pro | `Product` with one `Offer` a billing period, in Canadian dollars, taxes not included (only while the checkout is configured); `FAQPage` with the page's questions word for word |
 | Record pages | `BreadcrumbList` (tenders, awards, PSPC history, published contracts, organizations, buyers, segments, directory pages) |
@@ -250,11 +250,12 @@ So, since 2026-11-15:
   organization"), since that page is the publisher's address in the markup
   and a likely result for the name with "Canada".
 
-The publisher's markup is unchanged: `Organization` is Allwater Software
-Inc., with no `sameAs`. Google's page on that markup suggests the
-organization's `name` be the site's name with the registered name as
-`legalName`; whether "Award Watch" is a name the corporation goes by is the
-operator's to say, so it is left as it was.
+The publisher's markup names the site itself, since 2026-11-15:
+`Organization` is Award Watch, with no `legalName` and no `sameAs`. Google's
+page on that markup asks for the name the organization goes by, and every
+page of the site goes by this one. The corporation that publishes the site
+is named in the text of the About, Terms and plan pages, where a reader
+looks for it, and nowhere in the markup.
 
 What the markup cannot do: move the site above the other for the two words
 alone, or make a new domain rank for the descriptive searches of the table

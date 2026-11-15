@@ -594,7 +594,7 @@ describe("search framing", () => {
         expect(article.dateModified).toBe(g.checked);
         expect(article.inLanguage).toBe(lang === "fr" ? "fr-CA" : "en-CA");
         expect(article.url).toBe(lang === "fr" ? `${O}${pathOf(g)}?lang=fr` : `${O}${pathOf(g)}`);
-        expect(article.publisher.name).toBe("Allwater Software Inc.");
+        expect(article.publisher.name).toBe("Award Watch");
         expect(JSON.stringify(blocks)).not.toContain(EM_DASH);
       }
     }

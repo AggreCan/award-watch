@@ -160,10 +160,13 @@ describe("page metadata", () => {
     }
   });
 
-  it("the home page names Allwater Software Inc. as publisher with the site's logo, never a person", async () => {
+  it("the home page names the site itself as publisher with its logo: no person, no legal name", async () => {
     const [graph] = jsonLd(await headOf("/"));
     const org = graph["@graph"].find((n: any) => n["@type"] === "Organization");
-    expect(org.name).toBe("Allwater Software Inc.");
+    expect(org.name).toBe("Award Watch");
+    expect(org.legalName).toBeUndefined();
+    // The corporation is named in the pages' text, never in the markup.
+    expect(JSON.stringify(graph)).not.toContain("Allwater");
     expect(org.logo).toEqual({ "@type": "ImageObject", url: `${O}/brand/mark-512.png`, width: 512, height: 512 });
     expect(org.sameAs).toBeUndefined();
     const site = graph["@graph"].find((n: any) => n["@type"] === "WebSite");
@@ -194,7 +197,7 @@ describe("page metadata", () => {
       expect(part.license).toBe(dataset.license);
       for (const d of part.distribution) expect(d.contentUrl).toBe(`${O}/downloads/${d.name}`);
     }
-    expect(dataset.creator.name).toBe("Allwater Software Inc.");
+    expect(dataset.creator.name).toBe("Award Watch");
   });
 
   it("breadcrumbs carry a URL on every crumb but the last", () => {

@@ -337,11 +337,15 @@ export function absoluteUrl(path: string): string {
   return `${SITE_ORIGIN}${path}`;
 }
 
-/// The publisher: Allwater Software Inc., the British Columbia corporation the
-// About and Terms pages name, never a person. The logo is the site's mark
+// The publisher in the markup is the site under its own name: never a
+// person, and since 2026-11-15 no other name either. A search engine reads
+// an organization's name as the name the site goes by, and every page goes
+// by this one. The corporation that publishes the site is named where a
+// reader looks for it, in the text of the About, Terms and plan pages, and
+// nowhere in the markup. The logo is the site's mark
 // (public/brand/mark-512.png), which Google takes for an organization's logo
 // at 112 px square or more.
-export const PUBLISHER_NAME = "Allwater Software Inc.";
+export const PUBLISHER_NAME = SITE_NAME;
 export const LOGO_PATH = "/brand/mark-512.png";
 export const LOGO_SIZE = 512;
 // The card every shared link shows (public/brand/og-home.png): the wordmark,

@@ -131,11 +131,11 @@ describe("structured data", () => {
     }
   });
 
-  it("names the site with its search and Allwater Software Inc. as publisher on the home page", async () => {
+  it("names the site with its search, and the site itself as publisher, on the home page", async () => {
     for (const lang of ["en", "fr"] as const) {
       const [graph] = jsonLd(await html(lang === "fr" ? "/?lang=fr" : "/"));
       const org = graph["@graph"].find((n: any) => n["@type"] === "Organization");
-      expect(org.name).toBe("Allwater Software Inc.");
+      expect(org.name).toBe("Award Watch");
       expect(org.address).toEqual({ "@type": "PostalAddress", addressRegion: "BC", addressCountry: "CA" });
       expect(org.url).toBe(lang === "fr" ? `${O}/about?lang=fr` : `${O}/about`);
       const site = graph["@graph"].find((n: any) => n["@type"] === "WebSite");
@@ -248,7 +248,7 @@ describe("the Pro page", () => {
     ]);
     for (const o of product.offers) {
       expect(o.priceSpecification.valueAddedTaxIncluded).toBe(false);
-      expect(o.seller.name).toBe("Allwater Software Inc.");
+      expect(o.seller.name).toBe("Award Watch");
     }
     // The questions, word for word as the page shows them.
     expect(faq["@type"]).toBe("FAQPage");
