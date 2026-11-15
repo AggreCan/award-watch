@@ -178,6 +178,17 @@ data, where a square logo is wanted.
 In all, about 3.4 million addresses: 2.6 million for the published
 contracts and 0.8 million for everything else, each language counted.
 
+**Links into the guides.** The record pages (a tender notice, an award
+notice, a contract history record, a published contract, a standing offer)
+and the tender, award and radar lists end on one line, "Guides:", that links
+one to three guides chosen by what the page shows: the notice type, the
+competitive flag, a set-aside, an end date still to come. Most readers from
+a search engine land on a record page; before the line, a guide was linked
+only from the index, the rail, the footer and other guides. The line names
+each guide by its own title, never links a guide the page already links,
+and adds no query and no file read to the crawled pages. The guides page
+of the docs holds the rules.
+
 **Home page.** The lead says what a reader can do and how many
 organizations have a page (from the nightly figures). Below the cards, a
 short "What You Can Do Here" section has four lines, each led by its link:

@@ -14,6 +14,7 @@ import {
 } from "../data";
 import { buyerPath } from "../crosslinks";
 import type { AppEnv } from "../env";
+import { GuideLine, tenderGuides } from "../guide_links";
 import { categoryLabel, fmtInt, pick, segmentLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import { clockOf, closesAtUtc, closesLine, closingTime, tenderState, type Clock } from "../closing";
 import { Layout, PageHead, Panel, StatusBadge, lowerRedirect, noDataPage, notFoundPage, page, todayOf } from "../layout";
@@ -332,6 +333,9 @@ export async function tenderPage(c: Context<AppEnv>): Promise<Response> {
       {follows ? <FollowsPanel lang={lang} state={follows} today={today} /> : null}
 
       <EarlierAwards lang={lang} earlier={earlier} />
+
+      {/* The guides that explain this notice, after the last panel and before the provenance line (src/guide_links.tsx). */}
+      <GuideLine lang={lang} slugs={tenderGuides(d)} />
 
       <p class="page-foot-note">
         {tj(lang, "tender.provenance", {

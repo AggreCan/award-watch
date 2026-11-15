@@ -50,6 +50,7 @@ import {
   type ExpiringWindowIndex, type IndigenousMark, type Stats,
 } from "../data";
 import type { AppEnv } from "../env";
+import { GuideLine, radarGuides } from "../guide_links";
 import { fmtInt, numberLocale, pick, provinceName, segmentLabel, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import { CompetitiveFlag, Layout, addDays, noDataPage, notFoundPage, page, PageHead, Panel, todayOf, varyOnCookie } from "../layout";
 import { lineKey, parseLine } from "../lines";
@@ -760,6 +761,8 @@ export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
       ) : <p class="muted">{t(lang, "expiring.none_window")}</p>}
       </Panel>
       </div>
+      {/* The guides to contracts ending, after the overview's last panel (src/guide_links.tsx). */}
+      <GuideLine lang={lang} slugs={radarGuides()} />
     </Layout>,
   );
 }
@@ -1047,6 +1050,8 @@ async function expiringTeaser(c: Context<AppEnv>, window: ExpiringWindow, stats:
           <p class="muted">{t(lang, "expiring.none_window")}</p>
         )}
       </Panel>
+      {/* The guides to contracts ending, under the list as on the full window (src/guide_links.tsx). */}
+      <GuideLine lang={lang} slugs={radarGuides()} />
       <ProPanel lang={lang} signedIn={!!account?.email} price={checkoutPrice(c.env)} ultra={await ultraCheckoutPrice(c.env)}
         text={proTeaserText(lang, window, idx, three)}
         free={tj(lang, "expiring.pro_free", { list: <a href="/expiring/3m">{t(lang, "expiring.pro_free_list")}</a> })} />
@@ -1270,6 +1275,8 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
           <p class="muted">{t(lang, whole ? "expiring.whole_none" : filtered ? "expiring.none_match" : "expiring.none_window")}</p>
         )}
       </Panel>
+      {/* The guides to contracts ending, under the list and its pager, before the email list (src/guide_links.tsx). */}
+      <GuideLine lang={lang} slugs={radarGuides()} />
       <InterestPanel lang={lang} filter={interest} />
       <PhonePagerScript lang={lang} />
     </Layout>,

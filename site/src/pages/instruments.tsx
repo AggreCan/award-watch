@@ -23,6 +23,7 @@ import { type HeadSort, Table, headSort } from "../columns";
 import { SEGMENTS } from "../constants";
 import { loadStats } from "../data";
 import type { AppEnv } from "../env";
+import { GuideLine, instrumentGuides } from "../guide_links";
 import { fmtInt, pick, provinceName, segmentLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import {
   AGREEMENT_MAX, HOLDER_ROWS_MAX, HOLDERS_CSV_MAX, INSTRUMENT_CSV_MAX, INSTRUMENT_ORDERS, INSTRUMENT_PAGE_ROWS, OTHER_REGIONS, REGION_ALIASES,
@@ -616,6 +617,9 @@ async function instrumentPage(c: Context<AppEnv>, agreement: string): Promise<Re
           <p class="muted small">{t(lang, "instrument.calls_other", { n: fmtInt(other.n, lang), value: moneyOf(lang, other) })}</p>
         ) : null}
       </Panel>
+
+      {/* The guide to standing offers and supply arrangements, after the holders and before the source line (src/guide_links.tsx). */}
+      <GuideLine lang={lang} slugs={instrumentGuides()} />
 
       <p class="muted small">
         {tj(lang, "instrument.source", {

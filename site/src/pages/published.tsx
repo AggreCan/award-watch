@@ -20,6 +20,7 @@ import { WatchControl, watchControl } from "../account/watch_pages";
 import { Table } from "../columns";
 import { BUYER_ID_RE, loadStats } from "../data";
 import type { AppEnv } from "../env";
+import { GuideLine, publishedGuides } from "../guide_links";
 import { fmtInt, pick, t, tj, tn, type Key, type Lang } from "../i18n";
 import { CompetitiveFlag, Layout, PageHead, Panel, noDataPage, page, todayOf } from "../layout";
 import { dollars, num } from "../records_db";
@@ -342,6 +343,10 @@ export async function publishedContractPage(c: Context<AppEnv>): Promise<Respons
           </div>
         </Panel>
       ) : null}
+
+      {/* The guides that explain this contract, after the last panel and before the provenance line
+          (src/guide_links.tsx); the guide the exception's note links is left out while the note shows. */}
+      <GuideLine lang={lang} slugs={publishedGuides({ competitive: num(d.comp) as 0 | 1 | null, exception, psib: psibCode, end }, today)} />
 
       <p class="page-foot-note">
         {tj(lang, "published.provenance", {

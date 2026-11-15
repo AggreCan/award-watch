@@ -16,6 +16,7 @@ import {
   type AwardYear,
 } from "../data";
 import type { AppEnv } from "../env";
+import { GuideLine, awardListGuides } from "../guide_links";
 import { fmtInt, pick, t, tn, type Lang } from "../i18n";
 import { Table, type SortOrders, headSort } from "../columns";
 import { Layout, PageHead, Panel, StatusBadge, noDataPage, notFoundPage, page, todayOf } from "../layout";
@@ -163,6 +164,8 @@ export async function awardsPage(c: Context<AppEnv>): Promise<Response> {
         foot={<>{pager("/awards", n, pages, lang, order)}<SourceLine lang={lang} source="awards" /></>}>
         {shown.length ? <AwardTable lang={lang} rows={shown} sorting="server" sorts={sorts} /> : <p class="muted">{t(lang, "awards.none")}</p>}
       </Panel>
+      {/* The guides to one contract's records and to debriefings, under the list, its pager and source line (src/guide_links.tsx). */}
+      <GuideLine lang={lang} slugs={awardListGuides()} />
     </Layout>,
   );
 }

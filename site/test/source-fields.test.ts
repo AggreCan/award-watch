@@ -11,7 +11,9 @@
 //   published contract's page (rec_contract_indigenous), and as a tag on a
 //   radar row;
 // - the published contracts' section 6 exception (article_6_exceptions): on
-//   the published contract's page (rec_contract_exception).
+//   the published contract's page (rec_contract_exception), whose note links
+//   the guide on contracts without competition, so the page's line of guides
+//   (src/guide_links.tsx) leaves that guide out while the note shows.
 //
 // A supplier or vendor withheld as a person shows neither of the first two;
 // the section 6 exception describes the award, so a person's contract shows
@@ -21,7 +23,7 @@
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { EMPLOYEE_BANDS, indigenousMark, isEmployees, profileEmployees, supplierEmployees } from "../src/data";
-import { GUIDES } from "../src/guides";
+import { ENDING_PATH, GUIDES, LIMITS_PATH, PSIB_PATH, THREE_PATH } from "../src/guides";
 import { app } from "../src/index";
 import { PUBLISHED_EXCEPTION_SQL, PUBLISHED_INDIGENOUS_SQL, TABLE_SQL } from "../src/records_tables";
 import { EXCEPTIONS_GUIDE } from "../src/pages/published";
@@ -451,5 +453,62 @@ describe("the section 6 exception on a published contract's page", () => {
     } finally {
       await seedPublished();
     }
+  });
+});
+
+// -- the line of guides on a published contract's page (src/guide_links.tsx) ------------
+
+const LIMITS_GUIDE = LIMITS_PATH;
+const SET_ASIDES_GUIDE = PSIB_PATH;
+const THREE_GUIDE = THREE_PATH;
+const ENDING_GUIDE = ENDING_PATH;
+// The guides the line links, in order; null without the line.
+const guideLine = (html: string): string[] | null => {
+  const m = /<p class="page-foot-note">Guides ?: ((?:(?!<\/p>)[\s\S])*)<\/p>/.exec(html);
+  return m ? [...m[1].matchAll(/<a href="(\/guides\/[a-z0-9-]+)">/g)].map((a) => a[1]) : null;
+};
+
+describe("the line of guides on a published contract's page", () => {
+  it("names the set-aside, the three records and the end, and leaves the limits guide to the exception's note, from the page's one batch", async () => {
+    const { binding, batches } = counting(RECORDS);
+    const html = await contractPage("EXC-4", "", { ...testEnv(), RECORDS: binding });
+    // The line asks for nothing: the same batch of four as before it.
+    expect(batches).toEqual([4]);
+    expect(guideLine(html)).toEqual([SET_ASIDES_GUIDE, THREE_GUIDE, ENDING_GUIDE]);
+    // The limits guide is linked once on the page, by the note, and from no other place.
+    expect(html.split(`href="${LIMITS_GUIDE}`).length - 1).toBe(1);
+    expect(html).toContain(EXCEPTION_NOTE);
+    // After the last panel, the provenance line next.
+    const at = html.indexOf('<p class="page-foot-note">Guides: ');
+    expect(html.lastIndexOf('class="panel')).toBeLessThan(at);
+    expect(html.slice(at).replace(/^<p class="page-foot-note">Guides: [\s\S]*?<\/p>\s*/, "")).toMatch(/^<p class="page-foot-note">/);
+    const fr = await contractPage("EXC-4", "fr");
+    expect(fr).toContain(`<p class="page-foot-note">Guides : <a href="${PSIB_PATH}">Marchés réservés aux entreprises autochtones`);
+    expect(guideLine(fr)).toEqual([SET_ASIDES_GUIDE, THREE_GUIDE, ENDING_GUIDE]);
+    expect(guideLine(await contractPage("EXC-1"))).toEqual([THREE_GUIDE, ENDING_GUIDE]);
+  });
+
+  it("names the set-aside only where the page shows one, and nothing for a person's contract but the records and the end", async () => {
+    expect(guideLine(await contractPage("IND-MS-1"))).toEqual([SET_ASIDES_GUIDE, THREE_GUIDE, ENDING_GUIDE]);
+    expect(guideLine(await contractPage("IND-VS-1"))).toEqual([SET_ASIDES_GUIDE, THREE_GUIDE, ENDING_GUIDE]);
+    for (const ref of ["IND-IB-1", "IND-NONE-1", "IND-PERSON-1"]) expect(guideLine(await contractPage(ref)), ref).toEqual([THREE_GUIDE, ENDING_GUIDE]);
+  });
+
+  it("names the limits guide first for a non-competitive contract once no exception note links it", async () => {
+    await RECORDS.prepare("DROP TABLE rec_contract_exception").run();
+    try {
+      const html = await contractPage("EXC-4");
+      expect(html).not.toContain("exception to soliciting bids");
+      expect(guideLine(html)).toEqual([LIMITS_GUIDE, SET_ASIDES_GUIDE, THREE_GUIDE]);
+      expect(html.split(`href="${LIMITS_GUIDE}`).length - 1).toBe(1);
+    } finally {
+      await seedPublished();
+    }
+  });
+
+  it("draws no line for a contract the database does not hold", async () => {
+    const res = await app.request(contractPath("dfo-mpo", "NO-SUCH-1"), {}, testEnv());
+    expect(res.status).toBe(404);
+    expect(guideLine(await res.text())).toBeNull();
   });
 });

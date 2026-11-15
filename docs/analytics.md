@@ -474,7 +474,10 @@ tendering reason is kept. A records database without one of these tables or
 `rec_lines` (a site deployed before the nightly that creates it) is read
 again without the statement whose table the error names, so each table falls
 back by itself and the page shows what the others hold
-(`readPublishedContract`).
+(`readPublishedContract`). Before the provenance, a line links one to three
+guides chosen from the row the batch read (`publishedGuides`, `docs/guides.md`,
+*Where the section is linked*): the guide on contracts awarded without
+competition only while the exception's note does not already link it.
 
 `rec_contracts` leaves out `loaded_at`, which changes for every row each
 time the file is read, so a night sends only the rows that changed. Rows the

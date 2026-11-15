@@ -674,8 +674,9 @@ describe("the writing", () => {
   ];
 
   it("has no em-dash or en-dash in either language, the sources' titles included", () => {
-    // The tenth is the line that ends every figure's caption (guides.figure_sample).
-    expect(FRAME.length).toBe(10);
+    // The tenth is the line that ends every figure's caption (guides.figure_sample); the eleventh the line of
+    // guides on the record and list pages (guides.line, src/guide_links.tsx).
+    expect(FRAME.length).toBe(11);
     for (const s of GUIDES.flatMap((g) => g.sources)) {
       for (const title of [s.title, s.fr?.title ?? ""]) {
         expect(title, s.url).not.toContain(EM_DASH);

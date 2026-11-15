@@ -224,3 +224,34 @@ Worker writes `/sitemap-guides.xml` from `GUIDES`: the index and each guide
 in both languages, each dated by its check, and the sitemap index names that
 part, so a new guide needs no pipeline change. The views count each guide at
 its own address.
+
+The record and list pages link the guides that explain them, in one line at
+their foot (`site/src/guide_links.tsx`): "Guides:" ("Guides :" in French)
+and one to three guides by the titles the index gives them, a middle dot
+apart, in the muted small type of the page's other closing notes. Each kind
+of page has one rule, a pure function of fields the page has already read,
+so the line adds no query and no file read. The most specific guide comes
+first, no guide appears twice, and a guide the page already links in its
+body is left out.
+
+| Page | Guides, in order |
+|---|---|
+| Tender notice | Advance contract award notices, for a notice of that type; standing offers and supply arrangements, for a request for either; then reading a tender notice and bidding; then trade agreements when the notice names one and there is room |
+| Award notice | Contracts without competition, when the page's competitive flag reads non-competitive; the three records of one contract; debriefings and bid challenges |
+| PSPC contract history record | The same first two; when a contract ends, if its end date is on or after the data date |
+| Published contract | Contracts without competition, when non-competitive and the page shows no section 6 exception (that note links the same guide); Indigenous set-asides, for a set-aside under the strategy; the three records; when a contract ends, if its end date is on or after the data date and there is room |
+| The radar, every view that lists contracts | When a contract ends; the three records |
+| A standing offer or supply arrangement | Standing offers and supply arrangements |
+| `/tenders` (any filter) and `/tenders/new` | Reading a tender notice; bidding |
+| `/awards` | The three records; debriefings and bid challenges |
+
+A notice's type is read by the tender list's own type filter (`isNoticeType`
+in `site/src/data.ts`), the filter the ACAN and standing offers guides save
+their email lists by, so a notice gets its type's guide exactly when the list
+filtered by that type holds it. The line sits after the page's last panel and
+before its provenance or source line; on a list, after the table and its
+pager and before the email list. A page with no record (not found, no data,
+the records database loading or failing) shows none, and the profiles, buyer
+pages, account pages, the landing page and the guides carry none. A guide's
+address is one constant in `site/src/guides.ts`; the tests hold every rule's
+result to the guides `GUIDES` lists (`site/test/guide-links.test.ts`).

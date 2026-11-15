@@ -1075,28 +1075,38 @@ const SAMPLE_PUBLISHED_PSIB = "/contracts/isc-sac/C-2026-2027-Q2-90117";
 const SAMPLE_PUBLISHED_TN = "/contracts/nrcan-rncan/C-2026-2027-Q2-90345";
 const SAMPLE_INSTRUMENT = `/instruments/${encodeURIComponent("EN578-991533/001/ZT")}`;
 const SAMPLE_ENDING = "/expiring/3m";
-// The addresses of the guides that link one another.
-const ACAN_PATH = "/guides/advance-contract-award-notices-acan";
-const PSIB_PATH = "/guides/indigenous-business-set-asides-psib";
-const THREE_PATH = "/guides/three-records-of-one-federal-contract";
-const READING_PATH = "/guides/reading-a-canadabuys-tender-notice";
-const SOSA_PATH = "/guides/standing-offers-and-supply-arrangements";
-const ENDING_PATH = "/guides/when-a-federal-contract-ends";
-const BID_PATH = "/guides/how-to-bid-on-government-of-canada-contracts";
-const SECURITY_PATH = "/guides/security-requirements-on-federal-contracts";
-const TRADE_PATH = "/guides/trade-agreements-and-thresholds-on-federal-tenders";
-const BUY_CANADIAN_PATH = "/guides/buy-canadian-policy-on-federal-tenders";
-const EVALUATION_PATH = "/guides/how-federal-bids-are-evaluated-and-selected";
-const DEBRIEF_PATH = "/guides/debriefings-and-bid-challenges-on-federal-contracts";
-const SBPP_PATH = "/guides/small-business-procurement-program-sbpp";
-const LIMITS_PATH = "/guides/federal-contracts-without-competition-and-contracting-limits";
-const CYBER_PATH = "/guides/cyber-security-certification-for-defence-suppliers-cpcsc";
-const INTEGRITY_PATH = "/guides/supplier-integrity-ineligibility-and-suspension-policy";
+// The addresses of the guides, each the one place its slug is written: the guides link one another by them, and
+// the record and list pages' line of guides (src/guide_links.tsx) picks among them.
+export const ACAN_PATH = "/guides/advance-contract-award-notices-acan";
+export const PSIB_PATH = "/guides/indigenous-business-set-asides-psib";
+export const THREE_PATH = "/guides/three-records-of-one-federal-contract";
+export const READING_PATH = "/guides/reading-a-canadabuys-tender-notice";
+export const SOSA_PATH = "/guides/standing-offers-and-supply-arrangements";
+export const ENDING_PATH = "/guides/when-a-federal-contract-ends";
+export const BID_PATH = "/guides/how-to-bid-on-government-of-canada-contracts";
+export const SECURITY_PATH = "/guides/security-requirements-on-federal-contracts";
+export const TRADE_PATH = "/guides/trade-agreements-and-thresholds-on-federal-tenders";
+export const BUY_CANADIAN_PATH = "/guides/buy-canadian-policy-on-federal-tenders";
+export const EVALUATION_PATH = "/guides/how-federal-bids-are-evaluated-and-selected";
+export const DEBRIEF_PATH = "/guides/debriefings-and-bid-challenges-on-federal-contracts";
+export const SBPP_PATH = "/guides/small-business-procurement-program-sbpp";
+export const LIMITS_PATH = "/guides/federal-contracts-without-competition-and-contracting-limits";
+export const CYBER_PATH = "/guides/cyber-security-certification-for-defence-suppliers-cpcsc";
+export const INTEGRITY_PATH = "/guides/supplier-integrity-ineligibility-and-suspension-policy";
+// A guide's slug, from its address above.
+export const slugOf = (path: string): string => path.slice("/guides/".length);
+
+// The notice types, as CanadaBuys publishes them in English, that the guides' email lists save (tenderList) and
+// the line of guides on a notice's page reads. Both go through the tender list's own type filter (data.ts
+// isNoticeType), so a notice is of a type here exactly when the list filtered by that type holds it.
+export const ACAN_TYPE = "Advance Contract Award Notice";
+export const RFSO_TYPE = "Request for Standing Offer";
+export const RFSA_TYPE = "Request for Supply Arrangement";
 
 // -- the guides ---------------------------------------------------------------------
 
 const TENDER_NOTICE: Guide = {
-  slug: "reading-a-canadabuys-tender-notice",
+  slug: slugOf(READING_PATH),
   title: both("How to Read a Federal Tender Notice on CanadaBuys", "Lire un avis d'appel d'offres fédéral sur AchatsCanada"),
   seoTitle: both("How to Read a CanadaBuys Tender Notice", "Lire un avis d'appel d'offres d'AchatsCanada"),
   summary: both(
@@ -1415,7 +1425,7 @@ const TENDER_NOTICE: Guide = {
 };
 
 const STANDING_OFFERS: Guide = {
-  slug: "standing-offers-and-supply-arrangements",
+  slug: slugOf(SOSA_PATH),
   title: both("Standing Offers and Supply Arrangements", "Offres à commandes et arrangements en matière d'approvisionnement"),
   seoTitle: both("Standing Offers and Supply Arrangements", "Offres à commandes et arrangements (AMA)"),
   summary: both(
@@ -1427,7 +1437,7 @@ const STANDING_OFFERS: Guide = {
   action: tenderList(
     "To keep track of new requests for standing offers, save this list with your email address.",
     "Pour suivre les nouvelles demandes d'offre à commandes, enregistrez cette liste avec votre adresse courriel.",
-    "Request for Standing Offer",
+    RFSO_TYPE,
   ),
   sections: [
     {
@@ -1629,7 +1639,7 @@ const STANDING_OFFERS: Guide = {
 };
 
 const THREE_RECORDS: Guide = {
-  slug: "three-records-of-one-federal-contract",
+  slug: slugOf(THREE_PATH),
   title: both("Three Federal Records of One Contract", "Trois dossiers fédéraux d'un même contrat"),
   summary: both(
     "The award notice, PSPC contract history and the published contract over $10,000: who publishes each, when, and why their values differ.",
@@ -1864,7 +1874,7 @@ const ACAN: Guide = {
   action: tenderList(
     "To keep track of new advance contract award notices, save this list with your email address.",
     "Pour suivre les nouveaux préavis d'adjudication de contrat, enregistrez cette liste avec votre adresse courriel.",
-    "Advance Contract Award Notice",
+    ACAN_TYPE,
   ),
   sections: [
     {
@@ -2099,7 +2109,7 @@ const LIMITS: Guide = {
   action: tenderList(
     "To follow new advance contract award notices as they are posted, save this list with your email address.",
     "Pour suivre les nouveaux préavis d'adjudication de contrat à mesure qu'ils sont publiés, enregistrez cette liste avec votre adresse courriel.",
-    "Advance Contract Award Notice",
+    ACAN_TYPE,
   ),
   sections: [
     {
@@ -2571,7 +2581,7 @@ const PSIB: Guide = {
 };
 
 const CONTRACT_END: Guide = {
-  slug: "when-a-federal-contract-ends",
+  slug: slugOf(ENDING_PATH),
   title: both(
     "When a Federal Contract Ends: Options, Extensions and What Comes Next",
     "Quand un contrat fédéral prend fin : options, prolongations et suite",

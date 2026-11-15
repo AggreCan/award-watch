@@ -245,6 +245,47 @@ const iptEnv = {
   }, "v1-ipt"),
 };
 
+// -- the pages that read the records database ------------------------------------------------
+//
+// A published contract's page (src/pages/published.tsx) and a standing offer's page
+// (src/pages/instruments.tsx), each statement of their one batch answered from memory, so the time is the
+// render alone, the line of guides at the foot included (src/guide_links.tsx): a non-competitive contract
+// under a mandatory set-aside with two earlier versions and long descriptions, and a regional standing
+// offer with 40 holders and its call-ups.
+const publishedRow = (self: 0 | 1, ref: string, cdate: string) => ({
+  self, dept: "dfo-mpo", ref, pid: "F1234-260001", wh: 0, oid: 1, cdate, start: "2026-05-01", endd: "2027-03-31", value: 12_345_600,
+  orig: 10_000_000, amend: self ? 2_345_600 : null, proc: "TN", comp: 0, ctype: "S", gsin: "N7010", agr: "C", trade: "0", ltr: "71",
+  inst: self ? "A" : "C", period: "2026-2027-Q2", bids: 1, so_no: null, desc_en: "Harbour dredging services ".repeat(8).trim(),
+  desc_fr: "Services de dragage portuaire ".repeat(8).trim(), com_en: "Amendment to extend the period of the work.", com_fr: null,
+  buyer_id: "dfo-mpo", buyer_en: "Fisheries and Oceans Canada", buyer_fr: "Pêches et Océans Canada", org_name: "Exemplar Translation Services Inc.",
+  counted: 12_345_600, vnote: null, gsin_en: "ADP equipment", gsin_fr: "Matériel de TED",
+});
+const INSTRUMENT_ROW = {
+  agr: "E60ZT-120002/001/ZT", type_en: "Regional Master Standing Offer", type_fr: "Offre à commandes principale régionale",
+  desc_en: "Environmental consulting services", desc_fr: "Services d'experts-conseils en environnement", gsin: "R109C",
+  gsin_en: "Environmental consulting services", gsin_fr: null, user_en: "Public Services and Procurement Canada",
+  user_fr: "Services publics et Approvisionnement Canada", buyer: "pwgsc-tpsgc", start: "2024-04-01", expiry: "2028-03-31", segs: " 77 ",
+  tref: "cb-100-10000001", n: 40, nw: 1, seen: "2026-10-30", last: "2026-10-30", calls: JSON.stringify([[1, 2, 15_000_000, 0], [null, 2, 1_500_000, 0]]),
+};
+const HOLDER_ROWS = Array.from({ length: 40 }, (_, i) => ({
+  oid: i % 3 ? null : 1 + i, name: `Holder ${i} Environmental Consulting Ltd.`, op: null, region: "ON", region_en: "Ontario", region_fr: "Ontario",
+  seen: "2026-10-30",
+}));
+const pageRecords = stubDb((sql) => {
+  if (sql.includes("FROM rec_meta")) return [{ key: "state", value: "ready" }, { key: "as_of", value: "2026-10-31" }];
+  if (sql.includes("SELECT 1 AS self")) {
+    return [publishedRow(1, "C-2026-2027-Q2-00117", "2026-08-01"), publishedRow(0, "C-2026-2027-Q1-00052", "2026-05-01"),
+      publishedRow(0, "C-2026-2027-Q1-00053", "2026-06-01")];
+  }
+  if (sql.includes("rec_contract_indigenous")) return [{ psib: "MS", ib: 0 }];
+  if (sql.includes("FROM rec_instruments i")) return [INSTRUMENT_ROW];
+  if (sql.includes("FROM rec_holders h")) return HOLDER_ROWS;
+  return [];
+});
+const recordsEnv = { ...env, RECORDS: pageRecords };
+const PUBLISHED_PAGE = "/contracts/dfo-mpo/C-2026-2027-Q2-00117";
+const INSTRUMENT_PAGE = "/instruments/E60ZT-120002%2F001%2FZT";
+
 // -- timing ---------------------------------------------------------------------------
 
 let address = 0;
@@ -253,14 +294,14 @@ let address = 0;
 // signedIn: the request carries the stub's Pro session, under the signed-in environment (signedInEnv).
 let signedInEnv: object | null = null;
 // payments: the files carry the largest Public Accounts blocks (paEnv); target: the buyer file carries the
-// largest Indigenous procurement target block (iptEnv).
-async function render(path: string, home = false, signedIn = false, payments = false, target = false): Promise<number> {
+// largest Indigenous procurement target block (iptEnv); records: the records database answers from memory (recordsEnv).
+async function render(path: string, home = false, signedIn = false, payments = false, target = false, records = false): Promise<number> {
   const res = await (home ? homeApp : app).request(path, {
     headers: {
       "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.${100 + ((address >> 8) % 100)}.${(address++ % 250) + 1}`,
       ...(signedIn ? { cookie: SIGNED_IN } : {}),
     },
-  }, signedIn ? signedInEnv! : payments ? paEnv : target ? iptEnv : path === "/" && !home ? landingEnv : env);
+  }, signedIn ? signedInEnv! : payments ? paEnv : target ? iptEnv : records ? recordsEnv : path === "/" && !home ? landingEnv : env);
   await res.arrayBuffer();
   return res.status;
 }
@@ -279,13 +320,13 @@ const yardstick = () => JSON.parse(JSON.stringify(ROWS));
 
 // A route's time over the yardstick's, batches of each taken in turn so a
 // change in the machine's load falls on both.
-async function ratio(path: string, per: number, home = false, signedIn = false, payments = false, target = false): Promise<number> {
-  for (let i = 0; i < 3; i++) await render(path, home, signedIn, payments, target);
+async function ratio(path: string, per: number, home = false, signedIn = false, payments = false, target = false, records = false): Promise<number> {
+  for (let i = 0; i < 3; i++) await render(path, home, signedIn, payments, target, records);
   const route: number[] = [];
   const yard: number[] = [];
   for (let b = 0; b < 5; b++) {
     yard.push(await batch(yardstick, 16));
-    route.push(await batch(() => render(path, home, signedIn, payments, target), per));
+    route.push(await batch(() => render(path, home, signedIn, payments, target, records), per));
   }
   return median(route) / median(yard);
 }
@@ -329,6 +370,15 @@ const BUDGET: [path: string, bound: number, per: number][] = [
   // largest block the 2025-26 plan gives, a little larger (two years of 26 rows, the longest delivery location,
   // 24 gaps); 2.6 against 1.6 for the plain page and 2.4 with the payments in the same run.
   ["/buyers/pwgsc-tpsgc (with the target)", 9, 16], // [2.6]
+  // The other pages that end on the line of guides (src/guide_links.tsx; measured 2026-11-15 with the line): the
+  // lists, a contract history record, the radar's overview, and the two pages that read the records database,
+  // answered from memory (recordsEnv).
+  ["/tenders/new", 4.5, 16], // [1.35]
+  ["/awards", 4, 16], // [1.17]
+  ["/history/w8472-000633", 4.5, 16], // [1.39]
+  ["/expiring", 5, 16], // [1.48]
+  [`${PUBLISHED_PAGE} (records in memory)`, 4.5, 16], // [1.35]
+  [`${INSTRUMENT_PAGE} (records in memory)`, 4.5, 16], // [1.35]
 ];
 
 // -- a signed-in account that names its organization ---------------------------------------
@@ -540,15 +590,23 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
     // And on the notice: may follow's three rows, each holder with its mark.
     const notice = await (await app.request("/tenders/cb-100-10000001", { headers: { "sec-fetch-mode": "navigate", cookie: SIGNED_IN } }, signedInEnv)).text();
     expect(notice.match(/class="muted small line-mark"/g)).toHaveLength(3);
+    // And on the two pages read from the records database: the whole page, its line of guides at the foot.
+    for (const [path, guides] of [[PUBLISHED_PAGE, 3], [INSTRUMENT_PAGE, 1]] as const) {
+      const res = await app.request(path, { headers: { "sec-fetch-mode": "navigate" } }, recordsEnv);
+      expect(res.status, path).toBe(200);
+      const line = /<p class="page-foot-note">Guides: ([\s\S]*?)<\/p>/.exec(await res.text())?.[1] ?? "";
+      expect(line.match(/<a href="\/guides\//g), path).toHaveLength(guides);
+    }
     for (const [name, bound, per] of BUDGET) {
       const home = name === "/ (app home)";
       const signedIn = name.includes("(signed in");
       const payments = name.includes("(with payments");
       const target = name.includes("(with the target");
+      const records = name.includes("(records in memory");
       const path = home ? "/" : name.split(" ")[0];
       // The search page answers 503 without its database, after rendering in full.
-      expect([200, 503], name).toContain(await render(path, home, signedIn, payments, target));
-      const r = await ratio(path, per, home, signedIn, payments, target);
+      expect([200, 503], name).toContain(await render(path, home, signedIn, payments, target, records));
+      const r = await ratio(path, per, home, signedIn, payments, target, records);
       seen.push(`${name} ${r.toFixed(2)}`);
       if (r > bound) over.push(`${name}: ${r.toFixed(2)} over ${bound}`);
     }

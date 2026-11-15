@@ -4574,6 +4574,8 @@ const STRINGS = {
     en: "The record pictured is a sample made for this guide.",
     fr: "Le dossier illustré est un exemple créé pour ce guide.",
   },
+  // The line of guides under a record or a list (src/guide_links.tsx): links is the guides' titles, a middle dot apart.
+  "guides.line": { en: "Guides: {links}", fr: "Guides : {links}" },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;

@@ -28,10 +28,11 @@ import { TendersFitPanel, readFit } from "../account/fit_panels";
 import { type SortOrders, SortsHere, clientTable, headSort } from "../columns";
 import { CATEGORIES, CLOSING_SOON_DAYS, PROVINCES, SEGMENT_CODES } from "../constants";
 import {
-  BUYER_ID_RE, type CodeLevel, DAY_RE, type FacetCount, type OpenFirst, codeLevel, loadNewTenders, loadOpenFirst, loadOpenLevels, loadStats,
-  type TenderRow,
+  BUYER_ID_RE, type CodeLevel, DAY_RE, type FacetCount, type OpenFirst, codeLevel, isNoticeType, loadNewTenders, loadOpenFirst, loadOpenLevels,
+  loadStats, type TenderRow,
 } from "../data";
 import type { AppEnv } from "../env";
+import { GuideLine, tenderListGuides } from "../guide_links";
 import {
   categoryLabel, clientStrings, fmtInt, numberLocale, pick, provinceName, segmentLabel, segmentShort, t, tj, tn, type Key, type Lang,
 } from "../i18n";
@@ -149,7 +150,7 @@ export function filterTenders(rows: readonly TenderRow[], q: TenderQuery, clock:
     if (q.code && !(r.codes ?? []).some((c) => c.startsWith(q.code))) return false;
     if (!placedIn(r, q)) return false;
     if (q.buyer && r.buyer_id !== q.buyer) return false;
-    if (q.type && r.notice_type_en !== q.type) return false;
+    if (q.type && !isNoticeType(r, q.type)) return false;
     if (q.method && r.method_en !== q.method) return false;
     if (until) {
       const day = (r.closing ?? "").slice(0, 10);
@@ -519,6 +520,8 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
           </div>
         </aside>
       </div>
+      {/* The guides to reading a notice and bidding, under the list and its pager, before the email list (src/guide_links.tsx). */}
+      <GuideLine lang={lang} slugs={tenderListGuides()} />
       <InterestPanel lang={lang} filter={interest} />
       <ClientData id="i18n" data={{
         lang, locale: numberLocale(lang), strings: clientStrings(lang, TENDERS_CLIENT_KEYS), labels,
@@ -599,6 +602,8 @@ export async function newTendersPage(c: Context<AppEnv>): Promise<Response> {
           <TenderTable lang={lang} rows={rows} clock={clock} status marked={intraday?.marked} />
         )}
       </Panel>
+      {/* As on the tender list: the guides to reading a notice and bidding, under the day's list (src/guide_links.tsx). */}
+      <GuideLine lang={lang} slugs={tenderListGuides()} />
       {/* The same-day band marks its closing-soon rows too, so with a band the countdown runs whatever the day's list holds. */}
       {intraday || rows?.some((r) => tenderState(r.status ?? "open", r.closing, clock) === "closing") ? <CountdownScript lang={lang} /> : null}
     </Layout>,

@@ -11,6 +11,7 @@ import { WatchControl, watchControl } from "../account/watch_pages";
 import { Table } from "../columns";
 import { REFERENCE_RE, loadContract, loadStats, publishedReference, supplierEmployees, type ContractDetail } from "../data";
 import type { AppEnv } from "../env";
+import { GuideLine, contractGuides } from "../guide_links";
 import { categoryLabel, fmtInt, pick, provinceName, segmentLabel, statusLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import { CompetitiveFlag, Layout, PageHead, Panel, StatusBadge, lowerRedirect, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { contractSeo } from "../seo";
@@ -259,6 +260,9 @@ export async function contractPage(c: Context<AppEnv>, kind: "award" | "history"
       </div>
       </Panel>
       ) : null}
+
+      {/* The guides that explain this record, after the last panel and before the provenance line (src/guide_links.tsx). */}
+      <GuideLine lang={lang} slugs={contractGuides(kind, d, today)} />
 
       <p class="page-foot-note">
         {tj(lang, "tender.provenance", {

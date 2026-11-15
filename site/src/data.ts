@@ -1223,6 +1223,14 @@ const isPublishedRef = (v: unknown): v is string => isStr(v) && v.length >= 1 &&
 export function publishedReference(r: { reference: string; reference_published?: string }): string {
   return r.reference_published ?? r.reference;
 }
+
+// Whether a notice is of a type, named as CanadaBuys publishes it in English, word for word. The tender list's
+// type filter (pages/tenders.tsx filterTenders), and so the guides' email lists of one type, read a type this
+// way, and so does the line of guides on a notice's page (guide_links.tsx): one test, so the two never disagree.
+export function isNoticeType(r: { notice_type_en: string | null }, type: string): boolean {
+  return r.notice_type_en === type;
+}
+
 const isMoneySource = (v: unknown): v is MoneySource => (MONEY_SOURCES as readonly unknown[]).includes(v);
 
 export const isTenderRow = (r: unknown): r is TenderRow => isObj(r) && isRef(r.reference) &&

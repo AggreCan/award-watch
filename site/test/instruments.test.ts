@@ -16,6 +16,8 @@ import {
   HOLDERS_CSV_SQL, HOLDERS_SQL, INSTRUMENT_SQL, INSTRUMENT_STATEMENTS, commodityList, filterInstruments, instrumentPath, readInstrumentQuery,
   sortInstruments, type InstrumentRow,
 } from "../src/instruments";
+import { SOSA_PATH, guideBySlug, slugOf } from "../src/guides";
+import { guideText } from "../src/pages/guides";
 import { regionName, typeCodeOf } from "../src/pages/instruments";
 import { bucketFor } from "../src/limits";
 import { PRO_INCLUDES } from "../src/pro";
@@ -275,6 +277,19 @@ describe("an instrument's page", () => {
     } finally {
       await seed();
     }
+  });
+
+  it("ends on the line of guides to standing offers, after the holders and before the source line, and not without an instrument", async () => {
+    const line = (lang: string) =>
+      `<p class="page-foot-note">Guides${lang === "fr" ? " " : ""}: <a href="${SOSA_PATH}">${nbsp(guideText(lang === "fr" ? "fr" : "en", guideBySlug(slugOf(SOSA_PATH))!.title))}</a></p>`;
+    for (const lang of ["en", "fr"]) {
+      const { html } = await page(lang === "fr" ? `${instrumentPath(RMSO)}?lang=fr` : instrumentPath(RMSO));
+      const at = html.indexOf(line(lang));
+      expect(at, lang).toBeGreaterThan(html.lastIndexOf('class="panel'));
+      expect(html.slice(at + line(lang).length).trimStart(), lang).toMatch(/^<p class="muted small">/);
+      expect(html.split(`href="${SOSA_PATH}`).length - 1, lang).toBe(1);
+    }
+    expect((await page(instrumentPath("E60ZT-000000/001/ZT"))).html).not.toContain("Guides:");
   });
 
   it("reads through the indexes, bounded", async () => {
