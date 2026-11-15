@@ -11,7 +11,8 @@ import { app } from "../src/index";
 import { CLOSING_SOON_DAYS } from "../src/constants";
 import { referenceShard } from "../src/data";
 import {
-  EXAMPLE_ACAN, EXAMPLE_AWARD, EXAMPLE_BUY_CANADIAN, EXAMPLE_DEBRIEF, EXAMPLE_EVALUATION, EXAMPLE_NOTICE, EXAMPLE_PROFILE, EXAMPLE_SET_ASIDE, GUIDES,
+  EXAMPLE_ACAN, EXAMPLE_AWARD, EXAMPLE_BUY_CANADIAN, EXAMPLE_DEBRIEF, EXAMPLE_EVALUATION, EXAMPLE_NOTICE, EXAMPLE_PROFILE, EXAMPLE_SBPP, EXAMPLE_SET_ASIDE,
+  GUIDES,
   type Block, type Both, type Cell, type Guide, type Link, type Text,
 } from "../src/guides";
 import { allKeys, rawEntry } from "../src/i18n";
@@ -171,7 +172,7 @@ beforeAll(async () => {
     exampleRecords[path] = { ...((exampleRecords[path] as object) ?? {}), [reference]: { ...structuredClone(tender), reference } };
   }
   const award = (FILES["contracts/637.json"] as Record<string, any>)["award:cb-400-40000004"];
-  for (const awardRef of [EXAMPLE_AWARD, EXAMPLE_DEBRIEF].map((p) => p.slice("/awards/".length))) {
+  for (const awardRef of [EXAMPLE_AWARD, EXAMPLE_DEBRIEF, EXAMPLE_SBPP].map((p) => p.slice("/awards/".length))) {
     const path = `contracts/${await referenceShard(awardRef)}.json`;
     exampleRecords[path] = { ...((exampleRecords[path] as object) ?? {}), [`award:${awardRef}`]: { ...structuredClone(award), reference: awardRef } };
   }
@@ -291,13 +292,14 @@ describe("links and sources", () => {
     // the open ACANs and the counting of competitive records; a contract reporting a set-aside; the three
     // lists of contracts ending and the overview of them; the new notices, the award notices, an example
     // notice, ACAN and award, a notice stating a Buy Canadian policy, a request for proposal stating its selection
-    // criteria, an award notice showing the dates and the trade agreements line the complaint rules turn on; and the
-    // guides that link one another.
+    // criteria, an award notice showing the dates and the trade agreements line the complaint rules turn on, an award notice
+    // showing the category, value and trade agreements line the guide on the Small Business Procurement Program names; and
+    // the guides that link one another.
     for (const want of ["/tenders", "/methodology#statuses", "/methodology#places", "/methodology#counting", "/instruments", "/data#sources",
       `${EXAMPLE_PROFILE}#awards`, `${EXAMPLE_PROFILE}#history`, `${EXAMPLE_PROFILE}#contracts`, `${EXAMPLE_PROFILE}#instruments`,
       "/tenders?type=Advance%20Contract%20Award%20Notice", "/methodology#competitive", "/methodology#expiring", EXAMPLE_SET_ASIDE,
       "/expiring", "/expiring/3m", "/expiring/6m", "/expiring/12m", "/tenders/new", "/awards", EXAMPLE_NOTICE, EXAMPLE_ACAN, EXAMPLE_AWARD,
-      EXAMPLE_BUY_CANADIAN, EXAMPLE_EVALUATION, EXAMPLE_DEBRIEF, ...GUIDES.map(pathOf)]) {
+      EXAMPLE_BUY_CANADIAN, EXAMPLE_EVALUATION, EXAMPLE_DEBRIEF, EXAMPLE_SBPP, ...GUIDES.map(pathOf)]) {
       expect(targets.has(want), want).toBe(true);
     }
     expect([...targets].some((h) => h.startsWith("/tenders?type="))).toBe(true);
@@ -399,6 +401,27 @@ describe("links and sources", () => {
     expect(text("fr")).toContain(`à ${fr(goods)} pour les biens et à ${fr(services)} pour les services et la construction`);
     expect(text("fr")).toContain(`moins de ${fr(goods)} pour les biens ou moins de ${fr(services)} pour les services`);
     expect(GUIDES.indexOf(g)).toBe(GUIDES.findIndex((x) => x.slug === "how-federal-bids-are-evaluated-and-selected") + 1);
+  });
+
+  it("hold the small business guide's launch date to the Buy Canadian guide's table, place it right after that guide, and link the two", () => {
+    // Both guides give the day PSPC launched the Small Business Procurement Program; when one changes, the other does.
+    const bc = GUIDES.find((x) => x.slug === "buy-canadian-policy-on-federal-tenders")!;
+    const table = bc.sections.find((s) => s.id === "instruments")!.blocks.find((b) => b.kind === "table") as Extract<Block, { kind: "table" }>;
+    const row = table.rows.find((r) => !("money" in r[0]) && r[0].en === "Small Business Procurement Program")!;
+    const launched = row[1] as Both;
+    expect(launched).toEqual({ en: "Launched July 6, 2026", fr: "Lancé le 6 juillet 2026" });
+    const g = GUIDES.find((x) => x.slug === "small-business-procurement-program-sbpp")!;
+    const text = (lang: "en" | "fr") => pieces(g).map((p) => filled(p, lang)).join("\n");
+    expect(text("en")).toContain(`on ${launched.en.slice("Launched ".length)}, Public Services and Procurement Canada (PSPC)`);
+    expect(text("fr")).toContain(`le ${launched.fr.slice("Lancé le ".length)}, Services publics et Approvisionnement Canada (SPAC)`);
+    expect(GUIDES.indexOf(g)).toBe(GUIDES.indexOf(bc) + 1);
+    expect(internalLinks(bc)).toContain(pathOf(g));
+    expect(internalLinks(g)).toContain(pathOf(bc));
+    // It rests on the Treasury Board Secretariat's notice and cites the regulations its Tribunal sentences quote.
+    expect(g.sources.map((s) => s.url)).toEqual(expect.arrayContaining([
+      "https://www.canada.ca/en/treasury-board-secretariat/services/policy-notice/2026-4.html",
+      "https://laws-lois.justice.gc.ca/eng/regulations/SOR-93-602/FullText.html",
+    ]));
   });
 
   it("hold the closing-soon window to the one the pages use", () => {

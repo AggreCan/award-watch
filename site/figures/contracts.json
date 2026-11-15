@@ -198,5 +198,96 @@
       "Accord de libre-échange canadien (ALEC)"
     ],
     "value": 247500
+  },
+  "history:cw9391744": {
+    "kind": "history",
+    "reference": "CW9391744",
+    "amendment": 0,
+    "amended": null,
+    "amendment_type_en": "Original",
+    "amendment_type_fr": "Original",
+    "amendments": [
+      {
+        "amendment": 0,
+        "amended": null,
+        "amendment_type_en": "Original",
+        "amendment_type_fr": "Original",
+        "amount": 186400,
+        "status": "active",
+        "total_value": 186400
+      }
+    ],
+    "amount": 186400,
+    "awarded": "2026-08-12",
+    "buyer_en": "Public Services and Procurement Canada",
+    "buyer_fr": "Services publics et Approvisionnement Canada",
+    "buyer_id": "pwgsc-tpsgc",
+    "category": [
+      "GD"
+    ],
+    "client_en": "Natural Resources Canada",
+    "client_fr": "Ressources naturelles Canada",
+    "client_id": "nrcan-rncan",
+    "codes": [
+      {
+        "code": "41112200",
+        "desc_en": "Temperature and heat measuring instruments",
+        "desc_fr": "Instruments de mesure de la température et de la chaleur"
+      }
+    ],
+    "competitive": true,
+    "contract_number": "CW9391744",
+    "currency": "CAD",
+    "description_en": null,
+    "description_fr": null,
+    "end": "2027-08-31",
+    "first_seen": "2026-09-05",
+    "gsin": null,
+    "gsin_desc_en": null,
+    "gsin_desc_fr": null,
+    "instrument_type_en": "Contract",
+    "instrument_type_fr": "Contrat",
+    "last_seen": "2026-11-13",
+    "limited_reason_en": null,
+    "limited_reason_fr": null,
+    "method_en": "Competitive - Open bidding",
+    "method_fr": "Concurrentielle - Invitation ouverte à soumissionner",
+    "notice_type_en": null,
+    "notice_type_fr": null,
+    "organization_id": null,
+    "procurement_number": "EN578-991744",
+    "provinces": [
+      "MB"
+    ],
+    "published": "2026-08-26",
+    "regions_delivery_en": [
+      "Manitoba"
+    ],
+    "regions_delivery_fr": [
+      "Manitoba"
+    ],
+    "selection_en": null,
+    "selection_fr": null,
+    "solicitation": "EN578-991744",
+    "source_file": "contractHistoryComplete-contratsOctroyesComplet.csv",
+    "start": "2026-09-01",
+    "status": "active",
+    "supplier": "Sample Survey Instruments Ltd.",
+    "supplier_city": "Winnipeg",
+    "supplier_country": "CA",
+    "supplier_employees": "45",
+    "supplier_operating": null,
+    "supplier_province": "MB",
+    "tender_reference": null,
+    "title_en": "Field temperature sensors",
+    "title_fr": "Capteurs de température de terrain",
+    "total_value": 186400,
+    "trade_agreements_en": [
+      "Canadian Free Trade Agreement (CFTA)"
+    ],
+    "trade_agreements_fr": [
+      "Accord de libre-échange canadien (ALEC)"
+    ],
+    "value": 186400
   }
 }

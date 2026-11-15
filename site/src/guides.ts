@@ -613,6 +613,35 @@ const SRC = {
       url: "https://www.canada.ca/fr/secretariat-conseil-tresor/services/avis-politique/2026-4.html",
     },
   },
+  // The Small Business Procurement Program: PSPC's news release and backgrounder of its launch (each read on 2026-11-14).
+  sbppNews: {
+    title: "Public Services and Procurement Canada launches new Small Business Procurement Program measures to modernize federal contracting and boost access for Canadian businesses",
+    publisher: PSPC,
+    url: "https://www.canada.ca/en/public-services-procurement/news/2026/07/public-services-and-procurement-canada-launches-new-small-business-procurement-program-measures-to-modernize-federal-contracting-and-boost-access-f.html",
+    fr: {
+      title: "Services publics et Approvisionnement Canada lance de nouvelles mesures dans le cadre du Programme d'approvisionnement auprès des petites entreprises, afin de moderniser les contrats fédéraux et de les rendre plus accessibles aux entreprises canadiennes",
+      url: "https://www.canada.ca/fr/services-publics-approvisionnement/nouvelles/2026/07/services-publics-et-approvisionnement-canada-lance-de-nouvelles-mesures-dans-le-cadre-du-programme-dapprovisionnement-aupres-des-petites-entreprise.html",
+    },
+  },
+  sbppBackgrounder: {
+    title: "Simplifying federal procurement for Canadian small businesses",
+    publisher: PSPC,
+    url: "https://www.canada.ca/en/public-services-procurement/news/2026/07/simplifying-federal-procurement-for-canadian-small-businesses.html",
+    fr: {
+      title: "Simplifier l'approvisionnement fédéral pour les petites entreprises canadiennes",
+      url: "https://www.canada.ca/fr/services-publics-approvisionnement/nouvelles/2026/07/simplifier-lapprovisionnement-federal-pour-les-petites-entreprises-canadiennes.html",
+    },
+  },
+  // The guide on the program's example award notice, on CanadaBuys (read there on 2026-11-14).
+  exampleSbpp: {
+    title: "23375-250365-001-HL Humidity Control System Contract (award notice CW2460403)",
+    publisher: PSPC,
+    url: "https://canadabuys.canada.ca/en/tender-opportunities/award-notice/cw2460403",
+    fr: {
+      title: "23375-250365-001-HL contrat de Système de contrôle de l'humidité (avis d'attribution CW2460403)",
+      url: "https://achatscanada.canada.ca/fr/occasions-de-marche/avis-d-attribution/cw2460403",
+    },
+  },
   reciprocityNotice: {
     title: "Contracting Policy Notice 2025-5: Reciprocity in Federal Procurement and Amendments to the Canadian International Trade Tribunal Procurement Inquiry Regulations",
     publisher: TBS,
@@ -805,13 +834,18 @@ export const EXAMPLE_EVALUATION = "/tenders/ws5933829424-doc5973518768";
 // publication date (2026-11-10) apart, a total contract value and a trade agreements line of eleven agreements, the
 // CFTA among them (read in the site's newest award notices and on awardwatch.ca on 2026-11-14).
 export const EXAMPLE_DEBRIEF = "/awards/cb-879-18498282";
+// A PSPC award notice for the Department of Natural Resources whose page shows Goods as its category, a value and a
+// trade agreements line of twelve agreements, CETA and the Canada-UK Trade Continuity Agreement among them (awarded
+// 2026-11-13; read in the site's newest award notices, on awardwatch.ca and on CanadaBuys on 2026-11-14).
+export const EXAMPLE_SBPP = "/awards/cw2460403";
 // The pages the figures are captured from, drawn from the sample records in site/figures/, made for the figures
 // and never real, their reference numbers in ranges the real series are nowhere near: three tender notices (the
 // second with security requirements in its description, a limited tendering reason of None and a trade
 // agreements line that names NAFTA; the third with a Buy Canadian statement in its description), an advance
 // contract award notice, one day's new notices, one contract's award notice (linking the tender notice it
-// followed) and PSPC contract history record, published contracts (the same contract's amendment, one after an
-// ACAN, one under a set-aside), a standing offer and the 3-month list of contracts ending.
+// followed) and PSPC contract history record, a second contract history record that gives its supplier's
+// employees, published contracts (the same contract's amendment, one after an ACAN, one under a set-aside), a
+// standing offer and the 3-month list of contracts ending.
 const SAMPLE_NOTICE = "/tenders/cb-900-90000101";
 const SAMPLE_NOTICE_SECURITY = "/tenders/cb-900-90000303";
 const SAMPLE_NOTICE_BUY_CANADIAN = "/tenders/cb-900-90000606";
@@ -819,6 +853,7 @@ const SAMPLE_NEW = "/tenders/new";
 const SAMPLE_ACAN = "/tenders/cb-900-90000202";
 const SAMPLE_AWARD = "/awards/cw9391528";
 const SAMPLE_HISTORY = "/history/cw9391528";
+const SAMPLE_HISTORY_EMPLOYEES = "/history/cw9391744";
 const SAMPLE_PUBLISHED = "/contracts/dfo-mpo/C-2026-2027-Q2-90088";
 const SAMPLE_PUBLISHED_ACAN = "/contracts/nrcan-rncan/C-2026-2027-Q2-90231";
 const SAMPLE_PUBLISHED_PSIB = "/contracts/isc-sac/C-2026-2027-Q2-90117";
@@ -837,6 +872,7 @@ const TRADE_PATH = "/guides/trade-agreements-and-thresholds-on-federal-tenders";
 const BUY_CANADIAN_PATH = "/guides/buy-canadian-policy-on-federal-tenders";
 const EVALUATION_PATH = "/guides/how-federal-bids-are-evaluated-and-selected";
 const DEBRIEF_PATH = "/guides/debriefings-and-bid-challenges-on-federal-contracts";
+const SBPP_PATH = "/guides/small-business-procurement-program-sbpp";
 
 // -- the guides ---------------------------------------------------------------------
 
@@ -3089,6 +3125,13 @@ const BUY_CANADIAN: Guide = {
           "The CM and CSCC policies do not apply to solicitations published or contracts awarded before December 16, 2025, and under the reciprocal procurement policy published solicitations and existing contracts need not be amended. Each policy applies to an existing supply arrangement or standing offer at its next renewal; under the reciprocal policy, the next renewal of an existing supply arrangement must be completed by July 14, 2026.",
           "Les politiques sur les MC et sur la PFCCC ne s'appliquent pas aux demandes d'offres publiées ni aux contrats attribués avant le 16 décembre 2025, et selon la politique d'approvisionnement réciproque, les demandes de soumissions publiées et les contrats existants n'ont pas besoin d'être modifiés. Chaque politique s'applique à un arrangement en matière d'approvisionnement ou à une offre à commandes existants à leur prochain renouvellement; selon la politique d'approvisionnement réciproque, le prochain renouvellement d'un arrangement existant doit être effectué d'ici le 14 juillet 2026.",
         ),
+        p(
+          "The {sbpp} explains the program.",
+          "Le {sbpp} explique le programme.",
+          {
+            sbpp: a(SBPP_PATH, "guide on the Small Business Procurement Program", "guide sur le Programme d'approvisionnement auprès des petites entreprises"),
+          },
+        ),
       ],
     },
     {
@@ -3344,6 +3387,224 @@ const BUY_CANADIAN: Guide = {
     SRC.buyCanadianNotice, SRC.buyCanadianPage, SRC.bcFramework, SRC.bcMaterials, SRC.bcSuppliers, SRC.bcCompliance, SRC.bcReciprocal,
     SRC.bcReciprocalSteps, SRC.bcQuestions, SRC.pspcBuyCanadian, SRC.smallBusinessNotice, SRC.reciprocityNotice, SRC.dictionary,
     SRC.exampleBuyCanadian,
+  ],
+};
+
+const SBPP: Guide = {
+  slug: SBPP_PATH.slice("/guides/".length),
+  title: both(
+    "The Small Business Procurement Program on Federal Contracts",
+    "Le Programme d'approvisionnement auprès des petites entreprises dans les marchés fédéraux",
+  ),
+  seoTitle: both("Small Business Procurement Program on Federal Contracts", "Programme d'approvisionnement auprès des petites entreprises"),
+  summary: both(
+    "The Small Business Procurement Program: its launch and phases, what Notice 2026-4 reminds departments of, the definition, set-asides and the records.",
+    "Le Programme d'approvisionnement auprès des petites entreprises : lancement, étapes, rappels de l'avis 2026-4, définition, marchés réservés, dossiers.",
+  ),
+  checked: "2026-11-14",
+  action: tenderList(
+    "To follow new federal tender notices as they are posted, save this list with your email address.",
+    "Pour suivre les nouveaux avis d'appel d'offres fédéraux à mesure qu'ils sont publiés, enregistrez cette liste avec votre adresse courriel.",
+  ),
+  sections: [
+    {
+      id: "program",
+      title: both("What the Program Is", "Ce qu'est le programme"),
+      blocks: [
+        p(
+          "The Treasury Board of Canada Secretariat's Contracting Policy Notice 2026-4, dated July 31, 2026, says that on July 6, 2026, Public Services and Procurement Canada (PSPC), as the exclusive authority for procurement for the Government of Canada, launched the Small Business Procurement Program (SBPP) to increase the participation of small businesses in federal procurement and to make it easier for them to do business with the Government of Canada. The notice reinforces existing requirements under the Directive on the Management of Procurement that support improved access to federal procurement for small businesses.",
+          "L'Avis sur la Politique des marchés 2026-4 du Secrétariat du Conseil du Trésor du Canada, daté du 31 juillet 2026, indique que le 6 juillet 2026, Services publics et Approvisionnement Canada (SPAC), à titre de ministère ayant la compétence exclusive pour l'approvisionnement du gouvernement du Canada, a lancé le Programme d'approvisionnement auprès des petites entreprises (PAPE) afin d'accroître la participation des petites entreprises aux marchés publics fédéraux et de faciliter leurs relations d'affaires avec le gouvernement du Canada. L'avis réitère les exigences existantes de la Directive sur la gestion de l'approvisionnement qui visent à améliorer l'accès des petites entreprises aux marchés publics fédéraux.",
+        ),
+        p(
+          "Under the notice, the program includes a phased set of measures to improve the supplier experience and reduce barriers to participation, among them requiring that procurements be designed with small businesses in mind and expanding the use of standardized solicitation and contract templates across departments. When procuring under a delegated authority from the minister responsible for PSPC, departments are responsible for incorporating PSPC's prescribed direction, systems, policies, tools, templates, procedures and guidance. Organizations that are not contracting pursuant to PSPC delegated authorities are encouraged to apply the same measures.",
+          "Selon l'avis, le programme comprend une série de mesures en plusieurs étapes visant à offrir une meilleure expérience aux fournisseurs et à réduire les obstacles à leur participation, notamment en exigeant que les projets de marchés soient conçus en tenant compte des petites entreprises et en élargissant l'utilisation de gabarits uniformisés pour les demandes de soumissions et les contrats à l'ensemble des ministères. Lors de l'approvisionnement en vertu d'une délégation de pouvoir du ministre responsable de SPAC, les ministères sont tenus d'intégrer les directives, systèmes, politiques, outils, modèles, procédures et lignes directrices prescrits par SPAC. Les organisations qui ne passent pas de marchés en vertu d'une délégation de pouvoir de SPAC sont encouragées à appliquer les mêmes mesures.",
+        ),
+        p(
+          "PSPC's Buy Canadian page says the program is built on four key pillars: improving the ability of small businesses to compete for federal contracts; modernizing digital tools to make it easier to find and access opportunities; reducing administrative barriers through simpler processes and requirements for small businesses; and recognizing suppliers.",
+          "La page « Achetez canadien » de SPAC indique que le programme repose sur quatre axes principaux : améliorer la capacité des petites entreprises à faire concurrence pour obtenir des contrats fédéraux; moderniser les outils numériques afin de faciliter la recherche et l'accès aux opportunités; réduire les obstacles administratifs en simplifiant les processus et les exigences pour les petites entreprises; et reconnaître les fournisseurs.",
+        ),
+      ],
+    },
+    {
+      id: "phases",
+      title: both("The Two Phases of Measures", "Les deux étapes de mesures"),
+      blocks: [
+        p(
+          "PSPC's backgrounder of July 6, 2026, sets out the program's measures in two phases:",
+          "Le document d'information de SPAC du 6 juillet 2026 présente les mesures du programme en deux étapes :",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "label", label: both("Phase", "Étape") },
+            { kind: "label", label: both("When", "Quand") },
+            { kind: "main", label: both("Measures", "Mesures") },
+          ],
+          rows: [
+            [
+              both("Phase 1", "Étape 1"),
+              both("Beginning in summer 2026", "À compter de l'été 2026"),
+              both(
+                "Federal buyers will be required to design procurements with small businesses in mind, which the backgrounder says will ensure requirements are proportionate to the opportunity; improvements to the Procura chatbot; expanding the use of standardized solicitation and contract templates across departments",
+                "Les acheteurs fédéraux devront planifier leurs projets de marchés en tenant compte des petites entreprises, ce qui, selon le document, fera en sorte que les exigences soient adaptées à la portée du marché; des améliorations au robot conversationnel Procura; l'utilisation élargie de gabarits uniformisés pour les demandes de soumissions et les contrats à l'ensemble des ministères",
+              ),
+            ],
+            [
+              both("Phase 2", "Étape 2"),
+              both("By the end of 2026", "D'ici la fin de 2026"),
+              both(
+                "Plain language tender summaries; a \"Tell Us Once\" approach, under which suppliers will be able to submit common attestations and documents once and reuse them across bids; structured response formats; pre-submission completeness checks; a supplier recognition program, which will recognize trusted Canadian small businesses",
+                "Des résumés des appels d'offres en langage clair; l'application du principe « Une fois suffit », qui permettra aux fournisseurs de soumettre une seule fois les attestations et les documents couramment exigés, puis de les réutiliser pour d'autres appels d'offres; des gabarits de soumission structurés; des vérifications préalables de l'exhaustivité des soumissions; un programme de reconnaissance des fournisseurs, qui permettra de reconnaître les petites entreprises canadiennes de confiance",
+              ),
+            ],
+          ],
+        },
+        p(
+          "The backgrounder gives these as measures that will be introduced. PSPC's news release of the same day reports that day's launch of the enhanced Procura chatbot; none of the pages read reports that any other measure has been introduced.",
+          "Le document présente ces mesures comme devant être mises en place. Le communiqué de SPAC du même jour annonce le lancement, ce jour-là, de la version améliorée du robot conversationnel Procura; aucune des pages lues n'indique qu'une autre mesure a été mise en place.",
+        ),
+      ],
+    },
+    {
+      id: "departments",
+      title: both("What the Notice Reminds Departments Of", "Ce que l'avis rappelle aux ministères"),
+      blocks: [
+        p(
+          "Notice 2026-4 reminds departments of existing requirements of the directive that support improved procurement opportunities for small businesses, and says contracting authorities should work with business owners to reflect these considerations throughout the procurement process:",
+          "L'avis 2026-4 rappelle aux ministères les exigences existantes de la directive qui visent à améliorer les occasions de marchés pour les petites entreprises, et indique que les autorités contractantes devraient collaborer avec les propriétaires fonctionnels pour prendre ces considérations en compte tout au long du processus d'approvisionnement :",
+        ),
+        {
+          kind: "table",
+          cols: [
+            { kind: "text", label: both("Consideration", "Considération") },
+            { kind: "main", label: both("What the notice says", "Ce que dit l'avis") },
+          ],
+          rows: [
+            [
+              both("Clear, proportionate and simplified requirements", "Exigences claires, proportionnelles et simplifiées"),
+              both(
+                "Business owners must clearly define the operational requirements and end-user needs of a procurement. Requirements, specifications, mandatory criteria, bid instructions and administrative conditions should not be more complex, restrictive or burdensome than is necessary to meet the operational need or manage risk. Requirements should also be framed to support the government's strategic direction, which includes defining them in a way that does not unnecessarily exclude capable Canadian small businesses. Whenever possible, solicitation documents should be simplified. These considerations should be informed by market analysis conducted to understand industry capacity and availability.",
+                "Les propriétaires fonctionnels doivent définir clairement les exigences opérationnelles et les besoins des utilisateurs finaux associés à un marché. Les exigences, les spécifications, les critères obligatoires, les instructions pour la soumission et les conditions administratives ne devraient pas être plus complexes, ni restrictifs, ni contraignants que nécessaire pour répondre au besoin opérationnel ou gérer le risque. Les exigences devraient aussi être formulées de manière à appuyer l'orientation stratégique du gouvernement, ce qui comprend de les définir d'une manière qui n'exclut pas inutilement les petites entreprises canadiennes compétentes. Dans la mesure du possible, les documents d'appels d'offres devraient être simplifiés. Ces considérations devraient s'appuyer sur des analyses du marché effectuées dans le but de mieux comprendre la capacité et la disponibilité de l'industrie.",
+              ),
+            ],
+            [
+              both("Legitimate unbundling of requirements", "Dégroupement légitime des exigences"),
+              both(
+                "Departments must consider whether a requirement can be legitimately divided into smaller requirements when doing so would better align the procurement strategy to the operational need and allow more suppliers to participate; for example, this could include allowing bids on lots or regional components where bundling would unnecessarily restrict competition or put smaller firms at a disadvantage. Contracting authorities must document their decisions and ensure that any division of requirements is not used to bypass financial approval thresholds or other obligations.",
+                "Les ministères doivent déterminer si des exigences peuvent être légitimement divisées en exigences plus petites lorsqu'une telle approche permet de mieux harmoniser la stratégie d'approvisionnement avec le besoin opérationnel et de favoriser la participation d'un plus grand nombre de fournisseurs; par exemple, il peut s'agir d'autoriser la présentation de soumissions pour des lots ou des composantes régionales lorsque le regroupement limiterait inutilement la concurrence ou désavantagerait les petites entreprises. Les autorités contractantes doivent consigner leurs décisions et veiller à ce qu'aucune division des exigences ne soit utilisée pour contourner les seuils d'approbation financière ou d'autres obligations.",
+              ),
+            ],
+            [
+              both("Pricing strategies", "Stratégies de prix"),
+              both(
+                "Contracting authorities must use pricing strategies, including the basis of payment, incentives and performance adjustments, that meet operational requirements and intended results. Departments should assess whether pricing and payment structures create avoidable barriers for small businesses, for example access to capital, cost of borrowing and cash flow, and, where operationally and risk appropriate, should adjust these structures so that smaller firms are not unnecessarily disadvantaged by payment terms or risk allocation, such as by using milestone payments or progress-based payments.",
+                "Les autorités contractantes doivent utiliser des stratégies de prix, y compris la base de paiement, les incitatifs et les ajustements en fonction du rendement, qui permettent de respecter les exigences opérationnelles et d'atteindre les résultats escomptés. Les ministères devraient évaluer si les structures de prix et de paiement créent des obstacles évitables pour les petites entreprises, par exemple l'accès au capital, le coût d'emprunt et les flux de trésorerie, et, lorsque cela est approprié sur les plans opérationnel et de la gestion des risques, devraient modifier ces structures afin que les petites entreprises ne soient pas inutilement désavantagées par les modalités de paiement ou la répartition du risque, notamment en recourant à des paiements de jalons ou à des paiements fondés sur l'avancement des travaux.",
+              ),
+            ],
+            [
+              both("Supplier collaboration", "Collaboration avec les fournisseurs"),
+              both(
+                "Departments must make sure that there are opportunities for suppliers to collaborate and develop solutions, including pilots and prototypes, where appropriate.",
+                "Les ministères doivent veiller à ce que les fournisseurs aient l'occasion de collaborer et d'élaborer des solutions, y compris des projets pilotes et des prototypes, le cas échéant.",
+              ),
+            ],
+            [
+              both("Credible and fair procurement processes", "Processus d'approvisionnement crédibles et équitables"),
+              both(
+                "Departments must uphold the Values and Ethics Code for the Public Sector, the Directive on Conflict of Interest, and requirements for timely debriefings and fair, prompt dispute resolution throughout the procurement process.",
+                "Les ministères doivent se conformer au Code de valeurs et d'éthique du secteur public, à la Directive sur les conflits d'intérêts et aux exigences relatives à l'envoi rapide de comptes rendus et au règlement équitable et rapide des différends tout au long du processus d'approvisionnement.",
+              ),
+            ],
+          ],
+        },
+        p(
+          "Notice 2025-7, dated December 17, 2025, reminds departments that they are required to justify and document all decisions taken with respect to a procurement, including decisions that affect prioritization of Canadian suppliers, goods, services, materials, or small businesses. The {debrief} explains debriefings and complaints.",
+          "L'avis 2025-7, daté du 17 décembre 2025, rappelle aux ministères qu'ils doivent justifier et documenter de manière rigoureuse toutes les décisions prises en matière d'approvisionnement, y compris les décisions ayant une incidence sur la priorisation des fournisseurs, biens, services, matériaux et petites entreprises du Canada. Le {debrief} explique les comptes rendus et les plaintes.",
+          { debrief: a(DEBRIEF_PATH, "guide on debriefings and bid challenges", "guide sur les comptes rendus et les contestations des offres") },
+        ),
+      ],
+    },
+    {
+      id: "small-business",
+      title: both("Who Counts as a Small Business", "Ce qu'est une petite entreprise"),
+      blocks: [
+        p(
+          "CanadaBuys' questions and answers for suppliers on the Buy Canadian Policy give the government's definition: a small business is a company with 499 employees or fewer, including those of its affiliates, or a joint venture whose total number of employees does not exceed 499. PSPC's backgrounder gives the same definition, for reference. None of the pages read sets out how a business shows that it meets it.",
+          "Les questions et réponses d'AchatsCanada pour les fournisseurs sur la Politique « Achetez canadien » donnent la définition du gouvernement : une petite entreprise est une entreprise comptant 499 employés ou moins, incluant ceux de ses affiliés, ou une coentreprise dont le total des employés ne dépasse pas 499. Le document d'information de SPAC donne la même définition, à titre indicatif. Aucune des pages lues n'indique comment une entreprise démontre qu'elle y satisfait.",
+        ),
+        p(
+          "Under the Canadian International Trade Tribunal Procurement Inquiry Regulations, current to October 19, 2026, and despite any provision in respect of procurement of any trade agreement, the Tribunal shall not address or examine matters relating to the way in which the expressions the Regulations list, \"small business\" among them, are defined for the purposes of the procurement process.",
+          "Selon le Règlement sur les enquêtes du Tribunal canadien du commerce extérieur sur les marchés publics, à jour au 19 octobre 2026, et malgré toute disposition relative aux marchés publics de tout accord commercial, le Tribunal ne peut aborder ou traiter aucune question relative à la manière dont sont définies, pour les besoins de la procédure des marchés publics, les expressions que le Règlement énumère, dont « petites entreprises ».",
+        ),
+      ],
+    },
+    {
+      id: "set-asides",
+      title: both("Set-Asides, Trade Agreements and Other Programs", "Marchés réservés, accords commerciaux et autres programmes"),
+      blocks: [
+        p(
+          "The Buy Canadian Procurement Policy Framework, which applies to the departments and agencies listed in Schedules I, I.1 and II of the Financial Administration Act, lists the program with the policy instruments that are or will be issued under it. It describes the program as reserving federal procurement opportunities for Canadian small businesses, with mandatory set-asides applied where feasible, and as streamlining access through simplified registration, onboarding and contracting processes tailored to small business capacity; its French page puts both in the future tense. Notice 2026-4 and PSPC's news release and backgrounder of July 6, 2026, describe no set-aside, and none of the pages read gives the program a dollar threshold or a numeric target. The {bc} explains the Framework's policies.",
+          "Le Cadre stratégique de la politique d'approvisionnement « Achetez canadien », qui s'applique aux ministères et organismes énumérés aux annexes I, I.1 et II de la Loi sur la gestion des finances publiques, range le programme avec les instruments de politique qui sont ou seront publiés en vertu de celui-ci. Il décrit le programme comme réservant des occasions d'approvisionnement fédéral aux petites entreprises canadiennes, avec des marchés réservés obligatoires appliqués dans la mesure du possible, et comme rationalisant l'accès par des processus d'inscription, d'intégration et de passation de marchés simplifiés et adaptés aux capacités des petites entreprises; sa page française met l'un et l'autre au futur. L'avis 2026-4 ainsi que le communiqué et le document d'information de SPAC du 6 juillet 2026 ne décrivent aucun marché réservé, et aucune des pages lues ne fixe au programme de seuil monétaire ni de cible chiffrée. Le {bc} explique les politiques du Cadre.",
+          { bc: a(BUY_CANADIAN_PATH, "guide on the Buy Canadian Policy", "guide sur la Politique « Achetez canadien »") },
+        ),
+        p(
+          "Set-asides are among the factors PSPC's Buyer's Guide says a buyer must consider in determining whether a procurement falls under a trade agreement ({trade}). The buyer should decide if any set-asides, such as the set-aside for minority businesses, will be applied to the procurement, and may apply them to all of it or only part, which means that all or some aspects may not be subject to certain trade agreement obligations; buyers may refer to Canada's market access schedule for Canada's set-asides.",
+          "Les marchés réservés figurent parmi les éléments dont l'acheteur doit tenir compte, selon le Guide de l'acheteur de SPAC, pour déterminer si un approvisionnement relève d'un accord commercial ({trade}). L'acheteur devrait décider si des marchés réservés, comme les marchés réservés aux entreprises minoritaires, seront appliqués à l'approvisionnement, et peut les appliquer à l'ensemble de l'approvisionnement ou seulement à une partie, ce qui signifie que tous les aspects ou certains d'entre eux peuvent ne pas être assujettis à certaines obligations découlant des accords commerciaux; l'acheteur peut consulter la liste d'engagements en matière d'accès aux marchés publics du Canada pour les marchés réservés du Canada.",
+          { trade: a(TRADE_PATH, "guide on trade agreements", "guide sur les accords commerciaux") },
+        ),
+        p(
+          "Despite any provision in respect of procurement of CETA or the Canada-UK Trade Continuity Agreement, the Tribunal's Regulations say it shall not address or examine matters relating to any measure in the procurement process that restricts participation to small businesses.",
+          "Malgré toute disposition relative aux marchés publics de l'AECG ou de l'Accord de continuité commerciale Canada-Royaume-Uni, le Règlement du Tribunal prévoit que celui-ci ne peut aborder ou traiter aucune question relative à toute mesure dans la procédure des marchés publics qui restreint la participation à cette procédure aux petites entreprises.",
+        ),
+        p(
+          "None of the pages read says how the program's measures sit beside set-asides under the Procurement Strategy for Indigenous Business, which the {psib} explains.",
+          "Aucune des pages lues n'indique comment les mesures du programme s'articulent avec les marchés réservés de la Stratégie d'approvisionnement auprès des entreprises autochtones, qu'explique le {psib}.",
+          { psib: a(PSIB_PATH, "guide on Indigenous business set-asides", "guide sur les marchés réservés aux entreprises autochtones") },
+        ),
+      ],
+    },
+    {
+      id: "records",
+      title: both("What the Records Show", "Ce que montrent les dossiers"),
+      blocks: [
+        p(
+          "CanadaBuys' data dictionary, in its file last modified on March 24, 2026, has no field that marks a procurement under the program, a set-aside or a small business. It defines the trade agreements field as a list of any international trade agreements that apply to the procurement action, if applicable. An award notice also gives the contract's value and its category, and Notice 2025-8 gives the agreements' thresholds separately for goods, services and construction.",
+          "Le dictionnaire de données d'AchatsCanada, dans son fichier modifié pour la dernière fois le 24 mars 2026, ne comporte aucun champ qui indique un approvisionnement relevant du programme, un marché réservé ou une petite entreprise. Il définit le champ des accords commerciaux comme une liste de tous les accords commerciaux internationaux qui s'appliquent à l'action d'approvisionnement, le cas échéant. Un avis d'attribution donne aussi la valeur du contrat et sa catégorie, et l'avis 2025-8 fixe les seuils des accords séparément pour les biens, les services et la construction.",
+        ),
+        p(
+          "This {example} from PSPC for the Department of Natural Resources, awarded November 13, 2026, shows Goods as its category, a value of $790,605 and twelve agreements in its trade agreements line, CETA and the Canada-UK Trade Continuity Agreement among them.",
+          "Cet {example} de SPAC pour le ministère des Ressources naturelles, attribué le 13 novembre 2026, indique la catégorie Biens, une valeur de 790 605 $ et douze accords dans sa ligne des accords commerciaux, dont l'AECG et l'Accord de continuité commerciale Canada-Royaume-Uni.",
+          { example: a(EXAMPLE_SBPP, "award notice", "avis d'attribution") },
+        ),
+        p(
+          "Of CanadaBuys' tender notice, award notice and contract history files, the dictionary lists the supplier's employees for the contract history alone: it describes the field as a description of the number of individuals employed by the supplier, blank or one of the descriptions it lists. Award Watch shows it on a contract history record's page under Supplier's employees, as PSPC gives it: a count, or a size band in older records.",
+          "Des fichiers des avis d'appel d'offres, des avis d'attribution et des contrats octroyés d'AchatsCanada, le dictionnaire n'inscrit les employés du fournisseur que pour l'historique des contrats : il décrit ce champ comme une description du nombre de personnes employées par le fournisseur, vide ou l'une des descriptions qu'il énumère. Award Watch l'affiche sur la page d'un dossier de l'historique des contrats sous Employés du fournisseur, tel que SPAC le donne : un nombre, ou une tranche dans les dossiers plus anciens.",
+        ),
+        figure(
+          "sbpp-employees", SAMPLE_HISTORY_EMPLOYEES, ".panel-stack > section.panel:first-child",
+          both(
+            "The Supplier and Buyer panel of a PSPC contract history record's page on Award Watch: the supplier, its location, the supplier's employees, PSPC as the contracting entity, the client department and the note on the employees field.",
+            "Le panneau Fournisseur et acheteur de la page d'un dossier de l'historique des contrats de SPAC sur Award Watch : le fournisseur, son lieu, les employés du fournisseur, SPAC comme entité contractante, le ministère client et la note sur le champ des employés.",
+          ),
+          both("A PSPC contract history record's supplier panel on Award Watch.", "Le panneau du fournisseur d'un dossier de l'historique des contrats de SPAC sur Award Watch."),
+          [
+            mark(field(":scope > dl", 1),
+              "CanadaBuys' data dictionary has no field that marks a procurement under the program, a set-aside or a small business.",
+              "Le dictionnaire de données d'AchatsCanada ne comporte aucun champ qui indique un approvisionnement relevant du programme, un marché réservé ou une petite entreprise."),
+            mark(field(":scope > dl", 3),
+              "Only the contract history carries the supplier's employees, shown as its file gives them: a count, or a size band in older records.",
+              "Seul l'historique des contrats porte les employés du fournisseur, affichés tels que son fichier les donne : un nombre, ou une tranche dans les dossiers plus anciens."),
+            mark(":scope > dl + p",
+              "The dictionary calls the field a description of the number of individuals employed by the supplier.",
+              "Le dictionnaire présente ce champ comme une description du nombre de personnes employées par le fournisseur."),
+          ],
+        ),
+      ],
+    },
+  ],
+  sources: [
+    SRC.smallBusinessNotice, SRC.sbppNews, SRC.sbppBackgrounder, SRC.pspcBuyCanadian, SRC.bcQuestions, SRC.bcFramework, SRC.procurementDirective,
+    SRC.buyCanadianNotice, SRC.tradeApplicability, SRC.cittRegulations, SRC.thresholds, SRC.dictionary, SRC.exampleSbpp,
   ],
 };
 
@@ -3818,7 +4079,7 @@ const DEBRIEF: Guide = {
 
 // The order of the index, and of the sitemap's part.
 export const GUIDES: readonly Guide[] = [
-  HOW_TO_BID, EVALUATION, DEBRIEF, TENDER_NOTICE, TRADE, BUY_CANADIAN, SECURITY, ACAN, STANDING_OFFERS, PSIB, THREE_RECORDS, CONTRACT_END,
+  HOW_TO_BID, EVALUATION, DEBRIEF, TENDER_NOTICE, TRADE, BUY_CANADIAN, SBPP, SECURITY, ACAN, STANDING_OFFERS, PSIB, THREE_RECORDS, CONTRACT_END,
 ];
 
 export const GUIDE_SLUGS: ReadonlySet<string> = new Set(GUIDES.map((g) => g.slug));

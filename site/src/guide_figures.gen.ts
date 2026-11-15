@@ -155,6 +155,22 @@ export const GUIDE_FIGURES: Readonly<Record<string, FigureEntry>> = {
       phone: {"width":370,"height":414,"viewport":390,"boxes":[[6.22,4.47,40.93,3.86],[6.22,28.74,87.57,46.38],[6.22,77.05,87.57,17.39]]},
     },
   },
+  "sbpp-employees": {
+    slug: "small-business-procurement-program-sbpp", page: "/history/cw9391744", region: ".panel-stack > section.panel:first-child",
+    targets: [
+      ":scope > dl > dt:nth-of-type(1), :scope > dl > dt:nth-of-type(1) + dd",
+      ":scope > dl > dt:nth-of-type(3), :scope > dl > dt:nth-of-type(3) + dd",
+      ":scope > dl + p",
+    ],
+    en: {
+      wide: {"width":557,"height":303,"viewport":1440,"boxes":[[1.26,15.51,97.4,11.88],[1.26,39.6,97.4,12.21],[4.13,81.85,91.65,10.56]]},
+      phone: {"width":370,"height":415,"viewport":390,"boxes":[[1.89,11.33,96.22,8.67],[1.89,33.73,96.22,13.73],[6.22,79.04,87.57,15.42]]},
+    },
+    fr: {
+      wide: {"width":557,"height":319,"viewport":1440,"boxes":[[1.26,14.73,97.4,11.29],[1.26,37.62,97.4,11.6],[4.13,77.74,91.65,15.05]]},
+      phone: {"width":370,"height":415,"viewport":390,"boxes":[[1.89,11.33,96.22,8.67],[1.89,33.73,96.22,13.73],[6.22,79.04,87.57,15.42]]},
+    },
+  },
   "security-description": {
     slug: "security-requirements-on-federal-contracts", page: "/tenders/cb-900-90000303", region: "section.panel:has(.prose)",
     targets: [
