@@ -4,8 +4,9 @@
 // the other rows of the same contract (its amendments: the rows sharing the
 // department and procurement_id) and, in the same batch, its Indigenous
 // business fields when the department reported a set-aside or an Indigenous
-// business (PUBLISHED_INDIGENOUS_SQL), and for a signed-in reader the
-// holder's record (pages/holders.tsx). A reference is unique within one
+// business (PUBLISHED_INDIGENOUS_SQL), its section 6 exception when the
+// department reported one (PUBLISHED_EXCEPTION_SQL), and for a signed-in
+// reader the holder's record (pages/holders.tsx). A reference is unique within one
 // department only, so the address names both. The government's contracts
 // search stays linked as the source, a secondary link: it often lists
 // nothing yet for a new quarter.
@@ -22,7 +23,7 @@ import type { AppEnv } from "../env";
 import { fmtInt, pick, t, tj, tn, type Key, type Lang } from "../i18n";
 import { CompetitiveFlag, Layout, PageHead, Panel, noDataPage, page, todayOf } from "../layout";
 import { dollars, num } from "../records_db";
-import { CONTRACT_VERSIONS_MAX, readPublishedContract, type Row } from "../records_tables";
+import { CONTRACT_VERSIONS_MAX, PUBLISHED_AT, readPublishedContract, type Row } from "../records_tables";
 import { breadcrumbJsonLd, clip, pageTitle, type Seo } from "../seo";
 import { lineKey } from "../lines";
 import { windowOf } from "./expiring";
@@ -45,6 +46,15 @@ const INSTRUMENT: Record<string, Key> = {
 // The set-asides under the Procurement Strategy for Indigenous Business, in
 // the TBS schema's own terms (indigenous_business).
 const PSIB: Record<string, Key> = { MS: "published.psib_MS", VS: "published.psib_VS" };
+// The exceptions to soliciting bids in section 6 of the Government Contracts
+// Regulations, as the TBS schema codes article_6_exceptions (its choices 1 to
+// 4, read 2026-11-15 from the published schema, contracts.json). Its 0, not
+// applicable, is never stored (pipeline normalize.article_6_exception).
+const ARTICLE_6: Record<string, Key> = {
+  "1": "published.exception_1", "2": "published.exception_2", "3": "published.exception_3", "4": "published.exception_4",
+};
+// The guide's section on the four exceptions (src/guides.ts, LIMITS).
+export const EXCEPTIONS_GUIDE = "/guides/federal-contracts-without-competition-and-contracting-limits#exceptions";
 
 const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v : null);
 
@@ -168,10 +178,13 @@ export async function publishedContractPage(c: Context<AppEnv>): Promise<Respons
   const supplier = supplierOf(lang, d);
   // The two Indigenous business fields, when the department reported a
   // set-aside or an Indigenous business; none for a person's contract.
-  const marks = num(d.wh) === 1 ? undefined : read.rows[1]?.[0];
+  const marks = num(d.wh) === 1 ? undefined : read.rows[PUBLISHED_AT.indigenous]?.[0];
   const psib = str(marks?.psib)?.toUpperCase() ?? null;
   const psibCode = psib && PSIB[psib] ? psib : null;
   const outsidePsib = num(marks?.ib) === 1;
+  // The section 6 exception, when the department reported one: it describes
+  // how the contract was awarded, so a person's contract shows it too.
+  const exception = str(read.rows[PUBLISHED_AT.exception]?.[0]?.exc);
   const seo: Seo = {
     path,
     title: pageTitle(clip(title, 90)),
@@ -184,7 +197,7 @@ export async function publishedContractPage(c: Context<AppEnv>): Promise<Respons
   };
   const watch = await watchControl(c, "contract", `contract:${dept}:${ref}`);
   const holder = access && inRadar(daysLeft, num(d.wh) !== 1 && num(d.oid) !== null, true)
-    ? await holderFromRead(c, read, 2, daysLeft, access.plan) : { state: "none" as const };
+    ? await holderFromRead(c, read, PUBLISHED_AT.line, daysLeft, access.plan) : { state: "none" as const };
 
   return page(
     c,
@@ -253,12 +266,18 @@ export async function publishedContractPage(c: Context<AppEnv>): Promise<Respons
             <Item lang={lang} k="published.agreement" v={str(d.agr) ? <span class="mono">{str(d.agr)}</span> : null} />
             <Item lang={lang} k="tender.trade_agreements" v={str(d.trade) ? <span class="mono">{str(d.trade)}</span> : null} />
             <Item lang={lang} k="published.limited_reason" v={str(d.ltr) ? <span class="mono">{str(d.ltr)}</span> : null} />
+            <Item lang={lang} k="published.exception" v={coded(lang, exception, ARTICLE_6)} />
             <Item lang={lang} k="published.bids" v={num(d.bids) === null ? null : fmtInt(num(d.bids), lang)} />
             <Item lang={lang} k="published.standing_offer" v={str(d.so_no) ? <span class="mono">{str(d.so_no)}</span> : null} />
             <Item lang={lang} k="contract.procurement_number" v={str(d.pid) ? <span class="mono">{str(d.pid)}</span> : null} />
             <Item lang={lang} k="published.psib" v={coded(lang, psibCode, PSIB)} />
             <Item lang={lang} k="published.ib_outside" v={outsidePsib ? t(lang, "published.ib_yes") : null} />
           </dl>
+          {exception ? (
+            <p class="muted small">{tj(lang, "published.exception_note", {
+              guide: <a href={EXCEPTIONS_GUIDE}>{t(lang, "published.exception_guide")}</a>,
+            })}</p>
+          ) : null}
           {psibCode ? <p class="muted small">{t(lang, "published.psib_note")}</p> : null}
           {outsidePsib ? <p class="muted small">{t(lang, "published.ib_note")}</p> : null}
           <p class="muted small">{t(lang, "published.codes_note")}</p>

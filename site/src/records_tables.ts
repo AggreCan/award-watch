@@ -2,7 +2,7 @@
 // and (below) the radar over its whole window, the record tables, the earlier
 // awards on a tender, the incumbents and the per-organization feeds. The
 // tables are pipeline/records_schema.sql's rec_contracts, rec_gsin,
-// rec_contract_indigenous, rec_details, rec_classes and rec_expiring, which the nightly sync fills
+// rec_contract_indigenous, rec_contract_exception, rec_details, rec_classes and rec_expiring, which the nightly sync fills
 // (pipeline/awardwatch_pipeline/records_db.py; docs/analytics.md).
 //
 // The rules of records_db.ts hold here too: every statement is a constant
@@ -52,23 +52,60 @@ export const PUBLISHED_CONTRACT_SQL =
 export const PUBLISHED_INDIGENOUS_SQL =
   "SELECT i.psib AS psib, i.ib AS ib FROM rec_contracts c JOIN rec_contract_indigenous i ON i.k = c.k WHERE c.dept = ?1 AND c.ref = ?2 LIMIT 1";
 
-// One batch: the state row, the contract's rows and its Indigenous business
-// fields (rows[1]). A records database the nightly has not given
-// rec_contract_indigenous yet is read again without it, and the page shows
-// the contract without the two fields. lineKey, for a signed-in reader only:
-// the holder's record in the same batch (rows[2], LINE_BY_KEY_SQL); a
-// database without rec_lines is read again without it, and noLines says so.
-export async function readPublishedContract(env: Env, dept: string, ref: string, lineKey?: string): Promise<Read & { noLines?: true }> {
-  const contract: Query = { sql: PUBLISHED_CONTRACT_SQL, params: [dept, ref] };
-  const indigenous: Query = { sql: PUBLISHED_INDIGENOUS_SQL, params: [dept, ref] };
-  if (lineKey !== undefined) {
-    const read = await readRecords(env, [contract, indigenous, { sql: LINE_BY_KEY_SQL, params: [lineKey] }]);
-    if (read.state !== "failed" || !read.noTable) return read;
-    return { ...(await readPublishedContract(env, dept, ref)), noLines: true };
+// The row's section 6 exception (rec_contract_exception, keyed the same way),
+// read as the Indigenous business fields are. A row only where the department
+// reported an exception to soliciting bids (article_6_exceptions 1 to 4, or a
+// value the schema does not list); 0, not applicable, has none.
+export const PUBLISHED_EXCEPTION_SQL =
+  "SELECT e.exc AS exc FROM rec_contracts c JOIN rec_contract_exception e ON e.k = c.k WHERE c.dept = ?1 AND c.ref = ?2 LIMIT 1";
+
+// Where each statement's rows are in a read of readPublishedContract. Each
+// keeps its place when its table could not be read, with no rows in it.
+export const PUBLISHED_AT = { contract: 0, indigenous: 1, exception: 2, line: 3 } as const;
+
+// A statement a page can do without, and the table it reads, which a records
+// database the nightly has not given it yet lacks.
+interface Optional { table: string; query: Query }
+
+// The required statements and the optional ones in one batch, their rows in
+// that order. A batch that fails for want of an optional statement's table is
+// read again without that statement, its place left with no rows, so each
+// table newer than the nightly that makes it falls back by itself, at one more
+// batch for each table missing. A failure naming no optional table is read
+// again with the required statements alone. without names the tables left out.
+async function readWithOptional(env: Env, required: Query[], optional: Optional[]): Promise<Read & { without: string[] }> {
+  let left = optional;
+  for (;;) {
+    const read = await readRecords(env, [...required, ...left.map((opt) => opt.query)]);
+    const without = optional.filter((opt) => !left.includes(opt)).map((opt) => opt.table);
+    if (read.state === "ready") {
+      const found = read.rows.slice(required.length);
+      const rows = [...read.rows.slice(0, required.length), ...optional.map((opt) => (left.includes(opt) ? found[left.indexOf(opt)] ?? [] : []))];
+      return { ...read, rows, without };
+    }
+    if (read.state !== "failed" || !read.noTable || !left.length) return { ...read, without };
+    const gone = left.find((opt) => opt.table === read.missing);
+    left = gone ? left.filter((opt) => opt !== gone) : [];
   }
-  const read = await readRecords(env, [contract, indigenous]);
-  if (read.state !== "failed" || !read.noTable) return read;
-  return readRecords(env, [contract]);
+}
+
+// One batch: the state row, the contract's rows, its Indigenous business
+// fields and its section 6 exception (PUBLISHED_AT). A records database the
+// nightly has not given rec_contract_indigenous or rec_contract_exception yet
+// is read again without the table it lacks, and the page shows the contract
+// without what that table holds. lineKey, for a signed-in reader only: the
+// holder's record in the same batch (LINE_BY_KEY_SQL); a database without
+// rec_lines is read again without it, and noLines says so.
+export async function readPublishedContract(env: Env, dept: string, ref: string, lineKey?: string): Promise<Read & { noLines?: true }> {
+  const optional: Optional[] = [
+    { table: "rec_contract_indigenous", query: { sql: PUBLISHED_INDIGENOUS_SQL, params: [dept, ref] } },
+    { table: "rec_contract_exception", query: { sql: PUBLISHED_EXCEPTION_SQL, params: [dept, ref] } },
+  ];
+  if (lineKey !== undefined) optional.push({ table: "rec_lines", query: { sql: LINE_BY_KEY_SQL, params: [lineKey] } });
+  const read = await readWithOptional(env, [{ sql: PUBLISHED_CONTRACT_SQL, params: [dept, ref] }], optional);
+  const noLines = lineKey !== undefined && read.without.includes("rec_lines");
+  if (read.state === "ready") return { state: "ready", asOf: read.asOf, rows: read.rows, ...(noLines ? { noLines: true as const } : {}) };
+  return { state: read.state, ...(read.noTable ? { noTable: true as const } : {}), ...(noLines ? { noLines: true as const } : {}) };
 }
 
 // -- the radar over its whole window (pages/expiring.tsx) -------------------------------
@@ -452,7 +489,7 @@ export function readContractSitemap(env: Env, first: string, last: string): Prom
 // Every statement here, for the tests that read their plans and their bounds.
 export const TABLE_SQL: readonly string[] = [
   CONTRACT_SITEMAP_SQL, EARLIER_AWARDS_SQL, BUYER_INCUMBENTS_SQL, SEGMENT_INCUMBENTS_SQL, ORG_FEED_SQL,
-  PUBLISHED_CONTRACT_SQL, PUBLISHED_INDIGENOUS_SQL, LINES_BY_KEY_SQL, LINE_BY_KEY_SQL, FOLLOWS_SQL, RADAR_ROWS_END_SQL, RADAR_ROWS_VALUE_SQL, RADAR_CSV_END_SQL, RADAR_CSV_VALUE_SQL, RADAR_TOTAL_SQL,
+  PUBLISHED_CONTRACT_SQL, PUBLISHED_INDIGENOUS_SQL, PUBLISHED_EXCEPTION_SQL, LINES_BY_KEY_SQL, LINE_BY_KEY_SQL, FOLLOWS_SQL, RADAR_ROWS_END_SQL, RADAR_ROWS_VALUE_SQL, RADAR_CSV_END_SQL, RADAR_CSV_VALUE_SQL, RADAR_TOTAL_SQL,
   RADAR_ROWS_END_DESC_SQL, RADAR_ROWS_VALUE_ASC_SQL, RADAR_CSV_END_DESC_SQL, RADAR_CSV_VALUE_ASC_SQL,
   RADAR_FACETS_SQL, RADAR_BUYERS_SQL, RADAR_CLIENTS_SQL, RADAR_SUPPLIERS_SQL,
   ...Object.values(RECORDS_SQL.organization), ...Object.values(RECORDS_SQL.buyer), ...RADAR_PROV_SQL,

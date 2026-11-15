@@ -709,6 +709,26 @@ def indigenous_mark(set_aside: object, outside_psib: object) -> str | None:
     return psib_set_aside(set_aside) or ("IB" if indigenous_outside_psib(outside_psib) else None)
 
 
+# The exception to soliciting bids in section 6 of the Government Contracts
+# Regulations a published contract reports (the TBS schema's
+# article_6_exceptions, choices read 2026-11-15): 1 to 4, one per paragraph
+# (a) to (d), and 0 "Not applicable", which the schema asks for when bids were
+# solicited. The loader keeps the cell as published, squashed; every value seen
+# on the development copy is a single digit.
+ARTICLE_6_EXCEPTIONS = ("1", "2", "3", "4")
+_DIGITS_RE = re.compile(r"[0-9]+")
+
+
+def article_6_exception(raw: object) -> str | None:
+    """The section 6 exception a published contract reports: a code of digits without its leading zeros ("04"
+    reads 4), anything else as published (the page shows a code it has no name for as it is); None for a blank
+    or 0, which says no exception applies, as NA does for the Indigenous business fields."""
+    text = squash(raw)
+    if _DIGITS_RE.fullmatch(text):
+        text = text.lstrip("0")
+    return text or None
+
+
 _TENDER_STATUS = {
     "open": "open", "ouvert": "open", "ouverte": "open",
     "expired": "expired", "expire": "expired", "expiree": "expired", "closed": "expired", "ferme": "expired",

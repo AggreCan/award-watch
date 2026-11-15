@@ -48,6 +48,9 @@ of the rows that report a set-aside under the Procurement Strategy for
 Indigenous Business or an Indigenous business outside one: a table of its
 own, because a column added to rec_contracts reaches D1 only through a full
 reload, and a row only where a field says so, so the table stays small.
+rec_contract_exception holds, the same way, the exception to soliciting bids
+in section 6 of the Government Contracts Regulations a row reports
+(article_6_exceptions), a row only where the department gave one.
 
 One more, rec_events, holds what the watches follow (site/src/account/
 watch_events.ts): what happened tonight to an organization, a buyer, a
@@ -109,7 +112,9 @@ from .db import connect, get_meta, now_iso, set_meta, today_iso
 from .export import scrub
 from .export_static import BUYER_ID_RE, NEW_LAG_DAYS, ORG_ID_RE, RefMap, read_segments
 from .indicators import RULES_VERSION
-from .normalize import PROVINCE_CODES, closing_day, indigenous_outside_psib, psib_set_aside, tender_status_on
+from .normalize import (
+    PROVINCE_CODES, article_6_exception, closing_day, indigenous_outside_psib, psib_set_aside, tender_status_on,
+)
 from .search_db import (
     MAX_BATCH_BYTES, MAX_BATCH_STATEMENTS, MAX_KEYS_PER_DELETE, MAX_STATEMENT_BYTES, _BatchWriter, _grouped, sql_literal,
 )
@@ -169,8 +174,10 @@ CONTRACT_INDIGENOUS = Table(17, "rec_contract_indigenous", "k", ("psib", "ib"))
 LINES = Table(18, "rec_lines", "k", ("sk", "j"))
 # The earlier contracts an open notice may follow (follows.py, follows_rows), keyed by the notice and the record.
 FOLLOWS = Table(19, "rec_follows", "k", ("tref", "rank", "j"))
+# A published contract row's section 6 exception, keyed as its rec_contracts row (published_exception_rows).
+CONTRACT_EXCEPTION = Table(20, "rec_contract_exception", "k", ("exc",))
 TABLES = (RECORDS, ORGS, BUYERS, BUYER_QUARTERS, SEGMENT_YEARS, BUYER_YEARS, DUE, DETAILS, CLASSES, EXPIRING, CONTRACTS, GSIN,
-          EVENTS, INSTRUMENTS, HOLDERS, EXPIRING_PROV, CONTRACT_INDIGENOUS, LINES, FOLLOWS)
+          EVENTS, INSTRUMENTS, HOLDERS, EXPIRING_PROV, CONTRACT_INDIGENOUS, LINES, FOLLOWS, CONTRACT_EXCEPTION)
 BY_CODE = {t.code: t for t in TABLES}
 
 # The form of the tables in records_schema.sql. 1: phase 1 (no meta row says
@@ -178,9 +185,9 @@ BY_CODE = {t.code: t for t in TABLES}
 # rec_buyer_years, rec_due. Recorded in meta (META_LAYOUT) by the full load
 # that wrote it; a sync that finds another reloads in full by itself. The
 # tables added beside them (rec_details to rec_gsin, then rec_events, rec_instruments, rec_holders,
-# rec_expiring_prov, rec_contract_indigenous, rec_lines and rec_follows) leave it at 2: no table D1 holds changed
-# form, the nightly schema creates a missing table, and its rows are all new to the ledger, so the ordinary changes
-# fill it. A column added to any of the nineteen raises it.
+# rec_expiring_prov, rec_contract_indigenous, rec_lines, rec_follows and rec_contract_exception) leave it at 2: no
+# table D1 holds changed form, the nightly schema creates a missing table, and its rows are all new to the ledger, so
+# the ordinary changes fill it. A column added to any of the twenty raises it.
 LAYOUT = 2
 
 # The source numbers the site's records_db.ts SOURCE_NUMBER repeats.
@@ -678,7 +685,7 @@ def follows_rows(conn: sqlite3.Connection) -> Iterator[tuple]:
         yield key_of(f"follow:{tref}:{data.get('src')}:{data.get('ref')}"), tref, rank, j
 
 
-# -- the published contracts' pages (rec_contracts, rec_gsin, rec_contract_indigenous) --
+# -- the published contracts' pages (rec_contracts, rec_gsin, rec_contract_indigenous, rec_contract_exception) --
 
 # One row per row of the contracts table, keyed as its records row is
 # ('contract:<owner_org>:<reference>'), so the page reads the counted value
@@ -788,6 +795,31 @@ def published_indigenous_rows(conn: sqlite3.Connection) -> Iterator[tuple]:
         ib = 1 if indigenous_outside_psib(r["indigenous_business_excluding_psib"]) else 0
         if psib or ib:
             yield key_of(f"contract:{dept}:{ref}"), psib, ib
+
+
+# The rows that report something in article_6_exceptions; published_exception_rows reads each value.
+EXCEPTION_SQL = (
+    "SELECT owner_org, reference, article_6_exceptions FROM contracts WHERE COALESCE(TRIM(article_6_exceptions), '') != ''"
+)
+# A value no code is this long; a longer one is cut, as the page's other short fields are.
+EXCEPTION_MAX = 20
+
+
+def published_exception_rows(conn: sqlite3.Connection) -> Iterator[tuple]:
+    """rec_contract_exception's rows, in CONTRACT_EXCEPTION.written order: one per published contract row the
+    site can address whose article_6_exceptions names an exception to soliciting bids (normalize.
+    article_6_exception: 1 to 4, or a value the schema does not list, which the page shows as it is), keyed as
+    its rec_contracts row. 0 (not applicable) and a blank write no row. A vendor withheld as a person keeps
+    the row, unlike the Indigenous business fields: the exception describes how the contract was awarded, not
+    the vendor, as the limited tendering reason beside it on the page does.
+    """
+    for r in conn.execute(EXCEPTION_SQL):
+        dept, ref = str(r["owner_org"] or ""), str(r["reference"] or "")
+        if not _addressable(dept, ref):
+            continue
+        code = _short(article_6_exception(r["article_6_exceptions"]), EXCEPTION_MAX)
+        if code:
+            yield key_of(f"contract:{dept}:{ref}"), code
 
 
 def gsin_rows(conn: sqlite3.Connection, codes: set[str]) -> Iterator[tuple]:
@@ -1004,6 +1036,7 @@ def build(conn: sqlite3.Connection, today: date | None = None, static_dir: Path 
     codes = {r[0] for r in conn.execute(f"SELECT DISTINCT gsin FROM temp.{_now(CONTRACTS)} WHERE gsin IS NOT NULL")}
     fill(GSIN, gsin_rows(conn, codes))
     fill(CONTRACT_INDIGENOUS, published_indigenous_rows(conn))
+    fill(CONTRACT_EXCEPTION, published_exception_rows(conn))
 
     # The standing offers and supply arrangements' pages.
     tenders = RefMap(conn, "tenders")

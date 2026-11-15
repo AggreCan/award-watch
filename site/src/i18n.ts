@@ -3242,6 +3242,34 @@ const STRINGS = {
   "published.limited_reason": { en: "Limited tendering reason", fr: "Raison de l'appel d'offres limité" },
   "published.bids": { en: "Number of bids", fr: "Nombre de soumissions" },
   "published.standing_offer": { en: "Standing offer number", fr: "Numéro de l'offre à commandes" },
+  // The section 6 exception (article_6_exceptions). The label is the schema's field label put in the singular,
+  // the Regulations named as they are titled (the schema's French label carries an older title); each code's
+  // name is the schema's own words for choices 1 to 4, read 2026-11-15, without the closing period some carry.
+  "published.exception": {
+    en: "Section 6 exception (Government Contracts Regulations)",
+    fr: "Exception prévue à l'article 6 (Règlement sur les marchés de l'État)",
+  },
+  "published.exception_1": {
+    en: "Pressing emergency in which delay would be injurious to the public interest",
+    fr: "Extrême urgence où un retard serait préjudiciable à l'intérêt public",
+  },
+  "published.exception_2": {
+    en: "Does not exceed s.6 (b) Government Contracts Regulations prescribed dollar limits",
+    fr: "N'excède pas la limite financière prescrite à l'alinéa 6 b) du Règlement sur les marchés de l'État",
+  },
+  "published.exception_3": {
+    en: "Not in the public interest to solicit bids",
+    fr: "Situation dans laquelle un appel d'offres ne servirait pas l'intérêt public",
+  },
+  "published.exception_4": {
+    en: "Only one person is capable of performing the contract",
+    fr: "Une seule personne est en mesure d'exécuter le marché",
+  },
+  "published.exception_note": {
+    en: "The department reported this exception to soliciting bids; the {guide} explains the four exceptions.",
+    fr: "Le ministère a déclaré cette exception à l'appel d'offres; le {guide} explique les quatre exceptions.",
+  },
+  "published.exception_guide": { en: "guide on contracts awarded without competition", fr: "guide sur les marchés conclus sans appel d'offres" },
   // The two Indigenous business fields, in the TBS schema's own terms (indigenous_business and
   // indigenous_business_excluding_psib), and a note for each.
   "published.psib": { en: "Procurement Strategy for Indigenous Business", fr: "Stratégie d'approvisionnement auprès des entreprises autochtones" },

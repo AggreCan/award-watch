@@ -1,4 +1,4 @@
-// Two fields the sources give that the pages now show, each as its source
+// Fields the sources give that the pages now show, each as its source
 // states it:
 //
 // - the supplier's employees on PSPC's contract history
@@ -9,15 +9,22 @@
 // - the published contracts' two Indigenous business fields
 //   (indigenous_business, indigenous_business_excluding_psib): on the
 //   published contract's page (rec_contract_indigenous), and as a tag on a
-//   radar row.
+//   radar row;
+// - the published contracts' section 6 exception (article_6_exceptions): on
+//   the published contract's page (rec_contract_exception).
 //
-// A supplier or vendor withheld as a person shows neither. A file or a
-// records database from before the fields reads as it did.
+// A supplier or vendor withheld as a person shows neither of the first two;
+// the section 6 exception describes the award, so a person's contract shows
+// it. A file or a records database from before the fields reads as it did,
+// and a records database lacking either table of a published contract's page
+// reads the other.
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { EMPLOYEE_BANDS, indigenousMark, isEmployees, profileEmployees, supplierEmployees } from "../src/data";
+import { GUIDES } from "../src/guides";
 import { app } from "../src/index";
-import { PUBLISHED_INDIGENOUS_SQL, TABLE_SQL } from "../src/records_tables";
+import { PUBLISHED_EXCEPTION_SQL, PUBLISHED_INDIGENOUS_SQL, TABLE_SQL } from "../src/records_tables";
+import { EXCEPTIONS_GUIDE } from "../src/pages/published";
 import { contractPath, employeesText } from "../src/pages/shared";
 import contracts from "./fixtures/contracts-637.json";
 import expiring3m from "./fixtures/expiring-3m-1.json";
@@ -188,7 +195,7 @@ describe("the Indigenous business marks on a radar row", () => {
 const RECORDS = (env as unknown as { RECORDS: D1Database }).RECORDS;
 const SCHEMA = (env as unknown as { RECORDS_SCHEMA_SQL: string }).RECORDS_SCHEMA_SQL;
 const DFO = 104;
-interface Published { k: number; ref: string; wh: 0 | 1; psib?: string | null; ib?: 0 | 1 }
+interface Published { k: number; ref: string; wh: 0 | 1; psib?: string | null; ib?: 0 | 1; exc?: string }
 const PUBLISHED: Published[] = [
   { k: 5001, ref: "IND-MS-1", wh: 0, psib: "MS", ib: 0 },
   { k: 5002, ref: "IND-VS-1", wh: 0, psib: "VS", ib: 0 },
@@ -196,6 +203,14 @@ const PUBLISHED: Published[] = [
   { k: 5004, ref: "IND-NONE-1", wh: 0 },
   // A person's contract: whatever a row says, the page shows neither field.
   { k: 5005, ref: "IND-PERSON-1", wh: 1, psib: "MS", ib: 1 },
+  // Contracts awarded without soliciting bids, each with one of the schema's four section 6 exceptions (the
+  // fourth beside a set-aside), a person's contract, and a code the schema does not list.
+  { k: 5011, ref: "EXC-1", wh: 0, exc: "1" },
+  { k: 5012, ref: "EXC-2", wh: 0, exc: "2" },
+  { k: 5013, ref: "EXC-3", wh: 0, exc: "3" },
+  { k: 5014, ref: "EXC-4", wh: 0, exc: "4", psib: "MS", ib: 0 },
+  { k: 5015, ref: "EXC-PERSON-1", wh: 1, exc: "4" },
+  { k: 5016, ref: "EXC-UNLISTED-1", wh: 0, exc: "7" },
 ];
 
 const INDIGENOUS_DDL = [
@@ -207,16 +222,20 @@ async function seedPublished(): Promise<void> {
   for (const sql of INDIGENOUS_DDL) await RECORDS.prepare(sql).run();
   await RECORDS.batch([
     RECORDS.prepare("DELETE FROM rec_contract_indigenous"),
+    RECORDS.prepare("DELETE FROM rec_contract_exception"),
     RECORDS.prepare("DELETE FROM rec_contracts WHERE dept = 'dfo-mpo'"),
     RECORDS.prepare("INSERT OR REPLACE INTO rec_buyers (bid, id, name_en, name_fr) VALUES (?, 'dfo-mpo', 'Fisheries and Oceans Canada', 'Pêches et Océans Canada')").bind(DFO),
     RECORDS.prepare("INSERT OR REPLACE INTO rec_meta (key, value) VALUES ('state', 'ready'), ('as_of', '2026-10-31'), ('rules', '2')"),
+    // A row with an exception is non-competitive (TN) with a limited tendering reason, as such rows are published.
     ...PUBLISHED.map((c) => RECORDS.prepare(
       "INSERT INTO rec_contracts (k, dept, ref, pid, bid, oid, wh, cdate, start, endd, value, orig, amend, proc, comp, ctype, gsin, agr, trade, ltr, " +
       "inst, period, bids, so_no, desc_en, desc_fr, com_en, com_fr) VALUES (?, 'dfo-mpo', ?, NULL, ?, NULL, ?, '2026-05-01', '2026-05-01', " +
-      "'2027-03-31', 5000000, 5000000, NULL, 'OB', 1, 'S', NULL, NULL, NULL, NULL, 'C', '2026-2027-Q1', 3, NULL, ?, NULL, NULL, NULL)",
-    ).bind(c.k, c.ref, DFO, c.wh, `Harbour dredging ${c.ref}`)),
+      "'2027-03-31', 5000000, 5000000, NULL, ?, ?, 'S', NULL, NULL, NULL, ?, 'C', '2026-2027-Q1', ?, NULL, ?, NULL, NULL, NULL)",
+    ).bind(c.k, c.ref, DFO, c.wh, c.exc ? "TN" : "OB", c.exc ? 0 : 1, c.exc ? "71" : null, c.exc ? 1 : 3, `Harbour dredging ${c.ref}`)),
     ...PUBLISHED.filter((c) => c.psib !== undefined).map((c) =>
       RECORDS.prepare("INSERT INTO rec_contract_indigenous (k, psib, ib) VALUES (?, ?, ?)").bind(c.k, c.psib ?? null, c.ib ?? 0)),
+    ...PUBLISHED.filter((c) => c.exc !== undefined).map((c) =>
+      RECORDS.prepare("INSERT INTO rec_contract_exception (k, exc) VALUES (?, ?)").bind(c.k, c.exc!)),
   ]);
 }
 
@@ -242,7 +261,8 @@ describe("the Indigenous business fields on a published contract's page", () => 
   it("show a set-aside under the Procurement Strategy for Indigenous Business, code and term, with its note, from the page's one batch", async () => {
     const { binding, batches } = counting(RECORDS);
     const html = await contractPage("IND-MS-1", "", { ...testEnv(), RECORDS: binding });
-    expect(batches).toEqual([3]);
+    // The state row, the contract's rows, its Indigenous business fields and its section 6 exception.
+    expect(batches).toEqual([4]);
     expect(html).toContain('<dt>Procurement Strategy for Indigenous Business</dt><dd><span class="mono">MS</span> Mandatory Set-Aside</dd>');
     expect(html).toContain("The department reported a set-aside for Indigenous businesses under the Procurement Strategy for Indigenous Business (PSIB) on this contract.");
     expect(html).not.toContain("Indigenous Business excluding PSIB");
@@ -295,8 +315,139 @@ describe("the Indigenous business fields on a published contract's page", () => 
       const html = decode(nbsp(await res.text()));
       expect(html).toContain("Harbour dredging IND-MS-1");
       expect(html).not.toContain("Procurement Strategy for Indigenous Business");
-      // The batch with the table's statement fails, and the page reads again without it.
-      expect(batches).toEqual([3, 2]);
+      // The batch with the table's statement fails, and the page reads again without it (the exception's kept).
+      expect(batches).toEqual([4, 3]);
+    } finally {
+      await seedPublished();
+    }
+  });
+});
+
+// -- the section 6 exception on a published contract's page -------------------------
+
+const EXCEPTION_ROW = (code: string, name: string) =>
+  `<dt>Section 6 exception (Government Contracts Regulations)</dt><dd><span class="mono">${code}</span>${name ? ` ${name}` : ""}</dd>`;
+const EXCEPTION_NOTE =
+  `The department reported this exception to soliciting bids; the <a href="${EXCEPTIONS_GUIDE}">guide on contracts awarded without competition</a> explains the four exceptions.`;
+
+describe("the section 6 exception on a published contract's page", () => {
+  it("shows the code and the schema's name for it right after the limited tendering reason, with its note, from the page's one batch", async () => {
+    const { binding, batches } = counting(RECORDS);
+    const html = await contractPage("EXC-4", "", { ...testEnv(), RECORDS: binding });
+    expect(batches).toEqual([4]);
+    expect(html).toContain(
+      `<dt>Limited tendering reason</dt><dd><span class="mono">71</span></dd>${EXCEPTION_ROW("4", "Only one person is capable of performing the contract")}<dt>Number of bids</dt><dd>1</dd>`,
+    );
+    expect(html).toContain(`<p class="muted small">${EXCEPTION_NOTE}</p>`);
+    // The set-aside beside it shows as before, its note after the exception's.
+    expect(html).toContain('<dt>Procurement Strategy for Indigenous Business</dt><dd><span class="mono">MS</span> Mandatory Set-Aside</dd>');
+    expect(html.indexOf(EXCEPTION_NOTE)).toBeLessThan(html.indexOf("The department reported a set-aside for Indigenous businesses"));
+    for (const [ref, code, name] of [
+      ["EXC-1", "1", "Pressing emergency in which delay would be injurious to the public interest"],
+      ["EXC-2", "2", "Does not exceed s.6 (b) Government Contracts Regulations prescribed dollar limits"],
+      ["EXC-3", "3", "Not in the public interest to solicit bids"],
+    ]) {
+      const page = await contractPage(ref);
+      expect(page, ref).toContain(EXCEPTION_ROW(code, name));
+      expect(page, ref).toContain(EXCEPTION_NOTE);
+    }
+    expect(html).not.toContain(EM_DASH);
+    expect(html).not.toContain(EN_DASH);
+  });
+
+  it("reads in French in the schema's French words", async () => {
+    const fr = await contractPage("EXC-4", "fr");
+    const row = (code: string, name: string) =>
+      `<dt>Exception prévue à l’article 6 (Règlement sur les marchés de l’État)</dt><dd><span class="mono">${code}</span> ${name}</dd>`;
+    expect(fr).toContain(row("4", "Une seule personne est en mesure d’exécuter le marché"));
+    expect(fr).toContain(
+      `<p class="muted small">Le ministère a déclaré cette exception à l’appel d’offres; le <a href="${EXCEPTIONS_GUIDE}">guide sur les marchés conclus sans appel d’offres</a> explique les quatre exceptions.</p>`,
+    );
+    const names: [string, string][] = [
+      ["1", "Extrême urgence où un retard serait préjudiciable à l’intérêt public"],
+      ["2", "N’excède pas la limite financière prescrite à l’alinéa 6 b) du Règlement sur les marchés de l’État"],
+      ["3", "Situation dans laquelle un appel d’offres ne servirait pas l’intérêt public"],
+    ];
+    for (const [code, name] of names) expect(await contractPage(`EXC-${code}`, "fr"), code).toContain(row(code, name));
+    expect(fr).not.toContain(EM_DASH);
+    expect(fr).not.toContain(EN_DASH);
+  });
+
+  it("shows a code the schema does not list as it is, and the exception on a person's contract without the Indigenous fields", async () => {
+    const unlisted = await contractPage("EXC-UNLISTED-1");
+    expect(unlisted).toContain(EXCEPTION_ROW("7", ""));
+    expect(unlisted).toContain(EXCEPTION_NOTE);
+    const person = await contractPage("EXC-PERSON-1");
+    expect(person).toContain("Individual, name withheld");
+    expect(person).toContain(EXCEPTION_ROW("4", "Only one person is capable of performing the contract"));
+    expect(person).not.toContain("Indigenous Business");
+  });
+
+  it("shows neither the row nor the note on a contract that reports no exception", async () => {
+    for (const ref of ["IND-NONE-1", "IND-MS-1", "IND-PERSON-1"]) {
+      const html = await contractPage(ref);
+      expect(html, ref).toContain(`Harbour dredging ${ref}`);
+      expect(html, ref).not.toContain("Section 6 exception");
+      expect(html, ref).not.toContain("exception to soliciting bids");
+      expect(await contractPage(ref, "fr"), ref).not.toContain("article 6");
+    }
+  });
+
+  it("links the guide's section on the four exceptions", () => {
+    const [path, section] = EXCEPTIONS_GUIDE.split("#");
+    const guide = GUIDES.find((g) => `/guides/${g.slug}` === path);
+    expect(guide, path).toBeDefined();
+    expect(guide!.sections.map((s) => s.id)).toContain(section);
+  });
+
+  it("reads the row through the unique index and the table's key, bounded", async () => {
+    expect(TABLE_SQL).toContain(PUBLISHED_EXCEPTION_SQL);
+    expect(PUBLISHED_EXCEPTION_SQL).toMatch(/LIMIT 1$/);
+    const steps = ((await RECORDS.prepare(`EXPLAIN QUERY PLAN ${PUBLISHED_EXCEPTION_SQL}`).bind("dfo-mpo", "EXC-4").all()).results ?? [])
+      .map((r) => String((r as { detail?: unknown }).detail));
+    const text = steps.join("\n");
+    expect(steps.filter((s) => /^SCAN /.test(s)), text).toEqual([]);
+    expect(text).toContain("rec_contracts_ref");
+    expect(text).toMatch(/SEARCH e USING INTEGER PRIMARY KEY/);
+  });
+
+  // The Worker can deploy before the nightly that creates rec_contract_exception: each table of the page's batch
+  // falls back by itself, so a database lacking one still shows what the other holds.
+  it("reads again without the table on a records database the nightly has not given it yet, keeping the Indigenous fields", async () => {
+    await RECORDS.prepare("DROP TABLE rec_contract_exception").run();
+    try {
+      const { binding, batches } = counting(RECORDS);
+      const res = await app.request(contractPath("dfo-mpo", "EXC-4"), {}, { ...testEnv(), RECORDS: binding });
+      expect(res.status).toBe(200);
+      const html = decode(nbsp(await res.text()));
+      expect(html).toContain("Harbour dredging EXC-4");
+      expect(html).toContain("<dt>Limited tendering reason</dt><dd><span class=\"mono\">71</span></dd><dt>Number of bids</dt>");
+      expect(html).not.toContain("Section 6 exception");
+      expect(html).not.toContain("exception to soliciting bids");
+      expect(html).toContain('<span class="mono">MS</span> Mandatory Set-Aside</dd>');
+      expect(batches).toEqual([4, 3]);
+    } finally {
+      await seedPublished();
+    }
+  });
+
+  it("keeps the exception on a database without the Indigenous table, and shows the contract alone without both", async () => {
+    await RECORDS.prepare("DROP TABLE rec_contract_indigenous").run();
+    try {
+      const { binding, batches } = counting(RECORDS);
+      const html = await contractPage("EXC-4", "", { ...testEnv(), RECORDS: binding });
+      expect(html).toContain(EXCEPTION_ROW("4", "Only one person is capable of performing the contract"));
+      expect(html).not.toContain("Procurement Strategy for Indigenous Business");
+      expect(batches).toEqual([4, 3]);
+      await RECORDS.prepare("DROP TABLE rec_contract_exception").run();
+      const both = counting(RECORDS);
+      const res = await app.request(contractPath("dfo-mpo", "EXC-4"), {}, { ...testEnv(), RECORDS: both.binding });
+      expect(res.status).toBe(200);
+      const alone = decode(nbsp(await res.text()));
+      expect(alone).toContain("Harbour dredging EXC-4");
+      expect(alone).not.toMatch(/Section 6 exception|Procurement Strategy for Indigenous Business/);
+      // One table missing a batch: the full batch, then without the first table the error names, then without the other.
+      expect(both.batches).toEqual([4, 3, 2]);
     } finally {
       await seedPublished();
     }

@@ -725,6 +725,15 @@ td.c-notice a:first-child { font-weight: 500; }
    inside the value column ("Méthode non précisée" is wider than it). */
 .rest-flag { margin-top: 4px; }
 td .rest-flag .flag { height: auto; min-height: 24px; max-width: 100%; padding: 4px 8px; white-space: normal; text-align: left; }
+/* The same in a definition list's value (a published contract's Procurement
+   panel): on a 320 px phone "Non concurrentiel" is wider than the value
+   column, and the flag's box was cut to the column while its text ran on past
+   the border. 3 px above and below, with the 1 px border, keep a one-line flag
+   at its 24 px, its text where the fixed height put it. Words stay whole (the
+   dd breaks anywhere, which cut "concurrentie" from its "l"), so the flag is
+   as wide as its longest word at least, which may reach into the dd's right
+   padding, as a table cell's flag reaches into its cell's. */
+dd .flag { height: auto; min-height: 24px; max-width: none; padding: 3px 8px; white-space: normal; overflow-wrap: normal; text-align: left; }
 
 /* -- status chips, the competitive flag, codes, filter chips -------------- */
 .badge, .flag, .chip, .fchip {

@@ -137,7 +137,7 @@ function carriesDisclaimer(html: string, why: string, lang: "en" | "fr" = "en") 
 }
 
 describe("a reader not signed in", () => {
-  it("gets each contract page byte for byte as it was, whatever rec_lines holds, and the published contract in one batch of three", async () => {
+  it("gets each contract page byte for byte as it was, whatever rec_lines holds, and the published contract in one batch of four", async () => {
     for (const path of [AWARD, PUBLISHED, `${AWARD}?lang=fr`]) {
       for (const environment of [E, OFF]) {
         const filled = await get(path, { env: environment() });
@@ -151,7 +151,8 @@ describe("a reader not signed in", () => {
     }
     const { binding, batches } = counting(RECORDS);
     await get(PUBLISHED, { env: E({ records: binding }) });
-    expect(batches).toEqual([3]);
+    // The state row, the contract's rows, its Indigenous business fields and its section 6 exception.
+    expect(batches).toEqual([4]);
   });
 
   it("gets one line more on a radar window's page, the same for everyone, and the page stays public", async () => {
@@ -241,7 +242,7 @@ describe("a Pro reader", () => {
     expect(main(past.html)).toContain('<p><strong>Earlier records</strong> <span class="muted">8 earlier since 2026-04-27</span></p>');
     const { binding, batches } = counting(RECORDS);
     const published = await open(PUBLISHED, { cookie: pro, env: E({ records: binding }) });
-    expect(batches).toEqual([4]);
+    expect(batches).toEqual([5]);
     const m = main(published.html);
     expect(m).toContain("<p>Contracts of this kind with National Defence held by Sample Harbour Marine Ltd., fiscal years 2017-18 to 2026-27.</p>");
     expect(m).toContain("<p><strong>No earlier record</strong></p>");
@@ -262,6 +263,23 @@ describe("the states without a record to show", () => {
       const { res, html } = await open(path, { cookie, env: E({ records: withoutLines(RECORDS) }) });
       expect(res.status, path).toBe(200);
       expect(html, path).not.toMatch(/Holder's Record|line-mark|line-disclaimer|not available right now|line-signin|after the next nightly/);
+    }
+  });
+
+  it("keep the holder's record on a published contract's page whose records database lacks one of the page's other tables", async () => {
+    await readers();
+    for (const table of ["rec_contract_exception", "rec_contract_indigenous"]) {
+      await RECORDS.prepare(`DROP TABLE ${table}`).run();
+      try {
+        const { binding, batches } = counting(RECORDS);
+        const { res, html } = await open(PUBLISHED, { cookie: pro, env: E({ records: binding }) });
+        expect(res.status, table).toBe(200);
+        expect(main(html), table).toContain("<p><strong>No earlier record</strong></p>");
+        // The full batch, then the same without the statement whose table the error names.
+        expect(batches, table).toEqual([5, 4]);
+      } finally {
+        await applySql(RECORDS, SCHEMA);
+      }
     }
   });
 

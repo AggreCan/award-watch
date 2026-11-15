@@ -312,6 +312,17 @@ CREATE TABLE IF NOT EXISTS rec_contract_indigenous (
   ib INTEGER NOT NULL DEFAULT 0                  -- 1 when indigenous_business_excluding_psib is Y
 );
 
+-- The exception to soliciting bids in section 6 of the Government Contracts
+-- Regulations a published contract row reports (article_6_exceptions,
+-- records_db.published_exception_rows), keyed as its rec_contracts row, for
+-- its page: a row only where the department gave one, so 0 (not applicable)
+-- and a blank have none. A table beside rec_contracts for the reason
+-- rec_contract_indigenous is one.
+CREATE TABLE IF NOT EXISTS rec_contract_exception (
+  k INTEGER PRIMARY KEY,                         -- rec_contracts.k of the row
+  exc TEXT NOT NULL                              -- 1 to 4 as the TBS schema codes them, or another value as published
+);
+
 -- The events the watches follow (site/src/account/watch_events.ts; the rules
 -- in docs/analytics.md, "Events"): one row per thing that happened on a data
 -- date of the last 90 days to an organization, a buyer, a published contract

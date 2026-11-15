@@ -1,13 +1,17 @@
-"""Two fields the sources give that the site now shows, each as its source states it:
+"""Fields the sources give that the site now shows, each as its source states it:
 
 * the supplier's employees on PSPC's contract history (supplierEmployeeCount): a count, or a size band
   of the CanadaBuys data dictionary on older records (normalize.employee_count), on a history record's
   detail (supplier_employees) and on the profile as its newest record's figure (employees);
 * the published contracts' Indigenous business fields (indigenous_business,
   indigenous_business_excluding_psib): the radar's mark (expiring.py, export_static.expiring_row) and the
-  published contract page's table, rec_contract_indigenous (records_db.py).
+  published contract page's table, rec_contract_indigenous (records_db.py);
+* the published contracts' section 6 exception (article_6_exceptions): the published contract page's
+  table, rec_contract_exception (records_db.py).
 
-A supplier or vendor withheld as a person carries neither, anywhere."""
+A supplier or vendor withheld as a person carries neither of the first two, anywhere. The section 6
+exception describes how a contract was awarded, so a withheld vendor's row keeps it, as it keeps the
+limited tendering reason."""
 
 from __future__ import annotations
 
@@ -24,7 +28,8 @@ from awardwatch_pipeline import export_static as es
 from awardwatch_pipeline import records_db as rd
 from awardwatch_pipeline.db import set_meta
 from awardwatch_pipeline.normalize import (
-    EMPLOYEE_BANDS, INDIGENOUS_MARKS, employee_count, indigenous_mark, indigenous_outside_psib, psib_set_aside,
+    ARTICLE_6_EXCEPTIONS, EMPLOYEE_BANDS, INDIGENOUS_MARKS, article_6_exception, employee_count, indigenous_mark,
+    indigenous_outside_psib, psib_set_aside,
 )
 from export_seed import ACME, NORTH, PERSON_STREET, STAMP, TODAY, seed
 
@@ -68,6 +73,21 @@ def test_the_site_reads_every_mark_the_export_writes():
     data_ts = (REPO / "site" / "src" / "data.ts").read_text(encoding="utf-8")
     listed = re.search(r"export const INDIGENOUS_MARKS = \[([^\]]*)\]", data_ts)
     assert listed and tuple(re.findall(r'"([^"]+)"', listed.group(1))) == INDIGENOUS_MARKS
+
+
+@pytest.mark.parametrize("raw, code", [
+    ("1", "1"), ("2", "2"), (" 3 ", "3"), ("4", "4"), ("04", "4"), ("0", None), ("00", None), (" ", None), ("", None),
+    (None, None), ("5", "5"), ("10", "10"), ("2, 4", "2, 4"), ("N/A", "N/A"),
+])
+def test_the_section_6_exception_is_a_code_or_the_value_as_published(raw, code):
+    # 0 is the schema's "Not applicable"; a value it does not list is kept as published, for the page to show bare.
+    assert article_6_exception(raw) == code
+
+
+def test_the_site_names_every_section_6_exception_the_schema_lists():
+    published = (REPO / "site" / "src" / "pages" / "published.tsx").read_text(encoding="utf-8")
+    listed = re.search(r"const ARTICLE_6: Record<string, Key> = \{([^}]*)\}", published)
+    assert listed and tuple(re.findall(r'"(\d+)":', listed.group(1))) == ARTICLE_6_EXCEPTIONS
 
 
 # -- the supplier's employees in the export ------------------------------------------------
@@ -287,8 +307,57 @@ def test_the_page_table_holds_the_rows_that_report_a_set_aside_or_an_indigenous_
     assert held == {"C-1": ("VS", 0), "C-5": ("VS", 0)}
 
 
+def exception_rows(db: sqlite3.Connection) -> dict[str, str]:
+    return {r[0]: r[1] for r in db.execute(
+        "SELECT c.ref, e.exc FROM rec_contract_exception e JOIN rec_contracts c ON c.k = e.k ORDER BY c.ref")}
+
+
+def test_the_page_table_holds_the_rows_that_report_a_section_6_exception(conn, tmp_path):
+    seed(conn)
+    set_meta(conn, "data_as_of", TODAY.isoformat())
+    # The seed's C-1 and C-2 are non-competitive (TN): one names exception 4, the other reports nothing.
+    conn.execute("UPDATE contracts SET article_6_exceptions = '4' WHERE reference = 'C-1'")
+    rows = [("C-3", "2", 0), ("C-4", "0", 0), ("C-5", None, 0), ("C-6", " 1 ", 1), ("C-7", "04", 0), ("C-8", "7", 0)]
+    for ref, exception, withheld in rows:
+        conn.execute(
+            "INSERT INTO contracts (owner_org, reference, vendor_raw, vendor_withheld, buyer_id, contract_date, value, "
+            "solicitation_procedure, competitive, article_6_exceptions, loaded_at) VALUES ('dnd-mdn', ?, ?, ?, 'dnd-mdn', "
+            "'2025-12-01', 50000, 'TN', 0, ?, ?)", (ref, None if withheld else NORTH, withheld, exception, STAMP))
+    # A row the site cannot address has no page, so no row here either.
+    conn.execute("INSERT INTO contracts (owner_org, reference, article_6_exceptions, loaded_at) VALUES ('Not An Id', 'Z-1', '4', ?)",
+                 (STAMP,))
+    conn.commit()
+    out = tmp_path / "records"
+    db = d1()
+    manifest = night(conn, out, db)
+    # 0 (not applicable) and a blank write none; a person's contract keeps its exception; 04 reads 4; a value the
+    # schema does not list is kept as published.
+    assert manifest["expected"]["rec_contract_exception"] == 5
+    assert exception_rows(db) == {"C-1": "4", "C-3": "2", "C-6": "1", "C-7": "4", "C-8": "7"}
+    # Keyed as the page's row, through the unique index the page reads.
+    plan = " ".join(str(r[-1]) for r in db.execute(
+        "EXPLAIN QUERY PLAN SELECT e.exc FROM rec_contracts c JOIN rec_contract_exception e ON e.k = c.k "
+        "WHERE c.dept = ? AND c.ref = ? LIMIT 1", ("dnd-mdn", "C-1")))
+    assert "rec_contracts_ref" in plan and "SCAN" not in plan, plan
+    # Nothing changed, nothing sent; a value that changes sends its row, and one that becomes 0 deletes it.
+    assert night(conn, out, db)["batches"] == []
+    conn.execute("UPDATE contracts SET article_6_exceptions = '3' WHERE reference = 'C-1'")
+    conn.execute("UPDATE contracts SET article_6_exceptions = '0' WHERE reference = 'C-3'")
+    conn.commit()
+    manifest = night(conn, out, db)
+    assert (manifest["upserts"]["rec_contract_exception"], manifest["deletes"]["rec_contract_exception"]) == (1, 1)
+    assert exception_rows(db) == {"C-1": "3", "C-6": "1", "C-7": "4", "C-8": "7"}
+    # The Indigenous business table is untouched by it.
+    assert manifest["expected"]["rec_contract_indigenous"] == 0
+
+
 def test_a_new_table_needs_no_full_reload():
-    # The table is added beside rec_contracts, so the layout a full reload records stays as it was.
+    # The tables are added beside rec_contracts, so the layout a full reload records stays as it was.
     assert rd.LAYOUT == 2
     assert rd.CONTRACT_INDIGENOUS.code == 17 and rd.BY_CODE[17] is rd.CONTRACT_INDIGENOUS
+    assert rd.CONTRACT_EXCEPTION.code == 20 and rd.BY_CODE[20] is rd.CONTRACT_EXCEPTION
     assert len({t.code for t in rd.TABLES}) == len(rd.TABLES)
+    # The comment beside LAYOUT counts the tables in words; it stays true.
+    source = Path(rd.__file__).read_text(encoding="utf-8")
+    words = {19: "nineteen", 20: "twenty", 21: "twenty-one", 22: "twenty-two"}
+    assert f"any of the {words[len(rd.TABLES)]} raises it" in source

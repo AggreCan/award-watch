@@ -47,6 +47,7 @@ reads it, with prepared statements.
 | `rec_contracts` | published contract row: every field its page shows (`/contracts/<department>/<reference>`) | about 1.34 million |
 | `rec_gsin` | GSIN code a published contract carries: its names | about 10,000 at most |
 | `rec_contract_indigenous` | published contract row (its `rec_contracts` `k`) whose `indigenous_business` names a set-aside under the Procurement Strategy for Indigenous Business (`psib` MS or VS) or whose `indigenous_business_excluding_psib` says yes (`ib` 1); none for a vendor withheld as a person | tens of thousands (143 of the first 5,290 rows of `contracts.csv`) |
+| `rec_contract_exception` | published contract row (its `rec_contracts` `k`) whose `article_6_exceptions` names an exception to soliciting bids in section 6 of the Government Contracts Regulations: `exc` 1 to 4 as the Treasury Board's schema codes them, or a value the schema does not list, as published; none for 0 (not applicable) or a blank; kept for a vendor withheld as a person | tens of thousands (254 of the development copy's 5,289 rows, three departments) |
 | `rec_lines` | row of `rec_expiring` (its `k`) whose holder is named: the holder's record with the buyer as JSON (`j`, the pipeline's `lines.py`), asked for by `sk`, the row's kind and reference in lower case (*Holder's record* in `docs/accounts.md`) | about the window's rows (1,894 of the development copy's 1,906, about 355 bytes each) |
 | `rec_follows` | earlier contract an open notice may follow, up to 3 a notice: `tref` the notice's URL reference in lower case, `rank` 1 the closest, `j` the record, what matched and the record's own holder's record as JSON (the pipeline's `follows.py`; *May follow* in `docs/accounts.md`) | a few hundred to a few thousand (3 rows for 1 of the development copy's 25 open notices, about 900 bytes each) |
 | `rec_events` | thing that happened on a data date of the last 90 to an organization, a buyer, a single record or a tender notice, plus a count row past 100 a subject a day (*Events*) | thousands a night, a few hundred thousand |
@@ -441,8 +442,10 @@ the profiles' published contracts and the record tables link their titles
 here; the government's contracts search, which often lists nothing yet for
 a new quarter, stays linked as the source.
 
-The page is one D1 batch of two statements: the state row and
-`PUBLISHED_CONTRACT_SQL` (`site/src/records_tables.ts`), which reads the row
+The page is one D1 batch: the state row, `PUBLISHED_CONTRACT_SQL`, the
+Indigenous business fields and the section 6 exception (below), and for a
+signed-in reader the holder's record. `PUBLISHED_CONTRACT_SQL`
+(`site/src/records_tables.ts`) reads the row
 through `rec_contracts_ref (dept, ref)` and up to 51 other rows of the same
 contract (the rows sharing the department and `procurement_id`, as the radar
 groups them) through `rec_contracts_group (dept, pid, cdate)`, with the
@@ -459,9 +462,19 @@ the comments, and the provenance: the dataset, its file and last read
 set-aside under the Procurement Strategy for Indigenous Business (MS
 "Mandatory Set-Aside", VS "Voluntary Set-Aside") or an Indigenous business
 outside one ("Indigenous Business excluding PSIB": Y), the page shows it in
-the source's terms from `rec_contract_indigenous`, read in the same batch; a
-records database without that table (a site deployed before the nightly that
-creates it) is read again without it, and the page shows neither.
+the source's terms from `rec_contract_indigenous`, read in the same batch.
+When the row reports an exception to soliciting bids in section 6 of the
+Government Contracts Regulations (`article_6_exceptions`), the page shows it
+from `rec_contract_exception` right after the limited tendering reason: the
+code and the Treasury Board schema's name for it in the page's language
+(1 to 4; read from the published schema on 2026-11-15), a code the schema
+does not list as it is, with a note linking the guide on contracts awarded
+without competition. A vendor withheld as a person keeps it, as the limited
+tendering reason is kept. A records database without one of these tables or
+`rec_lines` (a site deployed before the nightly that creates it) is read
+again without the statement whose table the error names, so each table falls
+back by itself and the page shows what the others hold
+(`readPublishedContract`).
 
 `rec_contracts` leaves out `loaded_at`, which changes for every row each
 time the file is read, so a night sends only the rows that changed. Rows the
