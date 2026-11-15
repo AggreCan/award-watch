@@ -1056,6 +1056,14 @@ so it covers both days.
   back in one batch, with each search's `failed` row when the mail service
   refused the message, or none at a sending limit, which stops the run. A
   group is sent whole or not at all.
+- A group that its claims leave at five or fewer (stop links clicked between
+  the run's read and its claims) is five or fewer with news, so each goes as
+  its own message, in its own language, as five or fewer always do, on the
+  claim already held: the first was taken up with the group, and each later
+  one is held to the run's cap, the day's ceiling and the query budget as a
+  message of its own. When one of them stops the run (the cap, the ceiling,
+  the budget or a sending limit), the claims not yet sent are given back in
+  one batch, so none is lost and none is sent twice.
 - Counts. A grouped message is one message against the run's cap, the day's
   ceiling and the run log's `sent`, as the quota counts it; each search it
   carried has its own `deliveries` row, so the console's "Deliveries sent"
@@ -1217,7 +1225,10 @@ List-Unsubscribe: <mailto:contact@awardwatch.ca>, <https://awardwatch.ca/account
   2,048 bytes (`E_HEADER_VALUE_TOO_LONG`) and folds long headers at
   whitespace only, so the URI must also fit a line of RFC 5322's 998
   characters. A hundred 32-character ids make about 3,300; a hundred tags
-  make 800, and the header with 100 searches is 914 bytes in French.
+  make 800, and the header with 100 searches is 914 bytes in French. The
+  live mail check sends a grouped message whose link is that long, so a
+  `sent` result proves Email Sending takes the header (docs/mail.md, *The
+  live mail check*).
 
 A reply to the `mailto:` address reaches the contact inbox, where the
 operator turns the delivery off by hand.

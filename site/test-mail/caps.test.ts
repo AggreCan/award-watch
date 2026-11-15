@@ -58,7 +58,7 @@ describe("the caps", () => {
     expect(WEEKLY_RUN_MAX).toBe(100);
     expect(WEEKLY_LINES).toBe(5);
     expect(SUBJECT_MAX).toBe(100);
-    expect(MAIL_CHECK_TEMPLATES).toHaveLength(11);
+    expect(MAIL_CHECK_TEMPLATES).toHaveLength(12);
     expect(VIEWS_RUN_MAX).toBe(1000);
     expect(VIEW_MAIL_ROWS).toBe(5);
     expect([RULES.free.match_mail, RULES.pro.match_mail]).toEqual([3, 10]);
@@ -262,7 +262,7 @@ describe("the subject", () => {
     expect([...fitSubject("x".repeat(SUBJECT_MAX - 1))].length).toBeLessThan(SUBJECT_MAX);
   });
 
-  it("names the counts that fit, the last ones left out first, and cuts one that does not fit alone", () => {
+  it("names the counts that fit, the last ones left out first, and cuts one that does not fit alone", async () => {
     const subject = (shown: readonly string[]) => `Segment this week: ${shown.join(", ")}`;
     const counts = ["a".repeat(30), "b".repeat(30), "c".repeat(30)];
     // 19 + 30 * 3 + 4 = 113 characters with all three, 81 with two.
@@ -273,12 +273,12 @@ describe("the subject", () => {
     expect([...alone].length).toBeLessThan(SUBJECT_MAX);
     expect(alone.endsWith("…")).toBe(true);
     // The live check's French briefing has three counts and names the two that fit, with its mark.
-    const fr = mailCheckMessages("fr", "", SITE).find((m) => m.template === "briefing")!.message.subject;
+    const fr = (await mailCheckMessages("fr", "", SITE)).find((m) => m.template === "briefing")!.message.subject;
     expect([...fr].length).toBeLessThan(SUBJECT_MAX);
     expect(fr.endsWith("…")).toBe(false);
     // Its weekly email names the site's count and the matches' count, whole, in both languages.
     for (const lang of LANGS) {
-      const weekly = mailCheckMessages(lang, "", SITE, new Date(), SAMPLE_ADDRESS).find((m) => m.template === "weekly")!.message.subject;
+      const weekly = (await mailCheckMessages(lang, "", SITE, new Date(), SAMPLE_ADDRESS)).find((m) => m.template === "weekly")!.message.subject;
       expect(nbsp(weekly).endsWith(`, ${nbsp(t(lang, "fit.mail_subject_many", { n: 4 }))}`), weekly).toBe(true);
     }
   });

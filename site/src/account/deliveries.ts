@@ -134,6 +134,8 @@ export const GROUP_OVER = 5;
 // marks after the send (one batch, tried once more on a fault), or the claims
 // given back with the failed rows (one batch). Within CLAIM_QUERIES, which the
 // run holds back before any claim, so a group is taken up whole or not at all.
+// A group its claims leave at GROUP_OVER or fewer goes as each search's own
+// message instead, the second and later each taken up as a message of its own.
 export const GROUP_QUERIES = 4;
 export { groupStopPath, groupTag } from "./group_stop";
 export { DELIVERY_ROW_DAYS };
@@ -1040,6 +1042,17 @@ async function deliver(env: Env, now: Date, tally: Tally): Promise<RunReport> {
       done.add(s.id);
       return true;
     }
+    return sendClaimed(r, secret);
+  };
+
+  // A search's own message, its claim held by this run (in `held`) and its
+  // stop secret known: built, sent, and recorded, or its claim given back.
+  // False when a sending limit stops the run.
+  const sendClaimed = async (r: Ready, secret: string): Promise<boolean> => {
+    const s = r.s;
+    const unhold = () => {
+      held = held.filter((h) => h.id !== s.id);
+    };
     const stopUrl = siteLink(site, `/account/stop?s=${s.id}&t=${secret}`, r.lang);
     const base = { lang: r.lang, to: s.email, site, label: s.label, params: r.params, cadence: r.cadence, dataDate, stopUrl, total: r.total };
     let message: DigestMessage;
@@ -1062,14 +1075,14 @@ async function deliver(env: Env, now: Date, tally: Tally): Promise<RunReport> {
     const result = await send(env, site, message);
     if (result.sent) {
       // Sent: the claim stands, whatever happens to the row that records it.
-      held = [];
+      unhold();
       done.add(s.id);
       await afterSend(() => record(env, s.id, "sent", r.total, now, r.mark));
       report.sent++;
       return true;
     }
     await release(env, s.id, s.last_delivered_at, now);
-    held = [];
+    unhold();
     if (result.code && STOP_CODES.has(result.code)) {
       stop = result.code;
       report.outcome = "limited";
@@ -1086,7 +1099,13 @@ async function deliver(env: Env, now: Date, tally: Tally): Promise<RunReport> {
   // its own claim (one batch), its own row and its own mark (one batch after
   // the send); a send that does not go gives every claim back together. At
   // most GROUP_QUERIES queries from the claims on, inside what mayTakeUp
-  // holds back. False when the run must stop.
+  // holds back. When the claims leave GROUP_OVER or fewer (stop links clicked
+  // since the list was read), those are five or fewer with news, as the
+  // subscriber was told, and each goes as its own message (sendClaimed, on the
+  // claim already held), the second and later each held to mayTakeUp again;
+  // when one of them stops the run, the claims not yet sent are given back
+  // together, so none is lost and none is sent twice. False when the run must
+  // stop.
   const sendGroup = async (rs: Ready[]): Promise<boolean> => {
     if (!mayTakeUp()) return false;
     const claimed = await claimAll(env, rs.map((r) => r.s.id), dataDate, now);
@@ -1102,6 +1121,20 @@ async function deliver(env: Env, now: Date, tally: Tally): Promise<RunReport> {
       await releaseAll(env, held, now);
       held = [];
       for (const r of members) done.add(r.s.id);
+      return true;
+    }
+    if (kept.length <= GROUP_OVER) {
+      // A deleted search's claim went with its row: nothing of it to give back.
+      for (const r of members) if (!kept.includes(r)) done.add(r.s.id);
+      held = held.filter((h) => kept.some((r) => r.s.id === h.id));
+      for (const [k, r] of kept.entries()) {
+        // The first was taken up with the group (mayTakeUp above); each later one is a message of its own.
+        if ((k > 0 && !mayTakeUp()) || !(await sendClaimed(r, secretOf(r)!))) {
+          if (held.length) await releaseAll(env, held, now);
+          held = [];
+          return false;
+        }
+      }
       return true;
     }
     const first = kept[0].s;

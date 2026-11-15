@@ -33,7 +33,7 @@ const LANGS = ["en", "fr"] as const;
 
 // The live check's templates as checkMessage reads them.
 const CHECK_SHAPE: Record<MailCheckTemplate, keyof typeof SHAPES> = {
-  sign_in: "sign_in", tenders_daily: "digest_daily", expiring_weekly: "digest_weekly", records: "digest_daily", watch: "watch",
+  sign_in: "sign_in", tenders_daily: "digest_daily", expiring_weekly: "digest_weekly", records: "digest_daily", group: "group", watch: "watch",
   briefing: "briefing", view: "view_weekly", weekly: "weekly", accounts_open: "accounts_open", ultra_open: "ultra_open",
   address_notice: "address_notice",
 };
@@ -222,10 +222,10 @@ describe.each(LANGS)("every message, in %s", (lang) => {
 
   it("the live check's messages: one of each template, marked, to the one address", async () => {
     const to = newEmail(`mail-check-${lang}`);
-    const messages = mailCheckMessages(lang, to, SITE, new Date("2026-11-09T16:00:00Z"), SAMPLE_ADDRESS);
+    const messages = await mailCheckMessages(lang, to, SITE, new Date("2026-11-09T16:00:00Z"), SAMPLE_ADDRESS);
     expect(messages.map((m) => m.template)).toEqual([...MAIL_CHECK_TEMPLATES]);
     // Without the mailing address the weekly email is left out, and nothing else.
-    expect(mailCheckMessages(lang, to, SITE).map((m) => m.template)).toEqual(MAIL_CHECK_TEMPLATES.filter((x) => x !== "weekly"));
+    expect((await mailCheckMessages(lang, to, SITE)).map((m) => m.template)).toEqual(MAIL_CHECK_TEMPLATES.filter((x) => x !== "weekly"));
     for (const { template, message } of messages) {
       expect(message.to, template).toBe(to);
       expect(message.subject.startsWith(`${MAIL_CHECK_MARK} `), template).toBe(true);
@@ -238,10 +238,11 @@ describe.each(LANGS)("every message, in %s", (lang) => {
 describe("the live check's messages", () => {
   // The records digest, the watch mail and the briefing of the live check
   // are the catalogue's samples of those kinds; their stop links lead nowhere.
-  it("point their stop links at an id and a secret no row holds", () => {
+  // The grouped message's own link (g=, its tags) is held in check-group.test.ts.
+  it("point their stop links at an id and a secret no row holds", async () => {
     for (const lang of LANGS) {
-      for (const { template, message } of mailCheckMessages(lang, newEmail("stops"), SITE, new Date(), SAMPLE_ADDRESS)) {
-        for (const stop of message.text.match(/https:\/\/\S+\/(?:account|interest)\/stop\?\S+/g) ?? []) {
+      for (const { template, message } of await mailCheckMessages(lang, newEmail("stops"), SITE, new Date(), SAMPLE_ADDRESS)) {
+        for (const stop of (message.text.match(/https:\/\/\S+\/(?:account|interest)\/stop\?\S+/g) ?? []).filter((u) => !/[?&]g=/.test(u))) {
           expect(stop, template).toMatch(/[?&](?:s|w|b|e|v|t)=0{32}(?:&|$)/);
           const params = new URL(stop).searchParams;
           for (const key of ["s", "w", "b", "e", "v", "t"]) if (params.has(key)) expect(params.get(key), `${template} ${key}`).toBe("0".repeat(32));

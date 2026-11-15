@@ -830,10 +830,6 @@ export const ACCOUNT_STRINGS = {
     fr: "Le paiement du forfait Pro n'est pas encore offert. Toutes les pages du site restent gratuites, avec ou sans compte.",
   },
   "billing.panel_pro": { en: "What Pro Includes", fr: "Ce que comprend Pro" },
-  "billing.pro_searches": {
-    en: "Up to {n} saved searches; the Free plan keeps {free}.",
-    fr: "Jusqu'à {n} recherches enregistrées; le forfait Gratuit en conserve {free}.",
-  },
   "billing.pro_delivery": {
     en: "Saved searches sent by email, daily or weekly.",
     fr: "L'envoi des recherches enregistrées par courriel, chaque jour ou chaque semaine.",
@@ -2438,6 +2434,10 @@ export const ACCOUNT_STRINGS = {
   "admin.mail_check_t_tenders": { en: "A saved search's tender notices, daily", fr: "Les avis d'appel d'offres d'une recherche enregistrée, chaque jour" },
   "admin.mail_check_t_expiring": { en: "A saved search's contracts ending, weekly", fr: "Les contrats qui prennent fin d'une recherche enregistrée, chaque semaine" },
   "admin.mail_check_t_records": { en: "A segment's new records", fr: "Les nouveaux dossiers d'un segment" },
+  "admin.mail_check_t_group": {
+    en: "Eight saved searches in one message, with the longest stop link an account's can carry",
+    fr: "Huit recherches enregistrées dans un seul message, avec le plus long lien d'arrêt que peut porter celui d'un compte",
+  },
   "admin.mail_check_t_watch": { en: "The watch mail", fr: "Le courriel des suivis" },
   "admin.mail_check_t_briefing": { en: "The weekly briefing", fr: "Le bulletin hebdomadaire" },
   "admin.mail_check_t_accounts_open": { en: "The accounts-open message", fr: "Le message d'ouverture des comptes" },

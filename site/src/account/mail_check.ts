@@ -14,7 +14,11 @@
 // MAIL_CHECK_MARK, a fixed tag in both languages, so the message is never
 // taken for a reader's and an inbox rule can file it. The stop links name an
 // id and a secret of zeros, which match no row: a click, or a mail client's
-// one-click post, changes nothing.
+// one-click post, changes nothing. The grouped saved-search message's own
+// stop link (group_stop.ts) is built by groupStopPath for GROUP_TAGS_MAX
+// members, an account's most, under a user id of zeros, so its
+// List-Unsubscribe header is as long as a full Ultra account's would be and
+// the check proves Email Sending takes it; the route answers 404 to it.
 //
 // The recipient is MAIL_TEST_TO alone: the builders are handed it, the run
 // sets it again on each message before the send, and nothing here reads an
@@ -33,8 +37,12 @@ import { accessRequired, accessVerified } from "./admin_access";
 import { operatorEmails } from "./admin_ops";
 import { accountsOpenMessage, announceLinks, ultraLinks, ultraOpenMessage } from "./announce";
 import { type BriefingData, type BriefingSubject, INSTRUMENT_WITHIN, briefingName, nextQuarter, quarterTurn } from "./briefings";
-import { sendWithHeaders } from "./deliveries";
-import { briefingDigest, expiringDigest, fitSubject, recordsDigest, siteLink, tenderDigest, viewDigest, watchDigest, weeklyDigest } from "./digests";
+import { GROUP_OVER, sendWithHeaders } from "./deliveries";
+import {
+  type GroupSection, briefingDigest, expiringDigest, fitSubject, groupDigest, recordsDigest, siteLink, tenderDigest, viewDigest, watchDigest,
+  weeklyDigest,
+} from "./digests";
+import { GROUP_TAGS_MAX, groupStopPath } from "./group_stop";
 import { matchDigestBlock } from "./fit_mail";
 import { sameHash, sha256Hex } from "./secrets";
 import { type MailMessage, type Sender, addressNotice, senderFor, signInMessage } from "./sender";
@@ -49,16 +57,18 @@ export const MAIL_CHECK_MARK = "[mail check]";
 // One message of each template, in this order. Two cadences of the
 // saved-search delivery are covered by its two kinds (the tender notices
 // daily, the contracts ending weekly), since the footer's reason is the only
-// part the cadence changes.
+// part the cadence changes. "group" is several saved searches in one message
+// (digests.ts groupDigest), with the longest stop link a reader's can carry.
 export const MAIL_CHECK_TEMPLATES = [
-  "sign_in", "tenders_daily", "expiring_weekly", "records", "watch", "briefing", "view", "weekly", "accounts_open", "ultra_open", "address_notice",
+  "sign_in", "tenders_daily", "expiring_weekly", "records", "group", "watch", "briefing", "view", "weekly", "accounts_open", "ultra_open",
+  "address_notice",
 ] as const;
 export type MailCheckTemplate = (typeof MAIL_CHECK_TEMPLATES)[number];
 
 // The messages a list or watch delivery sends: each carries a stop link, the
 // reason it came, and List-Unsubscribe with an https stop link.
 export const MAIL_CHECK_LISTS: ReadonlySet<MailCheckTemplate> = new Set([
-  "tenders_daily", "expiring_weekly", "records", "watch", "briefing", "view", "weekly", "accounts_open", "ultra_open",
+  "tenders_daily", "expiring_weekly", "records", "group", "watch", "briefing", "view", "weekly", "accounts_open", "ultra_open",
 ]);
 
 // The reason the weekly email's template reports when MAIL_ADDRESS is unset:
@@ -146,6 +156,56 @@ export function mailCheckBriefingData(day: string): BriefingData {
   };
 }
 
+// The grouped message's eight searches, of every kind a saved search can be,
+// in the order an account could have saved them: each section's own stop
+// link names zeros. Exported for the mail suite.
+export function mailCheckGroupSections(lang: Lang, site: string, day: string): GroupSection[] {
+  const own = siteLink(site, `/account/stop?s=${ZERO}&t=${ZERO}`, lang);
+  const buyer = lang === "fr" ? BUYER.buyer_fr : BUYER.buyer_en;
+  const fy = fiscalYearOf(day);
+  const segment = (code: string) => `${code} ${segmentShort(lang, code)}`;
+  const roof = sampleTender("cb-000-00000051", day, 20, {
+    title_en: "Roof repairs (sample)", title_fr: "Réparation de toitures (exemple)", segments: ["72", "30"], provinces: ["NS"],
+  });
+  return [
+    { kind: "tenders", label: t(lang, "interest.label_tenders_all"), params: "/tenders", stopUrl: own, total: 2,
+      rows: [sampleTender("cb-000-00000050", day, 5), roof] },
+    { kind: "expiring", label: t(lang, "interest.label_expiring", { n: 3, scope: t(lang, "interest.scope_all") }), params: "/expiring/3m",
+      stopUrl: own, total: 2, months: 3,
+      rows: [sampleContract("award", "cb-000-00000052", addDays(day, 80)),
+        sampleContract("history", "W0000-000053", addDays(day, 60), { organization: "Sample Linguistics Ltd.", value: 90_476 })] },
+    { kind: "segment", label: t(lang, "interest.label_segment", { segment: segment("43") }), params: "/segments/43", stopUrl: own,
+      rises: [{ src: "awards", fy, more: 2, n: 14, cents: 125_000_000 }], more: 2, tenderTotal: 1,
+      tenders: [sampleTender("cb-000-00000054", day, 12, {
+        title_en: "Network equipment (sample)", title_fr: "Équipement réseau (exemple)", segments: ["43"], category: ["GD"],
+      })] },
+    { kind: "organization", label: t(lang, "interest.label_organization", { organization: "Sample Engineering Ltd." }),
+      params: "/organizations/org-0000000000", stopUrl: own, more: 3, tenders: [], tenderTotal: 0,
+      rises: [{ src: "awards", fy, more: 1, n: 6, cents: 48_500_000 }, { src: "contracts", fy, more: 2, n: 11, cents: 9_900_000 }] },
+    { kind: "tenders", label: t(lang, "interest.label_tenders", { filters: segment("72") }), params: "/tenders?segment=72", stopUrl: own, total: 1,
+      rows: [roof] },
+    { kind: "buyer", label: t(lang, "interest.label_buyer", { buyer }), params: `/buyers/${BUYER.buyer_id}`, stopUrl: own, more: 3, tenders: [],
+      tenderTotal: 0, rises: [{ src: "contracts", fy, more: 2, n: 30, cents: 412_000_000 }, { src: "history", fy, more: 1, n: 12, cents: null }] },
+    { kind: "expiring", label: t(lang, "interest.label_expiring", { n: 6, scope: t(lang, "interest.scope_buyer", { buyer }) }),
+      params: `/expiring/6m?buyer=${BUYER.buyer_id}`, stopUrl: own, total: 1, months: 6,
+      rows: [sampleContract("award", "cb-000-00000055", addDays(day, 150))] },
+    { kind: "tenders", label: t(lang, "interest.label_tenders", { filters: segment("81") }), params: "/tenders?segment=81", stopUrl: own, total: 1,
+      rows: [sampleTender("cb-000-00000056", day, 9, {
+        title_en: "Geotechnical survey (sample)", title_fr: "Étude géotechnique (exemple)", segments: ["81"],
+      })] },
+  ];
+}
+
+// The grouped message's own stop link: what groupStopPath builds for an
+// account's most searches, GROUP_TAGS_MAX, under a user id of zeros, each
+// member a fixed id and a secret of zeros. No account has the id, so the
+// route answers 404 and nothing changes; the link is as long as a real one
+// can be.
+export async function mailCheckGroupStop(lang: Lang, site: string): Promise<string> {
+  const members = Array.from({ length: GROUP_TAGS_MAX }, (_, i) => ({ id: (i + 1).toString(16).padStart(32, "0"), secret: ZERO }));
+  return siteLink(site, await groupStopPath(ZERO, members), lang);
+}
+
 // The matching notices block for a Free account (fit_mail.ts), from four
 // sample matches, so it lists RULES.free.match_mail and counts the rest.
 export function mailCheckMatches(lang: Lang, site: string, day: string) {
@@ -162,17 +222,21 @@ export function mailCheckMatches(lang: Lang, site: string, day: string) {
 // -- the messages ------------------------------------------------------------------------------
 
 // One message of each template, in lang, to `to`, its links on `site` (no
-// trailing slash), the rows dated from now's UTC date. The subjects carry the
+// trailing slash), the rows dated from now's UTC date. Asynchronous because
+// the grouped message's stop link is hashed (group_stop.ts). The subjects carry the
 // mark and stay under SUBJECT_MAX with it (digests.ts fitSubject). Exported for the mail suite (site/test-mail/), which checks these
 // before the route ever sends them. address is the sender's mailing address
 // (weekly.ts mailAddress); without one the weekly email is left out, as the
 // delivery run leaves it unsent.
-export function mailCheckMessages(lang: Lang, to: string, site: string, now: Date = new Date(), address: string | null = null): MailCheckMessage[] {
+export async function mailCheckMessages(
+  lang: Lang, to: string, site: string, now: Date = new Date(), address: string | null = null,
+): Promise<MailCheckMessage[]> {
   const day = now.toISOString().slice(0, 10);
   const yesterday = addDays(day, -1);
   const link = (path: string) => siteLink(site, path, lang);
   const segment43 = `43 ${segmentShort(lang, "43")}`;
-  const build: Record<MailCheckTemplate, () => (MailMessage & { headers?: Record<string, string> }) | null> = {
+  type Built = (MailMessage & { headers?: Record<string, string> }) | null;
+  const build: Record<MailCheckTemplate, () => Built | Promise<Built>> = {
     sign_in: () => signInMessage(lang, to, "000000", `${site}/account/check?token=${ZERO}.${ZERO}${ZERO}${lang === "fr" ? "&lang=fr" : ""}`,
       CODE_MINUTES, site),
     tenders_daily: () => tenderDigest({
@@ -205,6 +269,9 @@ export function mailCheckMessages(lang: Lang, to: string, site: string, now: Dat
       tenders: [sampleTender("cb-000-00000010", day, 12, {
         title_en: "Network equipment (sample)", title_fr: "Équipement réseau (exemple)", segments: ["43"], category: ["GD"],
       })],
+    }),
+    group: async () => groupDigest({
+      lang, to, site, dataDate: day, stopUrl: await mailCheckGroupStop(lang, site), sections: mailCheckGroupSections(lang, site, day), over: GROUP_OVER,
     }),
     watch: () => watchDigest({
       lang, to, site, dataDate: day, stopUrl: link(`/account/stop?w=${ZERO}&t=${ZERO}`), total: 3, watched: 4, clock: clockAt(now.getTime()),
@@ -264,10 +331,12 @@ export function mailCheckMessages(lang: Lang, to: string, site: string, now: Dat
     ultra_open: () => ultraOpenMessage(lang, to, ultraLinks(site, lang, ZERO)),
     address_notice: () => addressNotice(lang, to, site),
   };
-  return MAIL_CHECK_TEMPLATES.flatMap((template) => {
-    const m = build[template]();
-    return m ? [{ template, message: { ...m, to, subject: fitSubject(`${MAIL_CHECK_MARK} ${m.subject}`), headers: m.headers ?? {} } }] : [];
-  });
+  const out: MailCheckMessage[] = [];
+  for (const template of MAIL_CHECK_TEMPLATES) {
+    const m = await build[template]();
+    if (m) out.push({ template, message: { ...m, to, subject: fitSubject(`${MAIL_CHECK_MARK} ${m.subject}`), headers: m.headers ?? {} } });
+  }
+  return out;
 }
 
 // -- the run ----------------------------------------------------------------------------------
@@ -284,7 +353,7 @@ export async function runMailCheck(
 ): Promise<MailCheckRun> {
   const sender = senderFor(env, requestUrl).kind;
   const results: MailCheckResult[] = [];
-  const messages = mailCheckMessages(o.lang, o.to, o.site, o.now ?? new Date(), mailAddress(env));
+  const messages = await mailCheckMessages(o.lang, o.to, o.site, o.now ?? new Date(), mailAddress(env));
   for (const template of MAIL_CHECK_TEMPLATES) {
     const message = messages.find((m) => m.template === template)?.message;
     if (!message) {

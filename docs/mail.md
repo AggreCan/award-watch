@@ -125,7 +125,7 @@ Each in English and in French.
 | The accounts-open message | its console run, `runAnnouncement`, and with an https stop link |
 | The Ultra message | its console run (kind `ultra`), and with an https stop link |
 | The address-change notice | the console's notice |
-| The live check's eleven messages | `site/src/account/mail_check.ts` |
+| The live check's twelve messages | `site/src/account/mail_check.ts` |
 
 The operator's own alerts (the daily check's email and the bug reports, both
 through the `ALERTS` binding to the operator's address) are not reader mail
@@ -204,7 +204,7 @@ and keep their own tests.
 | Lists named in the accounts-open message | `LISTS_SHOWN`, 10 | twelve lists name ten and count two more |
 | Messages in one accounts-open or Ultra run | `ANNOUNCE_MAX`, 300 | runs capped at 2 send at most 2 each, each address once; what waited less what a run sent is what waits after it; account holders are passed over (accounts-open only) |
 | Sign-in codes an address may ask for in an hour | `CODES_PER_HOUR`, 5 | the sixth request answers 429 and sends nothing |
-| Messages in one live check | one per template, 11 | all to the one address, nothing to any other; without `MAIL_ADDRESS` the weekly email is reported `stubbed` and not sent |
+| Messages in one live check | one per template, 12 | all to the one address, nothing to any other; without `MAIL_ADDRESS` the weekly email is reported `stubbed` and not sent |
 
 One more ceiling holds the delivery job across a UTC day rather than a run:
 `MAIL_DAILY_QUOTA` less `MAIL_DAILY_RESERVE` (200 less 40 as shipped), the
@@ -240,22 +240,32 @@ sender a reader's message goes through (`sendWithHeaders` in
 2. a saved search's tender notices (daily)
 3. a saved search's contracts ending (weekly)
 4. a segment's new records
-5. the watch mail
-6. the weekly briefing
-7. a saved analytics view (weekly; a segment's award notices over three
+5. eight saved searches in one message (the grouped message: tender
+   notices, contracts ending, and a segment's, an organization's and a
+   buyer's records), with the longest stop link an account's can carry
+6. the watch mail
+7. the weekly briefing
+8. a saved analytics view (weekly; a segment's award notices over three
    fiscal years, the last counted to date)
-8. the weekly email (the site's week, as an account that follows nothing on
+9. the weekly email (the site's week, as an account that follows nothing on
    Free gets it, with four sample matching notices for the organization it
    names, so the block, its line on Pro and its disclaimer can be read)
-9. the accounts-open message
-10. the Ultra message
-11. the address-change notice
+10. the accounts-open message
+11. the Ultra message
+12. the address-change notice
 
 Each subject starts with `[mail check]`, the same tag in both languages, so
 the message is never taken for a reader's and an inbox rule can file it. The
 rows are fixed samples in `site/src/account/mail_check.ts`, dated on the day
 of the run; nothing is read from a file or a database, so the check proves
-the way out of the Worker and not the night's data. Every stop link names an
+the way out of the Worker and not the night's data. The grouped message is
+there for its header: its own stop link is what `groupStopPath` builds for
+100 searches, an account's most, under a user id of zeros (each search a
+fixed id and a secret of zeros), so its `List-Unsubscribe` is as long as a
+full Ultra account's, 906 bytes in English and 914 in French, and a `sent` result proves Email
+Sending takes it (the limit is 2,048 bytes, `E_HEADER_VALUE_TOO_LONG`); no
+account has the id, so the link answers 404 and changes nothing
+(`site/test-mail/check-group.test.ts`). Every other stop link names an
 id and a secret of zeros, which match no row: a click or a mail client's
 one-click post changes nothing.
 
@@ -329,7 +339,7 @@ address.
 | Cloudflare Access stopped the request | check the service token secrets and the Service Auth policy (step 3) |
 | The site answered 404 | the switch is off, `OPERATOR_EMAILS` is unset, Access's token did not check out, or the repository's token is not the Worker's |
 | The Worker has no test address | add the secret `MAIL_TEST_TO` and deploy (step 1) |
-| n of 11 templates were not sent | read the run summary: a `refused` reason is Email Sending's code, `stubbed` means the binding or `MAIL_FROM` is missing, or for the weekly email that `MAIL_ADDRESS` is not set (`docs/accounts.md`, Weekly email) |
+| n of 12 templates were not sent | read the run summary: a `refused` reason is Email Sending's code, `stubbed` means the binding or `MAIL_FROM` is missing, or for the weekly email that `MAIL_ADDRESS` is not set (`docs/accounts.md`, Weekly email) |
 
 ### Setting up
 
@@ -360,7 +370,8 @@ address.
 
 After each run, in the test inbox:
 
-- Ten messages arrived, each subject starting with `[mail check]`, none in
+- Twelve messages arrived (eleven while `MAIL_ADDRESS` is unset, since the
+  weekly email is then not sent), each subject starting with `[mail check]`, none in
   spam. A template the run reported `sent` that did not arrive is a delivery
   problem past Email Sending: look in spam, then at the address's
   suppression list in the dashboard.
