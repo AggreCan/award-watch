@@ -430,12 +430,12 @@ describe("the Terms", () => {
   });
 
   it("say on the privacy page what a dashboard keeps, and on the Data page each paid plan's API figure for the day, only while Ultra is on sale", async () => {
-    const kept = "A dashboard keeps the panels you chose, their order and their width.";
+    const kept = "A dashboard keeps the tiles you chose, the position and size of each, and each tile's own choices.";
     expect(text((await page("/privacy", payEnv())).body)).not.toContain(kept);
     const privacy = text((await page("/privacy", saleEnv())).body);
     expect(privacy).toContain(kept);
-    expect(privacy).toContain("The panels are deleted with the account.");
-    expect(text((await page("/privacy?lang=fr", saleEnv())).body)).toContain("Un tableau de bord conserve les panneaux que vous avez choisis");
+    expect(privacy).toContain("The tiles are deleted with the account.");
+    expect(text((await page("/privacy?lang=fr", saleEnv())).body)).toContain("Un tableau de bord conserve les tuiles que vous avez choisies, la position et la taille de chacune");
     const pro = keyQuota("pro")!.perDay.toLocaleString("en-CA");
     const ultra = keyQuota("ultra")!.perDay.toLocaleString("en-CA");
     const before = text((await page("/data", payEnv())).body);

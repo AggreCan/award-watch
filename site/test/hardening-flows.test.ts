@@ -161,17 +161,20 @@ function counting(limit: number) {
 const spent = { limit: async () => ({ success: false }) } as unknown as RateLimit;
 const NAV = { accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "sec-fetch-mode": "navigate" };
 
-const panelRows = async (id: string) =>
-  ((await ACCOUNTS.prepare("SELECT id, kind, ref FROM dashboard_panels WHERE user_id = ? ORDER BY pos, created_at, id").bind(id)
-    .all<{ id: string; kind: string; ref: string }>()).results ?? []).filter((r) => (dashboard.PANEL_KINDS as readonly string[]).includes(r.kind));
+const tileRows = async (id: string) =>
+  ((await ACCOUNTS.prepare("SELECT id, kind, ref, x, y, w, h FROM dashboard_tiles WHERE user_id = ? ORDER BY y, x, id").bind(id)
+    .all<{ id: string; kind: string; ref: string; x: number; y: number; w: number; h: number }>()).results ?? [])
+    .filter((r) => (dashboard.PANEL_KINDS as readonly string[]).includes(r.kind));
 
 describe("W2: the dashboard's and the saved views' posts, and a refusal a browser can read", () => {
   it("count in a bucket of their own, 60 a minute, in the next namespace", () => {
     const id = "a".repeat(32);
     for (const path of [
       "/account/dashboard/panels", `/account/dashboard/panels/${id}/move`, `/account/dashboard/panels/${id}/width`, `/account/dashboard/panels/${id}/delete`,
+      "/account/dashboard/layout", `/account/dashboard/tiles/${id}/move`, `/account/dashboard/tiles/${id}/size`, `/account/dashboard/tiles/${id}/delete`,
       "/account/views", `/account/views/${id}`, `/account/views/${id}/delete`,
     ]) expect(bucketFor("POST", path), path).toBe("edit");
+    expect(bucketFor("GET", `/account/dashboard/tiles/${id}`)).toBe("edit");
     for (const path of ["/account/bug", "/account/billing/portal", "/corrections"]) expect(bucketFor("POST", path), path).toBe("form");
     expect(wranglerConfig).toContain('{ "name": "EDIT_LIMIT", "namespace_id": "2012", "simple": { "limit": 60, "period": 60 } }');
     const ids = [...wranglerConfig.matchAll(/"namespace_id": "(\d+)"/g)].map((m) => Number(m[1]));
@@ -181,20 +184,22 @@ describe("W2: the dashboard's and the saved views' posts, and a refusal a browse
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("let an Ultra account move a panel seven times in a minute, then send a form from the same address", async () => {
+  it("let an Ultra account move a tile seven times in a minute, save and read one, then send a form from the same address", async () => {
     const r = await reader("w2-moves", "ultra");
     const form = counting(5);
     const edit = counting(60);
     const ip = nextIp();
     const env = offSale({ FORM_LIMIT: form.limiter, EDIT_LIMIT: edit.limiter });
     const go = (path: string, fields: Record<string, string>) => post(path, { csrf: r.csrf, ...fields }, { cookie: r.cookie, env, ip });
-    expect((await go("/account/dashboard/panels/s1/move", { dir: "up", from: "edit" })).status).toBe(303);
-    const moved = (await panelRows(r.id))[0].id;
+    expect((await go("/account/dashboard/tiles/s1/move", { dir: "up" })).status).toBe(303);
+    const moved = (await tileRows(r.id))[0].id;
     for (let i = 0; i < 6; i++) {
-      const res = await go(`/account/dashboard/panels/${moved}/move`, { dir: i % 2 ? "up" : "down", from: "edit" });
+      const res = await go(`/account/dashboard/tiles/${moved}/move`, { dir: i % 2 ? "up" : "down" });
       expect(res.status, `move ${i + 2}`).toBe(303);
     }
-    expect(edit.keys).toHaveLength(7);
+    expect((await go("/account/dashboard/layout", { layout: "[]" })).status).toBe(200);
+    expect((await get(`/account/dashboard/tiles/${moved}`, { cookie: r.cookie, env, ip, headers: { "x-csrf-token": r.csrf } })).status).toBe(200);
+    expect(edit.keys).toHaveLength(9);
     expect(form.keys).toEqual([]);
     expect((await go("/account/bug", { text: "After seven moves." })).status).toBe(200);
   });
@@ -246,29 +251,29 @@ describe("W2: the dashboard's and the saved views' posts, and a refusal a browse
     expect(script.headers.get("content-type")).toContain("text/plain");
   });
 
-  it("return a move, an add and a removal to the panel's own place on the page", async () => {
+  it("return a move, an add and a removal to the tile's own place on the page", async () => {
     const r = await reader("w2-anchor", "ultra");
-    const move = await send(r, "/account/dashboard/panels/s1/move", { dir: "up", from: "edit" });
-    const rows = await panelRows(r.id);
+    const move = await send(r, "/account/dashboard/tiles/s1/move", { dir: "up" });
+    const rows = await tileRows(r.id);
     expect(rows.map((x) => `${x.kind}:${x.ref}`)).toEqual(["radar:3m", "watches:"]);
-    expect(move.headers.get("location")).toBe(`/account/dashboard?edit=1#panel-${rows[0].id}`);
-    const width = await send(r, `/account/dashboard/panels/${rows[1].id}/width`, { wide: "0" });
-    expect(width.headers.get("location")).toBe(`/account/dashboard#panel-${rows[1].id}`);
-    const add = await send(r, "/account/dashboard/panels", { panel: "radar:6m", from: "edit" });
-    const after = await panelRows(r.id);
+    expect(move.headers.get("location")).toBe(`/account/dashboard#tile-${rows[0].id}`);
+    const size = await send(r, `/account/dashboard/tiles/${rows[1].id}/size`, { to: "narrower" });
+    expect(size.headers.get("location")).toBe(`/account/dashboard#tile-${rows[1].id}`);
+    const add = await send(r, "/account/dashboard/panels", { panel: "radar:6m" });
+    const after = await tileRows(r.id);
     expect(after.map((x) => `${x.kind}:${x.ref}`)).toEqual(["radar:3m", "watches:", "radar:6m"]);
-    expect(add.headers.get("location")).toBe(`/account/dashboard?edit=1&m=added#panel-${after[2].id}`);
-    // Added already: the panel the account holds.
-    expect((await send(r, "/account/dashboard/panels", { panel: "radar:6m", from: "edit" })).headers.get("location"))
-      .toBe(`/account/dashboard?edit=1&m=exists#panel-${after[2].id}`);
-    // A removal: the panel that took its place, or the one before the last.
-    const middle = await send(r, `/account/dashboard/panels/${after[1].id}/delete`, { from: "edit" });
-    expect(middle.headers.get("location")).toBe(`/account/dashboard?edit=1#panel-${after[2].id}`);
-    const last = await send(r, `/account/dashboard/panels/${after[2].id}/delete`, { from: "edit" });
-    expect(last.headers.get("location")).toBe(`/account/dashboard?edit=1#panel-${after[0].id}`);
+    expect(add.headers.get("location")).toBe(`/account/dashboard?m=added#tile-${after[2].id}`);
+    // Added already: the tile the account holds.
+    expect((await send(r, "/account/dashboard/panels", { panel: "radar:6m" })).headers.get("location"))
+      .toBe(`/account/dashboard?m=exists#tile-${after[2].id}`);
+    // A removal: the tile that takes its place in reading order, or the one before the last.
+    const middle = await send(r, `/account/dashboard/tiles/${after[1].id}/delete`);
+    expect(middle.headers.get("location")).toBe(`/account/dashboard#tile-${after[2].id}`);
+    const last = await send(r, `/account/dashboard/tiles/${after[2].id}/delete`);
+    expect(last.headers.get("location")).toBe(`/account/dashboard#tile-${after[0].id}`);
     // The French page's address says so, before the place.
-    const fr = await send(r, `/account/dashboard/panels/${after[0].id}/width`, { wide: "0", lang: "fr" });
-    expect(fr.headers.get("location")).toBe(`/account/dashboard?lang=fr#panel-${after[0].id}`);
+    const fr = await send(r, `/account/dashboard/tiles/${after[0].id}/size`, { to: "narrower", lang: "fr" });
+    expect(fr.headers.get("location")).toBe(`/account/dashboard?lang=fr#tile-${after[0].id}`);
   });
 });
 
@@ -277,27 +282,27 @@ describe("W2: the dashboard's and the saved views' posts, and a refusal a browse
 // =========================================================================================
 
 describe("W4: an emptied dashboard", () => {
-  it("stays empty and offers Add a Panel, and its next panel comes alone", async () => {
+  it("stays empty and offers Add a Tile, open, and its next tile comes alone", async () => {
     const r = await reader("w4-empty", "ultra");
-    await send(r, "/account/dashboard/panels/s0/delete", { from: "edit" });
-    const left = await panelRows(r.id);
+    await send(r, "/account/dashboard/tiles/s0/delete");
+    const left = await tileRows(r.id);
     expect(left.map((x) => `${x.kind}:${x.ref}`)).toEqual(["radar:3m"]);
-    const emptied = await send(r, `/account/dashboard/panels/${left[0].id}/delete`, { from: "edit" });
-    expect(emptied.headers.get("location")).toBe("/account/dashboard?edit=1#dash-add");
+    const emptied = await send(r, `/account/dashboard/tiles/${left[0].id}/delete`);
+    expect(emptied.headers.get("location")).toBe("/account/dashboard#dash-add");
     for (const path of ["/account/dashboard", "/account/dashboard?edit=1"]) {
       const main = mainOf(await page(path, r.cookie, offSale()));
       expect(main, path).not.toContain(t("en", "dash.starter"));
-      expect(main, path).not.toContain("dash-panel");
-      expect(main, path).toContain('id="dash-add"');
-      expect(main, path).toContain(">Add a Panel</h2>");
+      expect(main, path).not.toContain("dash-tile");
+      expect(main, path).toContain('<details class="dash-adder" id="dash-add" open="">');
+      expect(main, path).toContain(">Add a Tile</summary>");
       expect(main, path).toContain('<option value="radar:6m">');
     }
     expect((await send(r, "/account/dashboard/panels", { panel: "radar:6m" })).status).toBe(303);
-    expect((await panelRows(r.id)).map((x) => `${x.kind}:${x.ref}`)).toEqual(["radar:6m"]);
+    expect((await tileRows(r.id)).map((x) => `${x.kind}:${x.ref}`)).toEqual(["radar:6m"]);
     expect(mainOf(await page("/account/dashboard", r.cookie, offSale()))).not.toContain(t("en", "dash.starter"));
   });
 
-  it("keeps its marker out of every count: the plan's figure, the panels shown and the rows a move reorders", async () => {
+  it("before the grid, keeps the panels' marker out of every count: the plan's figure and the tiles shown", async () => {
     const r = await reader("w4-marker", "ultra");
     await ACCOUNTS.prepare("INSERT INTO dashboard_panels (id, user_id, kind, ref, pos, wide, created_at) VALUES (?, ?, 'layout', '', -1, 1, ?)")
       .bind(crypto.randomUUID().replace(/-/g, ""), r.id, new Date().toISOString()).run();
@@ -306,9 +311,9 @@ describe("W4: an emptied dashboard", () => {
       .bind(crypto.randomUUID().replace(/-/g, ""), r.id, "radar", "6m", 1, new Date().toISOString(), 1, 2).run();
     expect(res.meta?.changes).toBe(1);
     expect((await ACCOUNTS.prepare("SELECT pos FROM dashboard_panels WHERE user_id = ? AND kind = 'radar'").bind(r.id).first<{ pos: number }>())?.pos).toBe(0);
-    const main = mainOf(await page("/account/dashboard?edit=1", r.cookie, offSale()));
-    expect(main).toContain("1 of 12 panels");
-    expect(main.match(/class="panel dash-panel/g)).toHaveLength(1);
+    const main = mainOf(await page("/account/dashboard", r.cookie, offSale()));
+    expect(main).toContain("1 of 12 tiles");
+    expect(main.match(/class="panel dash-tile/g)).toHaveLength(1);
     expect(dashboard.LAYOUT_MARKER).toBe("layout");
     expect((dashboard.PANEL_KINDS as readonly string[]).includes(dashboard.LAYOUT_MARKER)).toBe(false);
   });

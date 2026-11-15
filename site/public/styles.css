@@ -572,21 +572,159 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ink); width: 1
   .panel-grid:has(> :nth-child(3):last-child) > :last-child:nth-child(odd):not(:first-child) { grid-column: auto; }
 }
 .panel-form { max-width: 720px; }
-/* The dashboard (src/account/dashboard.tsx): its panels one under another,
-   and from 1,280 px two tracks, a full-width panel taking the row and a
-   half-width one a track. Below that every panel takes the row, so no table
-   is squeezed under its column. */
-.dash-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gutter); align-items: start; margin: 0 0 var(--gutter); }
-.dash-grid > .panel { margin: 0; }
-@media (min-width: 1280px) {
+/* The dashboard (src/account/dashboard.tsx; the grid's rules in
+   public/dash-grid.js, its script public/dashboard.js). From 1,100 px a grid
+   of 12 columns, rows of 40 px and gaps of 12, each tile at its own place
+   and size (--gc, --gr, --gw, --gh, from its x, y, w and h), its body cut to
+   its height: the server lists only the rows the height holds and the
+   script takes off any that still do not fit, so no tile scrolls. Below
+   1,100 px two columns from 700 px (a tile of 7 columns or more takes both,
+   a smaller one takes one) and one below 700 px, in reading order, each tile
+   as tall as its content. A tile narrower than 440 px inside its border
+   stacks its table in labelled rows (the container query below), from 700
+   px; a phone restacks every table as the site does. The handles (the grip
+   at the head's left, the corner at the foot's right) show once the script
+   runs (.dash-live), from 1,100 px, on hover and on focus, and always on a
+   touch screen. The tile being dragged follows the pointer over the others;
+   the place it will land is marked in the soft emerald with a dashed
+   emerald edge. */
+.dash-bar { margin: 0 0 12px; min-height: 16px; }
+.dash-status { margin: 0; font-size: 12px; line-height: 16px; }
+.dash-status:empty { display: none; }
+.dash-status .btn-link { margin-left: 8px; color: var(--ink); }
+.dash-grid { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; margin: 0 0 var(--gutter); }
+.dash-grid:empty { min-height: 320px; }
+@media (min-width: 700px) {
   .dash-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .dash-grid > .panel:not(.dash-half) { grid-column: 1 / -1; }
+  .dash-tile.dash-both { grid-column: 1 / -1; }
 }
-/* A panel's item under its kind in the head band: the site's own label, in
-   its own case. Edit mode's controls sit beside See all; Add to dashboard
-   stands on its own line under a row's label. */
-.panel-head h2 .dash-item { display: block; margin-top: 2px; font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--ink-2); }
-.dash-controls { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+@media (min-width: 1100px) {
+  .dash-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: 40px; align-items: stretch; }
+  .dash-tile, .dash-tile.dash-both, .dash-marker { grid-column: var(--gc) / span var(--gw); grid-row: var(--gr) / span var(--gh); }
+  .dash-body { overflow: hidden; }
+}
+.dash-tile { position: relative; display: flex; flex-direction: column; min-width: 0; container: dash-tile / inline-size; }
+.panel.dash-tile { margin: 0; }
+.panel > .dash-head { margin: 0; }
+.panel > .dash-body { margin: 0; }
+.panel > .dash-foot { margin: 0; }
+.panel > .dash-corner { margin: 0; }
+.panel > .dash-grip { margin: 0; }
+.dash-tile:has(.dash-menu[open]) { z-index: 5; }
+/* The head: the kind and the item each on one line (their whole text in the
+   heading's title), the menu at the right. */
+.dash-head {
+  position: relative; display: flex; align-items: center; gap: 8px;
+  min-height: 40px; padding: 8px 8px 8px 16px; background: var(--head); border-bottom: 1px solid var(--border-2);
+}
+.dash-title {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink);
+}
+.dash-title .dash-item {
+  display: block; margin-top: 2px; overflow: hidden; text-overflow: ellipsis;
+  font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--ink-2);
+}
+/* The menu: a details element, so it opens without the script. */
+.dash-menu { position: relative; flex: none; }
+.dash-menu > summary { list-style: none; }
+.dash-menu > summary::-webkit-details-marker { display: none; }
+.dash-menu-button {
+  display: flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+  border: 2px solid transparent; border-radius: 6px; color: var(--ink-2); cursor: pointer;
+}
+.dash-menu-button svg { fill: currentColor; }
+.dash-menu-button:hover, .dash-menu[open] > .dash-menu-button { border-color: var(--field-border); background: var(--panel); color: var(--ink); }
+.dash-menu-list {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 10; min-width: 184px; padding: 4px 0;
+  background: var(--panel); border: 1px solid var(--border-2);
+}
+.dash-menu-list form { margin: 0; }
+.dash-menu-item {
+  display: block; width: 100%; padding: 6px 12px; border: 0; background: none; color: var(--ink);
+  font: inherit; font-size: 13px; line-height: 20px; text-align: left; text-decoration: none; cursor: pointer;
+}
+.dash-menu-item:hover { background: var(--hover); }
+.dash-menu-item:disabled { color: var(--muted); background: none; cursor: default; }
+.dash-menu-list form:last-child { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border); }
+/* The body: a table runs edge to edge, every other block keeps 12 px above and below and 16 at the sides. */
+.dash-body { flex: 1 1 auto; min-height: 0; }
+.dash-body > :not(.table-wrap, .chart) { margin: 12px 16px; }
+.dash-body > :not(.table-wrap) + .table-wrap { border-top: 1px solid var(--border); }
+.dash-body > .table-wrap:not(:last-child) { border-bottom: 1px solid var(--border); }
+.dash-body .table-wrap { overflow: hidden; }
+.dash-counts li { margin: 0 0 4px; }
+/* The foot: the source and period at the left, cut to one line on the grid; the rows shown of all there are, and Open. */
+.dash-foot {
+  display: flex; align-items: center; gap: 4px 12px; padding: 8px 16px; border-top: 1px solid var(--border);
+  font-size: 12px; line-height: 16px; color: var(--muted); white-space: nowrap;
+}
+.dash-meta { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.dash-count { flex: none; color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.dash-foot a { flex: none; color: var(--ink-2); }
+@media (max-width: 1099px) {
+  .dash-foot { flex-wrap: wrap; white-space: normal; }
+}
+/* The handles: buttons, hidden until the script runs and on the derived layouts below 1,100 px. */
+.dash-grip, .dash-corner { display: none; padding: 0; border: 0; background: none; color: var(--muted); touch-action: none; }
+.dash-grip { position: absolute; left: 4px; top: 4px; z-index: 1; width: 24px; height: 32px; align-items: center; justify-content: center; cursor: grab; }
+.dash-grip svg { fill: currentColor; }
+.dash-corner { position: absolute; right: 0; bottom: 0; z-index: 1; width: 24px; height: 24px; cursor: nwse-resize; }
+.dash-corner::after { content: ""; position: absolute; right: 5px; bottom: 5px; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; }
+.dash-grip:hover, .dash-corner:hover { color: var(--ink); }
+@media (min-width: 1100px) {
+  .dash-live .dash-grip, .dash-live .dash-corner { display: flex; opacity: 0; transition: opacity 120ms; }
+  .dash-live .dash-tile:hover .dash-grip, .dash-live .dash-tile:hover .dash-corner,
+  .dash-live .dash-tile:focus-within .dash-grip, .dash-live .dash-tile:focus-within .dash-corner,
+  .dash-live .dash-tile.is-moving .dash-grip, .dash-live .dash-tile.is-moving .dash-corner { opacity: 1; }
+  .dash-live .dash-head { padding-left: 32px; }
+  .dash-live .dash-foot { padding-right: 32px; }
+}
+@media (min-width: 1100px) and (hover: none) {
+  .dash-live .dash-grip, .dash-live .dash-corner { opacity: 1; }
+}
+/* A tile being moved or sized: its edge in the secondary ink; dragged, it rides over the others. */
+.dash-tile.is-moving { border-color: var(--ink-2); }
+.dash-tile.is-dragging { z-index: 20; opacity: 0.86; cursor: grabbing; }
+.dash-tile.is-dragging .dash-grip { cursor: grabbing; }
+.dash-marker { z-index: 10; display: none; background: var(--accent-soft); border: 2px dashed var(--accent); pointer-events: none; }
+@media (min-width: 1100px) {
+  .dash-marker.is-on { display: block; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dash-grip, .dash-corner { transition: none; }
+}
+/* A table in a tile narrower than itself: each row a block, its first cell
+   as its heading, every other cell a line, its column's name before it. A
+   phone restacks every table as the site does, so this is from 700 px. */
+@media (min-width: 700px) {
+  @container dash-tile (max-width: 439px) {
+    .dash-body table.restack { min-width: 0; }
+    .dash-body .restack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .dash-body .restack, .dash-body .restack tbody, .dash-body .restack tr, .dash-body .restack td { display: block; width: 100%; }
+    .dash-body .restack tr { padding: 8px 16px; border-bottom: 1px solid var(--border); }
+    .dash-body .restack tbody tr:last-child { border-bottom: 0; }
+    .dash-body .restack td, .dash-body .restack td:first-child, .dash-body .restack td:last-child { padding: 0; border: 0; text-align: left; white-space: normal; }
+    .dash-body .restack td + td { margin-top: 2px; }
+    .dash-body .restack td + td::before { content: attr(data-label); margin-right: 6px; color: var(--muted); font-size: 12px; }
+    .dash-body .restack td.mono { overflow-wrap: anywhere; }
+    .dash-body .restack tbody tr:hover > td:first-child { box-shadow: none; }
+  }
+}
+/* Add a Tile: the page's one filled button, its choices under the page head's row, at its right. */
+.page-head-row:has(> .page-actions > .dash-adder) { position: relative; }
+.dash-adder > summary { list-style: none; }
+.dash-adder > summary::-webkit-details-marker { display: none; }
+.dash-adder-body {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 15; width: min(400px, 100%); padding: 16px;
+  background: var(--panel); border: 1px solid var(--border-2);
+}
+.dash-adder-body > :first-child { margin-top: 0; }
+.dash-adder-body > :last-child { margin-bottom: 0; }
+.dash-adder-body select { width: 100%; }
+.dash-adder-head { margin: 16px 0 4px; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
+.dash-adder-body ul { font-size: 13px; line-height: 20px; }
+/* Add to dashboard stands on its own line under a row's label. */
 td > .dash-add { margin-top: 4px; }
 
 /* -- stat tiles: four to a row, large tabular figures, one line under -------- */

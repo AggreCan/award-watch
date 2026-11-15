@@ -264,6 +264,8 @@ describe("corners", () => {
       [".lang-toggle, .theme-toggle", "6px"],
       [".btn", "6px"],
       ['input[type="search"], input[type="text"], input[type="number"], input[type="email"], select, textarea', "6px"],
+      // A dashboard tile's menu button (src/account/dashboard.tsx DashTile), a control with its edge on hover.
+      [".dash-menu-button", "6px"],
       [".rank-bar", "0 4px 4px 0"],
       // A meter against a cap is one whole: its track and its fill are rounded both ends.
       [".rank-bars.of-cap .rank-track", "4px"],

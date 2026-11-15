@@ -558,6 +558,47 @@ CREATE TABLE IF NOT EXISTS dashboard_panels (
 );
 CREATE INDEX IF NOT EXISTS idx_dashboard_panels_user ON dashboard_panels(user_id, pos);
 
+-- The dashboard as a grid (src/account/dashboard.tsx, public/dash-grid.js; docs/accounts.md,
+-- Dashboard): an account's dashboards, then each one's tiles at their places and sizes. An account
+-- has one dashboard for now (pos 0), made with its first change to the layout, which writes every
+-- tile the page showed (the panels above, or the starting layout); from then on dashboard_panels is
+-- read no more for that account. A dashboards row with no tile is a dashboard the reader emptied.
+-- name is '' until dashboards can be named. Both go with the account.
+CREATE TABLE IF NOT EXISTS dashboards (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  name TEXT NOT NULL,
+  pos INTEGER NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_dashboards_user ON dashboards(user_id, pos);
+
+-- A tile: kind and ref as dashboard_panels has them (kind checked by the site, so a new kind needs no
+-- rebuild), opts the tile's own choices as JSON (2,000 characters at most; '' while it has none), and
+-- its place on the grid of 12 columns: x and w in columns, y and h in rows, as the grid's rules hold
+-- them (dash-grid.js). The page never trusts a stored place: every layout is clamped and compacted
+-- when it is read and before it is written. At most the plan's figure per dashboard and at most two
+-- briefings, the same item once, all held inside the insert. Goes with the account, and a tile goes
+-- with the search, view or briefing it shows.
+CREATE TABLE IF NOT EXISTS dashboard_tiles (
+  id TEXT PRIMARY KEY,
+  dashboard_id TEXT NOT NULL REFERENCES dashboards(id),
+  user_id TEXT NOT NULL REFERENCES users(id),
+  kind TEXT NOT NULL,
+  ref TEXT NOT NULL DEFAULT '',
+  opts TEXT NOT NULL DEFAULT '',
+  x INTEGER NOT NULL,
+  y INTEGER NOT NULL,
+  w INTEGER NOT NULL,
+  h INTEGER NOT NULL,
+  created_at TEXT NOT NULL
+);
+-- A page view reads an account's tiles, the deletions go by account, and each insert's checks (the
+-- count, the briefings, the same item once) read the account's tiles by kind and ref; a dashboard's own
+-- tiles by its id, which deleting a dashboard checks against its key.
+CREATE INDEX IF NOT EXISTS idx_dashboard_tiles_user ON dashboard_tiles(user_id, kind, ref);
+CREATE INDEX IF NOT EXISTS idx_dashboard_tiles_board ON dashboard_tiles(dashboard_id);
+
 -- Saved analytics views (src/account/saved_views.ts; docs/accounts.md, Saved views): a view's
 -- address as the site writes it, the reader's name for it, and its delivery (Ultra). kind 'build'
 -- is a view of the analytics builder (slice 5). last_hash is the SHA-256 of the figures the last

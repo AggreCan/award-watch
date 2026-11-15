@@ -44,9 +44,12 @@ import { isNavigation, refusalPage } from "./limit_page";
 // their addresses holds for thousands of feeds.
 //
 // The dashboard's posts and the saved views' get "edit", 60 a minute, on the
-// accounts terms: each writes one row of the account's own, and rearranging
-// a dashboard of a dozen panels is a post a place, so the forms' 5 would stop
-// a reader mid-move and spend the cap a billing post or a bug report needs.
+// accounts terms: each writes rows of the account's own, and arranging a
+// dashboard is a save a drop (the page's script waits for a pause) or, from
+// a tile's menu, a post a step, so the forms' 5 would stop a reader
+// mid-move and spend the cap a billing post or a bug report needs. The
+// dashboard's one read, a tile at a new size after a resize, counts there
+// too: it reads the account's rows and a tile's records.
 //
 // Which requests are downloads is bucketFor's decision alone. Who they are
 // counted against is throttle's: a download whose session is signed in on Pro
@@ -78,8 +81,10 @@ export const ORG_CLAIM_CSV = /^\/account\/organization\/[a-z]+\.csv$/;
 const BILLING_POSTS = new Set(["/account/billing/checkout", "/account/billing/portal", "/account/billing/refund"]);
 // The dashboard's posts (account/dashboard.tsx): each writes the account's
 // layout, so they count in the "edit" bucket, on the accounts terms; so do
-// the saved views' (account/view_pages.tsx): save one, its email, remove it.
-const DASHBOARD_POSTS = /^\/account\/dashboard\/panels(?:\/[^/]+\/(?:move|width|delete))?$/;
+// the saved views' (account/view_pages.tsx): save one, its email, remove it;
+// and the dashboard's read of one tile (DASHBOARD_TILE, a GET).
+const DASHBOARD_POSTS = /^\/account\/dashboard\/(?:panels(?:\/[^/]+\/(?:move|width|delete))?|layout|tiles\/[^/]+\/(?:move|size|delete))$/;
+const DASHBOARD_TILE = /^\/account\/dashboard\/tiles\/[^/]+$/;
 const VIEW_POSTS = /^\/account\/views(?:\/[^/]+(?:\/delete)?)?$/;
 
 // A HEAD request for a download (a link checker, a client asking a file's
@@ -97,6 +102,7 @@ export function bucketFor(method: string, path: string): Bucket {
   if (path === "/account/stop" || path === "/interest/stop") return "stop";
   if (method === "POST" && path === "/account/billing/webhook") return "hook";
   if (method === "POST" && (DASHBOARD_POSTS.test(path) || VIEW_POSTS.test(path))) return "edit";
+  if (method === "GET" && DASHBOARD_TILE.test(path)) return "edit";
   if (method === "POST" && (path === "/account/bug" || BILLING_POSTS.has(path))) return "form";
   if (method === "POST" && (path === "/corrections" || path === "/interest" || /^\/organizations\/[^/]+\/respond$/.test(path))) {
     return "form";

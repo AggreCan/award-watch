@@ -1,19 +1,24 @@
 // The dashboard (src/account/dashboard.tsx; docs/accounts.md, Dashboard):
 // the address for each reader (the site's 404 while Ultra is off sale for
 // anyone who does not hold it, the sign-in page, what it holds for Free and
-// Pro with no records read, the panels for Ultra); the starting layout; each
-// kind of panel from rows written here, with its "See all"; a removed item;
-// the four posts behind the session, CSRF and Origin, in the form bucket; the
-// 13th panel and the third briefing refused inside the insert; the table
-// missing; the page's fit from 700 px, its one filled button, its cache
-// header; the rail's item; "Add to dashboard" for Ultra alone; both
-// languages. The records database is built here from
+// Pro with no records read, the tiles for Ultra); the starting layout; each
+// kind of tile from rows written here, with its Open; a removed item; the
+// grid's three states of storage (the tiles' tables absent, present and
+// empty, holding tiles), each tested on its own; the add, the steps and
+// sizes of the menu, the removal, the layout the script saves and the one
+// tile it reads, behind the session, CSRF and Origin, in the edit bucket;
+// the cap and the briefings' cap inside the insert; rows and charts that
+// follow a tile's size; the page's one filled button, its fit at every
+// width, its cache header; the rail's item; "Add to dashboard" for Ultra
+// alone; both languages. The records database is built here from
 // pipeline/records_schema.sql with the rows below.
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
+import { LEAST, START_H, least, normalize, steps as gridSteps } from "../public/dash-grid.js";
 import {
-  ADD_PANEL_SQL, BRIEFING_PANELS_MAX, PANEL_KINDS, PANEL_ROWS, RADAR_TOP_SQL, specOf, startingLayout, viewAddress, viewRef, viewSpan,
+  ADD_PANEL_SQL, ADD_TILE_SQL, BRIEFING_PANELS_MAX, PANEL_KINDS, RADAR_TOP_SQL, specOf, startingLayout, viewAddress, viewRef, viewSpan,
 } from "../src/account/dashboard";
+import { tileFit } from "../src/account/dashboard_fit";
 import { DASHBOARD_MAX, dashboardCap } from "../src/account/dashboard_rule";
 import { DASHBOARD_STRINGS } from "../src/account/dashboard_strings";
 import { RULES } from "../src/account/entitlements";
@@ -27,7 +32,7 @@ import {
 } from "./accounts-helpers";
 import { FILES, makeFakeAssets } from "./assets";
 import { applySql, splitSql } from "./setup";
-import { leastWidths, misfits, tablesIn } from "./table-fit";
+import { misfits, tablesIn } from "./table-fit";
 import accountsSchema from "../accounts_schema.sql?raw";
 
 useAccountsDb();
@@ -82,12 +87,16 @@ function radar(ref: string, end: string, value: number, org: string): string {
     value_growth: null, tender_reference: null, segments: ["81"], provinces: ["ON"],
   });
 }
-// Seven contracts ending within 12 months of the data date, six of them the organization's: more than a panel lists.
-const ENDS = ["2026-11-15", "2026-12-01", "2027-01-15", "2027-02-01", "2027-03-01", "2027-05-01", "2027-07-01"];
-const EXPIRING = ENDS.map((end, i) => ({
-  endd: end, oid: i === 6 ? n(A2) : n(A1), buyer: i === 6 ? "dfo-mpo" : "pwgsc-tpsgc", cents: (i + 1) * 1_000_000,
-  j: radar(`EN578-00000${i}`, end, (i + 1) * 10_000, i === 6 ? A2 : A1),
-}));
+// Thirty contracts ending within 12 months of the data date, all but every seventh the organization's: more than a
+// tile of any size lists at its least, and fewer than its tallest lists.
+const EXPIRING = Array.from({ length: 30 }, (_, i) => {
+  const end = new Date(Date.UTC(2026, 10, 1 + i * 11)).toISOString().slice(0, 10);
+  const other = i % 7 === 6;
+  return {
+    endd: end, oid: other ? n(A2) : n(A1), buyer: other ? "dfo-mpo" : "pwgsc-tpsgc", cents: (i + 1) * 1_000_000,
+    j: radar(`EN578-${String(100000 + i)}`, end, (i + 1) * 10_000, other ? A2 : A1),
+  };
+});
 const EVENTS = [
   { day: "2026-10-30", kind: "award", src: 1, oid: n(A1), buyer: "pwgsc-tpsgc", sid: 81, ref: "award:a1", title: "A new award this week" },
   { day: "2026-10-29", kind: "award", src: 3, oid: n(A1), buyer: "dfo-mpo", sid: null, ref: "contract:dfo-mpo:c1", title: "A published contract this week" },
@@ -146,29 +155,58 @@ async function reader(tag: string, plan: "free" | "pro" | "ultra" = "ultra"): Pr
 const open = (r: Reader | null, path = "/account/dashboard", e: object = off()) => get(path, { cookie: r?.cookie, env: e });
 const send = (r: Reader, path: string, fields: Record<string, string> = {}, e: object = off()) =>
   post(path, { csrf: r.csrf, ...fields }, { cookie: r.cookie, env: e });
+// The page's script: a layout saved, and one tile read at a size.
+const save = (r: Reader, layout: unknown, e: object = off()) => send(r, "/account/dashboard/layout", { layout: JSON.stringify(layout) }, e);
+const readTile = (r: Reader, id: string, q = "", e: object = off(), token: string | null = r.csrf) =>
+  get(`/account/dashboard/tiles/${id}${q}`, { cookie: r.cookie, env: e, headers: token === null ? {} : { "x-csrf-token": token } });
 
+type TileRow = { id: string; kind: string; ref: string; opts: string; x: number; y: number; w: number; h: number };
+const tileRows = (id: string) => ACCOUNTS.prepare("SELECT id, kind, ref, opts, x, y, w, h FROM dashboard_tiles WHERE user_id = ? ORDER BY y, x, id")
+  .bind(id).all<TileRow>().then((r) => r.results ?? []);
+const boards = (id: string) => ACCOUNTS.prepare("SELECT id, name, pos FROM dashboards WHERE user_id = ?").bind(id).all<{ id: string; name: string; pos: number }>()
+  .then((r) => r.results ?? []);
 const panelRows = (id: string) => ACCOUNTS.prepare("SELECT id, kind, ref, pos, wide FROM dashboard_panels WHERE user_id = ? ORDER BY pos, created_at, id")
   .bind(id).all<{ id: string; kind: string; ref: string; pos: number; wide: number }>().then((r) => r.results ?? []);
-// The panels' heads, in order: the kind, then the item.
-const heads = (html: string) => [...mainOf(html).matchAll(/<section class="panel dash-panel[^"]*"[^>]*><div class="panel-head"><h2[^>]*>([\s\S]*?)<\/h2>/g)]
-  .map((m) => m[1].replace(/<span class="dash-item">/, " | ").replace(/<[^>]+>/g, ""));
+
+// The tiles as the page draws them, in reading order: id, the kind and the item, the place and size.
+type Drawn = { id: string; head: string; x: number; y: number; w: number; h: number; html: string };
+function drawn(html: string): Drawn[] {
+  const main = mainOf(html);
+  return main.split(/(?=<section class="panel dash-tile)/).slice(1).map((s) => {
+    const attr = (k: string) => /^[^>]*/.exec(s)![0].match(new RegExp(` data-${k}="([^"]*)"`))?.[1] ?? "";
+    const head = /<h2 id="tile-[^"]+-t" class="dash-title"[^>]*>([\s\S]*?)<\/h2>/.exec(s)?.[1] ?? "";
+    return {
+      id: attr("id"), head: head.replace(/<span class="dash-item">/, " | ").replace(/<[^>]+>/g, ""),
+      x: Number(attr("x")), y: Number(attr("y")), w: Number(attr("w")), h: Number(attr("h")), html: s,
+    };
+  });
+}
+const heads = (html: string) => drawn(html).map((d) => d.head);
+// Each tile's Open, in its foot.
+const opens = (html: string) => [...mainOf(html).matchAll(/<div class="dash-foot">[\s\S]*?<a href="([^"]*)">Open<\/a>/g)].map((m) => m[1]);
+const rowsIn = (s: string) => (s.match(/<tr>/g)?.length ?? 1) - 1;
 const searchId = async (r: Reader, params: string) =>
   (await ACCOUNTS.prepare("SELECT id FROM saved_searches WHERE user_id = ? AND params = ?").bind(r.id, params).first<{ id: string }>())!.id;
 
-// The dashboard's table taken off the database for the length of fn, then made again from accounts_schema.sql, its
-// rows kept aside and put back: the database before the operator applies the schema (as accounts-helpers withoutTiers).
-const PANELS_SCHEMA = splitSql(accountsSchema).filter((s) => s.includes("dashboard_panels"));
-async function withoutPanels<T>(fn: () => Promise<T>): Promise<T> {
-  const kept = (await ACCOUNTS.prepare("SELECT * FROM dashboard_panels").all<Record<string, unknown>>()).results ?? [];
-  await ACCOUNTS.prepare("DROP TABLE IF EXISTS dashboard_panels").run();
+// Tables taken off the database for the length of fn, then made again from accounts_schema.sql, their rows kept
+// aside and put back: the database before the operator applies the schema. The grid's two tables ("tiles"), and
+// with them the panels' table ("all").
+const GRID_TABLES = ["dashboard_tiles", "dashboards"];
+async function without<T>(which: "tiles" | "all", fn: () => Promise<T>): Promise<T> {
+  const tables = which === "tiles" ? GRID_TABLES : [...GRID_TABLES, "dashboard_panels"];
+  const kept = new Map<string, Record<string, unknown>[]>();
+  for (const table of tables) kept.set(table, (await ACCOUNTS.prepare(`SELECT * FROM ${table}`).all<Record<string, unknown>>()).results ?? []);
+  for (const table of tables) await ACCOUNTS.prepare(`DROP TABLE IF EXISTS ${table}`).run();
   try {
     return await fn();
   } finally {
-    await ACCOUNTS.batch(PANELS_SCHEMA.map((s) => ACCOUNTS.prepare(s)));
-    if (kept.length) {
-      await ACCOUNTS.batch(kept.map((r) => ACCOUNTS.prepare(
-        "INSERT OR IGNORE INTO dashboard_panels (id, user_id, kind, ref, pos, wide, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      ).bind(r.id, r.user_id, r.kind, r.ref, r.pos, r.wide, r.created_at)));
+    const own = new RegExp(`\\b(?:TABLE IF NOT EXISTS|ON) (?:${tables.join("|")})\\b`);
+    await ACCOUNTS.batch(splitSql(accountsSchema).filter((s) => own.test(s)).map((s) => ACCOUNTS.prepare(s)));
+    for (const table of [...tables].reverse()) {
+      for (const row of kept.get(table) ?? []) {
+        const cols = Object.keys(row);
+        await ACCOUNTS.prepare(`INSERT OR IGNORE INTO ${table} (${cols.join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`).bind(...cols.map((c) => row[c])).run();
+      }
     }
   }
 }
@@ -227,8 +265,9 @@ describe("a Free or Pro account while Ultra is on sale", () => {
         const filled = [...main.matchAll(/<a href="([^"]*)" class="btn btn-primary">/g)].map((m) => m[1]);
         expect(filled).toHaveLength(1);
         expect(filled[0]).toContain("plan=ultra");
-        // No panel, no records read.
-        expect(main).not.toContain("dash-panel");
+        // No tile, no script, no records read.
+        expect(main).not.toContain("dash-tile");
+        expect(main).not.toContain("dashboard.js");
         expect(records.used).toEqual([]);
         expect(html).not.toContain(EM_DASH);
         expect(html).not.toContain(EN_DASH);
@@ -238,12 +277,16 @@ describe("a Free or Pro account while Ultra is on sale", () => {
 });
 
 describe("an Ultra account", () => {
-  it("with no panel stored sees the starting layout, computed and not stored", async () => {
+  it("with nothing stored sees the starting layout on the grid, computed and not stored", async () => {
     const r = await reader("dash-start");
     const html = await text(await open(r));
     expect(heads(html)).toEqual(["Your watches this week", "Contracts ending | Ending within 3 months"]);
-    expect(mainOf(html)).toContain(`<p class="muted">${t("en", "dash.starter")}</p>`);
-    expect(await panelRows(r.id)).toEqual([]);
+    expect(drawn(html).map((d) => [d.id, d.x, d.y, d.w, d.h])).toEqual([
+      ["s0", 0, 0, 12, START_H.watches], ["s1", 0, START_H.watches, 12, START_H.radar],
+    ]);
+    expect(mainOf(html)).toContain(`<p class="dash-status muted" id="dash-status" role="status" aria-live="polite">${t("en", "dash.starter")}</p>`);
+    expect(await tileRows(r.id)).toEqual([]);
+    expect(await boards(r.id)).toEqual([]);
     // With a claim, two saved tender searches and a key: matches and the years block, the first two searches, the API.
     await send(r, "/account/organization", { org: A1 });
     for (const url of ["/tenders?segment=82", "/tenders?segment=72", "/tenders?segment=43"]) await send(r, "/account/searches", { url });
@@ -256,11 +299,11 @@ describe("an Ultra account", () => {
     expect(h[4]).toMatch(/^Saved search: open notices \| .*82 /);
     expect(h[5]).toMatch(/^Saved search: open notices \| .*72 /);
     expect(h.slice(6)).toEqual(["API requests today"]);
-    expect(await panelRows(r.id)).toEqual([]);
+    expect(await tileRows(r.id)).toEqual([]);
     expect(startingLayout({ searches: [], claim: null, keys: [] }).map((s) => `${s.kind}:${s.ref}`)).toEqual(["watches:", "radar:3m"]);
   });
 
-  it("draws every kind from what it reads, each with its See all, and keeps the advisory line inside the matching notices", async () => {
+  it("draws every kind from what it reads, each with its Open, and keeps the advisory line inside the matching notices", async () => {
     const r = await reader("dash-kinds");
     await send(r, "/account/organization", { org: A1 });
     await send(r, "/account/searches", { url: "/tenders?segment=82" });
@@ -274,18 +317,21 @@ describe("an Ultra account", () => {
     const briefing = (await ACCOUNTS.prepare("SELECT id FROM briefings WHERE user_id = ?").bind(r.id).first<{ id: string }>())!.id;
     const view = `/organizations/${A1}/analytics?source=awards&years=10`;
     // The first change writes the starting layout (the watches, the 3-month list, matching notices, the years block,
-    // the tender search, the API), then adds the panel after it; five more fill the dashboard's twelve.
-    const panels: [string, string][] = [
+    // the tender search, the API) as the account's tiles, then adds the tile under them; five more fill the twelve.
+    const tiles: [string, string][] = [
       ["radar", expiring], ["radar", "12m"], ["records", org], ["view", view], ["briefing", briefing], ["org", "segments"],
     ];
-    for (const [kind, ref] of panels) {
+    for (const [kind, ref] of tiles) {
       const res = await send(r, "/account/dashboard/panels", { kind, ref });
       expect(res.status, `${kind} ${ref}`).toBe(303);
-      expect(res.headers.get("location"), `${kind} ${ref}`).toMatch(/^\/account\/dashboard\?m=added#panel-[0-9a-f]{32}$/);
+      expect(res.headers.get("location"), `${kind} ${ref}`).toMatch(/^\/account\/dashboard\?m=added#tile-[0-9a-f]{32}$/);
     }
-    expect((await panelRows(r.id)).map((p) => `${p.kind}:${p.ref}`)).toEqual([
-      "watches:", "radar:3m", "matches:", "org:years", `tenders:${tenders}`, "api:", ...panels.map(([k, v]) => `${k}:${v}`),
-    ]);
+    const stored = await tileRows(r.id);
+    expect(stored.map((p) => `${p.kind}:${p.ref}`).sort()).toEqual([
+      "watches:", "radar:3m", "matches:", "org:years", `tenders:${tenders}`, "api:", ...tiles.map(([k, v]) => `${k}:${v}`),
+    ].sort());
+    expect(stored.every((p) => p.opts === "")).toBe(true);
+    expect(await boards(r.id)).toHaveLength(1);
     const res = await open(r, "/account/dashboard?m=added");
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("private, no-store");
@@ -293,107 +339,99 @@ describe("an Ultra account", () => {
     const main = mainOf(html);
     expect(main).toContain(`<p class="account-notice" role="status">${t("en", "dash.added")}</p>`);
     expect(main).not.toContain(t("en", "dash.starter"));
-    const h = heads(html);
-    expect(h.slice(0, 4)).toEqual([
+    const d = drawn(html);
+    expect(d).toHaveLength(12);
+    const by = (head: string | RegExp) => d.find((x) => (typeof head === "string" ? x.head === head : head.test(x.head)))!.html;
+    expect(heads(html)).toEqual(expect.arrayContaining([
       "Your watches this week", "Contracts ending | Ending within 3 months", "Matching notices", `Your organization: Records by Fiscal Year | ${NAME1}`,
-    ]);
-    expect(h[4]).toMatch(/^Saved search: open notices \| /);
-    expect(h[5]).toBe("API requests today");
-    expect(h[6]).toMatch(/^Contracts ending \| .*Public Services and Procurement Canada/);
-    expect(h.slice(7, 8)).toEqual(["Contracts ending | Ending within 12 months"]);
-    expect(h[8]).toBe(`Saved search: records | When ${NAME1} is named on a new award, contract or grant`);
-    expect(h.slice(9)).toEqual([
+      "API requests today", "Contracts ending | Ending within 12 months", `Saved search: records | When ${NAME1} is named on a new award, contract or grant`,
       `Analytics view | ${NAME1}`, "Weekly briefing, this week so far | 81 Engineering", `Your organization: Records by Segment | ${NAME1}`,
-    ]);
-    // The See all of each, in order.
-    const seeAll = [...main.matchAll(/<a href="([^"]*)">See all<\/a>/g)].map((m) => m[1]);
-    expect(seeAll).toEqual([
+    ]));
+    // Each tile's Open, to the page it comes from.
+    expect(opens(html).sort()).toEqual([
       "/account/watches", "/expiring/3m", "/account/matches", "/account/organization", "/tenders?segment=82", "/account/api",
       "/expiring/12m?buyer=pwgsc-tpsgc", "/expiring/12m", `/organizations/${A1}`, view, "/segments/81", "/account/organization",
-    ]);
-    const sections = main.split(/(?=<section class="panel dash-panel)/).slice(1);
-    expect(sections).toHaveLength(12);
+    ].sort());
     // The watches: the claimed organization's two events this week, not the one before it.
-    expect(sections[0]).toContain("A new award this week");
-    expect(sections[0]).toContain("A published contract this week");
-    expect(sections[0]).not.toContain("An award before the week");
-    // The 3-month list: the three contracts ending within 91 days.
-    expect(sections[1]).toContain('<span class="panel-count">3</span>');
-    // The matching notices: the advisory line inside the panel, and the notice in segment 82 first.
-    expect(sections[2]).toContain('class="muted small fit-disclaimer"');
-    expect(sections[2]).toContain('<a href="/tenders/cb-100-10000001">');
-    // The years block: the figures from the rows written.
-    expect(sections[3]).toContain("$300,000");
-    expect(sections[3]).toContain("2026-27 (to date)");
+    expect(by("Your watches this week")).toContain("A new award this week");
+    expect(by("Your watches this week")).toContain("A published contract this week");
+    expect(by("Your watches this week")).not.toContain("An award before the week");
+    // The 3-month list: the contracts ending within 91 days, as many as the tile holds, the count in its foot.
+    const three = by("Contracts ending | Ending within 3 months");
+    expect(three).toMatch(/<span class="dash-count">(\d+|\d+ of 9)<\/span>/);
+    // The matching notices: the advisory line inside the tile, and the notice in segment 82 first.
+    expect(by("Matching notices")).toContain('class="muted small fit-disclaimer"');
+    expect(by("Matching notices")).toContain('<a href="/tenders/cb-100-10000001">');
+    // The years block: the figures from the rows written, its note in the foot.
+    expect(by(/^Your organization: Records by Fiscal Year/)).toContain("$300,000");
+    expect(by(/^Your organization: Records by Fiscal Year/)).toContain("2026-27 (to date)");
+    expect(by(/^Your organization: Records by Fiscal Year/)).toContain(`<span class="dash-meta" title="${t("en", "orgclaim.foot_years")}">`);
     // The tender search: the open notice in segment 82.
-    expect(sections[4]).toContain('<a href="/tenders/cb-100-10000001">');
-    expect(sections[4]).toContain('<span class="panel-count">1 notice</span>');
-    // The API: the key, none used today, and the plan's daily figure.
-    expect(sections[5]).toContain("Reports");
-    // The holder's plan's figure: Ultra's (api_keyed_spec.ts keyQuota).
-    expect(sections[5]).toContain("Requests a day, per key: 50,000");
-    // The saved radar search: its six at the buyer, the five ending soonest.
-    expect(sections[6]).toContain('<span class="panel-count">6</span>');
-    expect(sections[6].match(/<tr>/g)).toHaveLength(1 + PANEL_ROWS);
-    expect(sections[6]).toContain("EN578-000000");
-    expect(sections[6]).not.toContain("EN578-000005");
-    expect(sections[7]).toContain('<span class="panel-count">7</span>');
+    expect(by(/^Saved search: open notices/)).toContain('<a href="/tenders/cb-100-10000001">');
+    expect(by(/^Saved search: open notices/)).toContain('<span class="dash-count">1 notice</span>');
+    // The API: the key, none used today, and the plan's daily figure (Ultra's, api_keyed_spec.ts keyQuota).
+    expect(by("API requests today")).toContain("Reports");
+    expect(by("API requests today")).toContain("Requests a day, per key: 50,000");
+    // The saved radar search: 26 at the buyer, the tile's rows of them soonest first, "n of 26" in its foot.
+    const saved = drawn(html).find((x) => /Public Services and Procurement Canada/.test(x.head))!;
+    const rows = tileFit("radar", expiring, saved.w, saved.h).rows;
+    expect(rowsIn(saved.html)).toBe(rows);
+    expect(saved.html).toContain(`<span class="dash-count">${rows} of 26</span>`);
+    expect(saved.html).toContain("EN578-100000");
+    expect(saved.html).not.toContain(`EN578-${100000 + rows}`);
     // The records search: each source over the last two fiscal years.
-    expect(sections[8]).toContain("2025-26");
-    expect(sections[8]).toContain("$500,000");
-    expect(sections[8]).toContain("$12,345");
-    // The view: its first chart at its source and period, named from the records.
-    expect(sections[9]).toContain("Award notices, federal fiscal years 2017-18 to 2026-27.");
-    expect(sections[9]).toContain('class="chart"');
+    const records = by(/^Saved search: records/);
+    expect(records).toContain("2025-26");
+    expect(records).toContain("$500,000");
+    expect(records).toContain("$12,345");
+    // The view: its first chart at its source and period (in its foot), named from the records, at the tile's height.
+    const v = drawn(html).find((x) => x.head.startsWith("Analytics view"))!;
+    expect(v.html).toContain("Award notices, federal fiscal years 2017-18 to 2026-27.");
+    expect(v.html).toContain('class="chart"');
+    expect(v.html).toContain(`<div class="chart-plot" style="height:${tileFit("view", view, v.w, v.h).chart!.height}px">`);
     // The briefing: the week's counts, one line each.
-    expect(sections[10]).toContain('<ul class="plain dash-counts">');
-    expect(sections[10].match(/<li>/g)).toHaveLength(4);
+    expect(by(/^Weekly briefing/)).toContain('<ul class="plain dash-counts">');
+    expect(by(/^Weekly briefing/).match(/<li>/g)).toHaveLength(4);
     // The segments block: segment 81's award notices.
-    expect(sections[11]).toContain("81 Engineering");
-    for (const s of sections) {
-      expect(s).not.toContain(t("en", "dash.unavailable"));
-      expect(s).not.toContain(t("en", "dash.gone"));
+    expect(by(/^Your organization: Records by Segment/)).toContain("81 Engineering");
+    for (const x of d) {
+      expect(x.html).not.toContain(t("en", "dash.unavailable"));
+      expect(x.html).not.toContain(t("en", "dash.gone"));
     }
-    // No filled button in the view; every table fits its column from 700 px.
-    expect(main).not.toContain("btn-primary");
+    // One filled button, Add a Tile; every table fits its tile at every width from 700 px, or stacks.
+    expect(main.match(/btn-primary/g)).toHaveLength(1);
     expect(tablesIn(html).length).toBeGreaterThanOrEqual(8);
     expect(misfits(html)).toEqual([]);
     // Twelve held: a thirteenth is refused inside the insert, and the page says so.
     const full = await send(r, "/account/dashboard/panels", { kind: "org", ref: "share" });
     expect(full.headers.get("location")).toBe("/account/dashboard?m=full");
-    expect((await panelRows(r.id)).length).toBe(12);
+    expect((await tileRows(r.id)).length).toBe(12);
     expect(await text(await open(r, "/account/dashboard?m=full"))).toContain(t("en", "dash.full", { cap: "12" }));
   });
 
-  it("draws the organization's other blocks, half width side by side from 1,280 px with every table in its column", async () => {
+  it("draws the organization's other blocks, side by side on the grid, every table in its tile at every width", async () => {
     const r = await reader("dash-blocks");
     await send(r, "/account/organization", { org: A1 });
     for (const ref of ["share", "ending", "buyers", "instruments"]) {
-      expect((await send(r, "/account/dashboard/panels", { kind: "org", ref })).headers.get("location")).toMatch(/^\/account\/dashboard\?m=added#panel-[0-9a-f]{32}$/);
+      expect((await send(r, "/account/dashboard/panels", { kind: "org", ref })).headers.get("location")).toMatch(/^\/account\/dashboard\?m=added#tile-[0-9a-f]{32}$/);
     }
-    // Every panel half width.
-    for (const p of await panelRows(r.id)) await send(r, `/account/dashboard/panels/${p.id}/width`, { wide: "0", from: "edit" });
-    expect((await panelRows(r.id)).every((p) => p.wide === 0)).toBe(true);
     const html = await text(await open(r));
-    const main = mainOf(html);
-    expect(main.match(/class="panel dash-panel dash-half"/g)).toHaveLength(8);
-    const sections = main.split(/(?=<section class="panel dash-panel)/).slice(1);
-    const at = (title: string) => sections.find((s) => s.includes(title)) ?? "";
+    const d = drawn(html);
+    expect(d.filter((x) => x.w === 6)).toHaveLength(4);
+    const at = (title: string) => d.find((x) => x.head.includes(title))?.html ?? "";
     expect(at("Share of a Segment")).toContain("81 Engineering and Research and Technology Based Services · Award notices");
     // Its own share by fiscal year: all of 2025-26's counted value, 30 of 2026-27's 40.
     expect(at("Share of a Segment")).toContain("100%");
     expect(at("Share of a Segment")).toContain("75%");
     expect(at("Share of a Segment")).toContain("Records whose supplier is withheld");
-    expect(at("Contracts Ending Within 12 Months")).toContain('<span class="panel-count">6</span>');
+    expect(at("Contracts Ending Within 12 Months")).toMatch(/<span class="dash-count">\d+ of 26<\/span>/);
     expect(at("Buyers It Has Won From")).toContain('<a href="/buyers/pwgsc-tpsgc">Public Services and Procurement Canada</a>');
     expect(at("Standing Offers and Supply Arrangements")).toContain("E60ZT-120002/001/ZT");
-    for (const s of sections) expect(s).not.toContain(t("en", "dash.unavailable"));
-    // Half a row from 1,280 px: each table's least width in its range within the half track.
+    for (const x of d) expect(x.html).not.toContain(t("en", "dash.unavailable"));
     expect(misfits(html)).toEqual([]);
-    for (const table of tablesIn(html)) expect(leastWidths(table).lg).toBeLessThanOrEqual(462);
   });
 
-  it("says a panel whose item was removed, offering Remove; a search or briefing removed on its page takes its panel with it", async () => {
+  it("says a tile whose item was removed, offering Remove; a search or briefing removed on its page takes its tile with it", async () => {
     const r = await reader("dash-gone");
     await send(r, "/account/searches", { url: "/tenders?segment=82" });
     await send(r, "/account/searches", { url: "/tenders?segment=72" });
@@ -402,135 +440,441 @@ describe("an Ultra account", () => {
     const second = await searchId(r, "/tenders?segment=72");
     const briefing = (await ACCOUNTS.prepare("SELECT id FROM briefings WHERE user_id = ?").bind(r.id).first<{ id: string }>())!.id;
     await send(r, "/account/dashboard/panels", { kind: "briefing", ref: briefing });
-    // A search removed behind the page's back (as another tab's delete could leave it): the panel says so.
+    // A search removed behind the page's back (as another tab's delete could leave it): the tile says so.
     await ACCOUNTS.prepare("DELETE FROM saved_searches WHERE id = ?").bind(first).run();
     const html = await text(await open(r));
-    const gone = mainOf(html).split(/(?=<section class="panel dash-panel)/).find((s) => s.includes(t("en", "dash.gone")))!;
+    const gone = drawn(html).find((x) => x.html.includes(t("en", "dash.gone")))!;
     expect(gone).toBeDefined();
-    expect(gone).toContain("Saved search: open notices");
-    expect(gone).toMatch(/<form method="post" action="\/account\/dashboard\/panels\/[0-9a-f]{32}\/delete" class="account-inline">/);
-    expect(gone).not.toContain("See all");
-    // Removed on the searches page and the briefings panel, each takes its panel.
-    const before = (await panelRows(r.id)).length;
+    expect(gone.head).toBe("Saved search: open notices");
+    expect(gone.html).toMatch(/<form method="post" action="\/account\/dashboard\/tiles\/[0-9a-f]{32}\/delete">/);
+    expect(gone.html).not.toContain(">Open</a>");
+    // Removed on the searches page and the briefings panel, each takes its tile.
+    const before = (await tileRows(r.id)).length;
     await send(r, `/account/searches/${second}/delete`);
     await send(r, `/account/briefings/${briefing}/delete`);
-    const after = await panelRows(r.id);
+    const after = await tileRows(r.id);
     expect(after.length).toBe(before - 2);
     expect(after.some((p) => p.ref === second || p.ref === briefing)).toBe(false);
   });
 
-  it("takes every post through the session, the CSRF value and the Origin, in the form bucket, and moves, sizes and removes its own rows only", async () => {
-    const r = await reader("dash-posts");
-    const other = await reader("dash-posts-other");
-    // Without the value, from another site, or without a session: nothing written.
-    expect((await post("/account/dashboard/panels", { kind: "watches", ref: "" }, { cookie: r.cookie, env: off() })).status).toBe(403);
-    expect((await post("/account/dashboard/panels", { csrf: r.csrf, kind: "watches", ref: "" }, { cookie: r.cookie, env: off(), origin: "https://evil.example" })).status).toBe(403);
-    const out = await post("/account/dashboard/panels", { csrf: r.csrf, kind: "watches", ref: "" }, { env: off() });
-    expect(out.status).toBe(303);
-    expect(out.headers.get("location")).toBe("/account/sign-in");
-    expect(await panelRows(r.id)).toEqual([]);
-    // A ref the account does not hold, or a kind the site does not know: refused.
-    for (const [kind, ref] of [["tenders", "0".repeat(32)], ["gauges", ""], ["radar", "24m"], ["view", "/buyers/pwgsc-tpsgc/analytics?source=awards"], ["org", "registry"]]) {
-      expect((await send(r, "/account/dashboard/panels", { kind, ref })).status, `${kind} ${ref}`).toBe(400);
-    }
-    // The first change writes the starting layout (the watches, the 3-month list) and applies to it: the second moves up.
-    const moved = await send(r, "/account/dashboard/panels/s1/move", { dir: "up", from: "edit" });
-    expect(moved.headers.get("location")).toMatch(/^\/account\/dashboard\?edit=1#panel-[0-9a-f]{32}$/);
-    expect((await panelRows(r.id)).map((p) => `${p.kind}:${p.ref}`)).toEqual(["radar:3m", "watches:"]);
-    const [a, b] = await panelRows(r.id);
-    await send(r, `/account/dashboard/panels/${a.id}/move`, { dir: "down" });
-    expect((await panelRows(r.id)).map((p) => p.id)).toEqual([b.id, a.id]);
-    await send(r, `/account/dashboard/panels/${a.id}/width`, { wide: "0" });
-    expect((await panelRows(r.id)).find((p) => p.id === a.id)?.wide).toBe(0);
-    expect((await send(r, `/account/dashboard/panels/${a.id}/width`, { wide: "half" })).status).toBe(400);
-    expect((await send(r, `/account/dashboard/panels/${a.id}/move`, { dir: "left" })).status).toBe(400);
-    // Another account's post names the id and changes nothing.
-    await send(other, `/account/dashboard/panels/${a.id}/delete`);
-    expect((await panelRows(r.id)).length).toBe(2);
-    await send(r, `/account/dashboard/panels/${a.id}/delete`);
-    expect((await panelRows(r.id)).map((p) => p.id)).toEqual([b.id]);
-    // The dashboard's own bucket for the four posts (limits.ts "edit"), the page's own GET with the pages.
-    for (const path of ["/account/dashboard/panels", `/account/dashboard/panels/${b.id}/move`, `/account/dashboard/panels/${b.id}/width`,
-      `/account/dashboard/panels/${b.id}/delete`]) expect(bucketFor("POST", path), path).toBe("edit");
-    expect(bucketFor("GET", "/account/dashboard")).toBe("page");
-    // A Free account's post is sent to the page, which says what the dashboard holds; nothing is written.
-    const free = await reader("dash-posts-free", "free");
-    const refused = await send(free, "/account/dashboard/panels", { kind: "watches", ref: "" }, sale());
-    expect(refused.headers.get("location")).toBe("/account/dashboard");
-    expect(await panelRows(free.id)).toEqual([]);
-  });
-
-  it("refuses the third briefing and the thirteenth panel inside the insert itself", async () => {
+  it("refuses the third briefing and the thirteenth tile inside the insert itself", async () => {
     const r = await reader("dash-caps");
     for (const s of ["81", "43", "72"]) await send(r, "/account/briefings", { kind: "segment", subject: s });
     const ids = ((await ACCOUNTS.prepare("SELECT id FROM briefings WHERE user_id = ? ORDER BY created_at, id").bind(r.id).all<{ id: string }>()).results ?? [])
       .map((x) => x.id);
     expect(ids).toHaveLength(3);
     for (const id of ids.slice(0, BRIEFING_PANELS_MAX)) {
-      expect((await send(r, "/account/dashboard/panels", { kind: "briefing", ref: id })).headers.get("location")).toMatch(/^\/account\/dashboard\?m=added#panel-[0-9a-f]{32}$/);
+      expect((await send(r, "/account/dashboard/panels", { kind: "briefing", ref: id })).headers.get("location")).toMatch(/^\/account\/dashboard\?m=added#tile-[0-9a-f]{32}$/);
     }
     const third = await send(r, "/account/dashboard/panels", { kind: "briefing", ref: ids[2] });
     expect(third.headers.get("location")).toBe("/account/dashboard?m=briefings_full");
     expect(await text(await open(r, "/account/dashboard?m=briefings_full"))).toContain(t("en", "dash.briefings_full", { n: "2" }));
-    // The statement alone holds both: two inserts at once cannot pass either.
-    const insert = (kind: string, ref: string, cap: number) => ACCOUNTS.prepare(ADD_PANEL_SQL)
-      .bind(crypto.randomUUID().replace(/-/g, ""), r.id, kind, ref, 1, new Date().toISOString(), cap, BRIEFING_PANELS_MAX).run();
+    // The statement alone holds all three: two inserts at once cannot pass any of them.
+    const insert = (kind: string, ref: string, cap: number) => ACCOUNTS.prepare(ADD_TILE_SQL)
+      .bind(crypto.randomUUID().replace(/-/g, ""), r.id, kind, ref, 0, 99, 6, 9, new Date().toISOString(), cap, BRIEFING_PANELS_MAX).run();
     expect((await insert("briefing", ids[2], DASHBOARD_MAX)).meta.changes).toBe(0);
-    const held = (await panelRows(r.id)).length;
+    const held = (await tileRows(r.id)).length;
     expect((await insert("watches", "x", held)).meta.changes).toBe(0);
     expect((await insert("watches", "x", held + 1)).meta.changes).toBe(1);
     // The same item once.
     expect((await insert("watches", "x", DASHBOARD_MAX)).meta.changes).toBe(0);
     expect(dashboardCap("ultra")).toBe(RULES.ultra.dashboard);
     expect([dashboardCap("free"), dashboardCap("pro")]).toEqual([0, 0]);
+    // A tile goes in only into the account's own dashboard: with none, nothing is written.
+    const fresh = await reader("dash-caps-none");
+    const none = await ACCOUNTS.prepare(ADD_TILE_SQL).bind("f".repeat(32), fresh.id, "watches", "", 0, 0, 6, 9, new Date().toISOString(), 12, 2).run();
+    expect(none.meta.changes).toBe(0);
   });
+});
 
-  it("in edit mode adds its controls, the Add panel and its one filled button; the plain view has none", async () => {
-    const r = await reader("dash-edit");
+// =====================================================================================
+// The three states of storage
+// =====================================================================================
+
+describe("without the grid's tables (accounts_schema.sql not applied since the grid)", () => {
+  it("lays the panels or the starting layout out on the grid, says places cannot be kept, saves none, and answers no 500", async () => {
+    const r = await reader("dash-state-a");
     await send(r, "/account/searches", { url: "/tenders?segment=82" });
-    const view = mainOf(await text(await open(r)));
-    expect(view).not.toContain("btn-primary");
-    expect(view).toContain('<a href="/account/dashboard?edit=1" class="btn">Edit the dashboard</a>');
-    expect(view).not.toContain("dash-controls");
-    const edit = mainOf(await text(await open(r, "/account/dashboard?edit=1")));
-    expect(edit.match(/btn-primary/g)).toHaveLength(1);
-    expect(edit).toContain('<button type="submit" class="btn btn-primary">Add</button>');
-    expect(edit).toContain('<a href="/account/dashboard" class="btn">Done</a>');
-    expect(edit).toContain(`<h2 id="dash-add">${t("en", "dash.add_panel")}</h2>`);
-    expect(edit).toContain('<span class="panel-count">3 of 12 panels</span>');
-    // The starter's panels carry their places as ids until written; the first has no Move up, the last no Move down.
-    expect(edit).toContain('action="/account/dashboard/panels/s0/width"');
-    const sections = edit.split(/(?=<section class="panel dash-panel)/).slice(1);
-    expect(sections).toHaveLength(3);
-    expect(sections[0]).not.toContain(">Move up<");
-    expect(sections[0]).toContain(">Move down<");
-    expect(sections[1]).toContain(">Move up<");
-    expect(sections[2]).not.toContain(">Move down<");
-    for (const s of sections) expect(s).toContain(">Half width<");
-    // The select offers what the account holds and the dashboard does not show yet.
-    expect(edit).toContain('<optgroup label="Contracts ending"><option value="radar:6m">Ending within 6 months</option>');
-    expect(edit).not.toContain('value="radar:3m"');
-    expect(edit).not.toContain('value="watches:"');
-    expect(edit).not.toContain(EM_DASH);
+    await without("tiles", async () => {
+      // The starting layout on the grid, the line that says positions and sizes cannot be saved yet.
+      const first = await text(await open(r));
+      expect(drawn(first).map((d) => [d.id, d.x, d.y, d.w])).toEqual([["s0", 0, 0, 12], ["s1", 0, START_H.watches, 12], ["s2", 0, START_H.watches + START_H.radar, 12]]);
+      expect(mainOf(first)).toContain(t("en", "dash.unsaved_layout"));
+      expect(first).toContain('"save":false');
+      // The script's save answers that nothing was kept; the menu's steps say so; nothing answers 500.
+      const saved = await save(r, [{ id: "s0", x: 0, y: 0, w: 6, h: 9 }]);
+      expect(saved.status).toBe(200);
+      expect(saved.headers.get("cache-control")).toBe("private, no-store");
+      expect(await saved.json()).toEqual({ state: "unsaved" });
+      for (const [path, fields] of [["/account/dashboard/tiles/s0/move", { dir: "down" }], ["/account/dashboard/tiles/s1/size", { to: "narrower" }]] as const) {
+        const res = await send(r, path, fields);
+        expect(res.status, path).toBe(303);
+        expect(res.headers.get("location"), path).toBe("/account/dashboard?m=unsaved_layout");
+      }
+      // One tile read at a size works from the computed layout.
+      const tile = await readTile(r, "s1", "?w=6&h=12");
+      expect(tile.status).toBe(200);
+      expect(await tile.text()).toContain('data-w="6" data-h="12"');
+      // Adding and removing keep working, in the panels' table, as before the grid.
+      expect((await send(r, "/account/dashboard/panels", { kind: "radar", ref: "6m" })).headers.get("location")).toMatch(/^\/account\/dashboard\?m=added#tile-[0-9a-f]{32}$/);
+      const rows = await panelRows(r.id);
+      expect(rows.map((p) => `${p.kind}:${p.ref}`)).toEqual(["watches:", "radar:3m", `tenders:${await searchId(r, "/tenders?segment=82")}`, "radar:6m"]);
+      expect((await send(r, `/account/dashboard/tiles/${rows[0].id}/delete`)).status).toBe(303);
+      expect((await panelRows(r.id)).map((p) => `${p.kind}:${p.ref}`)).toEqual(["radar:3m", `tenders:${await searchId(r, "/tenders?segment=82")}`, "radar:6m"]);
+      // The page lays the panels out: their order, full width.
+      const panels = await text(await open(r));
+      expect(heads(panels)).toEqual(["Contracts ending | Ending within 3 months", expect.stringMatching(/^Saved search: open notices/), "Contracts ending | Ending within 6 months"]);
+      // Deleting the account works without the tables.
+      const gone = await reader("dash-state-a-delete");
+      expect((await send(gone, "/account/delete", { confirm: "yes" })).status).toBe(200);
+    });
   });
 
-  it("without its table renders the starting layout, says the layout cannot be saved yet, and writes nothing", async () => {
-    const r = await reader("dash-unsaved");
-    await withoutPanels(async () => {
+  it("with neither the grid's tables nor the panels', shows the starting layout and keeps nothing", async () => {
+    const r = await reader("dash-state-none");
+    await without("all", async () => {
       const html = await text(await open(r));
       expect(heads(html)).toEqual(["Your watches this week", "Contracts ending | Ending within 3 months"]);
-      const edit = mainOf(await text(await open(r, "/account/dashboard?edit=1")));
-      expect(edit).toContain(`<p class="muted">${t("en", "dash.unsaved")}</p>`);
-      expect(edit).not.toContain("btn-primary");
-      expect(edit).not.toContain("dash-controls");
-      const add = await send(r, "/account/dashboard/panels", { kind: "radar", ref: "6m" });
-      expect(add.headers.get("location")).toBe("/account/dashboard?m=unsaved");
-      const move = await send(r, "/account/dashboard/panels/s0/move", { dir: "down", from: "edit" });
-      expect(move.headers.get("location")).toBe("/account/dashboard?edit=1&m=unsaved");
+      expect(mainOf(html)).toContain(t("en", "dash.unsaved"));
+      // Add a Tile says why it adds nothing.
+      expect(mainOf(html)).toMatch(/<div class="dash-adder-body"><p class="muted small">2 of 12 tiles<\/p><p class="muted">The dashboard cannot be saved yet/);
+      expect((await send(r, "/account/dashboard/panels", { kind: "radar", ref: "6m" })).headers.get("location")).toBe("/account/dashboard?m=unsaved");
+      expect((await send(r, "/account/dashboard/tiles/s0/move", { dir: "down" })).headers.get("location")).toBe("/account/dashboard?m=unsaved");
+      expect((await send(r, "/account/dashboard/tiles/s0/delete")).headers.get("location")).toBe("/account/dashboard?m=unsaved");
+      expect(await (await save(r, [])).json()).toEqual({ state: "unsaved" });
       expect(await text(await open(r, "/account/dashboard?m=unsaved"))).toContain(t("en", "dash.unsaved"));
-      // The account's other pages read as before.
       expect((await open(r, "/account/searches")).status).toBe(200);
     });
+  });
+});
+
+describe("with the grid's tables and nothing stored for the account", () => {
+  it("shows the panels laid out on the grid, computed; the first change writes the whole layout, and the panels are read no more", async () => {
+    const r = await reader("dash-state-b");
+    // Panels the account arranged before the grid: two half-width ones side by side, then a full-width one.
+    const at = new Date().toISOString();
+    const P = ["a".repeat(32), "b".repeat(32), "c".repeat(32)];
+    await ACCOUNTS.batch([["radar", "3m", 0, 0], ["radar", "6m", 1, 0], ["watches", "", 2, 1]].map(([kind, ref, pos, wide], i) => ACCOUNTS.prepare(
+      "INSERT INTO dashboard_panels (id, user_id, kind, ref, pos, wide, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    ).bind(P[i], r.id, kind, ref, pos, wide, at)));
+    const html = await text(await open(r));
+    expect(drawn(html).map((d) => [d.id, d.x, d.y, d.w, d.h])).toEqual([
+      [P[0], 0, 0, 6, START_H.radar], [P[1], 6, 0, 6, START_H.radar], [P[2], 0, START_H.radar, 12, START_H.watches],
+    ]);
+    expect(mainOf(html)).not.toContain(t("en", "dash.starter"));
+    expect(html).toContain('"save":true');
+    expect(await boards(r.id)).toEqual([]);
+    // The first change: the script's save of the layout with the watches moved up. The whole layout is written, the
+    // panels' ids kept, and the answer is the layout as kept.
+    const res = await save(r, [{ id: P[2], x: 0, y: 0, w: 12, h: START_H.watches }, { id: "f".repeat(32), x: 0, y: 0, w: 3, h: 3 }, { id: P[0], x: 0, y: 99 }]);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("private, no-store");
+    const answer = await res.json() as { state: string; tiles: { id: string; x: number; y: number; w: number; h: number }[]; renamed: object };
+    expect(answer.state).toBe("saved");
+    expect(answer.renamed).toEqual({});
+    const rows = await tileRows(r.id);
+    expect(rows.map((x) => [x.id, x.kind, x.ref, x.x, x.y, x.w, x.h])).toEqual([
+      [P[2], "watches", "", 0, 0, 12, START_H.watches], [P[0], "radar", "3m", 0, START_H.watches, 6, START_H.radar],
+      [P[1], "radar", "6m", 6, START_H.watches, 6, START_H.radar],
+    ]);
+    expect(answer.tiles).toEqual(rows.map((x) => ({ id: x.id, x: x.x, y: x.y, w: x.w, h: x.h })));
+    const board = await boards(r.id);
+    expect(board).toEqual([{ id: expect.stringMatching(/^[0-9a-f]{32}$/), name: "", pos: 0 }]);
+    // The panels' table is read no more for this account: a panel written there now changes nothing.
+    await ACCOUNTS.prepare("INSERT INTO dashboard_panels (id, user_id, kind, ref, pos, wide, created_at) VALUES (?, ?, 'radar', '12m', 3, 1, ?)")
+      .bind("d".repeat(32), r.id, at).run();
+    expect(heads(await text(await open(r)))).toEqual(["Your watches this week", "Contracts ending | Ending within 3 months", "Contracts ending | Ending within 6 months"]);
+  });
+
+  it("writes the starting layout with new ids at the first change, and answers each starter's new id", async () => {
+    const r = await reader("dash-state-b-starter");
+    const res = await save(r, [{ id: "s1", x: 6, y: 0, w: 6, h: 11 }, { id: "s0", x: 0, y: 0, w: 6, h: 11 }]);
+    const answer = await res.json() as { state: string; tiles: { id: string }[]; renamed: Record<string, string> };
+    const rows = await tileRows(r.id);
+    expect(rows.map((x) => [x.kind, x.ref, x.x, x.y, x.w, x.h])).toEqual([["watches", "", 0, 0, 6, 11], ["radar", "3m", 6, 0, 6, 11]]);
+    expect(answer.renamed).toEqual({ s0: rows[0].id, s1: rows[1].id });
+    expect(answer.tiles.map((x) => x.id)).toEqual([rows[0].id, rows[1].id]);
+    // A second first change from another tab, at once, writes nothing more.
+    await save(r, [{ id: "s0", x: 0, y: 0, w: 12, h: 11 }]);
+    expect((await tileRows(r.id)).length).toBe(2);
+    expect(await boards(r.id)).toHaveLength(1);
+  });
+
+  it("writes the layout at the first add, removal, step or size from the menu, then applies it", async () => {
+    for (const [tag, path, fields, check] of [
+      ["add", "/account/dashboard/panels", { kind: "radar", ref: "12m" }, (rows: TileRow[]) => expect(rows.map((x) => `${x.kind}:${x.ref}`)).toEqual(["watches:", "radar:3m", "radar:12m"])],
+      ["remove", "/account/dashboard/tiles/s0/delete", {}, (rows: TileRow[]) => expect(rows.map((x) => `${x.kind}:${x.ref}@${x.y}`)).toEqual(["radar:3m@0"])],
+      ["step", "/account/dashboard/tiles/s1/move", { dir: "up" }, (rows: TileRow[]) => expect(rows.map((x) => `${x.kind}@${x.y}`)).toEqual(["radar@0", `watches@${START_H.radar}`])],
+      ["size", "/account/dashboard/tiles/s1/size", { to: "narrower" }, (rows: TileRow[]) => expect(rows.find((x) => x.kind === "radar")!.w).toBe(11)],
+    ] as const) {
+      const r = await reader(`dash-state-b-${tag}`);
+      const res = await send(r, path, fields);
+      expect(res.status, tag).toBe(303);
+      expect(res.headers.get("location"), tag).toMatch(/^\/account\/dashboard(\?m=added)?#(tile-[0-9a-f]{32}|dash-add)$/);
+      check(await tileRows(r.id));
+      expect(await boards(r.id), tag).toHaveLength(1);
+    }
+  });
+});
+
+describe("with the account's tiles stored", () => {
+  it("draws each at its stored place and size, holds a posted layout to the grid and to the account's own tiles, and answers it", async () => {
+    const r = await reader("dash-state-c");
+    const other = await reader("dash-state-c-other");
+    await send(r, "/account/dashboard/panels", { kind: "radar", ref: "6m" });
+    await send(other, "/account/dashboard/panels", { kind: "radar", ref: "6m" });
+    const rows = await tileRows(r.id);
+    expect(rows.map((x) => `${x.kind}:${x.ref}`)).toEqual(["watches:", "radar:3m", "radar:6m"]);
+    const [w, three, six] = rows;
+    // Placed by the script: the 6-month list beside the watches, the 3-month list wide under them; another
+    // account's tile, nonsense sizes and a negative place go through the grid's rules.
+    const foreign = (await tileRows(other.id))[0].id;
+    const res = await save(r, [
+      { id: w.id, x: 0, y: 0, w: 6, h: 9 }, { id: six.id, x: 6, y: 0, w: 6, h: 99 }, { id: three.id, x: -4, y: 0, w: 40, h: 9 },
+      { id: foreign, x: 0, y: 0, w: 3, h: 2 }, { id: "s0", x: 0, y: 0, w: 3, h: 2 }, "nonsense", null,
+    ]);
+    const answer = await res.json() as { state: string; tiles: { id: string; x: number; y: number; w: number; h: number }[] };
+    expect(answer.state).toBe("saved");
+    const kept = await tileRows(r.id);
+    expect(kept.map((x) => [x.id, x.x, x.y, x.w, x.h])).toEqual(normalize([
+      { id: w.id, kind: "watches", x: 0, y: 0, w: 6, h: 9 }, { id: six.id, kind: "radar", x: 6, y: 0, w: 6, h: 99 },
+      { id: three.id, kind: "radar", x: -4, y: 0, w: 40, h: 9 },
+    ]).map((x) => [x.id, x.x, x.y, x.w, x.h]).sort((a, b) => (a[2] as number) - (b[2] as number) || (a[1] as number) - (b[1] as number)));
+    expect(kept.find((x) => x.id === six.id)!.h).toBe(16);
+    expect(answer.tiles.map((x) => x.id).sort()).toEqual(kept.map((x) => x.id).sort());
+    // The other account's tile is as it was.
+    expect((await tileRows(other.id))[0]).toMatchObject({ id: foreign, kind: "watches" });
+    // The page draws them at their places, in reading order.
+    const page = drawn(await text(await open(r)));
+    expect(page.map((d) => [d.id, d.x, d.y, d.w, d.h])).toEqual(kept.map((x) => [x.id, x.x, x.y, x.w, x.h]));
+    // A stored place the grid would not give (an overlap written by hand) is drawn held to the grid.
+    await ACCOUNTS.prepare("UPDATE dashboard_tiles SET x = 0, y = 0, w = 2, h = 1 WHERE id = ?").bind(three.id).run();
+    const held = drawn(await text(await open(r)));
+    expect(held.find((d) => d.id === three.id)).toMatchObject({ w: least("radar").w, h: least("radar", least("radar").w).h });
+    for (let i = 0; i < held.length; i++) for (let j = i + 1; j < held.length; j++) {
+      const a = held[i];
+      const b = held[j];
+      expect(a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h, `${a.id} meets ${b.id}`).toBe(false);
+    }
+    // A layout that is not a list, too long, or not JSON is refused and changes nothing.
+    for (const bad of ["{}", "[", JSON.stringify(Array.from({ length: 51 }, (_, i) => ({ id: String(i) }))), "x".repeat(9000)]) {
+      const refused = await send(r, "/account/dashboard/layout", { layout: bad });
+      expect(refused.status, bad.slice(0, 20)).toBe(400);
+    }
+  });
+
+  it("steps and sizes a tile from its menu as the grid does, and offers only the steps that change the layout", async () => {
+    const r = await reader("dash-menu");
+    await send(r, "/account/dashboard/panels", { kind: "radar", ref: "6m" });
+    const [w, three, six] = await tileRows(r.id);
+    const go = async (id: string, op: string, field: string, value: string) => {
+      const res = await send(r, `/account/dashboard/tiles/${id}/${op}`, { [field]: value });
+      expect(res.status).toBe(303);
+      expect(res.headers.get("location")).toBe(`/account/dashboard#tile-${id}`);
+      return tileRows(r.id);
+    };
+    // The 6-month list up a place: above the 3-month list.
+    let rows = await go(six.id, "move", "dir", "up");
+    expect(rows.map((x) => x.ref)).toEqual(["", "6m", "3m"]);
+    // Narrower twice, then right: it leaves the left edge.
+    rows = await go(six.id, "size", "to", "narrower");
+    rows = await go(six.id, "size", "to", "narrower");
+    rows = await go(six.id, "move", "dir", "right");
+    expect(rows.find((x) => x.id === six.id)).toMatchObject({ x: 1, w: 4 });
+    rows = await go(six.id, "size", "to", "taller");
+    expect(rows.find((x) => x.id === six.id)!.h).toBe(START_H.radar + 1);
+    rows = await go(six.id, "size", "to", "shorter");
+    expect(rows.find((x) => x.id === six.id)!.h).toBe(START_H.radar);
+    // The menu: each step a post with its CSRF value, Open first, Remove last; a step that changes nothing is offered
+    // disabled (the watches cannot go up, nor sideways at full width).
+    const html = await text(await open(r));
+    const watches = drawn(html).find((d) => d.id === w.id)!.html;
+    const offer = gridSteps(drawn(html).map((d) => ({ id: d.id, kind: d.id === w.id ? "watches" : "radar", x: d.x, y: d.y, w: d.w, h: d.h })), w.id);
+    for (const [step, label] of [["left", "Move left"], ["right", "Move right"], ["up", "Move up"], ["down", "Move down"], ["wider", "Wider"], ["narrower", "Narrower"],
+      ["taller", "Taller"], ["shorter", "Shorter"]] as const) {
+      const op = ["left", "right", "up", "down"].includes(step) ? "move" : "size";
+      const field = op === "move" ? "dir" : "to";
+      expect(watches, step).toContain(`<form method="post" action="/account/dashboard/tiles/${w.id}/${op}"><input type="hidden" name="csrf" value="${r.csrf}"/>` +
+        `<input type="hidden" name="${field}" value="${step}"/><button type="submit" class="dash-menu-item" data-step="${step}"${offer[step] ? "" : ' disabled=""'}>${label}</button></form>`);
+    }
+    expect(offer).toMatchObject({ up: false, left: false, right: false, wider: false, down: true });
+    expect(watches).toContain(`<a href="/account/watches" class="dash-menu-item">Open</a>`);
+    expect(watches).toMatch(/<form method="post" action="\/account\/dashboard\/tiles\/[0-9a-f]{32}\/delete"><input type="hidden" name="csrf" value="[0-9a-f]{32}"\/><button type="submit" class="dash-menu-item">Remove<\/button><\/form><\/div><\/details>/);
+    // A step the post does not name, or another account's tile: refused, or nothing changed.
+    expect((await send(r, `/account/dashboard/tiles/${six.id}/move`, { dir: "wider" })).status).toBe(400);
+    expect((await send(r, `/account/dashboard/tiles/${six.id}/size`, { to: "up" })).status).toBe(400);
+    expect((await send(r, `/account/dashboard/tiles/${six.id}/spin`, { to: "up" })).status).toBe(404);
+    const other = await reader("dash-menu-other");
+    const before = await tileRows(r.id);
+    await send(other, `/account/dashboard/tiles/${six.id}/move`, { dir: "down" });
+    await send(other, `/account/dashboard/tiles/${six.id}/delete`);
+    expect(await tileRows(r.id)).toEqual(before);
+    // The earlier page's posts answer as they did: a place up, a width, a removal.
+    const legacy = await send(r, `/account/dashboard/panels/${three.id}/width`, { wide: "1" });
+    expect(legacy.headers.get("location")).toBe(`/account/dashboard#tile-${three.id}`);
+    expect((await tileRows(r.id)).find((x) => x.id === three.id)!.w).toBe(12);
+  });
+
+  it("removes a tile at the tile that takes its place, and an emptied dashboard stays empty, Add a Tile open", async () => {
+    const r = await reader("dash-remove");
+    await send(r, "/account/dashboard/panels", { kind: "radar", ref: "6m" });
+    const [a, b, c] = await tileRows(r.id);
+    expect((await send(r, `/account/dashboard/tiles/${b.id}/delete`)).headers.get("location")).toBe(`/account/dashboard#tile-${c.id}`);
+    expect((await send(r, `/account/dashboard/tiles/${c.id}/delete`)).headers.get("location")).toBe(`/account/dashboard#tile-${a.id}`);
+    expect((await send(r, `/account/dashboard/tiles/${a.id}/delete`)).headers.get("location")).toBe("/account/dashboard#dash-add");
+    expect(await tileRows(r.id)).toEqual([]);
+    expect(await boards(r.id)).toHaveLength(1);
+    const main = mainOf(await text(await open(r)));
+    expect(main).not.toContain("dash-tile");
+    expect(main).not.toContain(t("en", "dash.starter"));
+    expect(main).toContain('<details class="dash-adder" id="dash-add" open="">');
+    expect(main).toContain('<option value="radar:6m">');
+    // Its next tile comes alone.
+    await send(r, "/account/dashboard/panels", { panel: "radar:6m" });
+    expect((await tileRows(r.id)).map((x) => `${x.kind}:${x.ref}@${x.x},${x.y}`)).toEqual(["radar:6m@0,0"]);
+  });
+});
+
+// =====================================================================================
+
+describe("a tile's size", () => {
+  it("sets the rows it lists, 3 at the least and 25 at the most, the statement's LIMIT and its foot's count", async () => {
+    const r = await reader("dash-rows");
+    await send(r, "/account/dashboard/panels", { kind: "radar", ref: "12m" });
+    const id = (await tileRows(r.id)).find((x) => x.ref === "12m")!.id;
+    const sizes: [number, number][] = [[least("radar").w, least("radar", least("radar").w).h], [6, 8], [12, 12], [12, 16]];
+    let last = 0;
+    for (const [w, h] of sizes) {
+      await save(r, [{ id, x: 0, y: 0, w, h }]);
+      const tile = drawn(await text(await open(r))).find((d) => d.id === id)!;
+      const rows = tileFit("radar", "12m", w, h).rows;
+      expect(rowsIn(tile.html), `${w}x${h}`).toBe(rows);
+      expect(rows).toBeGreaterThanOrEqual(3);
+      expect(rows).toBeLessThanOrEqual(25);
+      expect(rows, `${w}x${h}`).toBeGreaterThanOrEqual(last);
+      last = rows;
+      expect(tile.html).toContain(`<span class="dash-count">${rows} of 30</span>`);
+      expect(tile.html).toContain('data-total="30"');
+    }
+    // The radar's short form reads the tile's rows through the window's index.
+    expect(RADAR_TOP_SQL).toBe(RADAR_ROWS_END_SQL.replace(/ LIMIT 100 OFFSET \?13$/, " LIMIT ?13"));
+    const binds = radarBinds(endingParams(n(A1), claimFrame(DAY)));
+    for (const rows of [3, 25]) expect(((await RECORDS.prepare(RADAR_TOP_SQL).bind(...binds, rows).all()).results ?? []).length).toBe(rows);
+    const steps = ((await RECORDS.prepare(`EXPLAIN QUERY PLAN ${RADAR_TOP_SQL}`).bind(...binds, 5).all()).results ?? []).map((x) => String((x as { detail?: unknown }).detail));
+    expect(steps.filter((s) => /^SCAN rec_expiring\b/.test(s) && !/USING/.test(s)), steps.join("\n")).toEqual([]);
+    expect(steps.join("\n")).toMatch(/rec_expiring_end/);
+  });
+
+  it("is read for one tile alone, behind the session and the CSRF value in its header, at the size asked, held to the grid", async () => {
+    const r = await reader("dash-fragment");
+    await send(r, "/account/dashboard/panels", { kind: "radar", ref: "12m" });
+    const id = (await tileRows(r.id)).find((x) => x.ref === "12m")!.id;
+    const res = await readTile(r, id, "?w=6&h=14");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("private, no-store");
+    expect(res.headers.get("content-type")).toContain("text/html");
+    const html = norm(decode(await res.text()));
+    expect(html.startsWith(`<section class="panel dash-tile" id="tile-${id}"`)).toBe(true);
+    expect(html).toContain('data-w="6" data-h="14"');
+    expect(rowsIn(html)).toBe(tileFit("radar", "12m", 6, 14).rows);
+    expect(html).not.toContain("<html");
+    // Held to the grid: past the columns and below the least.
+    expect(norm(decode(await (await readTile(r, id, "?w=40&h=1")).text()))).toContain(`data-w="12" data-h="${least("radar").h}"`);
+    // Its own size without one asked.
+    expect(norm(decode(await (await readTile(r, id)).text()))).toMatch(/data-w="6" data-h="\d+"/);
+    // Without the header's value, with another value, without a session, for another account's tile or an unknown id: nothing.
+    expect((await readTile(r, id, "", off(), null)).status).toBe(403);
+    expect((await readTile(r, id, "", off(), "0".repeat(32))).status).toBe(403);
+    expect((await get(`/account/dashboard/tiles/${id}`, { env: off(), headers: { "x-csrf-token": r.csrf } })).status).toBe(403);
+    const other = await reader("dash-fragment-other");
+    expect((await readTile(other, id)).status).toBe(404);
+    expect((await readTile(r, "s9")).status).toBe(404);
+    // A Free account reads none.
+    const free = await reader("dash-fragment-free", "free");
+    expect((await readTile(free, "s0")).status).toBe(404);
+  });
+
+  it("draws a view's chart to the tile's width and height", async () => {
+    const r = await reader("dash-chart");
+    const view = "/buyers/pwgsc-tpsgc/analytics?source=awards&years=10";
+    await send(r, "/account/dashboard/panels", { kind: "view", ref: view });
+    const id = (await tileRows(r.id)).find((x) => x.kind === "view")!.id;
+    const plot = (html: string) => Number(/<div class="chart-plot" style="height:(\d+)px">/.exec(html)?.[1]);
+    const labels = (html: string) => (html.match(/<div class="chart-x">([\s\S]*?)<\/div>/)?.[1].match(/<span /g) ?? []).length;
+    const small = norm(decode(await (await readTile(r, id, `?w=${LEAST.view.w}&h=${LEAST.view.h}`)).text()));
+    const big = norm(decode(await (await readTile(r, id, "?w=12&h=14")).text()));
+    expect(plot(small)).toBe(tileFit("view", view, LEAST.view.w, LEAST.view.h).chart!.height);
+    expect(plot(big)).toBe(tileFit("view", view, 12, 14).chart!.height);
+    expect(plot(big)).toBeGreaterThan(plot(small));
+    // A narrow chart's axis keeps fewer of its years' labels.
+    expect(labels(big)).toBeGreaterThan(labels(small));
+    expect(small).toContain("Award notices, federal fiscal years 2017-18 to 2026-27.");
+  });
+});
+
+describe("the page", () => {
+  it("has no edit mode: ?edit=1 is the same page, Add a Tile its one filled button, every tile its handles and its menu", async () => {
+    const r = await reader("dash-page");
+    await send(r, "/account/searches", { url: "/tenders?segment=82" });
+    const plain = mainOf(await text(await open(r)));
+    const edit = mainOf(await text(await open(r, "/account/dashboard?edit=1")));
+    expect(edit).toBe(plain);
+    expect(plain.match(/btn-primary/g)).toHaveLength(1);
+    expect(plain).toContain(`<details class="dash-adder" id="dash-add"><summary class="btn btn-primary">${t("en", "dash.add_tile")}</summary>`);
+    expect(plain).toContain('<p class="muted small">3 of 12 tiles</p>');
+    expect(plain).toContain('<button type="submit" class="btn">Add</button>');
+    expect(plain).toContain('<optgroup label="Contracts ending"><option value="radar:6m">Ending within 6 months</option>');
+    expect(plain).not.toContain('value="radar:3m"');
+    expect(plain).not.toContain('value="watches:"');
+    // The handles are buttons, described by the keys' help; the menu a details element.
+    for (const d of drawn(plain)) {
+      expect(d.html).toContain(`<button type="button" class="dash-grip" aria-label="Move: ${d.head.replace(" | ", ": ")}" aria-describedby="dash-keys-move">`);
+      expect(d.html).toContain(`<button type="button" class="dash-corner" aria-label="Resize: ${d.head.replace(" | ", ": ")}" aria-describedby="dash-keys-size"></button>`);
+      expect(d.html).toContain('<details class="dash-menu"><summary class="dash-menu-button"');
+    }
+    expect(plain).toContain(`<p id="dash-keys-move" hidden="">${t("en", "dash.keys_move")}</p>`);
+    expect(plain).toContain('<p id="dash-say" class="visually-hidden" aria-live="polite"></p>');
+    // The script and its words, every template in pieces.
+    expect(plain).toContain('<script type="module" src="/dashboard.js"></script>');
+    const data = JSON.parse(/<script type="application\/json" id="dash-data">([\s\S]*?)<\/script>/.exec(plain)![1]);
+    expect(data).toMatchObject({ csrf: r.csrf, save: true, cols: 12, layout: "/account/dashboard/layout", tiles: "/account/dashboard/tiles/" });
+    expect(data.words.at).toEqual(["", "title", ": column ", "x", " of ", "cols", ", row ", "y", "."]);
+    expect(plain).not.toMatch(/\{\w+\}/);
+    expect(plain).not.toContain(EM_DASH);
+  });
+
+  it("counts every post and the one read in the edit bucket, the page with the pages", () => {
+    const id = "a".repeat(32);
+    for (const path of ["/account/dashboard/panels", "/account/dashboard/layout", `/account/dashboard/tiles/${id}/move`, `/account/dashboard/tiles/${id}/size`,
+      `/account/dashboard/tiles/${id}/delete`, `/account/dashboard/panels/${id}/move`, `/account/dashboard/panels/${id}/width`, `/account/dashboard/panels/${id}/delete`]) {
+      expect(bucketFor("POST", path), path).toBe("edit");
+    }
+    expect(bucketFor("GET", `/account/dashboard/tiles/${id}`)).toBe("edit");
+    expect(bucketFor("GET", "/account/dashboard")).toBe("page");
+    expect(bucketFor("POST", `/account/dashboard/tiles/${id}/spin`)).toBe("page");
+  });
+
+  it("takes every post through the session, the CSRF value and the Origin", async () => {
+    const r = await reader("dash-posts");
+    for (const path of ["/account/dashboard/panels", "/account/dashboard/layout", "/account/dashboard/tiles/s0/move"]) {
+      const fields = { kind: "watches", ref: "", layout: "[]", dir: "down" };
+      expect((await post(path, fields, { cookie: r.cookie, env: off() })).status, path).toBe(403);
+      expect((await post(path, { csrf: r.csrf, ...fields }, { cookie: r.cookie, env: off(), origin: "https://evil.example" })).status, path).toBe(403);
+      const out = await post(path, { csrf: r.csrf, ...fields }, { env: off() });
+      expect(out.status, path).toBe(303);
+      expect(out.headers.get("location"), path).toBe("/account/sign-in");
+    }
+    expect(await tileRows(r.id)).toEqual([]);
+    // A ref the account does not hold, or a kind the site does not know: refused.
+    for (const [kind, ref] of [["tenders", "0".repeat(32)], ["gauges", ""], ["radar", "24m"], ["view", "/buyers/pwgsc-tpsgc/analytics?source=awards"], ["org", "registry"]]) {
+      expect((await send(r, "/account/dashboard/panels", { kind, ref })).status, `${kind} ${ref}`).toBe(400);
+    }
+    expect((await send(r, "/account/dashboard/tiles/nonsense/move", { dir: "down" })).status).toBe(400);
+    // A Free account's post is sent to the page, which says what the dashboard holds; nothing is written.
+    const free = await reader("dash-posts-free", "free");
+    expect((await send(free, "/account/dashboard/panels", { kind: "watches", ref: "" }, sale())).headers.get("location")).toBe("/account/dashboard");
+    expect((await save(free, [])).status).toBe(403);
+    expect(await tileRows(free.id)).toEqual([]);
   });
 });
 
@@ -544,24 +888,20 @@ describe("the rail's Dashboard item", () => {
       const html = await (await get("/tenders", { cookie: r?.cookie, env: e })).text();
       return html.slice(html.indexOf('<p class="rail-head" id="rail-lists">'), html.indexOf("</nav>"));
     };
-    // Off sale: the account that holds it alone.
     expect(await rail(null, off())).not.toMatch(ITEM);
     expect(await rail(free, off())).not.toMatch(ITEM);
     const held = await rail(ultra, off());
     expect(held).toMatch(ITEM);
     expect(held.indexOf("/account/dashboard")).toBeLessThan(held.indexOf('href="/watchlist"'));
-    // On sale: every reader the rail shows an account to.
     for (const r of [null, free, ultra]) expect(await rail(r, sale())).toMatch(ITEM);
-    // The dashboard marks its own item.
     expect(await text(await open(ultra))).toMatch(/<a class="rail-item" href="\/account\/dashboard" aria-current="page">/);
-    // The switch off: no account, no item, Ultra's variables or not.
     expect(await rail(ultra, { ...offEnv(), ...PRO_SALE })).not.toContain("/account/dashboard");
     expect(await rail(null, { ...ultraEnv(), ACCOUNTS_ENABLED: "false" })).not.toContain("/account/dashboard");
   });
 });
 
 describe("Add to dashboard", () => {
-  it("is on each analytics view, each saved search a panel can show and each briefing, for an Ultra account alone", async () => {
+  it("is on each analytics view, each saved search a tile can show and each briefing, for an Ultra account alone", async () => {
     const ultra = await reader("dash-add-ultra");
     const pro = await reader("dash-add-pro", "pro");
     for (const r of [ultra, pro]) {
@@ -579,10 +919,16 @@ describe("Add to dashboard", () => {
     expect(searches).toMatch(form("tenders"));
     expect(searches).toMatch(form("briefing"));
     expect(await text(await get("/account/searches", { cookie: pro.cookie, env: off() }))).not.toContain("account-inline dash-add");
-    // The view's own address, posted from its page, is stored as the dashboard writes it.
+    // The view's own address, posted from its page, is stored as the dashboard writes it, under the others.
     const res = await send(ultra, "/account/dashboard/panels", { kind: "view", ref: `/organizations/${A1}/analytics?years=5&source=awards&lang=fr` });
-    expect(res.headers.get("location")).toMatch(/^\/account\/dashboard\?m=added#panel-[0-9a-f]{32}$/);
-    expect((await panelRows(ultra.id)).map((p) => p.ref)).toContain(`/organizations/${A1}/analytics?source=awards&years=5`);
+    expect(res.headers.get("location")).toMatch(/^\/account\/dashboard\?m=added#tile-[0-9a-f]{32}$/);
+    const rows = await tileRows(ultra.id);
+    const added = rows.find((p) => p.ref === `/organizations/${A1}/analytics?source=awards&years=5`)!;
+    expect(added).toMatchObject({ kind: "view", x: 0, w: 6, h: START_H.view });
+    expect(added.y).toBe(Math.max(...rows.filter((p) => p !== added).map((p) => p.y + p.h)));
+    // Added again: the tile it has.
+    expect((await send(ultra, "/account/dashboard/panels", { kind: "view", ref: `/organizations/${A1}/analytics?source=awards&years=5` })).headers.get("location"))
+      .toBe(`/account/dashboard?m=exists#tile-${added.id}`);
   });
 });
 
@@ -591,12 +937,13 @@ describe("both languages", () => {
     const r = await reader("dash-fr");
     await send(r, "/account/organization", { org: A1 });
     await send(r, "/account/dashboard/panels", { kind: "org", ref: "segments" });
-    const html = await text(await open(r, "/account/dashboard?lang=fr&edit=1"));
+    const html = await text(await open(r, "/account/dashboard?lang=fr"));
     const main = mainOf(html);
     expect(main).toContain(`<h1>${norm(t("fr", "dash.title"))}</h1>`);
     expect(main).toContain(norm(t("fr", "dash.kind_org", { block: t("fr", "orgclaim.panel_segments") })));
     expect(main).toContain(">Monter<");
-    expect(main).toContain(norm(t("fr", "dash.add_panel")));
+    expect(main).toContain(">Plus large<");
+    expect(main).toContain(norm(t("fr", "dash.add_tile")));
     expect(html).not.toContain(EM_DASH);
     expect(html).not.toContain(EN_DASH);
     expect(misfits(html)).toEqual([]);
@@ -614,7 +961,7 @@ describe("both languages", () => {
   });
 });
 
-describe("a panel's ref", () => {
+describe("a tile's ref", () => {
   it("names an analytics view only by its own path, source and period, stored in one form", () => {
     const ok = viewRef(`/buyers/pwgsc-tpsgc/analytics?years=10&source=contracts&segment=81&vs=${A2}&lang=fr`);
     expect(ok).toEqual({ view: "buyer", id: "pwgsc-tpsgc", source: "contracts", years: 10, from: null, to: null });
@@ -622,7 +969,6 @@ describe("a panel's ref", () => {
     const span = viewRef("/segments/81/analytics?source=history&from=2019&to=2022")!;
     expect(viewAddress(span)).toBe("/segments/81/analytics?from=2019&source=history&to=2022");
     expect(viewSpan(span, DAY)).toEqual({ first: 2019, last: 2022, current: 2026 });
-    // A span past ULTRA_YEARS keeps its latest; one past the data date stops at its year.
     expect(viewSpan(viewRef("/segments/81/analytics?source=awards&from=2001&to=2030")!, DAY)).toEqual({ first: 2007, last: 2026, current: 2026 });
     for (const bad of [
       "/buyers/pwgsc-tpsgc/analytics", "/buyers/pwgsc-tpsgc/analytics?source=lobbying&years=10", "/segments/99/analytics?source=awards&years=10",
@@ -632,29 +978,16 @@ describe("a panel's ref", () => {
       "/buyers/pwgsc-tpsgc/analytics?source=awards&from=2024&to=2020", "https://evil.example/buyers/pwgsc-tpsgc/analytics?source=awards&years=10",
       "//evil.example/buyers/x/analytics?source=awards&years=10", "/buyers/pwgsc-tpsgc?source=awards&years=10",
     ]) expect(viewRef(bad), bad).toBeNull();
-    // Search and briefing ids only the account holds.
     const h = { searches: [{ id: "a".repeat(32), kind: "tenders" }], briefings: [{ id: "b".repeat(32) }] } as never;
     expect(specOf("tenders", "a".repeat(32), h)).toEqual({ kind: "tenders", ref: "a".repeat(32), wide: true });
     expect(specOf("records", "a".repeat(32), h)).toBeNull();
     expect(specOf("briefing", "b".repeat(32), h)?.ref).toBe("b".repeat(32));
     expect(specOf("watches", "x", h)).toBeNull();
   });
-
-  it("reads the radar's rows through its 5-row form of the page's statement, by the window's index", async () => {
-    expect(RADAR_TOP_SQL).toBe(RADAR_ROWS_END_SQL.replace(/ LIMIT 100 OFFSET \?13$/, " LIMIT 5"));
-    expect(RADAR_TOP_SQL).toMatch(/ ORDER BY endd, kind, k LIMIT 5$/);
-    expect(RADAR_TOP_SQL).not.toContain("?13");
-    const binds = radarBinds(endingParams(n(A1), claimFrame(DAY)));
-    const rows = (await RECORDS.prepare(RADAR_TOP_SQL).bind(...binds).all()).results ?? [];
-    expect(rows).toHaveLength(PANEL_ROWS);
-    const steps = ((await RECORDS.prepare(`EXPLAIN QUERY PLAN ${RADAR_TOP_SQL}`).bind(...binds).all()).results ?? []).map((r) => String((r as { detail?: unknown }).detail));
-    expect(steps.filter((s) => /^SCAN rec_expiring\b/.test(s) && !/USING/.test(s)), steps.join("\n")).toEqual([]);
-    expect(steps.join("\n")).toMatch(/rec_expiring_end/);
-  });
 });
 
-describe("a panel that cannot be read", () => {
-  it("says so, and the others render: the records batch is read panel by panel once it fails", async () => {
+describe("a tile that cannot be read", () => {
+  it("says so, and the others render: the records batch is read tile by tile once it fails", async () => {
     const r = await reader("dash-unreadable");
     await send(r, "/account/organization", { org: A1 });
     await send(r, "/account/dashboard/panels", { kind: "org", ref: "instruments" });
@@ -662,12 +995,12 @@ describe("a panel that cannot be read", () => {
     await RECORDS.prepare("DROP TABLE rec_holders").run();
     try {
       const html = await text(await open(r));
-      const sections = mainOf(html).split(/(?=<section class="panel dash-panel)/).slice(1);
-      const instruments = sections.find((s) => s.includes("Standing Offers and Supply Arrangements"))!;
-      expect(instruments).toContain(t("en", "dash.unavailable"));
-      const others = sections.filter((s) => s !== instruments);
+      const d = drawn(html);
+      const instruments = d.find((x) => x.head.includes("Standing Offers and Supply Arrangements"))!;
+      expect(instruments.html).toContain(t("en", "dash.unavailable"));
+      const others = d.filter((x) => x !== instruments);
       expect(others.length).toBeGreaterThanOrEqual(4);
-      for (const s of others) expect(s).not.toContain(t("en", "dash.unavailable"));
+      for (const x of others) expect(x.html).not.toContain(t("en", "dash.unavailable"));
       expect(html).toContain("$300,000");
     } finally {
       await seedRecords();
@@ -676,12 +1009,16 @@ describe("a panel that cannot be read", () => {
 });
 
 describe("deleting the account", () => {
-  it("removes its panels", async () => {
+  it("removes its tiles, its dashboard and its panels", async () => {
     const r = await reader("dash-delete");
     await send(r, "/account/dashboard/panels", { kind: "radar", ref: "6m" });
-    expect((await panelRows(r.id)).length).toBeGreaterThan(0);
+    await ACCOUNTS.prepare(ADD_PANEL_SQL).bind("e".repeat(32), r.id, "radar", "12m", 1, new Date().toISOString(), 12, 2).run();
+    expect((await tileRows(r.id)).length).toBeGreaterThan(0);
+    expect((await panelRows(r.id)).length).toBe(1);
     const res = await send(r, "/account/delete", { confirm: "yes" });
     expect(res.status).toBe(200);
+    expect(await tileRows(r.id)).toEqual([]);
+    expect(await boards(r.id)).toEqual([]);
     expect(await panelRows(r.id)).toEqual([]);
   });
 });

@@ -534,25 +534,29 @@ const SIGNED_IN_BUDGET: [name: string, path: string, claim: boolean, mark: strin
   ["/account/matches, claim", "/account/matches", true, "<h2>Open Notices That Match</h2>", 21, 8], // [6.9]
 ];
 
-// -- an Ultra account's dashboard of twelve panels ------------------------------------------
+// -- an Ultra account's dashboard of twelve tiles ------------------------------------------
 //
 // src/account/dashboard.tsx: the session, an Ultra entitlement and the
-// account's rows answered from memory (twelve panels: two tender searches,
-// the 3- and 12-month lists, an organization search, the watches, an
-// analytics view, a briefing, two blocks of the claimed organization,
-// matching notices and the API), and a records database that answers at once
-// with a row or two for each statement, so the time is the Worker's own: the
-// 900 open notices filtered twice and ranked once, the radar's rows, the
-// chart, the tables.
+// account's rows answered from memory (its dashboard and twelve tiles stored
+// on the grid: two tender searches, the 3- and 12-month lists, an
+// organization search, the watches, an analytics view, a briefing, two
+// blocks of the claimed organization, matching notices and the API, at
+// sizes from the least to the whole row and 16 rows tall), and a records
+// database that answers at once with a row or two for each statement, so
+// the time is the Worker's own: the layout laid out by the grid's rules and
+// every tile's menu reckoned, the 900 open notices filtered twice and
+// ranked once, the radar's rows, the chart, the tables.
 const DASH_AT = new Date().toISOString();
 const S1 = "1".repeat(32);
 const S2 = "2".repeat(32);
 const S3 = "3".repeat(32);
 const B1 = "4".repeat(32);
-const DASH_PANELS = [
-  ["tenders", S1], ["tenders", S2], ["radar", "3m"], ["radar", "12m"], ["records", S3], ["watches", ""],
-  ["view", "/organizations/org-a000000001/analytics?source=awards&years=10"], ["briefing", B1], ["org", "years"], ["org", "ending"], ["matches", ""], ["api", ""],
-].map(([kind, ref], i) => ({ id: `${i}`.padStart(32, "d"), kind, ref, pos: i, wide: i % 3 ? 0 : 1, created_at: DASH_AT }));
+// Each tile at a place and size: [kind, ref, x, y, w, h]; the grid's rules lay them out again on the read.
+const DASH_TILES = ([
+  ["tenders", S1, 0, 0, 6, 10], ["tenders", S2, 6, 0, 6, 16], ["radar", "3m", 0, 10, 4, 10], ["radar", "12m", 4, 10, 8, 16], ["records", S3, 0, 20, 4, 9],
+  ["watches", "", 0, 29, 12, 11], ["view", "/organizations/org-a000000001/analytics?source=awards&years=10", 0, 40, 6, 8], ["briefing", B1, 6, 40, 3, 4],
+  ["org", "years", 9, 40, 3, 9], ["org", "ending", 0, 49, 12, 16], ["matches", "", 0, 65, 7, 12], ["api", "", 7, 65, 5, 8],
+] as const).map(([kind, ref, x, y, w, h], i) => ({ id: `${i}`.padStart(32, "d"), kind, ref, opts: "", x, y, w, h }));
 
 function ultraAccounts(tokenHash: string): D1Database {
   const at = DASH_AT;
@@ -565,7 +569,8 @@ function ultraAccounts(tokenHash: string): D1Database {
     if (sql.includes("FROM entitlements e LEFT JOIN entitlement_tiers")) {
       return [{ id: "e-ultra", plan: "ultra", starts_at: "2026-01-01T00:00:00.000Z", ends_at: null, created_at: "2026-01-01T00:00:00.000Z", revoked_at: null }];
     }
-    if (sql.includes("FROM dashboard_panels")) return DASH_PANELS;
+    if (sql.includes("FROM dashboards")) return [{ id: "b".repeat(32) }];
+    if (sql.includes("FROM dashboard_tiles")) return DASH_TILES;
     if (sql.includes("FROM saved_searches")) {
       return [
         { id: S1, kind: "tenders", params: "/tenders?segment=82", label: "Notices in segment 82", lang: "en", created_at: at, deliver: "off" },
@@ -687,17 +692,17 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
   // About three times the larger of two ratios measured when the dashboard was added (2026-11-11, in brackets),
   // rounded up: about as much as the 3-month list's 500 contracts signed out.
   const DASHBOARD_BOUND = 27; // [8.75, 8.36]
-  it("keeps an Ultra account's dashboard of twelve panels within its bound (accounts and records answered from memory)", async () => {
+  it("keeps an Ultra account's dashboard of twelve tiles within its bound (accounts and records answered from memory)", async () => {
     clearParsedCache();
     clearClosingCache();
     const accounts = ultraAccounts(await sha256Hex(SECRET));
-    // What the entry times: twelve panels, each drawn from its reads, none unreadable.
+    // What the entry times: twelve tiles, each drawn from its reads at its size, none unreadable.
     const first = await app.request("/account/dashboard", { headers: { "sec-fetch-mode": "navigate", cookie: COOKIE } },
       { ...env, ASSETS: assetsOf(FIT_BODIES, "v1-fit"), ACCOUNTS: accounts, ACCOUNTS_ENABLED: "true", RECORDS: dashRecords });
     const html = await first.text();
-    expect(html.match(/<section class="panel dash-panel/g)).toHaveLength(12);
-    expect(html).not.toContain("This panel cannot be read right now.");
-    const r = await signedInRatio("/account/dashboard", 8, accounts, '<div class="dash-grid">', { RECORDS: dashRecords });
-    expect(r, `/account/dashboard, 12 panels ${r.toFixed(2)}`).toBeLessThanOrEqual(DASHBOARD_BOUND);
+    expect(html.match(/<section class="panel dash-tile/g)).toHaveLength(12);
+    expect(html).not.toContain("This tile cannot be read right now.");
+    const r = await signedInRatio("/account/dashboard", 8, accounts, '<div class="dash-grid" id="dash-grid">', { RECORDS: dashRecords });
+    expect(r, `/account/dashboard, 12 tiles ${r.toFixed(2)}`).toBeLessThanOrEqual(DASHBOARD_BOUND);
   }, 120_000);
 });

@@ -398,7 +398,10 @@ account's verified destination addresses, and any other address gets the
    (without `delivery_marks`, deleting a search or an account answers 503).
    The calendar feeds added `feeds` and its two indexes; until they exist
    the searches page shows no feeds and the console no feed counts, and
-   deletion goes on without them.
+   deletion goes on without them. The dashboard's grid added `dashboards`
+   and `dashboard_tiles` with their three indexes; until they exist an
+   Ultra account can arrange its tiles on the page but not keep their
+   places and sizes, and the page says so (*Dashboard*, *Operator step*).
    `npm run db:local` applies it to the local database, with
    `seed/accounts_dev.sql` (the development outbox, never applied on the
    account).
@@ -661,7 +664,8 @@ logs name no key.
 ## Deletion
 
 `/account/delete` asks for a ticked box, deletes the account's dashboard
-panels, its saved views (with their runs), its watches, its
+(its tiles, its dashboard row and its earlier panels), its saved views
+(with their runs), its watches, its
 claim of an organization, its briefings, its weekly email row and its
 calendar feeds (statements of their own, so a database without those tables
 still deletes the rest), then in one batch: revokes every
@@ -2732,162 +2736,296 @@ Three things the run showed:
 
 ## Dashboard
 
-`/account/dashboard` is Ultra's: one page of up to 12 panels an account
-chooses from what the site already shows it, in its own order, each full
-width or half width. The figure is the `dashboard` feature of `RULES` (0 on
-Free and Pro, 12 on Ultra; `DASHBOARD_MAX` is the ceiling whatever the plan).
-The code is `site/src/account/dashboard.tsx` (the table, the panels, the
-page and its posts), `dashboard_rule.ts` (who has it and the rail's item),
-`dashboard_add.tsx` (Add to dashboard) and `dashboard_strings.ts`; the rail
-item is in `site/src/layout.tsx`. The tests are `site/test/dashboard.test.ts`,
-`site/test/dashboard-aid.test.ts` (More Kinds of Panel) and a 12-panel entry
-in `site/test/cpu-budget.test.ts`.
+`/account/dashboard` is Ultra's: a grid of up to 12 tiles an account
+chooses from what the site already shows it, each at its own place and
+size. The figure is the `dashboard` feature of `RULES` (0 on Free and Pro,
+12 on Ultra; `DASHBOARD_MAX` is the ceiling whatever the plan; the plan
+cards still say "panels", as the plan's row has since Ultra was made). The
+code is `site/src/account/dashboard.tsx` (the tables, the tiles, the page,
+its posts and its read), `site/public/dash-grid.js` (the grid's rules,
+shared by the Worker and the page's script), `dashboard_fit.ts` (what a
+tile shows at its size), `site/public/dashboard.js` (the page's script),
+`dashboard_rule.ts` (who has it and the rail's item), `dashboard_add.tsx`
+(Add to dashboard) and `dashboard_strings.ts`; the rail item is in
+`site/src/layout.tsx`. The tests are `site/test/dash-grid.test.ts` (the
+grid), `site/test/dashboard.test.ts` (the page, the three states of
+storage, the posts), `site/test/dashboard-aid.test.ts` (More Kinds of
+Tile) and a 12-tile entry in `site/test/cpu-budget.test.ts`.
 
-### The table
+### The grid
+
+From 1,100 px of window the page is a grid of 12 columns, rows of 40 px
+and gaps of 12 px. A tile is `{id, x, y, w, h}`: `x` and `w` in columns
+(`w` from 3 to 12), `y` and `h` in rows (`h` from 2 to 16), and never less
+than its kind's least size (`LEAST` in `dash-grid.js`; it holds three of
+the kind's rows). Tiles never overlap. The rules, in `dash-grid.js` and
+nowhere else:
+
+- **Compaction**: every tile slides up into the free rows above it, in
+  reading order (top, then left), as far as the tiles above it in its
+  columns allow; a tile never passes another on the way up. A layout
+  compacted once comes back unchanged.
+- **A move**: the tile goes to the column and row it was dropped on, held
+  to the grid. Going up (or along its row), it goes above a tile it meets
+  once its top reaches that tile's middle, and the tile is pushed down;
+  going down, it goes under a tile once its bottom passes that tile's
+  middle. Which tiles it passes is decided once, from where it was dropped;
+  every tile it then meets is pushed under it, the lowest first, and pushes
+  on what it meets in turn. Dropping a tile exactly where another of its
+  height was swaps the two, either way. Then the layout is compacted.
+- **A resize**: the tile keeps its column (it moves left when the new width
+  would pass the edge), what it then meets is pushed under it, and the
+  layout is compacted.
+- **A step** (a tile's menu, the arrow keys): a column left or right; up or
+  down to the next place where the layout changes, since one row is often
+  not enough to pass a tile; a column wider or narrower; a row taller or
+  shorter. A step that changes nothing is offered disabled in the menu.
+- **Clamping**: any layout read or posted is first held to whole numbers,
+  the columns and the least sizes (`normalize`). The Worker never trusts a
+  stored place: a page view, a fragment and every post lay the layout out
+  again by these rules.
+- A tile narrower than 6 columns (narrower than its table at 1,280 px)
+  needs more height for its three rows, so its least height is taller
+  (`hn` in `LEAST`).
+
+The least and starting sizes, by size key (a segment's view draws two
+charts; three blocks of the organization hold taller rows):
+
+| Size key | Least w | Least h (6 columns and up) | Least h (narrower) | Starts at h |
+|---|---|---|---|---|
+| `tenders` | 4 | 7 | 10 | 10 |
+| `radar` | 4 | 8 | 10 | 11 |
+| `records` | 4 | 6 | 9 | 9 |
+| `watches` | 3 | 8 | 10 | 11 |
+| `view` | 4 | 5 | 5 | 7 |
+| `view:segment` | 4 | 7 | 7 | 8 |
+| `briefing` | 3 | 4 | 4 | 6 |
+| `org` (years, segments, buyers) | 4 | 6 | 9 | 9 |
+| `org:share` | 4 | 7 | 9 | 8 |
+| `org:ending` | 4 | 8 | 10 | 11 |
+| `org:instruments` | 4 | 7 | 8 | 10 |
+| `matches` | 4 | 7 | 10 | 10 |
+| `api` | 3 | 7 | 8 | 9 |
+
+A tile starts half the row wide (an add) or as its panel was (the earlier
+page: full or half width), at its starting height, which holds the five
+rows every list showed before tiles had sizes. `site/test/dash-grid.test.ts`
+holds both tables to `dashboard_fit.ts`.
+
+Below 1,100 px the layout is derived, never stored: two columns from 700
+px (a tile of 7 columns or more takes both, a smaller one takes one), one
+column below 700 px, in reading order, each tile as tall as its content.
+The handles rest there; the menu works at any width.
+
+### What a tile shows at its size
+
+`tileFit(kind, ref, w, h)` in `dashboard_fit.ts` turns a tile's size into
+the rows its list shows (3 at the least, 25 at the most) and the width and
+height of its chart, from the stylesheet's figures at a window of 1,280 px:
+a head band of 41 px (53 with the item's line), a foot of 33, a table's
+head row of 33, a row's 8 px of padding each side and 20 px a line (a
+small line inside a cell takes the cell's 20 px line box), a main cell's
+usual text wrapping at about 6.6 px a character, and a table stacked into
+labelled rows when the tile is narrower than 440 px inside its border (the
+stylesheet's container query, from 700 px). Each kind's lines, its blocks
+beside the table and its usual text are a table there (`BODIES`, `BLOCKS`).
+The figures err tall; in the page the script takes off any row that still
+does not fit (`trim`) and the foot says how many show. Nothing scrolls
+inside a tile.
+
+| Kind | Rows | Statement's LIMIT |
+|---|---|---|
+| `tenders` | the soonest closing of the search's matches | none: `tenders/open.json`, cut to the rows |
+| `radar` | the soonest ending | `RADAR_TOP_SQL`, `LIMIT ?13` bound to the rows (at most 25), through `rec_expiring_end`; a province search reads its page of 100 and shows the rows |
+| `records`, `org` years | the sources, two fiscal years each | the counts statement (a row a source and year) |
+| `watches` | the newest events of the week | `readEvents`, as before |
+| `view` | its chart: the plot's height and width from the tile, the axis's years thinned to one label in about 64 px | the view's statement, as before |
+| `briefing` | the week's four counts | `readBriefing`, as before |
+| `org` segments, buyers, instruments, share | the block's first rows | the block's statement (LIMIT 114, 100 and 10,000 as on the organization's page; the share's years) |
+| `org` ending | the soonest ending | `RADAR_TOP_SQL` at the rows |
+| `matches` | the closest matches, held to the plan's count | the claim, the profile entry, `tenders/open.json` |
+| `api` | the live keys | the keys and `keyUsage` |
+
+A list cut to its rows says in its foot how many it shows of how many
+there are ("5 of 31"), beside Open; a list that shows all says its count as
+before.
+
+### The tables
 
 | Table | Columns | Rule |
 |---|---|---|
-| `dashboard_panels` | `id`, `user_id`, `kind`, `ref`, `pos`, `wide` (1 full width, 0 half), `created_at`; unique on (`user_id`, `kind`, `ref`) | At most the plan's figure per account and at most 2 briefing panels, both held inside the insert (`ADD_PANEL_SQL`), so two posts at once cannot pass either; the same item once |
+| `dashboards` | `id`, `user_id`, `name` ('' until dashboards are named), `pos` (0: one an account for now), `created_at` | Written with the account's first change unless it is there (`BOARD_INSERT_SQL`); a row with no tile is a dashboard the reader emptied |
+| `dashboard_tiles` | `id`, `dashboard_id`, `user_id`, `kind`, `ref`, `opts` (the tile's own choices as JSON, 2,000 characters at most; '' in this build), `x`, `y`, `w`, `h`, `created_at` | At most the plan's figure and at most 2 briefings an account, the same item once, all held inside the insert (`ADD_TILE_SQL`), so two posts at once cannot pass any of them; indexes `idx_dashboard_tiles_user` (`user_id`, `kind`, `ref`) and `idx_dashboard_tiles_board` (`dashboard_id`) |
+| `dashboard_panels` | `id`, `user_id`, `kind`, `ref`, `pos`, `wide`, `created_at`; unique on (`user_id`, `kind`, `ref`) | The earlier page's table: read until the account's first change on the grid, written while the grid's tables are absent (`ADD_PANEL_SQL`), then read no more for that account |
 
-`kind` is checked by the site (`PANEL_KINDS`), not by a CHECK, so a new kind
-needs no rebuild. A panel goes with the account (`deleteAccount`), and with
-the saved search or briefing it shows when that is removed on its page.
+`kind` is checked by the site (`PANEL_KINDS`), not by a CHECK, so a new
+kind needs no rebuild. A tile goes with the account (`deleteAccount`), and
+with the saved search, briefing or view it shows when that is removed on
+its page.
 
-### The panels
+### The three states of storage
 
-Each panel is a reader the account pages already have, with a LIMIT of 5
-where it lists rows. No statement about the data is new but the radar's 5-row
-form, `RADAR_TOP_SQL` (`RADAR_ROWS_END_SQL` without its offset, `LIMIT 5`).
+- **The grid's tables absent** (`accounts_schema.sql` not applied since the
+  grid): the account's `dashboard_panels` rows, or the starting layout,
+  laid out on the grid (`fromPanels`: a full-width panel takes the row,
+  half-width ones go two to a row, each at its kind's starting height). The
+  page arranges them, saves no place or size and says so ("Positions and
+  sizes cannot be saved yet"); the script posts nothing, the menu's steps
+  answer the same line, and the layout save answers `{"state":"unsaved"}`.
+  Adding and removing go to `dashboard_panels` as before; without that
+  table too, nothing is kept and the page says the dashboard cannot be
+  saved yet. Nothing answers 500.
+- **The tables there, nothing stored for the account**: the same layout,
+  computed and not stored. Its first change of any kind (a drop, a menu
+  step or size, an add, a removal) writes the whole layout in one batch
+  (`writeFirst`: the dashboard's row, then each tile through
+  `ADD_TILE_SQL`, a panel's id kept and a starter's given a new one), then
+  applies the change. The script's save answers the starter's new ids
+  (`renamed`), which the page takes on. Two first changes at once write one
+  dashboard and each item once.
+- **A dashboard stored**: its tiles; `dashboard_panels` is read no more for
+  that account, and goes with the account as before.
 
-| Kind | `ref` | Shows | Reads |
-|---|---|---|---|
-| `tenders` | a saved search of kind tenders | how many open notices match it, the 5 closing soonest | `tenders/open.json` (kept parsed), filtered as `/tenders` filters (`readTenderQuery`, `filterTenders`) |
-| `radar` | a saved search of kind expiring, or `3m`, `6m`, `12m` | the window's count and counted value, the 5 ending soonest | records: `RADAR_TOTAL_SQL` and `RADAR_TOP_SQL`; a search naming a province reads the radar's province statements (`RADAR_PROV_TOTAL_SQL`, `RADAR_PROV_ROWS_END_SQL`, its page of rows) and shows 5 |
-| `records` | a saved search of kind organization, buyer or segment | its records by source, the last two fiscal years | records: `ORG_COUNTS_SQL`, `BUYER_COUNTS_SQL` or `SEGMENT_COUNTS_SQL` (`records_deliveries.ts`) |
-| `watches` | none | the week's events on every watch: a count by kind, the 5 newest | records: `readEvents` over the 7 data dates ending with the data date; accounts: the watches |
-| `view` | an analytics view's address | the view's first chart at its source and period | records: `BUYER_QUARTERS_SQL`, `ORG_YEARS_SQL` or `SEGMENT_YEARS_SQL`, and the buyer's or organization's name by its key (`BUYER_NAME_SQL`, `ORG_NAME_SQL`) |
-| `briefing` | a briefing | the week so far, from the week's Monday: new notices, awards, notable amendments, contracts ending next quarter, as counts | records: `readBriefing`'s statements |
-| `org` | a block: `years`, `segments`, `share`, `ending`, `buyers`, `instruments` | that block of Your organization | records: the block's own statement of `readBlocks` (the years over the last two fiscal years; the ending block through `RADAR_TOP_SQL`; the share with the segments statement that names its segment) |
-| `matches` | none | the 5 closest matching notices, with the disclaimer | the claim, the profile entry, `tenders/open.json` |
-| `api` | none | each live key's requests today, with the plan's daily figure | accounts: the keys and `keyUsage` |
+### The page
 
-A view's `ref` is its own address, or the id of one of the account's saved
-views (*Saved views*), whose name heads the panel and whose address See all
-opens. An address is the path, then its
-source and its period (`?source=awards&years=10`, or `?from=2019&source=history&to=2022`),
-the keys in order (`viewAddress`). Anything else in the address (a segment,
-the organizations compared, the language) changes nothing of the first chart
-and is dropped; an unknown parameter, a source the view does not offer or a
-period the view does not offer makes it no view's (`viewRef`). A saved view's
-panel goes with the view when it is removed, and the Add a Panel select lists
-the account's saved views.
+Each tile on the grid at its place and size: a head (the grip, the kind,
+the item, the menu), a body, a foot (the source and period where the kind
+has one, the rows shown of all there are, Open) and a corner. The menu is
+a `details` element, so it opens without the script: Open, then Move left,
+Move right, Move up, Move down, Wider, Narrower, Taller, Shorter (each a
+post; a step that would change nothing is disabled), then Remove. There is
+no edit mode: `?edit=1` shows the same page. The page's one filled button
+is Add a Tile, at the head's right, a `details` too: the count of tiles,
+the select of what the account holds and is not on the dashboard yet (its
+choices as before), Add, and More Kinds of Tile. An emptied dashboard draws
+it open.
 
-Each panel's head names its kind and its item (the site's own label: the
-saved search's, the briefing's, the window's, the organization's or the
-view's name) and links See all to the page it comes from. Matching notices
-keep the advisory line inside their panel; no panel shows the holder's
-record, so no other advisory line is needed. A panel whose item was removed
-says so and offers Remove. A panel that cannot be read says so; the others
-render.
+The script (`dashboard.js`, a module loaded on this page only):
+
+- **Pointer** (from 1,100 px): drag a tile by its grip to move it, or by its
+  corner to size it, with Pointer Events and the pointer captured
+  (`touch-action: none` on the two handles only). While a tile moves, the
+  place it will land is marked (the soft emerald with a dashed emerald
+  edge) and the other tiles move to where they would go, sliding unless
+  the reader prefers reduced motion. A tile dragged near the window's top or
+  bottom scrolls the page.
+- **Keys**: the grip and the corner are buttons. Enter or Space picks the
+  tile up, the arrows move it a step (or size it: right wider, left
+  narrower, down taller, up shorter), Enter drops it, Escape puts it back,
+  and leaving the handle puts it back too. Each step is said in a polite
+  live region ("column 3 of 12, row 9").
+- **Touch**: the handles show always on a touch screen from 1,100 px;
+  dragging works as with a mouse. Below 1,100 px the handles rest and the
+  menu does the moving.
+- **No script**: the menu's posts and Add a Tile work as forms; the handles
+  are not drawn.
+- **Saving**: each change is saved by itself 600 ms after the last
+  (`POST /account/dashboard/layout`), one save at a time; the status line
+  says "Saving the layout.", then "Saved." with Undo, or "The layout could
+  not be saved." with Try again and Undo.
+- **Undo**: the status line's link, or Ctrl+Z (Cmd+Z) outside a field: the
+  layout before the last change, the last 20 of the visit, saved again.
+- **A resize** reads that tile again at its new size
+  (`GET /account/dashboard/tiles/:id?w=&h=`), parses the fragment and puts
+  its body and foot in place of the tile's; nothing else reloads. The
+  script writes nothing with `innerHTML`.
+- A menu step done with the script is done in the page and saved, so it
+  joins Undo; Remove and Open stay a post and a link.
 
 ### A page view
 
 The account's rows are read at once by the readers the account pages use
-(the panels, the saved searches, the briefings, the claim, the watches, the
-keys, the saved views). Every panel's records statements go in one batch with the state row;
-when that batch fails, each panel is read on its own, so one table the
-nightly has not made yet leaves the other panels. The watches and the
-briefings send their own batches through their own readers (`readEvents`,
-`readBriefing`), at once with the first. At most two static files are parsed:
-`tenders/open.json` and, with an organization panel or matching notices, the
-claimed organization's profile shard. More Kinds of Panel reads nothing of
-its own. A Free or Pro reader reads no records.
+(the dashboard and its tiles in one batch, the panels, the saved searches,
+the briefings, the claim, the watches, the keys, the saved views). Every
+tile's records statements go in one batch with the state row; when that
+batch fails, each tile is read on its own, so one table the nightly has
+not made yet leaves the other tiles. The watches and the briefings send
+their own batches through their own readers (`readEvents`,
+`readBriefing`), at once with the first. At most two static files are
+parsed: `tenders/open.json` and, with an organization tile or matching
+notices, the claimed organization's profile shard. More Kinds of Tile
+reads nothing of its own. A Free or Pro reader reads no records. A tile's
+fragment reads the same rows and that tile's statements in their own batch.
 
 ### Routes
 
 | Route | What it does |
 |---|---|
-| `GET /account/dashboard` | the panels; `?edit=1` adds Move up, Move down, Full width or Half width and Remove to each head, and the Add a Panel panel with one select and Add, the page's one filled button |
-| `POST /account/dashboard/panels` | add a panel: `kind` and `ref` from a page's Add to dashboard, or `panel` (`kind:ref`) from the select |
-| `POST /account/dashboard/panels/:id/move` | `dir` up or down |
-| `POST /account/dashboard/panels/:id/width` | `wide` 1 or 0 |
-| `POST /account/dashboard/panels/:id/delete` | remove it |
+| `GET /account/dashboard` | the tiles on the grid; `?edit=1` is the same page |
+| `POST /account/dashboard/panels` | add a tile: `kind` and `ref` from a page's Add to dashboard, or `panel` (`kind:ref`) from Add a Tile; it goes under the others at the left, half the row wide, at its kind's starting height |
+| `POST /account/dashboard/layout` | the script's save: `layout`, JSON `[{id, x, y, w, h}]` (8,000 characters and 50 tiles at most); only the account's own ids count, a tile the post leaves out keeps its place, the whole goes through `normalize`; answers JSON `{state: "saved", tiles, renamed}`, `{state: "unsaved"}` while the tables are absent, 400 for anything that is not such a list |
+| `GET /account/dashboard/tiles/:id` | one tile's section at `?w=&h=` (held to the grid), or at its own size; the CSRF value in the `X-CSRF-Token` header; 403 without it, 404 for an id the account does not hold |
+| `POST /account/dashboard/tiles/:id/move` | `dir` left, right, up or down |
+| `POST /account/dashboard/tiles/:id/size` | `to` wider, narrower, taller or shorter |
+| `POST /account/dashboard/tiles/:id/delete` | remove it |
+| `POST /account/dashboard/panels/:id/move`, `/width`, `/delete` | the earlier page's posts, for a page loaded before the grid: up or down, full or half width, remove |
 
-Every post is behind the session, the CSRF value and the Origin, in a
-bucket of its own with the saved views' posts (`EDIT_LIMIT`, 60 a minute
-per address; `bucketFor` "edit"), so a rearrangement never spends the
-forms' 5. A post returns to the dashboard with what happened (`?m=added`,
-`full`, `briefings_full`, `unsaved`), in edit mode from the page's own
-controls, at the place the change was made: a move or a width at the
-panel's own anchor (`#panel-<id>`), an add at the panel added (or found
-added), a removal at the panel that took its place, else the one before it,
-else Add a Panel (`#dash-add`). A refusal stays at the top, where its line
-is. The page is `private, no-store`.
+Every post is behind the session, the CSRF value and the Origin; the read
+is behind the session and the CSRF value in its header. All of them count
+in the dashboard's own bucket with the saved views' posts (`EDIT_LIMIT`, 60
+a minute per address; `bucketFor` "edit"), so arranging never spends the
+forms' 5. A post from the menu returns to the dashboard with what happened
+(`?m=added`, `exists`, `full`, `briefings_full`, `unsaved`,
+`unsaved_layout`), at the place the change was made: a step or a size at
+the tile's own anchor (`#tile-<id>`), an add at the tile added (or found
+added), a removal at the tile that takes its place in reading order, else
+the one before it, else Add a Tile (`#dash-add`). The page, the posts and
+the read are `private, no-store`.
 
 ### The starting layout
 
-An Ultra account with no panel stored sees the starting layout, computed and
+An Ultra account with nothing stored sees the starting layout, computed and
 not stored: the watches, the 3-month list, matching notices and the
 organization's years block when it has claimed one, its first two saved
-tender searches, and the API panel when it holds a live key. Its first
-change (an add, a move, a width, a removal) writes the starting layout as its
-rows, then applies the change, so the panels the reader kept stay where they
-were.
+tender searches, and the API tile when it holds a live key, each the whole
+row wide at its starting height. Its first change writes it as the
+account's tiles (*The three states of storage*). A removal that leaves no
+tile keeps the dashboard's row, so the emptied dashboard stays empty and
+offers Add a Tile, open. Before the grid's tables exist, an emptied layout
+is marked in `dashboard_panels` by a row of the kind `layout`
+(`LAYOUT_MARKER`; ref `''`, place -1) as before: no page shows it, no post
+can name it, and no count takes it.
 
-The starting layout appears only before the account's first change. A
-removal that leaves the account no panel (from the page, or with the saved
-search, briefing or view the panel showed) writes, in the same batch, a
-marker row of the kind `layout` (`LAYOUT_MARKER`; ref `''`, place -1; the
-table has no CHECK on `kind`, so no schema change). No page shows it, no
-post can name it, and no count or place takes it (`ADD_PANEL_SQL`, the
-panel count, the order a move rewrites). An account holding the marker and
-no panel sees an empty dashboard with Add a Panel, edit mode or not, and its
-next add writes that panel alone. Deleting the account removes the marker
-with the panels.
+### More kinds of tile
 
-### More kinds of panel
-
-More Kinds of Panel (`Autres genres de panneaux`) is a short muted list of the
-kinds of panel the account cannot add yet, each with the one step that gives
-the account what the panel shows and a plain link to the page where that is
+More Kinds of Tile (`Autres genres de tuiles`) is a short muted list of the
+kinds of tile the account cannot add yet, each with the one step that gives
+the account what the tile shows and a plain link to the page where that is
 done (`moreKinds`). It is built from the rows the page reads already and adds
 no statement and no file to a page view: `site/test/dashboard-aid.test.ts`
-counts both on the starting layout, its edit mode and an emptied dashboard
-against the figures measured before the list.
+counts both on the starting layout and an emptied dashboard against the
+figures measured before the list (with the grid's one batch of two
+statements added).
 
 | Line | Links to | Leaves the list once the account holds |
 |---|---|---|
 | A tender search's open notices | `/tenders` | a saved search of kind tenders |
-| A filtered list of contracts ending | `/expiring/12m` | a saved search of kind expiring; the 3, 6 and 12-month windows need nothing, and Add a Panel always offers them |
+| A filtered list of contracts ending | `/expiring/12m` | a saved search of kind expiring; the 3, 6 and 12-month windows need nothing, and Add a Tile always offers them |
 | An organization's, a buyer's or a segment's records | `/account/searches`, where Add a Search takes the page's address | a saved search of kind organization, buyer or segment |
-| A chart from an analytics view | `/analytics`; a view's head has Add to dashboard | a saved view, or a view panel on the dashboard |
+| A chart from an analytics view | `/analytics`; a view's head has Add to dashboard | a saved view, or a view tile on the dashboard |
 | A weekly briefing, this week so far | `/segments`; a segment's or a buyer's page has Save this briefing | a briefing; the line waits for the `briefings` table |
 | Your organization's figures and matching notices | `/account/organization` | a claim; the line waits for the `org_claims` table |
 | API requests today | `/account/keys` | a key not revoked; the line shows only on a plan with the keyed API (`api`) |
 
 The watches and the plain windows of contracts ending never appear, since
-those panels need nothing. With no line left the panel is not drawn, so an
-account that uses every kind sees the page as before.
-
-The panel shows under the starting layout's panels without the edit mode, so
-a first visit finds it, and under Add a Panel wherever that shows (edit mode,
-and an emptied dashboard). On a dashboard the reader has arranged it shows in
-edit mode only, so a settled dashboard stays as the reader left it. It is left
-out while the dashboard holds its plan's figure of panels and while the layout
-cannot be saved (the table missing), since nothing can be added then. Add a
-Panel's Add stays the page's one filled button.
+those tiles need nothing. With no line left the list is not drawn. It shows
+inside Add a Tile, and also under the starting layout's tiles, so a first
+visit finds it. It is left out while the dashboard holds its plan's figure
+of tiles and while nothing can be kept (neither the grid's tables nor the
+panels' table).
 
 ### What each reader sees
 
 - **Ultra**, whether or not Ultra is on sale (a grant by hand included): the
-  panels, More Kinds of Panel while a kind needs a step first (*More kinds of
-  panel*), and Add to dashboard on each analytics view's head, on each saved
-  search a panel can show, on each briefing of the searches page and on each
-  row of the saved views page.
+  tiles, Add a Tile, More Kinds of Tile while a kind needs a step first, and
+  Add to dashboard on each analytics view's head, on each saved search a
+  tile can show, on each briefing of the searches page and on each row of
+  the saved views page.
 - **Free and Pro while Ultra is on sale**: the head, What the Dashboard Holds
-  (the nine kinds, one sentence each), the gate line with Plans and prices,
-  and the three plan cards, Ultra's link the page's filled button. No records
-  read.
+  (the nine kinds, one sentence each; the lists say they show as many rows
+  as a tile's size holds), the gate line with Plans and prices, and the
+  three plan cards, Ultra's link the page's filled button. No records read,
+  no script.
 - **Free and Pro while Ultra is off sale**: the site's 404, as before Ultra.
 - **Signed out**: the sign-in page with `next=/account/dashboard` while
   Ultra is on sale; the site's 404 while it is not.
@@ -2901,21 +3039,29 @@ Panel's Add stays the page's one filled button.
 
 ### Operator step
 
-Apply the schema, as for every earlier table (it adds `dashboard_panels` and
-its index and changes nothing else):
+Apply the schema, as for every earlier table (it adds `dashboards`,
+`dashboard_tiles` and their three indexes, and changes nothing else; every
+statement only creates what is missing):
 
 ```
 cd site
 npx wrangler d1 execute awardwatch-accounts --remote --file=accounts_schema.sql
 ```
 
-Until then an Ultra account sees the starting layout, and the edit controls
-and every post say the layout cannot be saved yet.
+Until then an Ultra account sees its panels (or the starting layout) on the
+grid, can arrange them on the page, and is told that positions and sizes
+cannot be saved yet; adding and removing tiles keep working in
+`dashboard_panels`. Nothing needs moving by hand afterwards: each account's
+panels become its tiles at its first change.
 
 ### Known limits
 
-- A panel moves one place a post; the dashboard's own bucket (60 a minute)
-  holds a rearrangement of every panel several times over.
+- The rows a tile lists are reckoned for a window of 1,280 px. A wider
+  window can leave room under a list; a narrower one (1,100 to 1,279 px)
+  stacks more tables and the script takes off the rows that do not fit, so
+  a reader without the script there may see the last row cut.
+- The handles are not drawn below 1,100 px, where the layout is derived; a
+  phone or a tablet moves and sizes tiles from the menu.
 - A saved search's label is shown as it was saved, in the language of the
   page it was saved from; the searches page rebuilds it in the page's
   language.

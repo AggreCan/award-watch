@@ -387,18 +387,18 @@ describe("the saved views page", () => {
     expect(bucketFor("GET", "/account/views")).toBe("page");
   });
 
-  it("removes a view with its runs and its dashboard panel", async () => {
+  it("removes a view with its runs and its dashboard tile", async () => {
     const r = await reader("views-remove", "ultra");
     await save(r, `${ORG}?source=awards&years=3`, "Mine");
     const [v] = await rowsOf(r.id);
     await ACCOUNTS.prepare("INSERT INTO view_deliveries (view_id, sent_at, day, status) VALUES (?, ?, ?, 'same')").bind(v.id, `${DAY}T16:00:00.000Z`, DAY).run();
-    // The dashboard's view panel takes the saved view: its name heads the panel.
-    expect((await send(r, "/account/dashboard/panels", { kind: "view", ref: v.id }, sale())).headers.get("location")).toMatch(/^\/account\/dashboard\?m=added#panel-[0-9a-f]{32}$/);
-    const panels = () => ACCOUNTS.prepare("SELECT kind, ref FROM dashboard_panels WHERE user_id = ?").bind(r.id).all<{ kind: string; ref: string }>().then((x) => x.results ?? []);
+    // The dashboard's view tile takes the saved view: its name heads the tile.
+    expect((await send(r, "/account/dashboard/panels", { kind: "view", ref: v.id }, sale())).headers.get("location")).toMatch(/^\/account\/dashboard\?m=added#tile-[0-9a-f]{32}$/);
+    const panels = () => ACCOUNTS.prepare("SELECT kind, ref FROM dashboard_tiles WHERE user_id = ?").bind(r.id).all<{ kind: string; ref: string }>().then((x) => x.results ?? []);
     expect(await panels()).toContainEqual({ kind: "view", ref: v.id });
     const dash = mainOf(await text(await open(r, "/account/dashboard", sale())));
     expect(dash).toContain(`${t("en", "dash.kind_view")}<span class="dash-item">Mine</span>`);
-    expect(dash).toContain(`<a href="${ORG}?source=awards&years=3">${t("en", "dash.see_all")}</a>`);
+    expect(dash).toContain(`<a href="${ORG}?source=awards&years=3">${t("en", "dash.open")}</a>`);
     // Add to dashboard on each row of the page, for Ultra.
     expect(mainOf(await text(await open(r, "/account/views")))).toContain(`<input type="hidden" name="ref" value="${v.id}"/>`);
     const res = await send(r, `/account/views/${v.id}/delete`);

@@ -4,7 +4,8 @@
 // spaces and straight apostrophes; the dictionary's typography pass adds the
 // Canadian French forms when they are read. None of these reach a page while
 // the switch is off, and none while no account holds Ultra and Ultra is not
-// on sale.
+// on sale. The page's script (public/dashboard.js) reads the dash.say_*,
+// dash.status_* and dash.js_* ones from the page's data block.
 
 export const DASHBOARD_STRINGS = {
   // The rail's item, first in "Your lists", with the Ultra chip (src/layout.tsx Rail).
@@ -15,41 +16,98 @@ export const DASHBOARD_STRINGS = {
   // -- the page -------------------------------------------------------------------------
   "dash.title": { en: "Dashboard", fr: "Tableau de bord" },
   "dash.lead": {
-    en: "The panels you chose from your saved searches, watches, the lists of contracts ending, analytics views, briefings and your organization's page.",
-    fr: "Les panneaux que vous avez choisis parmi vos recherches enregistrées, vos suivis, les listes de contrats prenant fin, les vues d'analyse, les bulletins et la page de votre organisation.",
+    en: "Tiles from your saved searches, watches, the lists of contracts ending, analytics views, briefings and your organization's page. Drag a tile by its grip to move it and by its corner to size it, or use its menu.",
+    fr: "Des tuiles tirées de vos recherches enregistrées, de vos suivis, des listes de contrats prenant fin, des vues d'analyse, des bulletins et de la page de votre organisation. Faites glisser une tuile par sa poignée pour la déplacer et par son coin pour la redimensionner, ou servez-vous de son menu.",
   },
   "dash.starter": {
-    en: "These are the panels a dashboard starts with. Edit the dashboard to choose your own.",
-    fr: "Voici les panneaux de départ d'un tableau de bord. Modifiez-le pour choisir les vôtres.",
+    en: "These are the tiles a dashboard starts with. Your first change keeps them as your own.",
+    fr: "Voici les tuiles de départ d'un tableau de bord. Votre premier changement les garde comme les vôtres.",
   },
-  "dash.edit": { en: "Edit the dashboard", fr: "Modifier le tableau de bord" },
-  "dash.done": { en: "Done", fr: "Terminé" },
-  "dash.add_panel": { en: "Add a Panel", fr: "Ajouter un panneau" },
+  // Emptied by the reader: no tile left.
+  "dash.empty": {
+    en: "The dashboard has no tile. Add a Tile puts one here.",
+    fr: "Le tableau de bord n'a aucune tuile. Le bouton Ajouter une tuile en ajoute une ici.",
+  },
+  "dash.add_tile": { en: "Add a Tile", fr: "Ajouter une tuile" },
+  "dash.add_label": { en: "What the tile shows", fr: "Ce que montre la tuile" },
   "dash.add": { en: "Add", fr: "Ajouter" },
   "dash.add_here": { en: "Add to dashboard", fr: "Ajouter au tableau de bord" },
   "dash.added": { en: "Added to the dashboard.", fr: "Ajouté au tableau de bord." },
-  "dash.up": { en: "Move up", fr: "Monter" },
-  "dash.down": { en: "Move down", fr: "Descendre" },
-  "dash.wide": { en: "Full width", fr: "Pleine largeur" },
-  "dash.narrow": { en: "Half width", fr: "Demi-largeur" },
-  "dash.remove": { en: "Remove", fr: "Retirer" },
-  "dash.count": { en: "{n} of {cap} panels", fr: "{n} panneaux sur {cap}" },
+  "dash.count": { en: "{n} of {cap} tiles", fr: "{n} tuiles sur {cap}" },
   "dash.full": {
-    en: "The dashboard holds its {cap} panels. Remove one to add another.",
-    fr: "Le tableau de bord contient ses {cap} panneaux. Retirez-en un pour en ajouter un autre.",
+    en: "The dashboard holds its {cap} tiles. Remove one to add another.",
+    fr: "Le tableau de bord contient ses {cap} tuiles. Retirez-en une pour en ajouter une autre.",
+  },
+  "dash.none_left": {
+    en: "Everything you hold is on the dashboard already.",
+    fr: "Tout ce que vous avez est déjà au tableau de bord.",
   },
   "dash.briefings_full": { en: "A dashboard shows at most {n} briefings.", fr: "Un tableau de bord présente au plus {n} bulletins." },
-  "dash.gone": { en: "What this panel showed was removed.", fr: "Ce que ce panneau montrait a été retiré." },
-  "dash.unavailable": { en: "This panel cannot be read right now.", fr: "Ce panneau ne peut pas être lu pour le moment." },
+  "dash.gone": { en: "What this tile showed was removed.", fr: "Ce que cette tuile montrait a été retiré." },
+  "dash.unavailable": { en: "This tile cannot be read right now.", fr: "Cette tuile ne peut pas être lue pour le moment." },
+  // The accounts database without the dashboard's tables: nothing about the layout is kept.
   "dash.unsaved": {
-    en: "The layout cannot be saved yet; this is the starting layout.",
-    fr: "La disposition ne peut pas encore être enregistrée; voici la disposition de départ.",
+    en: "The dashboard cannot be saved yet; this is the starting layout.",
+    fr: "Le tableau de bord ne peut pas encore être enregistré; voici la disposition de départ.",
   },
-  "dash.see_all": { en: "See all", fr: "Tout voir" },
-  // The watches panel when no watch had an event in the week's data dates.
+  // The database holds the panels' table but not the tiles': tiles can be added and removed, not placed or sized.
+  "dash.unsaved_layout": {
+    en: "Positions and sizes cannot be saved yet: you can arrange the tiles here, and they go back to their places when the page is loaded again.",
+    fr: "Les positions et les tailles ne peuvent pas encore être enregistrées : vous pouvez disposer les tuiles ici, et elles reprennent leur place quand la page est chargée de nouveau.",
+  },
+  "dash.open": { en: "Open", fr: "Ouvrir" },
+  // A list cut to what its tile holds: the rows shown, of all there are.
+  "dash.shown": { en: "{n} of {total}", fr: "{n} sur {total}" },
+  // The watches tile when no watch had an event in the week's data dates.
   "dash.none_week": { en: "No event on your watches this week.", fr: "Aucun événement sur vos suivis cette semaine." },
 
-  // -- each panel's kind, in its head (dashboard.tsx PANEL_KINDS) ---------------------------------
+  // -- a tile's handles and its menu (dashboard.tsx DashTile) -------------------------------------
+  "dash.grip": { en: "Move: {title}", fr: "Déplacer : {title}" },
+  "dash.corner": { en: "Resize: {title}", fr: "Redimensionner : {title}" },
+  "dash.menu": { en: "Options: {title}", fr: "Options : {title}" },
+  "dash.keys_move": {
+    en: "Enter or Space picks the tile up, the arrow keys move it, Enter drops it and Escape puts it back.",
+    fr: "Entrée ou Espace prend la tuile, les flèches la déplacent, Entrée la dépose et Échap la remet en place.",
+  },
+  "dash.keys_size": {
+    en: "Enter or Space picks the corner up, the arrow keys size the tile, Enter drops it and Escape puts it back.",
+    fr: "Entrée ou Espace prend le coin, les flèches redimensionnent la tuile, Entrée la dépose et Échap la remet en place.",
+  },
+  "dash.left": { en: "Move left", fr: "Déplacer à gauche" },
+  "dash.right": { en: "Move right", fr: "Déplacer à droite" },
+  "dash.up": { en: "Move up", fr: "Monter" },
+  "dash.down": { en: "Move down", fr: "Descendre" },
+  "dash.wider": { en: "Wider", fr: "Plus large" },
+  "dash.narrower": { en: "Narrower", fr: "Plus étroite" },
+  "dash.taller": { en: "Taller", fr: "Plus haute" },
+  "dash.shorter": { en: "Shorter", fr: "Moins haute" },
+  "dash.remove": { en: "Remove", fr: "Retirer" },
+
+  // -- what the page's script says (public/dashboard.js): the status line and the live region -------------------
+  "dash.status_saving": { en: "Saving the layout.", fr: "Enregistrement de la disposition." },
+  "dash.status_saved": { en: "Saved.", fr: "Enregistré." },
+  "dash.status_failed": { en: "The layout could not be saved.", fr: "La disposition n'a pas pu être enregistrée." },
+  "dash.status_local": {
+    en: "Arranged on this page only: positions and sizes cannot be saved yet.",
+    fr: "Disposé sur cette page seulement : les positions et les tailles ne peuvent pas encore être enregistrées.",
+  },
+  "dash.status_undone": { en: "Undone.", fr: "Annulé." },
+  "dash.js_undo": { en: "Undo", fr: "Annuler" },
+  "dash.js_retry": { en: "Try again", fr: "Réessayer" },
+  "dash.say_picked": {
+    en: "{title} picked up. The arrow keys move it, Enter drops it, Escape puts it back.",
+    fr: "Tuile « {title} » prise. Les flèches la déplacent, Entrée la dépose, Échap la remet en place.",
+  },
+  "dash.say_picked_size": {
+    en: "{title}: corner picked up. The arrow keys size it, Enter drops it, Escape puts it back.",
+    fr: "Coin de la tuile « {title} » pris. Les flèches la redimensionnent, Entrée la dépose, Échap la remet en place.",
+  },
+  "dash.say_at": { en: "{title}: column {x} of {cols}, row {y}.", fr: "{title} : colonne {x} sur {cols}, rangée {y}." },
+  "dash.say_size": { en: "{title}: {w} columns wide, {h} rows high.", fr: "{title} : {w} colonnes de large, {h} rangées de haut." },
+  "dash.say_dropped": { en: "{title} dropped.", fr: "Tuile « {title} » déposée." },
+  "dash.say_back": { en: "{title} put back.", fr: "Tuile « {title} » remise en place." },
+
+  // -- each tile's kind, in its head (dashboard.tsx PANEL_KINDS) ---------------------------------
   "dash.kind_tenders": { en: "Saved search: open notices", fr: "Recherche enregistrée : avis ouverts" },
   "dash.kind_radar": { en: "Contracts ending", fr: "Contrats prenant fin" },
   "dash.kind_records": { en: "Saved search: records", fr: "Recherche enregistrée : dossiers" },
@@ -60,9 +118,9 @@ export const DASHBOARD_STRINGS = {
   "dash.kind_matches": { en: "Matching notices", fr: "Avis correspondants" },
   "dash.kind_api": { en: "API requests today", fr: "Requêtes à l'API aujourd'hui" },
 
-  // -- More Kinds of Panel (dashboard.tsx moreKinds): each kind the account cannot add yet, the one step that
-  // gives it what the panel shows, and the page where that is done ({link}, its words the _link key) ----------
-  "dash.more_title": { en: "More Kinds of Panel", fr: "Autres genres de panneaux" },
+  // -- More Kinds of Tile (dashboard.tsx moreKinds): each kind the account cannot add yet, the one step that
+  // gives it what the tile shows, and the page where that is done ({link}, its words the _link key) ----------
+  "dash.more_title": { en: "More Kinds of Tile", fr: "Autres genres de tuiles" },
   "dash.more_tenders": {
     en: "A tender search's open notices: save a search on the {link}.",
     fr: "Les avis ouverts d'une recherche d'appels d'offres : enregistrez une recherche sur la {link}.",
@@ -105,22 +163,22 @@ export const DASHBOARD_STRINGS = {
     en: "One page of up to {cap} panels you choose from what the site already shows you.",
     fr: "Une page d'au plus {cap} panneaux que vous choisissez parmi ce que le site vous montre déjà.",
   },
-  // The nine kinds, one sentence each, in PANEL_KINDS order.
+  // The nine kinds, one sentence each, in PANEL_KINDS order. A list shows as many rows as its size holds.
   "dash.what_tenders": {
-    en: "A saved tender search: how many open notices match it, and the five closing soonest.",
-    fr: "Une recherche d'appels d'offres enregistrée : combien d'avis ouverts y correspondent, et les cinq prochains à fermer.",
+    en: "A saved tender search: how many open notices match it, and the ones closing soonest, as many as its size holds.",
+    fr: "Une recherche d'appels d'offres enregistrée : combien d'avis ouverts y correspondent, et les prochains à fermer, autant que sa taille en contient.",
   },
   "dash.what_radar": {
-    en: "A list of contracts ending, or a saved search of one: its count and counted value, and the five ending soonest.",
-    fr: "Une liste de contrats prenant fin, ou une recherche enregistrée de l'une d'elles : leur nombre et leur valeur comptée, et les cinq prochains à prendre fin.",
+    en: "A list of contracts ending, or a saved search of one: its count and counted value, and the ones ending soonest, as many as its size holds.",
+    fr: "Une liste de contrats prenant fin, ou une recherche enregistrée de l'une d'elles : leur nombre et leur valeur comptée, et les prochains à prendre fin, autant que sa taille en contient.",
   },
   "dash.what_records": {
     en: "A saved search of an organization, a buyer or a segment: its records by source over the last two fiscal years.",
     fr: "Une recherche enregistrée d'une organisation, d'un acheteur ou d'un segment : ses dossiers par source au cours des deux derniers exercices.",
   },
   "dash.what_watches": {
-    en: "Your watches: the week's events by kind, and the five newest.",
-    fr: "Vos suivis : les événements de la semaine par genre, et les cinq derniers.",
+    en: "Your watches: the week's events by kind, and the newest, as many as its size holds.",
+    fr: "Vos suivis : les événements de la semaine par genre, et les derniers, autant que sa taille en contient.",
   },
   "dash.what_view": {
     en: "An analytics view of a buyer, an organization or a segment: its first chart, at the source and period you chose.",
@@ -135,8 +193,8 @@ export const DASHBOARD_STRINGS = {
     fr: "Un bloc de la page de votre organisation : ses dossiers par exercice ou par segment, sa part d'un segment, ses contrats prenant fin, ses acheteurs ou ses offres à commandes.",
   },
   "dash.what_matches": {
-    en: "Matching notices: the five open notices closest to your organization's records.",
-    fr: "Avis correspondants : les cinq avis ouverts qui correspondent le mieux aux dossiers de votre organisation.",
+    en: "Matching notices: the open notices closest to your organization's records, as many as its size holds.",
+    fr: "Avis correspondants : les avis ouverts qui correspondent le mieux aux dossiers de votre organisation, autant que sa taille en contient.",
   },
   "dash.what_api": {
     en: "The API: each key's requests today and the plan's daily cap.",
@@ -145,7 +203,7 @@ export const DASHBOARD_STRINGS = {
   "dash.gate": { en: "The dashboard is part of Ultra.", fr: "Le tableau de bord fait partie d'Ultra." },
   // The privacy page's line (account/privacy.tsx), while Ultra is on sale.
   "dash.privacy": {
-    en: "A dashboard keeps the panels you chose, their order and their width. A panel names a saved search, a briefing, an analytics view's address or a block of your organization's page. The panels are deleted with the account.",
-    fr: "Un tableau de bord conserve les panneaux que vous avez choisis, leur ordre et leur largeur. Un panneau nomme une recherche enregistrée, un bulletin, l'adresse d'une vue d'analyse ou un bloc de la page de votre organisation. Les panneaux sont supprimés avec le compte.",
+    en: "A dashboard keeps the tiles you chose, the position and size of each, and each tile's own choices. A tile names a saved search, a briefing, an analytics view's address or a block of your organization's page. The tiles are deleted with the account.",
+    fr: "Un tableau de bord conserve les tuiles que vous avez choisies, la position et la taille de chacune, et les choix propres à chaque tuile. Une tuile nomme une recherche enregistrée, un bulletin, l'adresse d'une vue d'analyse ou un bloc de la page de votre organisation. Les tuiles sont supprimées avec le compte.",
   },
 } as const satisfies Record<string, { en: string; fr: string }>;

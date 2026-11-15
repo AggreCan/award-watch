@@ -44,8 +44,13 @@ export const SHEET = {
   cmapFrom: px(/@media \(min-width: (\d+)px\) \{ \.cmap \{ grid-template-columns: minmax\(0, 1fr\) minmax\(var\(--cmap-list-min/, "where the map's list stands beside it"),
   // A block inside a panel that is not a table's wrapper keeps this margin.
   panelInset: px(/^\.panel > :not\([^)]*\) \{ margin: (\d+)px; \}/m, "the margin of a block inside a panel"),
-  // The dashboard's two tracks from this window, a half-width panel taking one (src/account/dashboard.tsx).
-  dashFrom: px(/@media \(min-width: (\d+)px\) \{\n\s*\.dash-grid \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/, "where the dashboard takes two tracks"),
+  // The dashboard (src/account/dashboard.tsx): two columns from dashTwoFrom (a tile marked dash-both takes both),
+  // the grid of 12 from dashGridFrom (a tile its --gw columns), the gap between them, and the width inside a
+  // tile's border below which its table stacks into labelled rows (the container query), from the restack window.
+  dashTwoFrom: px(/@media \(min-width: (\d+)px\) \{\n\s*\.dash-grid \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/, "where the dashboard takes two columns"),
+  dashGridFrom: px(/@media \(min-width: (\d+)px\) \{\n\s*\.dash-grid \{ grid-template-columns: repeat\(12, minmax\(0, 1fr\)\);/, "where the dashboard is its grid"),
+  dashGap: px(/^\.dash-grid \{[^}]*gap: (\d+)px;/m, "the dashboard's gap"),
+  dashStackBelow: px(/@container dash-tile \(max-width: (\d+)px\)/, "where a tile stacks its table") + 1,
 };
 
 // The blocks that run to a panel's edges rather than keep its inset: the
@@ -106,7 +111,8 @@ export function edges(): number[] {
   // The first window at which the grid holds two tracks of its least width.
   let split = SHEET.gridFrom;
   while (mainWidth(split) < 2 * SHEET.gridTrack + SHEET.gutter) split += 1;
-  const all = [...RANGES.map((r) => r.from), SHEET.railFrom, SHEET.gridFrom, split, SHEET.threeFrom, SHEET.tocFrom, SHEET.cmapFrom, SHEET.dashFrom];
+  const all = [...RANGES.map((r) => r.from), SHEET.railFrom, SHEET.gridFrom, split, SHEET.threeFrom, SHEET.tocFrom, SHEET.cmapFrom, SHEET.dashTwoFrom,
+    SHEET.dashGridFrom];
   return [...new Set(all)].sort((a, b) => a - b);
 }
 
@@ -194,14 +200,33 @@ function boxWidth(box: El, w: number): number {
     if (i === n - 1 && n % 2 === 1) return main;
     return half;
   }
-  // A half-width panel of the dashboard takes one of its two tracks from dashFrom; every other panel there takes the row.
-  if (grid && has(grid, "dash-grid") && has(cell, "dash-half") && w >= SHEET.dashFrom) return (main - SHEET.gutter) / 2;
+  // A tile of the dashboard: its columns of the grid, one of the two columns or both, or the row on a phone.
+  if (grid && has(grid, "dash-grid") && has(cell, "dash-tile")) return dashTileWidth(cell, w, main);
   if (has(box, "doc")) {
     const layout = box.parent;
     const toc = layout && has(layout, "doc-layout") && !has(layout, "doc-alone") && w >= SHEET.tocFrom ? SHEET.toc + SHEET.gutter : 0;
     return Math.min(SHEET.measure, main - toc);
   }
   return main;
+}
+
+// A dashboard tile's width at window w, from its --gw columns.
+export function dashTileWidth(tile: El, w: number, main = mainWidth(w)): number {
+  const cols = Number(tile.style.match(/--gw:(\d+)/)?.[1] ?? NaN);
+  if (w >= SHEET.dashGridFrom) {
+    const col = (main - 11 * SHEET.dashGap) / 12;
+    return cols * col + (cols - 1) * SHEET.dashGap;
+  }
+  if (w >= SHEET.dashTwoFrom && !has(tile, "dash-both")) return (main - SHEET.dashGap) / 2;
+  return main;
+}
+
+// Whether a table stands stacked in labelled rows at window w: in a dashboard tile narrower than its table's
+// stacking width, from the window where tables no longer restack for a phone.
+export function stackedInTile(table: El, w: number): boolean {
+  let tile: El | null = table.parent;
+  while (tile && !has(tile, "dash-tile")) tile = tile.parent;
+  return !!tile && w >= RANGES[0].from && dashTileWidth(tile, w) - 2 * SHEET.panelBorder < SHEET.dashStackBelow;
 }
 
 // The column a table gets at window w. The tender list beside its detail
@@ -298,6 +323,7 @@ export function misfits(html: string, skip: (table: El) => boolean = () => false
   for (const table of find(root, (e) => e.tag === "table" && e.cls.includes("cols") && !skip(e))) {
     const least = leastWidths(table);
     for (const w of edges()) {
+      if (stackedInTile(table, w)) continue;
       const range = rangeOf(w);
       const column = tableColumn(table, w);
       if (least[range] > column) out.push({ table: tableName(table), window: w, range, least: least[range], column: Math.floor(column * 10) / 10 });

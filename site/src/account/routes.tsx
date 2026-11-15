@@ -62,12 +62,17 @@
 //   POST /account/billing/change       a move between Pro and Ultra, on the portal    (session, CSRF)
 //   POST /account/billing/refund       refund the first payment, then cancel at once  (session read from the database, CSRF)
 //   POST /account/billing/webhook      the payment service's notices                  (signature only)
-//   GET  /account/dashboard            the dashboard's panels; ?edit=1 its controls   (session; Ultra, else what it holds
-//                                      while Ultra is on sale, else the site's 404)
-//   POST /account/dashboard/panels     add a panel (kind and ref, or panel)            (session, CSRF, plan's figure)
-//   POST /account/dashboard/panels/:id/move    one place up or down (dir)              (session, CSRF)
-//   POST /account/dashboard/panels/:id/width   full or half width (wide)               (session, CSRF)
-//   POST /account/dashboard/panels/:id/delete  remove it                               (session, CSRF)
+//   GET  /account/dashboard            the dashboard's tiles on the grid (?edit=1 is the same page) (session; Ultra,
+//                                      else what it holds while Ultra is on sale, else the site's 404)
+//   POST /account/dashboard/panels     add a tile (kind and ref, or panel)             (session, CSRF, plan's figure)
+//   POST /account/dashboard/layout     the page's script saves the layout (JSON in layout), answers the layout kept
+//                                                                                      (session, CSRF)
+//   GET  /account/dashboard/tiles/:id  one tile at a size (?w=&h=), for the script     (session, CSRF in X-CSRF-Token)
+//   POST /account/dashboard/tiles/:id/move     a step left, right, up or down (dir)    (session, CSRF)
+//   POST /account/dashboard/tiles/:id/size     wider, narrower, taller, shorter (to)   (session, CSRF)
+//   POST /account/dashboard/tiles/:id/delete   remove it                               (session, CSRF)
+//   POST /account/dashboard/panels/:id/move|width|delete  the earlier page's three posts, kept for a page
+//                                      loaded before the grid                         (session, CSRF)
 //   GET  /account/views                saved analytics views, each with its email      (session; the site's 404 until
 //                                      the schema holds saved_views)
 //   POST /account/views                save a view's own address, with a name          (session, CSRF, plan's figure)
@@ -118,7 +123,11 @@ import {
 } from "./briefings";
 import { bugPage, fileBug } from "./bugs";
 import { refererPath, safeNext } from "./next";
-import { type EditOp, addPanelPost, dashboardOpen, dashboardPage, deletePanelsFor, deletePanelsOf, editPanelPost } from "./dashboard";
+import {
+  CSRF_HEADER, type EditOp, addPanelPost, dashboardOpen, dashboardPage, deletePanelsFor, deletePanelsOf, editPanelPost, layoutPost, tileFragment,
+  tileReadAllowed,
+} from "./dashboard";
+import { STEPS, type Step } from "../../public/dash-grid.js";
 import { DASHBOARD_PATH } from "./dashboard_rule";
 import { type Plan, RULES, allowed, planFor, savedViewCap, watchCap } from "./entitlements";
 import {
@@ -177,9 +186,9 @@ account.use("*", async (c, next) => {
   await next();
   // A calendar feed is read by a calendar app, never a page: private as
   // well; so is the organization an account claims, its page and its files,
-  // and the notices matching it; and the dashboard, whose 404 stays as it was.
+  // and the notices matching it; and the dashboard, whose 404 stays as it was, with its posts and its one read.
   const own = FEED_ICS.test(c.req.path) || c.req.path === ORG_PATH || c.req.path.startsWith(`${ORG_PATH}/`) || c.req.path === MATCH_PATH ||
-    (c.req.path === DASHBOARD_PATH && c.res.status === 200);
+    (c.req.path === DASHBOARD_PATH && c.res.status === 200) || c.req.path.startsWith(`${DASHBOARD_PATH}/`);
   c.header("Cache-Control", own ? "private, no-store" : "no-store");
   c.header("X-Robots-Tag", "noindex, nofollow");
 });
@@ -703,7 +712,7 @@ account.post("/searches/:id/delete", async (c) => {
     const id = c.req.param("id") ?? "";
     if (await deleteSearch(c.env, who.userId, id)) {
       await audit(c.env, who.userId, "search_deleted");
-      // Its dashboard panel goes with it (dashboard.tsx).
+      // Its dashboard tile goes with it (dashboard.tsx).
       await deletePanelsFor(c.env, who.userId, ["tenders", "radar", "records"], id);
     }
     return c.redirect("/account/searches?m=deleted", 303);
@@ -770,7 +779,7 @@ account.post("/briefings/:id/delete", async (c) => {
     const id = c.req.param("id") ?? "";
     if (await deleteBriefing(c.env, who.userId, id)) {
       await audit(c.env, who.userId, "briefing_removed");
-      // Its dashboard panel goes with it (dashboard.tsx).
+      // Its dashboard tile goes with it (dashboard.tsx).
       await deletePanelsFor(c.env, who.userId, ["briefing"], id);
     }
     return c.redirect("/account/searches?m=b_removed#briefings", 303);
@@ -1544,19 +1553,63 @@ account.post("/dashboard/panels", async (c) => {
   return guarded(c, () => addPanelPost(c, post.account, post.fields));
 });
 
-// The three changes of a panel: one place up or down, full or half width, removed.
+// A tile's changes from its menu: a step of a place (move, dir) or of a size
+// (size, to), and its removal; the earlier page's three posts (one place up
+// or down, full or half width, removed) answer as they did.
+const isStep = (v: unknown): v is Step => typeof v === "string" && (STEPS as readonly string[]).includes(v);
+const MOVES: ReadonlySet<Step> = new Set(["left", "right", "up", "down"]);
+const TILE_OPS: Record<string, (fields: Record<string, string>) => EditOp | null> = {
+  move: (f) => (isStep(f.dir) && MOVES.has(f.dir) ? { op: "step", step: f.dir } : null),
+  size: (f) => (isStep(f.to) && !MOVES.has(f.to) ? { op: "step", step: f.to } : null),
+  delete: () => ({ op: "delete" }),
+};
 const PANEL_OPS: Record<string, (fields: Record<string, string>) => EditOp | null> = {
-  move: (f) => (f.dir === "up" || f.dir === "down" ? { op: "move", dir: f.dir } : null),
+  move: (f) => (f.dir === "up" || f.dir === "down" ? { op: "step", step: f.dir } : null),
   width: (f) => (f.wide === "1" || f.wide === "0" ? { op: "width", wide: f.wide === "1" } : null),
   delete: () => ({ op: "delete" }),
 };
+
+account.post("/dashboard/tiles/:id/:op{move|size|delete}", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  const op = TILE_OPS[c.req.param("op") ?? ""]?.(post.fields) ?? null;
+  if (!op) return c.text(t(c.get("lang"), "form.rejected"), 400);
+  return guarded(c, () => editPanelPost(c, post.account, c.req.param("id") ?? "", op));
+});
 
 account.post("/dashboard/panels/:id/:op{move|width|delete}", async (c) => {
   const post = await signedInPost(c);
   if (post instanceof Response) return post;
   const op = PANEL_OPS[c.req.param("op") ?? ""]?.(post.fields) ?? null;
   if (!op) return c.text(t(c.get("lang"), "form.rejected"), 400);
-  return guarded(c, () => editPanelPost(c, post.account, c.req.param("id") ?? "", op, post.fields));
+  return guarded(c, () => editPanelPost(c, post.account, c.req.param("id") ?? "", op));
+});
+
+// The page's script saving the layout; its answer is JSON, a database fault
+// included (the script says saving failed and offers to try again).
+account.post("/dashboard/layout", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  try {
+    return await layoutPost(c, post.account, post.fields);
+  } catch (e) {
+    console.error(`account: ${String(e).slice(0, 120)}`);
+    return c.json({ state: "unavailable" }, 503);
+  }
+});
+
+// One tile at a size, read by the page's script after a resize: the session,
+// then the CSRF value the script sends in its header; an empty 403 without it.
+account.get("/dashboard/tiles/:id", async (c) => {
+  const read = await readSession(c);
+  if (read.state !== "ok") return c.text("", read.state === "unavailable" ? 503 : 403);
+  if (!tileReadAllowed(read.account, c.req.header(CSRF_HEADER))) return c.text("", 403);
+  try {
+    return await tileFragment(c, read.account, c.req.param("id") ?? "");
+  } catch (e) {
+    console.error(`account: ${String(e).slice(0, 120)}`);
+    return c.text("", 503);
+  }
 });
 
 // -- saved analytics views (saved_views.ts, view_pages.tsx, view_mail.ts) -----------------------------
@@ -1629,7 +1682,7 @@ account.post("/views/:id/delete", async (c) => {
     const id = c.req.param("id") ?? "";
     if (await deleteSavedView(c.env, who.userId, id)) {
       await audit(c.env, who.userId, "view_removed");
-      // Its dashboard panel goes with it (dashboard.tsx).
+      // Its dashboard tile goes with it (dashboard.tsx).
       await deletePanelsFor(c.env, who.userId, ["view"], id);
     }
     return c.redirect(`${VIEWS_PATH}?m=removed`, 303);

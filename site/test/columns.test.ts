@@ -137,9 +137,9 @@ describe("a table's least width", () => {
     const panel = (w: number) => mainWidth(w) - 2 * SHEET.panelBorder;
     expect([700, 1000, 1280, 1440, 1600, 1920].map(panel)).toEqual([635, 671, 951, 1111, 1271, 1591]);
     // Each range's low edge, the rail's window, and the windows inside a range where a panel grid
-    // splits into tracks, three panels share a row, a document's contents move beside it, or the
-    // home map's list moves beside the map.
-    expect(edges()).toEqual([700, 1000, 1200, 1280, 1351, 1400, 1440, 1600, 1840, 1920]);
+    // splits into tracks, three panels share a row, a document's contents move beside it, the
+    // home map's list moves beside the map, or the dashboard becomes its grid of 12 (1,100).
+    expect(edges()).toEqual([700, 1000, 1100, 1200, 1280, 1351, 1400, 1440, 1600, 1840, 1920]);
     expect([699, 700, 1279, 1280, 1439, 1440, 1599, 1600, 1919, 1920].map(rangeOf)).toEqual(
       ["md", "md", "md", "lg", "lg", "xl", "xl", "xxl", "xxl", "all"]);
   });
