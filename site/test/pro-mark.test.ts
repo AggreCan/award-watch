@@ -385,8 +385,8 @@ describe("the radar's tabs and tiles", () => {
 
   it("lists what Pro includes, watches, calendar feeds, your organization, the weekly briefing, the keyed API, instrument files and bug reports among it, each line a Pro feature", () => {
     expect(PRO_INCLUDES.map(([f]) => f)).toEqual([
-      "intraday", "radar_depth", "radar_depth", "delivery", "watch_mail", "delivery", "analytics", "matches", "match_mail", "radar_depth", "api",
-      "export_filtered", "delivery", "analytics", "saved_views", "bug_reports",
+      "intraday", "radar_depth", "radar_depth", "delivery", "watch_mail", "delivery", "analytics", "matches", "match_mail", "radar_depth", "follows",
+      "api", "export_filtered", "delivery", "analytics", "saved_views", "bug_reports",
     ]);
     expect(PRO_INCLUDES.map(([, key]) => key)).toContain("plans.pro_briefing");
     // A row only Ultra has (the dashboard) is not one of Pro's.
@@ -494,10 +494,16 @@ describe("the plan cards", () => {
     expect(pro).toContain(`<span>${RULES.pro.match_mail} matching notices a week, by email</span>`);
     expect(freeFr).toContain(`<span>${RULES.free.match_mail} correspondances par semaine, par courriel</span>`);
     expect(proFr).toContain(`<span>${RULES.pro.match_mail} correspondances par semaine, par courriel</span>`);
+    // The earlier contracts an open notice may follow: each plan's own count, from RULES, first; Free's 1 in the singular.
+    expect([RULES.free.follows, RULES.pro.follows]).toEqual([1, 3]);
+    expect(free).toContain(`<span>${RULES.free.follows} earlier contract per open notice</span>`);
+    expect(pro).toContain(`<span>${RULES.pro.follows} earlier contracts per open notice</span>`);
+    expect(freeFr).toContain(`<span>${RULES.free.follows} contrat antérieur par avis ouvert</span>`);
+    expect(proFr).toContain(`<span>${RULES.pro.follows} contrats antérieurs par avis ouvert</span>`);
     // Every figure on a card is one of the plans' or the constants', or a window's months.
     const figures = new Set([RULES.free.saved_searches, RULES.pro.saved_searches, RULES.free.watchlists, RULES.pro.watchlists,
-      RULES.free.matches, RULES.pro.matches, RULES.free.match_mail, RULES.pro.match_mail, RULES.pro.saved_views, FREE_YEARS, MAX_YEARS,
-      KEY_PER_DAY, KEYS_MAX, hours, COMPETITORS_MAX, 3, 6, 12].map(String));
+      RULES.free.matches, RULES.pro.matches, RULES.free.match_mail, RULES.pro.match_mail, RULES.pro.saved_views, RULES.free.follows,
+      RULES.pro.follows, FREE_YEARS, MAX_YEARS, KEY_PER_DAY, KEYS_MAX, hours, COMPETITORS_MAX, 3, 6, 12].map(String));
     for (const card of [free, pro, freeFr, proFr]) {
       for (const { text } of rowsOf(card)) {
         for (const n of text.match(/[0-9][0-9 ,]*[0-9]|[0-9]/g) ?? []) expect(figures, `${n} in "${text}"`).toContain(n.replace(/[ ,]/g, ""));

@@ -354,10 +354,12 @@ describe("around the pages", () => {
   });
 
   it("state the rules on the Methodology page from the constants, after the matching notices, whatever the switch", async () => {
-    for (const environment of [offEnv(), E()]) {
+    // The section's name follows may follow's switch, which ships on (src/pages/follows.tsx; test/follows-pages.test.ts).
+    const both = "Holder's Record and Earlier Contracts";
+    for (const [environment, name] of [[offEnv(), both], [E(), both], [{ ...E(), FOLLOWS_PANEL: "off" }, "Holder's Record"]] as const) {
       const html = decode(nbsp(await (await get("/methodology", { env: environment })).text())).replace(/’/g, "'");
       const toc = /<nav class="toc"[\s\S]*?<\/nav>/.exec(html)?.[0] ?? "";
-      expect(toc.indexOf('<a href="#holders">Holder\'s Record</a>')).toBeGreaterThan(toc.indexOf('<a href="#matching">'));
+      expect(toc.indexOf(`<a href="#holders">${name}</a>`)).toBeGreaterThan(toc.indexOf('<a href="#matching">'));
       const section = html.slice(html.indexOf('<h2 id="holders">'), html.indexOf('<h2 id="people">'));
       expect(section).toContain("a commodity code with the same first 4 characters");
       expect(section).toContain("Records count from the 10 fiscal years ending with the data date's.");
@@ -370,7 +372,9 @@ describe("around the pages", () => {
       expectTablesFit(html, "methodology");
     }
     const fr = decode(nbsp(await (await get("/methodology?lang=fr", { env: offEnv() })).text()));
-    expect(fr).toContain('<h2 id="holders">Dossiers du titulaire</h2>');
+    expect(fr).toContain('<h2 id="holders">Dossiers du titulaire et contrats antérieurs</h2>');
+    const frOff = decode(nbsp(await (await get("/methodology?lang=fr", { env: { ...offEnv(), FOLLOWS_PANEL: "off" } })).text()));
+    expect(frOff).toContain('<h2 id="holders">Dossiers du titulaire</h2>');
     expect(fr.replace(/’/g, "'")).toContain("Un début de nom que plus de 12 titulaires partagent dans un même genre de travail");
   });
 });

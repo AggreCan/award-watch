@@ -204,9 +204,10 @@
   // the landing page's card, beside "Coming soon". FOLLOWS_PANEL is may
   // follow's switch (src/pages/follows.tsx, docs/accounts.md "May follow"):
   // "on" shows a signed-in reader the earlier contracts an open notice may
-  // follow; "off" keeps the notice page and every other page as they were.
-  // It stays "off" until the operator's hand check of the production matches
-  // (the review file's may-follow section) passes. MAIL_DAILY_QUOTA is the
+  // follow, with the Methodology's paragraph and the Terms' clause; "off"
+  // keeps the notice page, the Methodology and the Terms as they were (the
+  // plan cards' row stays). It is "on" since the hand check of the
+  // production matches of 2026-11-15 passed. MAIL_DAILY_QUOTA is the
   // account's Email Sending quota for a day as the dashboard shows it, and
   // MAIL_DAILY_RESERVE the part of it the delivery job leaves for sign-in
   // codes, which go through the same MAIL binding: the job stops for the UTC
@@ -230,7 +231,7 @@
     "STRIPE_PRICE_ULTRA_YEARLY": "price_1UaqmoIP2lpoGRa54JFX2voW",
     "PRICE_ULTRA_MONTHLY_CAD": "38.99",
     "PRICE_ULTRA_YEARLY_CAD": "389.99",
-    "FOLLOWS_PANEL": "off"
+    "FOLLOWS_PANEL": "on"
   },
   // Workers Logs keeps the console lines (which name events and counts, never
   // an address, a code or a token) and not the per-request invocation log,

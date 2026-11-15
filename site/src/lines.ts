@@ -30,12 +30,14 @@ export const SIMILAR_GROUP_MAX = 12;
 export const J_VERSION = 1;
 
 // May follow's rules (pipeline follows.py repeats each; its test compares
-// them): a text match from FOLLOW_MIN of the title words in common, close
-// from FOLLOW_CLOSE; the earlier contract ending from FOLLOW_BEFORE_DAYS
-// before the notice's expected start to FOLLOW_AFTER_DAYS after it; at most
-// FOLLOW_MAX kept a notice. The site shows them while FOLLOWS_PANEL is "on".
+// them): a text match from FOLLOW_MIN of the title words in common and
+// FOLLOW_WORDS_MIN words at least, close from FOLLOW_CLOSE; the earlier
+// contract ending from FOLLOW_BEFORE_DAYS before the notice's expected start
+// to FOLLOW_AFTER_DAYS after it; at most FOLLOW_MAX kept a notice. The site
+// shows them while FOLLOWS_PANEL is "on".
 export const FOLLOW_MIN = 0.5;
 export const FOLLOW_CLOSE = 0.75;
+export const FOLLOW_WORDS_MIN = 2;
 export const FOLLOW_BEFORE_DAYS = 180;
 export const FOLLOW_AFTER_DAYS = 120;
 export const FOLLOW_MAX = 3;

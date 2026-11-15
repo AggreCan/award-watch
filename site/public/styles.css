@@ -662,6 +662,7 @@ th.num { text-align: right; }
 .k-part { width: 120px; }
 .k-file { width: 220px; }
 .k-text { width: 192px; }
+.k-reasons { width: 256px; }
 tbody tr:last-child td { border-bottom: 0; }
 /* A sub-head inside a table (a source over its rows): a band, its name in spaced capitals. */
 th.group-head {

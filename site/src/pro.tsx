@@ -19,7 +19,7 @@
 
 import type { FC } from "hono/jsx";
 import { KEYS_MAX } from "./account/api_keys";
-import { PLANS, RULES, type Feature, type Plan } from "./account/entitlements";
+import { PLANS, RULES, type CountedFeature, type Feature, type Plan } from "./account/entitlements";
 import { paymentSource, ultraOnSale } from "./account/payments";
 import { stripeOffer, stripeOffers } from "./account/stripe";
 import { KEY_PER_DAY, keyQuota } from "./api_keyed_spec";
@@ -133,6 +133,17 @@ const keysOf = (plan: Plan) => (lang: Lang) => ({ keys: fmtInt(KEYS_MAX, lang), 
 // row whose wording is the same on Pro and Ultra (no figure, or the same
 // one) shares Pro's wording.
 const same = (w: Wording) => ({ pro: w, ultra: w });
+// A plan's own count of a feature from RULES, its key chosen by that figure (keyOf: a singular for one, say).
+const counted = (plan: Plan, feature: CountedFeature, keyOf: (n: number) => Key): Wording =>
+  ({ key: keyOf(RULES[plan][feature]), vars: count(() => RULES[plan][feature]) });
+// The same count on both paid plans: one wording while Ultra's figure is Pro's, so the row is not one of Ultra's
+// own (ULTRA_OWN_ROWS), and each plan's own once the two differ.
+const paid = (feature: CountedFeature, keyOf: (n: number) => Key) => {
+  const pro = counted("pro", feature, keyOf);
+  return RULES.pro[feature] === RULES.ultra[feature] ? same(pro) : { pro, ultra: counted("ultra", feature, keyOf) };
+};
+// The earlier contracts a notice's page shows: one contract, or several.
+const followsKey = (n: number): Key => (n === 1 ? "plans.follows_one" : "plans.follows");
 
 export const PLAN_ROWS: readonly PlanRow[] = [
   { feature: "intraday", free: { key: "plans.free_tenders" }, ...same({ key: "plans.pro_tenders", vars: (lang) => ({ h: sameDayHours(lang) }) }) },
@@ -191,6 +202,8 @@ export const PLAN_ROWS: readonly PlanRow[] = [
     free: { key: "plans.lines", vars: (lang) => ({ m: windowMonths(0, lang) }) },
     ...same({ key: "plans.lines", vars: (lang) => ({ m: windowMonths(2, lang) }) }),
   },
+  // The earlier contracts an open notice may follow (src/pages/follows.tsx): each plan's own count from RULES.
+  { feature: "follows", free: counted("free", "follows", followsKey), ...paid("follows", followsKey) },
   {
     feature: "api", free: { key: "plans.free_api" },
     pro: { key: "plans.api_keys", vars: keysOf("pro") }, ultra: { key: "plans.api_keys", vars: keysOf("ultra") },

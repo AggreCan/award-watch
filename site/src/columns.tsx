@@ -47,6 +47,10 @@ export const COLUMN_WIDTHS = {
   part: 120,
   file: 220, // a file name or an API endpoint
   text: 192, // a second column of running text
+  // Short lines, one a reason (what matched an earlier contract, pages/follows.tsx): the longest, "Same client
+  // department, <a department>", in two lines rather than three, while a 700 px window still leaves the main
+  // column its minimum beside an organization.
+  reasons: 256,
 } as const;
 
 export type ColumnKind = "main" | keyof typeof COLUMN_WIDTHS;

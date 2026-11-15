@@ -1,17 +1,22 @@
 // May follow on an open notice's page (src/pages/follows.tsx, src/lines.ts;
 // docs/accounts.md, May follow), against a local records database built from
-// pipeline/records_schema.sql. While FOLLOWS_PANEL is anything but "on" (it
-// ships "off"): the notice page is the same for every reader whatever
+// pipeline/records_schema.sql. It ships "on" (wrangler.jsonc), since the
+// hand check of the production matches of 2026-11-15. While FOLLOWS_PANEL is
+// anything but "on": the notice page is the same for every reader whatever
 // rec_follows holds, its batch is the one it read before (the state row and
-// the earlier awards, never rec_follows), and no page says a word of may
-// follow, the Methodology and the Terms included. With it on: a reader not
-// signed in gets the page as before; Free the closest earlier contract and a
-// line on what each plan shows; Pro up to three, each holder with its label
-// and figure; each state of the panel; the disclaimer with its links and the
-// licence's credit; no chip or filled button added; the table within the
-// column system at every width; a private page.
+// the earlier awards, never rec_follows), and the notice page, the
+// Methodology and the Terms say no word of may follow. With it on: a reader
+// not signed in gets the page as before; Free the closest earlier contract
+// and a line on what each plan shows; Pro up to three, each holder with its
+// label and figure; each state of the panel; the disclaimer with its links
+// and the licence's credit; no chip or filled button added; the table within
+// the column system at every width; a private page; the Methodology's rules
+// with the floor of title words; the plan cards' row, each plan's own figure.
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
+import { RULES } from "../src/account/entitlements";
+import { FOLLOW_CLOSE, FOLLOW_MIN, FOLLOW_WORDS_MIN, followsPanelOn } from "../src/lines";
+import { PLAN_ROWS, ULTRA_OWN_ROWS, planLine, rowFor } from "../src/pro";
 import { FOLLOWS_SQL } from "../src/records_tables";
 import { orgNumber } from "../src/records_db";
 import { decode, get, grantPro, nbsp, newEmail, onEnv, signIn, useAccountsDb } from "./accounts-helpers";
@@ -93,12 +98,13 @@ const tenders = FILES["tenders/20a.json"] as Record<string, Record<string, unkno
 const uncoded = { ...tenders, "cb-200-20005019": { ...tenders["cb-200-20005019"], codes: [] } };
 
 type O = { panel?: string | undefined; records?: D1Database; assets?: Fetcher };
+// The switch as wrangler.jsonc ships it ("on"), the accounts switch on; panel sets another value.
 const E = (o: O = {}) => onEnv({
-  ...("panel" in o ? { FOLLOWS_PANEL: o.panel } : { FOLLOWS_PANEL: "on" }), ...("records" in o ? { RECORDS: o.records } : {}),
+  ...("panel" in o ? { FOLLOWS_PANEL: o.panel } : {}), ...("records" in o ? { RECORDS: o.records } : {}),
   ...(o.assets ? { ASSETS: o.assets } : {}),
 });
-// The switch as wrangler.jsonc ships it, the accounts switch on.
-const OFF = (o: O = {}) => onEnv({ ...("records" in o ? { RECORDS: o.records } : {}), ...(o.assets ? { ASSETS: o.assets } : {}) });
+// The switch turned off.
+const OFF = (o: O = {}) => E({ ...o, panel: "off" });
 
 let free = "";
 let pro = "";
@@ -125,6 +131,14 @@ const items = (html: string) => [...html.matchAll(/<li>([\s\S]*?)<\/li>/g)].map(
 const WORDS = /may follow|May Follow|pourrait faire suite|Earlier Contract|earlier contracts|Contrats antérieurs|contrats antérieurs|follow-disclaimer|id="follows"/;
 const DISCLAIMER = "Award Watch finds these contracts by matching numbers, codes and title words in public records. A match does not mean this notice replaces a contract, is not advice and may be wrong. See the Terms of Use.";
 const CREDIT = "Contains information licensed under the Open Government Licence, Canada.";
+
+describe("the switch", () => {
+  it("ships on, and only \"on\" turns it on", () => {
+    expect((env as unknown as { FOLLOWS_PANEL?: string }).FOLLOWS_PANEL).toBe("on");
+    expect(followsPanelOn({ FOLLOWS_PANEL: "on" })).toBe(true);
+    for (const v of ["off", "", "On", "true", undefined]) expect(followsPanelOn({ FOLLOWS_PANEL: v }), String(v)).toBe(false);
+  });
+});
 
 describe("while the switch is off", () => {
   it("leaves the notice page the same for every reader whatever rec_follows holds, and reads no rec_follows", async () => {
@@ -316,16 +330,47 @@ describe("with the switch on", () => {
     expect(toc).toContain('<a href="#holders">Holder\'s Record and Earlier Contracts</a>');
     expect(html).toContain('<h2 id="holders">Holder\'s Record and Earlier Contracts</h2>');
     const para = /<p id="follows">([\s\S]*?)<\/p>/.exec(html)?.[1] ?? "";
-    for (const part of ["awarded in the last 10 fiscal years", "at least 50% of their distinct words", "between 180 days before and 120 days after",
-      "close from 75% of the words, partial from 50%", "Up to 3 contracts are kept"]) {
+    for (const part of ["awarded in the last 10 fiscal years", "their titles share at least 2 words and at least 50% of their distinct words",
+      "between 180 days before and 120 days after", "close from 75% of the words, partial from 50%", "Up to 3 contracts are kept"]) {
       expect(para, part).toContain(part);
     }
+    expect([FOLLOW_WORDS_MIN, FOLLOW_MIN, FOLLOW_CLOSE]).toEqual([2, 0.5, 0.75]);
     const fr = decode(nbsp(await (await get("/methodology?lang=fr", { env: E() })).text())).replace(/’/g, "'");
     expect(fr).toContain('<h2 id="holders">Dossiers du titulaire et contrats antérieurs</h2>');
-    expect(fr).toContain("au moins 50 % de leurs mots distincts");
+    expect(fr).toContain("leurs titres ont en commun au moins 2 mots et au moins 50 % de leurs mots distincts");
     const terms = (await open("/terms", { env: E() })).html;
     expect(terms).toContain("a contract holder's earlier records with the same buyer and the earlier contracts an open notice may follow.");
     const termsFr = decode(nbsp(await (await get("/terms?lang=fr", { env: E() })).text())).replace(/’/g, "'");
     expect(termsFr).toContain("et les contrats antérieurs auxquels un avis ouvert pourrait faire suite.");
+  });
+});
+
+describe("the plan cards' row", () => {
+  const row = PLAN_ROWS.find((r) => r.feature === "follows")!;
+  const line = (lang: "en" | "fr", plan: "free" | "pro" | "ultra") => nbsp(planLine(lang, rowFor(row, plan).wording));
+
+  it("states each plan's own figure from RULES first, the singular for one, after the holder's record, and is not one of Ultra's own", () => {
+    expect([RULES.free.follows, RULES.pro.follows, RULES.ultra.follows]).toEqual([1, 3, 3]);
+    expect([row.free?.key, row.pro?.key, row.ultra.key]).toEqual(["plans.follows_one", "plans.follows", "plans.follows"]);
+    for (const plan of ["free", "pro", "ultra"] as const) {
+      const n = RULES[plan].follows;
+      expect(rowFor(row, plan).has, plan).toBe(true);
+      expect(line("en", plan)).toBe(n === 1 ? `${n} earlier contract per open notice` : `${n} earlier contracts per open notice`);
+      expect(line("fr", plan)).toBe(n === 1 ? `${n} contrat antérieur par avis ouvert` : `${n} contrats antérieurs par avis ouvert`);
+    }
+    // Ultra's figure is Pro's, so the two share the wording and Ultra's own lines leave the row out.
+    expect(row.pro).toBe(row.ultra);
+    expect(ULTRA_OWN_ROWS).not.toContain(row);
+    const at = PLAN_ROWS.indexOf(row);
+    expect(PLAN_ROWS[at - 1].free?.key).toBe("plans.lines");
+  });
+
+  it("shows on the Pro page's cards in both languages, Free's 1 and Pro's 3", async () => {
+    for (const lang of ["en", "fr"] as const) {
+      const html = decode(nbsp(await (await get(`/pro${lang === "fr" ? "?lang=fr" : ""}`, { env: E() })).text()));
+      const cards = html.slice(html.indexOf('<div class="plan-cards"')).split(/(?=<div class="plan-card[ "])/).slice(1, 3);
+      expect(cards, lang).toHaveLength(2);
+      cards.forEach((card, i) => expect(card, `${lang} ${i}`).toContain(`<span>${line(lang, i ? "pro" : "free")}</span>`));
+    }
   });
 });

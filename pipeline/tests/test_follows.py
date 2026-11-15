@@ -1,7 +1,7 @@
 """May follow (follows.py, run by the lines stage): each match path (the same solicitation, a number the notice
 names, a text match), the numbers left out (the notice's own, the frameworks', a number two organizations carry),
 the words rule on the design's pairs (the CCGS Tully and anomaly-detection pairs rejected, the THS example kept with
-7 of 8 words), the timing window's edges, the order and the cap, a record awarded after the notice, standing offers,
+7 of 8 words) and its floor of two words in common, the timing window's edges, the order and the cap, a record awarded after the notice, standing offers,
 twins, the client department, the candidate's own holder's record by the same code (its similar names held by
 SIMILAR_GROUP_MAX and SIM_MAX), a withheld holder, a long or cut description, a fault that leaves the holders'
 records written, the same j on a second night, the review file's section, and the stop list the site's repeats.
@@ -186,6 +186,31 @@ def test_the_words_rule_rejects_the_tully_and_anomaly_pairs_and_keeps_the_ths_ex
     # Four letters or more, no digit, the stop words out; English, else French.
     assert follows.title_words("The 2026 Contract for X-ray Rental, rental") == frozenset({"rental"})
     assert follows.words_of("", "Services de déneigement") == frozenset({"déneigement"})
+
+
+def test_a_text_match_needs_two_title_words_in_common_and_a_number_match_none(db, tmp_path):
+    """The floor of words (FOLLOW_WORDS_MIN), set by the hand check of the first production night, whose clear miss
+    was two equal one-word titles: 1 of 1 is the whole share and is no longer kept; 2 of 2 is kept as close; a
+    number match is kept with no word in common."""
+    assert follows.FOLLOW_WORDS_MIN == 2
+    # One word each, the same, in the same class and window: no match.
+    tender(db, "cb-17-17", "Dredging", codes=("72141000",))
+    notice(db, "AW-ONE", "Dredge North Ltd", start="2025-11-01", end="2026-12-31", codes=("72141000",))
+    titled(db, "AW-ONE", "Dredging")
+    # Two of two, another buyer so the two notices never meet: close.
+    tender(db, "cb-18-18", "Harbour dredging", codes=("72141000",), buyer=PSPC)
+    notice(db, "AW-TWO", "Dredge South Ltd", start="2025-11-01", end="2026-12-31", codes=("72141000",), buyer=PSPC)
+    titled(db, "AW-TWO", "Harbour dredging")
+    # The same solicitation on a record that shares no title word or class: a number match.
+    tender(db, "cb-19-19", "Dredging", sol="F1234-260001", codes=("72141000",), buyer=HEALTH)
+    notice(db, "AW-SOL1", "Dredge East Ltd", start="2024-11-01", end="2025-03-31", codes=("43211500",), buyer=HEALTH)
+    titled(db, "AW-SOL1", "Grounds", solicitation="F1234-260001")
+    db.commit()
+    counts, rows = night(db, tmp_path)
+    assert "cb-17-17" not in rows
+    assert [(j["ref"], j["deg"], j["words"]) for j in rows["cb-18-18"]] == [("AW-TWO", "close", [2, 2])]
+    assert [(j["ref"], j["deg"], j["words"], j["sol"]) for j in rows["cb-19-19"]] == [("AW-SOL1", "number", [0, 2], "F1234-260001")]
+    assert (counts["follow_matched"], counts["follow_number"], counts["follow_close"]) == (2, 1, 1)
 
 
 def test_the_rejected_pairs_are_not_kept_on_a_night(db, tmp_path):
@@ -391,6 +416,7 @@ def test_the_review_file_lists_the_closest_match_of_the_sampled_notices(db, tmp_
     assert b"\r" not in text
     body = text.decode("utf-8")
     assert "## May follow: 1 open notices, 1 with a match kept (by the closest: 0 number, 1 close, 0 partial), 3 kept in all" in body
+    assert "Rules: title words from 50% and 2 words at least, close from 75%; ending from 180 days before the start" in body
     row = next(x for x in body.split("\n") if x.startswith("cb-935-21285129\t"))
     assert row.split("\t")[3:] == [
         "2026-11-23 s", "close", "award:cb-725-74465042",

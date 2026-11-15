@@ -25,12 +25,16 @@ site/src/lines.ts holds the same constants and tests/test_lines.py holds the two
   they were open, the awards of one call number (WS4001912488, five organizations) matched each other by number
   with no title word in common, and same-solicitation matches made 115 of the 136 notices' closest; with the rule,
   8 of 41.
-* Text match: the record shares a UNSPSC class with the notice (a family when the notice carries none); the share
-  of distinct title words in common, shared over all, is at least FOLLOW_MIN; and the record ends between
-  FOLLOW_BEFORE_DAYS before and FOLLOW_AFTER_DAYS after the notice's expected start, or its publication date when
-  it states none. Title words: four letters or more, no digit, outside STOP; a title is read in English, else in
-  French. A published contract carries no UNSPSC code, so it follows by number only.
-* Degrees: a number match; a close text match from FOLLOW_CLOSE of the words; a partial one from FOLLOW_MIN.
+* Text match: the record shares a UNSPSC class with the notice (a family when the notice carries none); the two
+  titles have FOLLOW_WORDS_MIN distinct words in common at least, and the share of distinct title words in
+  common, shared over all, is at least FOLLOW_MIN; and the record ends between FOLLOW_BEFORE_DAYS before and
+  FOLLOW_AFTER_DAYS after the notice's expected start, or its publication date when it states none. Title words:
+  four letters or more, no digit, outside STOP; a title is read in English, else in French. The floor of words
+  came from the hand check of the first production night (2026-11-15): of ten close matches, the clear miss was
+  two one-word titles, equal, so "1 of 1". A number match needs no word in common. A published contract carries
+  no UNSPSC code, so it follows by number only.
+* Degrees: a number match; a close text match from FOLLOW_CLOSE of the words; a partial one from FOLLOW_MIN (each
+  with FOLLOW_WORDS_MIN words in common at least).
   Order: number matches first, then the share of words, then the end nearest the start, then the record's key. One
   contract published in two sources (the radar's twins: a contract number in common, or the same organization
   ending within expiring.END_DAYS) is kept once, the first in that order. FOLLOW_MAX are kept.
@@ -67,10 +71,12 @@ from .normalize import tender_status_on
 from .records_db import org_number, title_text
 from .sources.canadabuys_rows import UNMARKED_DESCRIPTION_MAX
 
-# The constants of the rules; site/src/lines.ts holds the same values (tests/test_lines.py compares them). Each is
-# to be confirmed on production data (the review file) before the site shows the panel.
+# The constants of the rules; site/src/lines.ts holds the same values (tests/test_lines.py compares them), confirmed
+# on production data (the review file of 2026-11-15) before the site showed the panel. FOLLOW_WORDS_MIN is a text
+# match's floor of title words in common, beside the share: a one-word title equal to another passed the share alone.
 FOLLOW_MIN = 0.5
 FOLLOW_CLOSE = 0.75
+FOLLOW_WORDS_MIN = 2
 FOLLOW_BEFORE_DAYS = 180
 FOLLOW_AFTER_DAYS = 120
 FOLLOW_MAX = 3
@@ -480,7 +486,7 @@ def match_notice(n: Notice, index: Index) -> tuple[list[Match], int]:
         every = len(n.words | theirs)
         if sol or num:
             degree = NUMBER
-        elif every and shared >= FOLLOW_MIN * every:
+        elif shared >= FOLLOW_WORDS_MIN and shared >= FOLLOW_MIN * every:
             degree = CLOSE if shared >= FOLLOW_CLOSE * every else PARTIAL
         else:
             return
@@ -505,7 +511,8 @@ def match_notice(n: Notice, index: Index) -> tuple[list[Match], int]:
             if one_holder(holders):
                 for c in holders:
                     consider(c, buyer, None, c.numbers[x])
-        if n.level and n.words:
+        # A title of fewer words than the floor can make no text match, so its cells are not read.
+        if n.level and len(n.words) >= FOLLOW_WORDS_MIN:
             for k in sorted(n.keys):
                 for c in index.ending((buyer, n.level, k), lo, hi):
                     consider(c, buyer, None, None)
@@ -598,8 +605,9 @@ def review(chosen: Chosen, name_of: Callable[[str], str], labels: dict[tuple[str
     sampled = sorted(chosen.kept, key=lambda tref: _sample_order(tref))[:REVIEW_SAMPLE]
     out = ["", f"## May follow: {c['open']} open notices, {c['matched']} with a match kept (by the closest: {c['number']} "
            f"number, {c['close']} close, {c['partial']} partial), {c['kept']} kept in all, {c['beyond_max']} more matched "
-           f"past {FOLLOW_MAX}; {c['candidates']} records read. Rules: title words from {FOLLOW_MIN:.0%}, close from "
-           f"{FOLLOW_CLOSE:.0%}; ending from {FOLLOW_BEFORE_DAYS} days before the start to {FOLLOW_AFTER_DAYS} after it. "
+           f"past {FOLLOW_MAX}; {c['candidates']} records read. Rules: title words from {FOLLOW_MIN:.0%} and "
+           f"{FOLLOW_WORDS_MIN} words at least, close from {FOLLOW_CLOSE:.0%}; ending from {FOLLOW_BEFORE_DAYS} days "
+           f"before the start to {FOLLOW_AFTER_DAYS} after it. "
            f"{len(sampled)} notices sampled, the closest match of each.",
            "# notice\tnotice_title\tbuyer\tstart (s expected, p published)\tdegree\trecord\trecord_title\tholder\t"
            "matched\twords\tends\tdays\tholder's label"]

@@ -4093,17 +4093,19 @@ the switch and the row's check), `site/src/pages/follows.tsx` (the panel) and
 
 ### The switch
 
-`FOLLOWS_PANEL` in `site/wrangler.jsonc` ships "off". Anything but "on": the
+`FOLLOWS_PANEL` in `site/wrangler.jsonc` ships "on", since the hand check of
+the production matches of 2026-11-15 passed (it shipped "off" until then).
+"On": the panel shows, the Methodology section is "Holder's Record and
+Earlier Contracts" with its paragraph (`#follows`), and the Terms read
+`terms.advisory_follows` (section 9.2 of the design). Anything but "on": the
 notice page is the same for every reader whatever `rec_follows` holds, it runs
 no records statement for may follow (its batch is the state row and the
-earlier awards, as before), and no page names may follow: the Methodology
-section is "Holder's Record" without the paragraph, and the Terms' advisory
-paragraph names matching notices and the holder's record only
-(`terms.advisory`). "On": the panel shows, the section is "Holder's Record and
-Earlier Contracts" with its paragraph (`#follows`), and the Terms read
-`terms.advisory_follows` (section 9.2 of the design). The pipeline computes,
-syncs and reviews the matches whatever the switch, so the operator can judge
-them on production data first. `follows-pages.test.ts` holds both states.
+earlier awards, as before), the Methodology section is "Holder's Record"
+without the paragraph, and the Terms' advisory paragraph names matching
+notices and the holder's record only (`terms.advisory`). The plan cards' row
+(`plans.follows`) is static and stays whatever the switch. The pipeline
+computes, syncs and reviews the matches whatever the switch.
+`follows-pages.test.ts` holds both states.
 
 ### The rules
 
@@ -4128,14 +4130,18 @@ notice was published:
   and same-solicitation matches were the closest for 115 of 136 notices; with
   the rule, 8 of 41.
 - **Text match**: the record shares a UNSPSC class with the notice (a family
-  when the notice has none), their titles share at least half their distinct
-  words (`FOLLOW_MIN`; words of four letters or more, no digit, outside the
-  earlier awards' stop list and thirteen procurement words, English else
-  French), and the record ends from 180 days before the notice's expected
-  start to 120 after it (`FOLLOW_BEFORE_DAYS`, `FOLLOW_AFTER_DAYS`), or its
-  publication date when it states none. Close from three quarters of the words
-  (`FOLLOW_CLOSE`), partial below. A published contract has no UNSPSC code and
-  follows by number only.
+  when the notice has none), their titles share at least 2 distinct words
+  (`FOLLOW_WORDS_MIN`) and at least half their distinct words (`FOLLOW_MIN`;
+  words of four letters or more, no digit, outside the earlier awards' stop
+  list and thirteen procurement words, English else French), and the record
+  ends from 180 days before the notice's expected start to 120 after it
+  (`FOLLOW_BEFORE_DAYS`, `FOLLOW_AFTER_DAYS`), or its publication date when it
+  states none. Close from three quarters of the words (`FOLLOW_CLOSE`),
+  partial below. A published contract has no UNSPSC code and follows by number
+  only. The floor of 2 words came from the hand check of 2026-11-15: of the
+  first ten close matches, eight read as plausible, and the clear miss was two
+  equal one-word titles ("1/1", the whole share). A number match needs no word
+  in common.
 - Standing offers and supply arrangements themselves, cancelled notices and
   records awarded after the notice was published are left out.
 - Order: number matches, then the share of words, then the end nearest the
@@ -4224,16 +4230,24 @@ API, a CSV or a sitemap.
 - The CPU guard times a Pro reader's notice with three rows at 2.29 times the
   yardstick (bound 10); the same page with the panel off measured 3.25 in the
   next run, inside the machine's noise.
-- `RULES.follows`: Free 1, Pro 3, Ultra 3 (`followCap`).
+- `RULES.follows`: Free 1, Pro 3, Ultra 3 (`followCap`); the plan cards' row
+  (`plans.follows_one` or `plans.follows`, after the holder's record) reads
+  each plan's figure from it.
 
 ### Operator steps
 
-None for the tables. Read the may-follow section of `review/holder-lines.txt`
-after the first nightly with the stage; the design's gate is 7 or more of 10
-close matches reading as plausible. Then set `FOLLOWS_PANEL` to "on" and
-deploy the Worker, and add the plan cards' row ("Earlier contracts per open
-notice: 1" on Free, "3" on Pro and Ultra), which waits for the switch because
-no page may name may follow while it is off.
+None for the tables. The design's gate, 7 or more of 10 close matches of the
+may-follow section of `review/holder-lines.txt` reading as plausible, passed
+on the nightly of 2026-11-15 (8 of 10), with the floor of 2 title words
+added. `FOLLOWS_PANEL` is "on" and the plan cards carry the row "1 earlier
+contract per open notice" on Free, "3 earlier contracts per open notice" on
+Pro and Ultra (`plans.follows_one` for a figure of 1, else `plans.follows`),
+each figure read from `RULES.follows` and written first, so the ellipsis of a
+320 px card never cuts it. The switch reaches the site with the Worker's next
+deploy. The floor needs no stamp: the `lines` stage rebuilds
+`tender_follows` whole every night and the records sync deletes the
+`rec_follows` rows that are gone, so the first nightly after the change drops
+the matches the floor removes.
 
 ## Weekly briefings
 

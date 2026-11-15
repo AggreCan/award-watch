@@ -9,8 +9,8 @@ import { fmtInt, t, tj, type Key } from "../i18n";
 import { Layout, PageHead, page } from "../layout";
 import { pageSeo } from "../seo";
 import {
-  CODE_CHARS, FOLLOW_AFTER_DAYS, FOLLOW_BEFORE_DAYS, FOLLOW_CLOSE, FOLLOW_MAX, FOLLOW_MIN, LINE_YEARS, LONG_RUN, RUN_GAP_DAYS,
-  RUN_OVERLAP_DAYS, SIMILAR_GROUP_MAX, SIMILAR_PREFIX, followsPanelOn,
+  CODE_CHARS, FOLLOW_AFTER_DAYS, FOLLOW_BEFORE_DAYS, FOLLOW_CLOSE, FOLLOW_MAX, FOLLOW_MIN, FOLLOW_WORDS_MIN, LINE_YEARS, LONG_RUN,
+  RUN_GAP_DAYS, RUN_OVERLAP_DAYS, SIMILAR_GROUP_MAX, SIMILAR_PREFIX, followsPanelOn,
 } from "../lines";
 import { BAND_KEY } from "../lines_view";
 import { ENTRANT_LOOKBACK, FREE_YEARS } from "../records_db";
@@ -250,8 +250,8 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
           {follows ? (
             <p id="follows">
               {t(lang, "methodology.holders_follow", {
-                years: fmtInt(LINE_YEARS, lang), min: pct(FOLLOW_MIN), close: pct(FOLLOW_CLOSE), before: fmtInt(FOLLOW_BEFORE_DAYS, lang),
-                after: fmtInt(FOLLOW_AFTER_DAYS, lang), max: fmtInt(FOLLOW_MAX, lang),
+                years: fmtInt(LINE_YEARS, lang), words: fmtInt(FOLLOW_WORDS_MIN, lang), min: pct(FOLLOW_MIN), close: pct(FOLLOW_CLOSE),
+                before: fmtInt(FOLLOW_BEFORE_DAYS, lang), after: fmtInt(FOLLOW_AFTER_DAYS, lang), max: fmtInt(FOLLOW_MAX, lang),
               })}
             </p>
           ) : null}

@@ -5,10 +5,11 @@
 // one; Pro and Ultra up to FOLLOW_MAX, each with its holder's label and
 // figure under the holder's name (the radar's mark, src/lines_view.tsx).
 //
-// Behind a switch of its own, FOLLOWS_PANEL: anything but "on" leaves the
-// notice page byte for byte as it was for every reader, runs no records
-// statement for it, and shows no word of may follow on any page (the
-// Methodology and the Terms read the same switch). A reader not signed in,
+// Behind a switch of its own, FOLLOWS_PANEL, which ships "on": anything else
+// leaves the notice page byte for byte as it was for every reader, runs no
+// records statement for it, and leaves may follow out of the Methodology and
+// the Terms, which read the same switch (the plan cards' row, src/pro.tsx,
+// is static and stays). A reader not signed in,
 // a notice that is not open and a records database without rec_follows also
 // leave the page as it was.
 
@@ -143,7 +144,7 @@ export const FollowsPanel: FC<{ lang: Lang; state: FollowsState; today: string }
             <Table cols={[
               { kind: "main", label: t(lang, "follow.col_contract") },
               { kind: "org", label: t(lang, "follow.col_holder") },
-              { kind: "text", label: t(lang, "follow.col_matched") },
+              { kind: "reasons", label: t(lang, "follow.col_matched") },
             ]}>
               <tbody>
                 {rows.map((row) => (
