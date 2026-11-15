@@ -72,6 +72,9 @@ export interface Shape {
   manage?: string | null;
   // Lines worded for one part by design, as dictionary keys and their values.
   onePart?: readonly (readonly [Key, Record<string, string | number>?])[];
+  // A grouped delivery (digests.ts groupDigest): a stop link a section, each a search's own, and one for the
+  // whole message (/account/stop?g=), which List-Unsubscribe names.
+  group?: boolean;
 }
 
 // -- the dark rules and the links -----------------------------------------------------------------
@@ -367,8 +370,14 @@ export function checkMessage(m: Sent, shape: Shape, lang: Lang, o: { others?: re
   const stops = [...inHtml].filter((u) => STOP_RE.test(u));
   const headers = m.headers ?? {};
   if (shape.list) {
-    expect(stops, `${what}: one stop link`).toHaveLength(1);
-    const stop = stops[0];
+    const whole = stops.filter((u) => /[?&]g=/.test(u));
+    if (shape.group) {
+      expect(whole, `${what}: one stop link for the whole message`).toHaveLength(1);
+      expect(stops.length, `${what}: a stop link a section beside it`).toBeGreaterThan(1);
+    } else {
+      expect(stops, `${what}: one stop link`).toHaveLength(1);
+    }
+    const stop = shape.group ? whole[0] : stops[0];
     if (stop.startsWith("https://")) expect(headers, `${what}: List-Unsubscribe`).toEqual(deliveryHeaders(stop));
     else expect(headers["List-Unsubscribe"], `${what}: no List-Unsubscribe for an http link`).toBeUndefined();
     if (shape.manage) {
@@ -407,6 +416,8 @@ export const SHAPES = {
   view_weekly: { list: true, why: "view.mail_why_weekly", manage: "/account/views" },
   view_monthly: { list: true, why: "view.mail_why_monthly", manage: "/account/views" },
   weekly: { list: true, why: "weekly.why", manage: "/account" },
+  // Several saved searches in one message (digests.ts groupDigest), in the account's mail language.
+  group: { list: true, group: true, why: "digest.group_why", manage: "/account/searches", onePart: [["digest.text_searches"]] },
   accounts_open: { list: true, why: "announce.why", manage: null },
   ultra_open: { list: true, why: "announce.ultra_why", manage: null },
   // The shell's footer prints the tagline; the notice's text part, which

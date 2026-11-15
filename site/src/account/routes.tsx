@@ -31,6 +31,8 @@
 //   POST /account/calendar/:id/delete  remove the feed; its address stops             (session, CSRF)
 //   GET  /account/stop?s=&t=           a delivery's stop page, from its message       (the link's secret)
 //   POST /account/stop?s=&t=           turn that delivery off; also RFC 8058 one-click (the link's secret)
+//   GET  /account/stop?g=&t=           a grouped message's stop page: its searches     (the tags of their secrets)
+//   POST /account/stop?g=&t=           turn each one's delivery off; one-click too     (the tags of their secrets)
 //   GET  /account/stop?w=&t=           the watch mail's stop page, from its message    (the link's secret)
 //   POST /account/stop?w=&t=           turn the account's watch mail off; one-click too (the link's secret)
 //   POST /account/briefings            subscribe to a segment's or a buyer's briefing  (session, CSRF, the shared cap)
@@ -125,12 +127,13 @@ import {
 } from "./feeds";
 import {
   type CalendarRow, type CalendarView, accountPage, codeView, deleteView, deletedView, keysView, linkView, overviewView, searchesView,
-  signInView, staleFormView, stopView, stoppedView, unavailableView, weeklyStopView, weeklyStoppedView,
+  groupStopView, groupStoppedView, signInView, staleFormView, stopView, stoppedView, unavailableView, weeklyStopView, weeklyStoppedView,
 } from "./pages";
 import {
   type SavedSearch, addSearch, capFor, deleteSearch, heldCount, importInterest, isDelivery, lastDeliveries, listSearches, paidCapLine,
   pendingInterest, setDelivery,
 } from "./searches";
+import { GROUP_TAGS_MAX, GROUP_TAG_CHARS, USER_RE, provenBy, readGroupTags } from "./group_stop";
 import { randomHex, sameHash, sha256Hex, ipHash } from "./secrets";
 import { isLocalHost, senderFor, signInMessage } from "./sender";
 import {
@@ -899,6 +902,24 @@ async function stopTarget(c: Context<AppEnv>, searchId: string, secret: string):
   return row && sameHash(row.secret, secret) ? row : null;
 }
 
+// A grouped message's stop link, /account/stop?g=<user id>&t=<tags>
+// (group_stop.ts): the same rules, for every search the message carried. The
+// account's searches are read with their secrets and the link acts on those
+// whose tag it holds; a link that proves none is the site's 404. It turns
+// their delivery off; the searches stay, and the searches page turns it back on.
+type GroupStopRow = StopRow;
+
+async function groupStopTarget(c: Context<AppEnv>, userId: string, value: string): Promise<GroupStopRow[] | null> {
+  const tags = readGroupTags(value);
+  if (!USER_RE.test(userId) || !tags) return null;
+  const res = await c.env.ACCOUNTS!.prepare(
+    "SELECT s.id, s.user_id, s.kind, s.params, s.label, s.lang, s.deliver, k.secret FROM saved_searches s " +
+    "JOIN delivery_tokens k ON k.search_id = s.id JOIN users u ON u.id = s.user_id WHERE s.user_id = ? AND u.status = 'active' ORDER BY s.created_at, s.id",
+  ).bind(userId).all<GroupStopRow>();
+  const proven = await provenBy(tags, res.results ?? []);
+  return proven.length ? proven : null;
+}
+
 // The watch mail's stop link, /account/stop?w=<user id>&t=<secret>: the
 // same rules, for the account's watch mail as a whole (watch_mail.ts). It
 // turns the mail off; the watches stay.
@@ -968,7 +989,15 @@ account.get("/stop", async (c) => {
   const briefing = c.req.query("b");
   const weekly = c.req.query("e");
   const view = c.req.query("v");
+  const group = c.req.query("g");
   return guarded(c, async () => {
+    if (group !== undefined && !searchId && watcher === undefined && briefing === undefined && weekly === undefined && view === undefined) {
+      const rows = await groupStopTarget(c, group, secret);
+      if (!rows) return c.notFound();
+      const labels = await Promise.all(rows.map((r) => labelIn(c, lang, r)));
+      return accountPage(c, t(lang, "account.stop_group_title"),
+        groupStopView(lang, { userId: group, tags: secret, labels, off: rows.every((r) => r.deliver === "off") }));
+    }
     if (view !== undefined && !searchId && watcher === undefined && briefing === undefined && weekly === undefined) {
       const mine = await viewStopTarget(c, view, secret);
       if (!mine) return c.notFound();
@@ -1009,8 +1038,24 @@ account.post("/stop", async (c) => {
   const briefing = clean(fields, "b", 64) || (c.req.query("b") ?? "");
   const weekly = clean(fields, "e", 64) || (c.req.query("e") ?? "");
   const view = clean(fields, "v", 64) || (c.req.query("v") ?? "");
+  const group = clean(fields, "g", 64) || (c.req.query("g") ?? "");
   const oneClick = fields["List-Unsubscribe"] === "One-Click";
   return guarded(c, async () => {
+    if (group && !searchId && !watcher && !briefing && !weekly && !view) {
+      // The tags run longer than a secret: one a search, GROUP_TAGS_MAX at most (group_stop.ts readGroupTags).
+      const tags = clean(fields, "t", GROUP_TAGS_MAX * GROUP_TAG_CHARS + 1) || (c.req.query("t") ?? "");
+      const rows = await groupStopTarget(c, group, tags);
+      if (!rows) return c.notFound();
+      const on = rows.filter((r) => r.deliver !== "off");
+      if (on.length) {
+        const db = c.env.ACCOUNTS!;
+        await db.batch(on.map((r) => db.prepare("UPDATE saved_searches SET deliver = 'off' WHERE id = ? AND user_id = ?").bind(r.id, r.user_id)));
+        await audit(c.env, rows[0].user_id, "delivery_stopped", oneClick ? "group_one_click" : "group_link");
+      }
+      if (oneClick) return c.text(t(lang, "account.stopped_group_one_click"), 200);
+      return accountPage(c, t(lang, "account.stopped_group_title"),
+        groupStoppedView(lang, await Promise.all(rows.map((r) => labelIn(c, lang, r)))));
+    }
     if (view && !searchId && !watcher && !briefing && !weekly) {
       const mine = await viewStopTarget(c, view, secret);
       if (!mine) return c.notFound();

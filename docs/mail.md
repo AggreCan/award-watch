@@ -43,9 +43,10 @@ what is sent.
 A section's heading opens its list on a band, as a panel on the site opens
 on its head band. The messages with sections draw every heading with `h2`:
 the weekly briefing's six sections, the records message's two parts, each
-watch in the watch mail, the "Your organization" and matching notices
-blocks (the watch mail and the weekly email), and a saved view's two parts
-(its figures by fiscal year, its largest records). The weekly email's watch
+watch in the watch mail, each saved search in a grouped saved-search message
+and the band over the searches past its rows, the "Your organization" and
+matching notices blocks (the watch mail and the weekly email), and a saved
+view's two parts (its figures by fiscal year, its largest records). The weekly email's watch
 lines and the site's figures sit under the message's title and have no
 section heading.
 
@@ -115,6 +116,7 @@ Each in English and in French.
 | A saved search's tender notices, daily and weekly | the delivery tests' fixtures (`site/test/mail-fixtures.ts`) |
 | A saved search's contracts ending, weekly and daily | the same fixtures |
 | An organization's new records, a segment's new records and notices | the records digest |
+| Several saved searches in one message: eight of every kind, and an Ultra account's 100 busy ones | the grouped digest, `groupDigest`, in `site/test-mail/group.test.ts` |
 | The watch mail, with and without the "Your organization" block | the watch digest |
 | The weekly briefing | the briefing digest |
 | A saved analytics view, weekly and monthly, and with no record in its period | the view digest, `viewDigest`, from `viewInput` in `site/test/mail-fixtures.ts` (a buyer's published contracts over five fiscal years) |
@@ -163,7 +165,9 @@ and keep their own tests.
   most one button, and no image but the two wordmarks.
 - A list or watch delivery (the saved searches, the records, the watch mail,
   the briefing, the weekly email, a saved view, the accounts-open and Ultra
-  messages) carries its stop link in both parts, the page that manages it
+  messages) carries its stop link in both parts (a grouped saved-search
+  message a link a section and one for the whole message, the one
+  `List-Unsubscribe` names), the page that manages it
   (the saved searches page, the watches page, the saved views page, or the
   account page for the weekly email) where it has one, and the line saying
   why the reader received it.
@@ -192,6 +196,8 @@ and keep their own tests.
 | Watches one weekly email names | `WEEKLY_LINES`, 5 | eight watches with news name five, one line each, and count three more on a line to the watches page |
 | Matching notices one message lists | `RULES.free.match_mail`, 3; `RULES.pro.match_mail`, 10 | 2, 3 and 25 matches on Free list 2, 3 and 3; 9, 10 and 25 on Pro list 9, 10 and 10; the rest is counted in both parts only when there is one, and the subject counts every match |
 | Rows in one delivery message | `ROWS_MAX`, 50 | a search with 120 notices lists 50 and counts 70 more in both parts; a segment's counts come first; the watch mail's 50 run across every watch, each kind's rest on its own line, and the watches reached once the 50 are listed are one line to the watches page (`test-mail/watch-size.test.ts`: 100 busy watches stay under 100,000 characters of HTML, the footer's stop link kept) |
+| An account's saved searches with news sent one message each | `GROUP_OVER`, 5 | five go as five messages, six as one (`site/test/recs-group.test.ts`, the default suite) |
+| Rows in one grouped saved-search message | `GROUP_ROWS_MAX`, 30, at most `GROUP_SECTION_ROWS`, 5, a section | eight searches list each one's rows, 5 of 8 with "And 3 more on the site"; 100 busy searches list 30 rows over 6 sections and the other 94 one line each under one band, every label and list link in both parts, about 71,000 characters of HTML in English and 76,000 in French, under 100,000, the footer's stop link kept (`test-mail/group.test.ts`) |
 | Rows in one briefing section | `SECTION_ROWS`, 10 | 25 new notices list 10 and count 15 more |
 | Largest records in one saved view's message | `VIEW_MAIL_ROWS`, 5 | nine records list five; a twenty-year view lists its twenty fiscal years, the newest first |
 | Saved views one run reads | `VIEWS_RUN_MAX`, 1000 | the next hour reads the rest |
@@ -205,7 +211,10 @@ One more ceiling holds the delivery job across a UTC day rather than a run:
 part of the account's daily Email Sending quota the job may spend, the rest
 kept for sign-in codes (`docs/accounts.md`, *Sending mail*). It reads the
 day's sends from the job's run log, so the default suite holds it, in
-`site/test/recs-ops.test.ts`; the mail suite runs with no ceiling.
+`site/test/recs-ops.test.ts`; the mail suite runs with no ceiling. The
+console's accounts-open and Ultra runs keep to the same ceiling and log
+their sends in the same run log (`site/test/recs-group.test.ts`); a grouped
+saved-search message counts once.
 
 The last part plants each fault the checks look for (an em-dash, another
 reader's address, a link or a line in one part only, the reason line or the

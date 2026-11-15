@@ -171,8 +171,9 @@ CREATE TABLE IF NOT EXISTS entitlement_tiers (
 
 -- One row per delivery run of a saved search (src/account/deliveries.ts):
 -- sent (the message left), failed (the mail service refused it) or empty
--- (nothing new, no message). sent_at is the run's time; items is how many
--- records matched, past the 50 a message lists. Rows go after 90 days.
+-- (nothing new, no message). A grouped message writes one row for each search
+-- it carried. sent_at is the run's time; items is how many records matched,
+-- past the rows a message lists. Rows go after 90 days.
 CREATE TABLE IF NOT EXISTS deliveries (
   id INTEGER PRIMARY KEY,
   saved_search_id TEXT NOT NULL REFERENCES saved_searches(id) ON DELETE CASCADE,
@@ -189,11 +190,14 @@ CREATE INDEX IF NOT EXISTS idx_deliveries_search ON deliveries(saved_search_id, 
 -- runDeliveries), written when the run ends: its time, the data date it read
 -- (NULL when it stopped before reading one), how it ended (done, capped,
 -- limited, fault, not_today, no_data, no_mail, off), the messages it sent
--- and the ones the mail service refused, across every part, how many items
--- were still due when it ended, and why it stopped early, in a few words
--- that name no account and no address. The daily check (src/watchdog.ts)
--- reads the last day's rows, so a day whose runs all failed, or that had no
--- run, is said. Rows go after 90 days.
+-- (a grouped message once) and the ones the mail service refused, across
+-- every part, how many items were still due when it ended, and why it
+-- stopped early, in a few words that name no account and no address. A
+-- bulk run from the console (src/account/announce.tsx) writes a row too,
+-- outcome console, no data date, nothing due, so the day's ceiling counts
+-- its sends. The daily check (src/watchdog.ts) reads the last day's rows, so
+-- a day whose runs all failed, or that had no run, is said. Rows go after 90
+-- days.
 CREATE TABLE IF NOT EXISTS delivery_runs (
   id INTEGER PRIMARY KEY,
   at TEXT NOT NULL,
@@ -210,8 +214,9 @@ CREATE INDEX IF NOT EXISTS idx_delivery_runs_at ON delivery_runs(at);
 -- <secret>, and the List-Unsubscribe header), made from 16 random bytes the
 -- first time the search is delivered. Kept in clear, unlike every other
 -- secret here, because each message carries it; it can do one thing, turn
--- that search's delivery off. Goes with the search (the cascade, and the
--- delete paths in routes.tsx and searches.ts).
+-- that search's delivery off, by its own link or by a grouped message's link,
+-- which carries a tag made from it (src/account/group_stop.ts). Goes with the
+-- search (the cascade, and the delete paths in routes.tsx and searches.ts).
 CREATE TABLE IF NOT EXISTS delivery_tokens (
   search_id TEXT PRIMARY KEY REFERENCES saved_searches(id) ON DELETE CASCADE,
   secret TEXT NOT NULL,

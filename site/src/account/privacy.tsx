@@ -2,6 +2,7 @@ import type { FC } from "hono/jsx";
 import { t, type Lang } from "../i18n";
 import { EVENT_DAYS } from "./billing";
 import { VIEW_DELIVERY_DAYS } from "./saved_views";
+import { DELIVERY_ROW_DAYS } from "./searches";
 import { BUG_REPORT_DAYS } from "./signin";
 import { WATCH_DELIVERY_DAYS } from "./watches";
 
@@ -13,7 +14,7 @@ import { WATCH_DELIVERY_DAYS } from "./watches";
 // dashboard keeps, and what a saved view sent by email keeps beside it.
 export const AccountsPrivacy: FC<{ lang: Lang; dashboard?: boolean }> = ({ lang, dashboard }) => (
   <>
-    <p>{t(lang, "account.privacy_kept")}</p>
+    <p>{t(lang, "account.privacy_kept", { days: DELIVERY_ROW_DAYS })}</p>
     <p>{t(lang, "account.privacy_mail")}</p>
     <p>{t(lang, "watches.privacy", { days: WATCH_DELIVERY_DAYS })}</p>
     <p>{t(lang, "calfeed.privacy_page")}</p>

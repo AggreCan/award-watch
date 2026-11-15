@@ -746,9 +746,10 @@ describe("the delivery job", () => {
     const radar = await savedSearch(s.user, "/expiring/3m", { deliver: "weekly" });
     const quiet = vi.spyOn(console, "log").mockImplementation(() => {});
     try {
-      // The radar's files do not read: the tender digest goes, then the run ends.
+      // The radar's files do not read: the run ends there. An account's searches are all read before any of
+      // them is sent (they may go in one message), so the tender digest waits with the radar's for the next run.
       const cut = await run(runEnv(mail.binding, [s.user], { files: runFiles(["expiring/3m/index.json"]) }));
-      expect([cut.outcome, cut.sent]).toEqual(["fault", 1]);
+      expect([cut.outcome, cut.sent]).toEqual(["fault", 0]);
       for (let i = 0; i < 3; i++) await run(runEnv(mail.binding, [s.user]));
     } finally {
       quiet.mockRestore();

@@ -27,8 +27,8 @@ export const ACCOUNT_STRINGS = {
   "account.free_title": { en: "What a Free Account Gives You", fr: "Ce que donne un compte gratuit" },
   "account.free_weekly": { en: "The weekly email, each Monday", fr: "Le courriel hebdomadaire, chaque lundi" },
   "account.free_pro": {
-    en: "Pro: {searches} saved searches and {watches} watches, each change by email; {matches} matching notices, {mail} a week by email. {plans}",
-    fr: "Pro : {searches} recherches enregistrées et {watches} suivis, chaque changement par courriel; {matches} avis correspondants, {mail} par semaine par courriel. {plans}",
+    en: "Pro: {searches} saved searches and briefings, by email; {watches} watches, each change by email; {matches} matching notices, {mail} a week by email. {plans}",
+    fr: "Pro : {searches} recherches et bulletins, par courriel; {watches} suivis, chaque changement par courriel; {matches} avis correspondants, {mail} par semaine par courriel. {plans}",
   },
   "account.email_panel": { en: "Email Address", fr: "Adresse courriel" },
   "account.send_code": { en: "Send the code", fr: "Envoyer le code" },
@@ -618,8 +618,8 @@ export const ACCOUNT_STRINGS = {
   // -- the privacy page, while accounts are open ------------------------------------------
   "account.privacy_toc": { en: "Accounts", fr: "Comptes" },
   "account.privacy_kept": {
-    en: "Signing in is optional; every page works without an account. An account keeps the email address, the language, when it was created and last used, its plan, its saved searches, the names of its API keys and, for 60 days, how many requests each key made each day.",
-    fr: "La connexion est facultative; toutes les pages fonctionnent sans compte. Un compte conserve l'adresse courriel, la langue, sa date de création et de dernière utilisation, son forfait, ses recherches enregistrées, les noms de ses clés d'API et, pendant 60 jours, le nombre de requêtes faites chaque jour par chaque clé.",
+    en: "Signing in is optional; every page works without an account. An account keeps the email address, the language, when it was created and last used, its plan, its saved searches and, for {days} days, each delivery of their email (when it ran, whether it was sent and how many records it held), the names of its API keys and, for 60 days, how many requests each key made each day.",
+    fr: "La connexion est facultative; toutes les pages fonctionnent sans compte. Un compte conserve l'adresse courriel, la langue, sa date de création et de dernière utilisation, son forfait, ses recherches enregistrées et, pendant {days} jours, chaque envoi de leur courriel (son moment, s'il est parti et le nombre de dossiers qu'il contenait), les noms de ses clés d'API et, pendant 60 jours, le nombre de requêtes faites chaque jour par chaque clé.",
   },
   "account.privacy_secrets": {
     en: "There are no passwords. Sign-in codes, sign-in links, the session and API keys are stored only as one-way hashes. A signed-in browser holds a second cookie, __Host-aw_session, which keeps the session for 30 days after its last use.",
@@ -661,6 +661,21 @@ export const ACCOUNT_STRINGS = {
     fr: "Cette recherche n'est plus envoyée par courriel. Elle reste dans le compte, où son envoi peut être réactivé.",
   },
   "account.stopped_one_click": { en: "The delivery is off.", fr: "L'envoi est désactivé." },
+  // The stop link of a grouped message (/account/stop?g=&t=, group_stop.ts): every search the message carried.
+  "account.stop_group_title": { en: "Stop These Deliveries", fr: "Arrêter ces envois" },
+  "account.stop_group_lead": {
+    en: "The saved searches below came together in one email. Stopping turns off the email of each one; the searches stay in the account, where their delivery can be turned back on.",
+    fr: "Les recherches enregistrées ci-dessous sont arrivées ensemble dans un courriel. L'arrêt désactive l'envoi de chacune; les recherches restent dans le compte, où leur envoi peut être réactivé.",
+  },
+  "account.stop_group_panel": { en: "Saved Searches", fr: "Recherches enregistrées" },
+  "account.stop_group_button": { en: "Stop these deliveries", fr: "Arrêter ces envois" },
+  "account.stop_group_already": { en: "These deliveries are already off.", fr: "Ces envois sont déjà désactivés." },
+  "account.stopped_group_title": { en: "Deliveries Stopped", fr: "Envois arrêtés" },
+  "account.stopped_group_lead": {
+    en: "These searches are no longer sent by email. They stay in the account, where their delivery can be turned back on.",
+    fr: "Ces recherches ne sont plus envoyées par courriel. Elles restent dans le compte, où leur envoi peut être réactivé.",
+  },
+  "account.stopped_group_one_click": { en: "The deliveries are off.", fr: "Les envois sont désactivés." },
   "account.privacy_mail": {
     en: "The email address is handed to Cloudflare's email service to deliver the site's messages: the sign-in code, the saved searches whose delivery is on, the events of the pages followed while their mail is on, and the weekly email while it is on. Apart from the checkout described under Payments, it is used for nothing else.",
     fr: "L'adresse courriel est transmise au service de courriel de Cloudflare pour livrer les messages du site : le code de connexion, les recherches enregistrées dont l'envoi est activé, les événements des pages suivies lorsque leur envoi est activé et le courriel hebdomadaire lorsqu'il est activé. Hormis le paiement décrit à la section Paiements, elle ne sert à rien d'autre.",
@@ -777,6 +792,33 @@ export const ACCOUNT_STRINGS = {
   "digest.records_note": {
     en: "The records database counts each source by federal fiscal year, as the analytics views do. A count rises when a record is added to it, or when a correction moves one into it. The page lists each record.",
     fr: "La base des dossiers compte chaque source par exercice financier fédéral, comme les vues analytiques. Un compte augmente quand un dossier s'y ajoute, ou quand une correction l'y déplace. La page énumère chaque dossier.",
+  },
+  // Several saved searches in one message (digests.ts groupDigest), in the account's mail language.
+  "digest.group_subject": {
+    en: "News on {n} of your saved searches, data date {date}",
+    fr: "Du nouveau pour {n} de vos recherches enregistrées, date des données {date}",
+  },
+  "digest.group_title": { en: "News on your saved searches", fr: "Du nouveau dans vos recherches enregistrées" },
+  "digest.group_lead_one": {
+    en: "1 of your saved searches has news. When more than {max} have news on the same day, they come in this one email, a section each, in the order of your saved searches page. Data date {date}.",
+    fr: "1 de vos recherches enregistrées a du nouveau. Quand plus de {max} ont du nouveau le même jour, elles arrivent dans ce seul courriel, une section chacune, dans l'ordre de votre page des recherches enregistrées. Date des données : {date}.",
+  },
+  "digest.group_lead_many": {
+    en: "{n} of your saved searches have news. When more than {max} have news on the same day, they come in this one email, a section each, in the order of your saved searches page. Data date {date}.",
+    fr: "{n} de vos recherches enregistrées ont du nouveau. Quand plus de {max} ont du nouveau le même jour, elles arrivent dans ce seul courriel, une section chacune, dans l'ordre de votre page des recherches enregistrées. Date des données : {date}.",
+  },
+  "digest.group_rest_one": { en: "1 more saved search with news", fr: "1 autre recherche enregistrée avec du nouveau" },
+  "digest.group_rest_many": { en: "{n} more saved searches with news", fr: "{n} autres recherches enregistrées avec du nouveau" },
+  "digest.group_rest_note": {
+    en: "This email lists {rows} rows in all, so each of these is one line with its count and a link to its list.",
+    fr: "Ce courriel énumère {rows} lignes en tout; chacune de ces recherches tient donc en une ligne, avec son compte et le lien vers sa liste.",
+  },
+  "digest.group_stop_one": { en: "Stop this search's email", fr: "Arrêter l'envoi de cette recherche" },
+  "digest.group_stop_all": { en: "Stop the email of these searches", fr: "Arrêter l'envoi de ces recherches" },
+  "digest.group_button": { en: "Open your saved searches", fr: "Ouvrir vos recherches enregistrées" },
+  "digest.group_why": {
+    en: "You receive this for saved searches in your account whose email is on.",
+    fr: "Vous recevez ce message pour des recherches enregistrées de votre compte dont l'envoi est activé.",
   },
   // -- billing (src/account/billing.tsx) ----------------------------------------------
   // The prices are never written here: {price} is the operator's figure from
@@ -1068,6 +1110,11 @@ export const ACCOUNT_STRINGS = {
   "admin.count_subscriptions": { en: "Subscriptions by status", fr: "Abonnements par état" },
   "admin.count_sent": { en: "Deliveries sent, last {n} days", fr: "Envois effectués, {n} derniers jours" },
   "admin.count_failed": { en: "Deliveries not sent, last {n} days", fr: "Envois échoués, {n} derniers jours" },
+  // The run log's sends (delivery_runs): messages, where the two rows above count each saved search, a grouped message's too.
+  "admin.count_messages": {
+    en: "Messages sent by the delivery job and the console's runs, last {n} days",
+    fr: "Messages envoyés par la tâche d'envoi et les passages de la console, {n} derniers jours",
+  },
   "admin.count_bugs_week": { en: "Bug reports, last {n} days", fr: "Signalements de bogues, {n} derniers jours" },
   "admin.count_bugs_all": { en: "Bug reports, all", fr: "Signalements de bogues, en tout" },
   "admin.count_codes": { en: "Sign-in codes issued today (UTC)", fr: "Codes de connexion émis aujourd'hui (UTC)" },
@@ -1451,6 +1498,15 @@ export const ACCOUNT_STRINGS = {
   "admin.announce_stopped": {
     en: "The run stopped at the mail service's limit ({code}); run it again later.",
     fr: "Le passage s'est arrêté à la limite du service de courriel ({code}); relancez-le plus tard.",
+  },
+  // The day's sending ceiling (announce.tsx runAnnouncement, deliveries.ts dayRoom): the delivery job's, which a run shares.
+  "admin.announce_room": {
+    en: "Messages the day's sending ceiling, shared with the delivery job, still allows today (UTC): {n}. A run stops there.",
+    fr: "Messages que le plafond d'envoi du jour, partagé avec la tâche d'envoi, permet encore aujourd'hui (UTC) : {n}. Un passage s'arrête là.",
+  },
+  "admin.announce_ceiling": {
+    en: "The run stopped at the day's sending ceiling of {ceiling} messages (MAIL_DAILY_QUOTA {quota} less MAIL_DAILY_RESERVE {reserve}, the rest kept for sign-in codes), shared with the delivery job; the addresses left wait for the next UTC day.",
+    fr: "Le passage s'est arrêté au plafond d'envoi du jour, soit {ceiling} messages (MAIL_DAILY_QUOTA {quota} moins MAIL_DAILY_RESERVE {reserve}, le reste étant gardé pour les codes de connexion), partagé avec la tâche d'envoi; les adresses restantes attendent le prochain jour UTC.",
   },
   "admin.announce_no_mail": {
     en: "Mail cannot be sent from here: the MAIL binding or MAIL_FROM is missing.",
@@ -2473,8 +2529,8 @@ export const ACCOUNT_STRINGS = {
   "weekly.fig_ending_one": { en: "1 contract ending within {months} months", fr: "1 contrat prenant fin d'ici {months} mois" },
   "weekly.fig_ending_many": { en: "{n} contracts ending within {months} months", fr: "{n} contrats prenant fin d'ici {months} mois" },
   "weekly.pro_line": {
-    en: "{free}: {fw} watches and {fs} saved searches, on the site. {pro}: {pw} watches and {ps} saved searches, each change by email.",
-    fr: "{free} : {fw} suivis et {fs} recherches enregistrées, sur le site. {pro} : {pw} suivis et {ps} recherches enregistrées, chaque changement par courriel.",
+    en: "{free}: {fw} watches and {fs} saved searches and briefings, on the site. {pro}: {pw} watches, each change by email, and {ps} saved searches and briefings, by email.",
+    fr: "{free} : {fw} suivis et {fs} recherches et bulletins, sur le site. {pro} : {pw} suivis, chaque changement par courriel, et {ps} recherches et bulletins, par courriel.",
   },
   "weekly.pro_link": { en: "Plans and prices", fr: "Forfaits et prix" },
   "weekly.why": {

@@ -222,7 +222,10 @@ export type Overview = {
   active: number; deleted: number; blocked: number | null; sessions: number; codesToday: number;
   // Accounts on Pro and on Ultra now, by the source of the deciding row; Ultra's null before entitlement_tiers exists.
   proManual: number; proStripe: number; ultraManual: number | null; ultraStripe: number | null; subscriptions: { status: string; n: number }[];
-  sent: number; failed: number; bugs: { all: number; week: number } | null;
+  // sent and failed count deliveries rows, one a saved search (a grouped message's searches each count); messages
+  // is the run log's sends over the same days, one a message (the delivery job's and the console's), null before
+  // delivery_runs exists.
+  sent: number; failed: number; messages: number | null; bugs: { all: number; week: number } | null;
   audit: AuditRow[]; latestBugs: BugRow[] | null;
 };
 
@@ -261,6 +264,8 @@ export async function overview(env: Env, now = new Date()): Promise<Overview> {
   const c = (counts.results?.[0] ?? {}) as Record<string, number>;
   const byPlan = new Map(((pro.results ?? []) as { plan: string; source: string; n: number }[]).map((r) => [`${r.plan} ${r.source}`, r.n]));
   const blocked = await optional(async () => (await db.prepare("SELECT COUNT(*) AS n FROM account_blocks").first<{ n: number }>())?.n ?? 0);
+  const messages = await optional(async () =>
+    (await db.prepare("SELECT COALESCE(SUM(sent), 0) AS n FROM delivery_runs WHERE at >= ?").bind(week).first<{ n: number }>())?.n ?? 0);
   const bugs = await optional(async () => {
     const r = await db.prepare("SELECT COUNT(*) AS n, SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) AS week FROM bug_reports").bind(week)
       .first<{ n: number; week: number | null }>();
@@ -274,7 +279,7 @@ export async function overview(env: Env, now = new Date()): Promise<Overview> {
     proManual: byPlan.get("pro manual") ?? 0, proStripe: byPlan.get("pro stripe") ?? 0,
     ultraManual: tiers ? byPlan.get("ultra manual") ?? 0 : null, ultraStripe: tiers ? byPlan.get("ultra stripe") ?? 0 : null,
     subscriptions: (subs.results ?? []) as { status: string; n: number }[],
-    sent: c.sent ?? 0, failed: c.failed ?? 0, bugs, audit: (audit.results ?? []) as AuditRow[], latestBugs,
+    sent: c.sent ?? 0, failed: c.failed ?? 0, messages, bugs, audit: (audit.results ?? []) as AuditRow[], latestBugs,
   };
 }
 

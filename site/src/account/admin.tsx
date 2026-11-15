@@ -42,6 +42,7 @@
 // operator by user id (admin_ops.ts). The pages show no card data: Stripe
 // keeps it, and nothing here asks for it (admin_stripe.ts).
 
+import { dayRoom } from "./deliveries";
 import { WATCH_KIND_KEY } from "./digests";
 import { eventCounts, isWatchKind, watchPath } from "./watch_events";
 import { type WatchOverview, watchOverview } from "./watches";
@@ -50,7 +51,7 @@ import type { FC } from "hono/jsx";
 import { isOwnAddress } from "../api";
 import { readForm } from "../body";
 import { loadStats } from "../data";
-import type { AppEnv } from "../env";
+import { type AppEnv, mailCeiling } from "../env";
 import { fmtInt, t, tj, tn, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, page } from "../layout";
 import { type CorrectionListRow, latestCorrections } from "../pages/forms";
@@ -419,6 +420,7 @@ function overviewView(
           <dt>{t(lang, "admin.count_subscriptions")}</dt><dd>{subs}</dd>
           <dt>{t(lang, "admin.count_sent", { n: WEEK_DAYS })}</dt><dd>{fmtInt(o.sent, lang)}</dd>
           <dt>{t(lang, "admin.count_failed", { n: WEEK_DAYS })}</dt><dd>{fmtInt(o.failed, lang)}</dd>
+          {o.messages === null ? null : <><dt>{t(lang, "admin.count_messages", { n: WEEK_DAYS })}</dt><dd>{fmtInt(o.messages, lang)}</dd></>}
           {o.bugs === null ? null : (
             <>
               <dt>{t(lang, "admin.count_bugs_week", { n: WEEK_DAYS })}</dt><dd>{fmtInt(o.bugs.week, lang)}</dd>
@@ -1361,7 +1363,8 @@ admin.post("/users/:id/delete", async (c) => {
 
 // -- the accounts-open message and the Ultra message (announce.tsx) -----------------------------------
 
-type AnnounceState = { counts: AnnounceCounts | null; refusal: Key | null; errors?: Key[]; notice?: string | null };
+// room: what the day's sending ceiling still allows (deliveries.ts dayRoom), null with no ceiling set.
+type AnnounceState = { counts: AnnounceCounts | null; refusal: Key | null; errors?: Key[]; notice?: string | null; room?: number | null };
 
 // Each kind's page wording; the accounts-open message keeps the words it had.
 const ANNOUNCE_WORDS: Record<AnnounceKind, { title: Key; lead: Key; waiting: Key; preview: Key }> = {
@@ -1384,7 +1387,9 @@ async function announceState(c: Context<AppEnv>, kind: AnnounceKind): Promise<An
     if (missingColumn(e)) return { counts: null, refusal: "admin.announce_no_column" };
     throw e;
   }
-  return { counts, refusal: mailOn(c) ? null : "admin.announce_no_mail" };
+  const ceiling = mailCeiling(c.env);
+  const room = ceiling ? await dayRoom(c.env, ceiling, new Date()) : null;
+  return { counts, refusal: mailOn(c) ? null : "admin.announce_no_mail", room };
 }
 
 // What a run will do, the counts, the form, and the message in both
@@ -1407,6 +1412,7 @@ function announceView(lang: Lang, op: Account, base: string, s: AnnounceState, k
             <li>{t(lang, "admin.announce_sent", { n: n(s.counts.sent) })}</li>
             <li>{t(lang, "admin.announce_mark")}</li>
             <li>{t(lang, "admin.announce_limit")}</li>
+            {s.room === null || s.room === undefined ? null : <li>{t(lang, "admin.announce_room", { n: n(s.room) })}</li>}
           </ul>
         ) : null}
         {s.refusal ? null : (
@@ -1445,7 +1451,12 @@ function announceNotice(c: Context<AppEnv>, lang: Lang, kind: AnnounceKind = "ac
     ? t(lang, "admin.announce_ultra_done", { sent: count("sent"), failed: count("failed"), left: count("left") })
     : t(lang, "admin.announce_done", { sent: count("sent"), failed: count("failed"), accounts: count("accounts"), left: count("left") });
   const code = c.req.query("stopped") ?? "";
-  return STOP_CODE_RE.test(code) ? `${done} ${t(lang, "admin.announce_stopped", { code })}` : done;
+  const stopped = STOP_CODE_RE.test(code) ? `${done} ${t(lang, "admin.announce_stopped", { code })}` : done;
+  // The day's sending ceiling, the delivery job's (announce.tsx runAnnouncement), with its figures.
+  const ceiling = c.req.query("ceiling") === "1" ? mailCeiling(c.env) : null;
+  return ceiling
+    ? `${stopped} ${t(lang, "admin.announce_ceiling", { ceiling: fmtInt(ceiling.ceiling, lang), quota: fmtInt(ceiling.quota, lang), reserve: fmtInt(ceiling.reserve, lang) })}`
+    : stopped;
 }
 
 // ?kind=ultra (or kind=ultra in the post) is the Ultra message; anything else the accounts-open one.
@@ -1473,10 +1484,11 @@ admin.post("/announce", async (c) => {
     const r = await runAnnouncement(c.env, siteBase(c), c.req.url, new Date(), ANNOUNCE_MAX, kind);
     if (kind === "ultra") {
       await operatorAudit(c.env, null, "operator_announced_ultra", op.userId,
-        `${r.sent} sent, ${r.failed} not sent, ${r.left} left${r.stopped ? ", stopped at a limit" : ""}`);
+        `${r.sent} sent, ${r.failed} not sent, ${r.left} left${r.stopped ? ", stopped at a limit" : ""}${r.ceiling ? ", stopped at the day's ceiling" : ""}`);
     } else {
       await operatorAudit(c.env, null, "operator_announced", op.userId,
-        `${r.sent} sent, ${r.failed} not sent, ${r.accounts} holding an account, ${r.left} left${r.stopped ? ", stopped at a limit" : ""}`);
+        `${r.sent} sent, ${r.failed} not sent, ${r.accounts} holding an account, ${r.left} left${r.stopped ? ", stopped at a limit" : ""}` +
+        `${r.ceiling ? ", stopped at the day's ceiling" : ""}`);
     }
     const p = new URLSearchParams({ m: "done", sent: String(r.sent), failed: String(r.failed), accounts: String(r.accounts), left: String(r.left) });
     if (kind === "ultra") {
@@ -1484,6 +1496,7 @@ admin.post("/announce", async (c) => {
       p.set("kind", "ultra");
     }
     if (r.stopped) p.set("stopped", r.stopped);
+    if (r.ceiling) p.set("ceiling", "1");
     return c.redirect(`/admin/announce?${p}`, 303);
   });
 });

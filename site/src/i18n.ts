@@ -898,8 +898,8 @@ const STRINGS = {
     fr: "les avis d'appel d'offres du jour même dans les listes d'appels d'offres, lus sur AchatsCanada toutes les deux heures",
   },
   "expiring.pro_searches": {
-    en: "up to {cap} saved searches, with email delivery",
-    fr: "jusqu'à {cap} recherches enregistrées, avec envoi par courriel",
+    en: "up to {cap} saved searches and briefings, by email",
+    fr: "jusqu'à {cap} recherches et bulletins, par courriel",
   },
   "expiring.pro_free": {
     en: "The {list}, its feeds and every window's count and total stay free.",

@@ -150,9 +150,11 @@ export async function deleteSearch(env: Env, userId: string, id: string): Promis
 }
 
 // The newest delivery row of each of the user's searches, by search id,
-// through idx_deliveries_search. Rows go after 90 days (deliveries.ts
-// DELIVERY_ROW_DAYS): a search whose newest row is older shows none, as a
+// through idx_deliveries_search. Rows go after DELIVERY_ROW_DAYS (pruned by
+// deliveries.ts each run; the privacy page says so): a search whose newest row is older shows none, as a
 // search never delivered does.
+export const DELIVERY_ROW_DAYS = 90;
+
 export type LastDelivery = { sent_at: string; items: number; status: string };
 
 export const LAST_DELIVERIES_SQL =

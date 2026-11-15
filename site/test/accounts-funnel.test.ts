@@ -74,7 +74,7 @@ describe("the sign-in page", () => {
       const row = PLAN_ROWS.find((r) => r.free?.key === key)!;
       expect(lines, key).toContain(nbsp(planLine("en", row.free!)));
     }
-    expect(text(p)).toContain(`Pro: ${RULES.pro.saved_searches} saved searches and ${RULES.pro.watchlists} watches, each change by email; ` +
+    expect(text(p)).toContain(`Pro: ${RULES.pro.saved_searches} saved searches and briefings, by email; ${RULES.pro.watchlists} watches, each change by email; ` +
       `${RULES.pro.matches} matching notices, ${RULES.pro.match_mail} a week by email. Plans and prices`);
     expect(p).toContain('<a href="/pro">Plans and prices</a>');
     expect(text(p)).not.toMatch(COMPARATIVE);
@@ -94,7 +94,7 @@ describe("the sign-in page", () => {
     expect([...p.matchAll(/<li>([\s\S]*?)<\/li>/g)].map((m) => text(m[1]))).toEqual(freeLines("fr", true).map((s) => nbsp(s).replace(/’/g, "'")));
     expect(text(p)).toContain(`${RULES.free.saved_searches} recherches et bulletins, sur le site`);
     expect(text(p)).toContain("Le courriel hebdomadaire, chaque lundi");
-    expect(text(p)).toContain(`Pro : ${RULES.pro.saved_searches} recherches enregistrées et ${RULES.pro.watchlists} suivis, chaque changement par courriel; ` +
+    expect(text(p)).toContain(`Pro : ${RULES.pro.saved_searches} recherches et bulletins, par courriel; ${RULES.pro.watchlists} suivis, chaque changement par courriel; ` +
       `${RULES.pro.matches} avis correspondants, ${RULES.pro.match_mail} par semaine par courriel.`);
     expect(p).toContain('<a href="/pro">Forfaits et prix</a>');
     expect(text(p)).not.toMatch(COMPARATIVE);

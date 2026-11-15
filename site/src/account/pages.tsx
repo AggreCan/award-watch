@@ -780,6 +780,42 @@ export function stoppedView(lang: Lang, label: string) {
   );
 }
 
+// A grouped message's stop page (/account/stop?g=&t=, group_stop.ts): the
+// labels of the searches its link proves, and one button that posts the
+// link's values back. No session is needed; the tags are the proof.
+export function groupStopView(lang: Lang, state: { userId: string; tags: string; labels: readonly string[]; off: boolean }) {
+  return (
+    <>
+      <PageHead lang={lang} title={t(lang, "account.stop_group_title")} lead={t(lang, "account.stop_group_lead")} />
+      <Panel title={t(lang, "account.stop_group_panel")} class="panel-form">
+        <ul class="account-list">{state.labels.map((label) => <li>{label}</li>)}</ul>
+        {state.off ? (
+          <p>{t(lang, "account.stop_group_already")}</p>
+        ) : (
+          <form method="post" action="/account/stop" class="stack">
+            <input type="hidden" name="g" value={state.userId} />
+            <input type="hidden" name="t" value={state.tags} />
+            <input type="hidden" name="lang" value={lang} />
+            <button type="submit" class="btn btn-primary">{t(lang, "account.stop_group_button")}</button>
+          </form>
+        )}
+      </Panel>
+    </>
+  );
+}
+
+export function groupStoppedView(lang: Lang, labels: readonly string[]) {
+  return (
+    <>
+      <PageHead lang={lang} title={t(lang, "account.stopped_group_title")} lead={t(lang, "account.stopped_group_lead")}
+        actions={<a href="/account/searches" class="btn">{t(lang, "account.searches_title")}</a>} />
+      <Panel title={t(lang, "account.stop_group_panel")}>
+        <ul class="account-list">{labels.map((label) => <li>{label}</li>)}</ul>
+      </Panel>
+    </>
+  );
+}
+
 // The weekly email's unsubscribe page (/account/stop?e=&t=), the same way:
 // one button that posts the link's values back, no session needed.
 export function weeklyStopView(lang: Lang, state: { userId: string; secret: string; off: boolean }) {

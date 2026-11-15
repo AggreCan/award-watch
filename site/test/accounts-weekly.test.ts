@@ -331,7 +331,7 @@ Data dates 2026-10-25 to 2026-10-31.
 
 Open your watches: ${SITE}/account/watches
 
-Free: 3 watches and 3 saved searches, on the site. Pro: 25 watches and 25 saved searches, each change by email.
+Free: 3 watches and 3 saved searches and briefings, on the site. Pro: 25 watches, each change by email, and 25 saved searches and briefings, by email.
 Plans and prices: ${SITE}/pro
 
 You receive this because you turned on the weekly email for your account.
@@ -352,7 +352,7 @@ Follow an organization, a buyer, a contract or a tender notice from its page, an
 187 new award notices: ${SITE}/awards
 1,250 contracts ending within 3 months: ${SITE}/expiring/3m
 
-Free: 3 watches and 3 saved searches, on the site. Pro: 25 watches and 25 saved searches, each change by email.
+Free: 3 watches and 3 saved searches and briefings, on the site. Pro: 25 watches, each change by email, and 25 saved searches and briefings, by email.
 Plans and prices: ${SITE}/pro
 
 You receive this because you turned on the weekly email for your account.
@@ -384,7 +384,7 @@ Dates des données : du 2026-10-25 au 2026-10-31.
 
 Ouvrir vos suivis : ${FR("/account/watches")}
 
-Gratuit : 3 suivis et 3 recherches enregistrées, sur le site. Pro : 25 suivis et 25 recherches enregistrées, chaque changement par courriel.
+Gratuit : 3 suivis et 3 recherches et bulletins, sur le site. Pro : 25 suivis, chaque changement par courriel, et 25 recherches et bulletins, par courriel.
 Forfaits et prix : ${FR("/pro")}
 
 Vous recevez ce message parce que vous avez activé le courriel hebdomadaire de votre compte.
@@ -405,7 +405,7 @@ Suivez une organisation, un acheteur, un contrat ou un appel d'offres à partir 
 187 nouveaux avis d'attribution : ${FR("/awards")}
 1 250 contrats prenant fin d'ici 3 mois : ${FR("/expiring/3m")}
 
-Gratuit : 3 suivis et 3 recherches enregistrées, sur le site. Pro : 25 suivis et 25 recherches enregistrées, chaque changement par courriel.
+Gratuit : 3 suivis et 3 recherches et bulletins, sur le site. Pro : 25 suivis, chaque changement par courriel, et 25 recherches et bulletins, par courriel.
 Forfaits et prix : ${FR("/pro")}
 
 Vous recevez ce message parce que vous avez activé le courriel hebdomadaire de votre compte.

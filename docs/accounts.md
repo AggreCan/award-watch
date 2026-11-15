@@ -178,7 +178,8 @@ free and needs no card or password, and beside the form from 1200 px
 plan card's own lines for saved searches, watches, matching notices and the
 week's matches by email (`PLAN_ROWS`, figures from `RULES`; the holder's
 record stays on the plan cards), the weekly email while the form offers its box, and one line with
-Pro's own figures linking `/pro`. The line that a Follow or a briefing rides
+Pro's own figures linking `/pro`, worded as the plan rows word them ("Pro: 25 saved searches and briefings,
+by email; 25 watches, each change by email; ...", `account.free_pro`). The line that a Follow or a briefing rides
 along stays in the form's panel, above the list; the code step is unchanged.
 
 Both sign-in posts count against `AUTH_LIMIT` (10 a minute per address) while
@@ -197,12 +198,14 @@ else the account page).
 ### Mail language
 
 The overview's Account panel shows the language the account's own mail goes
-out in (`users.lang`: the watch mail and the weekly email), with one
+out in (`users.lang`: the watch mail, the weekly email and a grouped
+saved-search message, *Phase 2: delivery*), with one
 link-styled button that switches it between English and French (`POST
 /account/mail-language`, `mail_lang=en|fr`, with the CSRF value; the audit
 row `mail_lang` carries the language). A saved search, a briefing and a
 saved view keep the language of the page each was saved from, as the line
-under the row says.
+under the row says; when more than five of an account's saved searches go in
+one message, that message is in the account's language.
 
 ## The switch
 
@@ -354,9 +357,19 @@ Cloudflare names no reset time, so the ceiling counts by UTC day. The job
 sends only from 15:00 to 20:00 UTC, so a day that Cloudflare starts at any
 hour outside those counts the same messages; if Cloudflare counts a rolling
 24 hours instead, a day whose late runs sent much can leave less than the
-reserve for the hours before the next day's runs. The console's own messages (the accounts-open and Ultra runs, the
-address-change notice, the live mail check) are not in the run log, so they
-are not counted against the ceiling either.
+reserve for the hours before the next day's runs. The console's bulk runs
+(the accounts-open and Ultra messages, up to 300 a run) go through the same
+binding, so they keep to the same ceiling: a run reads the day's room
+(`dayRoom`) before it starts, stops before the next claim once it has sent
+that many, and the console page says so (*The console page*, under *The
+accounts-open message*); each run that sent or tried a message writes a row
+of its own to the run log (outcome `console`, no data date, nothing due,
+naming no address; `writeConsoleRun`), so its sends count against the
+ceiling for the rest of the UTC day. Two runs at the same moment, one the
+job's and one the console's, each read the room before the other's sends
+are logged, so together they can pass the ceiling by what the later one
+sends; the reserve is there for that too. The console's single messages
+(the address-change notice, the live mail check) are not counted.
 
 Every message the site sends is checked by the mail suite (`npm run
 test:mail` in `site/`) and, on the live site, by the weekly mail check, which
@@ -851,7 +864,10 @@ uses the same shell and rows); the records side of the organization, buyer
 and segment kinds is `site/src/account/records_deliveries.ts`; the tests are
 `site/test/accounts-deliveries.test.ts` and
 `site/test/accounts-records-deliveries.test.ts`, with the run log, the day's
-sending ceiling and the order of the lists in `site/test/recs-ops.test.ts`.
+sending ceiling and the order of the lists in `site/test/recs-ops.test.ts`,
+and the grouped message, its stop link and the searches passed over in
+`site/test/recs-group.test.ts` (its size and layout in the mail suite,
+`site/test-mail/group.test.ts`).
 
 ### When it runs
 
@@ -879,9 +895,21 @@ Each run does nothing unless all of these hold, in this order:
    `last_delivered_at` is earlier); for weekly, never delivered or last
    delivered seven or more days before. A search whose message failed for
    this data date waits for the next data date. The cached plan only orders
-   the list, so the searches of accounts that moved down to Free, read and
-   passed over each run, come after the ones paid for; `planFor` decides at
-   the send, and a stale cache only moves a search in the list.
+   the list, so the searches of accounts that moved down to Free come after
+   the ones paid for; `planFor` decides at the send, and a stale cache only
+   moves a search in the list. A search read and passed over because its
+   account's plan has no delivery, or because it is past the plan's figure,
+   is marked for the data date as a claim would mark it, with no
+   `deliveries` row (`passedOver`, `PASSED_OVER_SQL`, 100 a batch, and none
+   once too little of the query budget is left for a claim), so it leaves
+   the list and is not read again every hour, as the watch mail, the
+   briefings and the saved views pass theirs over. A plan restored that day
+   sends from the next data date on (a weekly search, a week after).
+
+The list is then taken account by account (`byAccount`: each account where
+its first search stood, its searches in their own order, `created_at` then
+id), and all of an account's due searches are read before any of them is
+sent, so the run knows how many have news (*What it sends and writes*).
 
 Every run that gets past the first check writes its row to the run log,
 `delivery_runs`, whatever the way it ends (*What it sends and writes*), so a
@@ -903,6 +931,8 @@ the data date alone, a first weekly one the last seven days.
 
 A file that does not read (today's new-notice file, a window's index or
 page) ends the run with one log line naming it; the next hour tries again.
+An account's searches are all read before any of them is sent, so the
+searches of the account whose file did not read wait with it.
 
 #### Organizations, buyers and segments
 
@@ -972,14 +1002,73 @@ so it covers both days.
 
 - Nothing new: a `deliveries` row `empty`, no message, and
   `last_delivered_at` moves to the run's time.
-- Otherwise one message per saved search, in the search's language, through
-  the accounts sender (`senderFor`, the `MAIL` binding), with the subject,
-  rows, button, note and footer of the design. A message lists at most 50
-  rows; past that, a line names how many more and links the page. A
-  `deliveries` row `sent` (with the number of records matched; for the
-  records kinds, the records added plus the notices) moves
-  `last_delivered_at`; `failed` leaves it, so the next data date's delivery
-  covers what this one missed.
+- Otherwise, when five or fewer of an account's saved searches have
+  something to report in the run (`GROUP_OVER`, 5), one message per saved
+  search, in the search's language, through the accounts sender
+  (`senderFor`, the `MAIL` binding), with the subject, rows, button, note
+  and footer of the design. A message lists at most 50 rows; past that, a
+  line names how many more and links the page. A `deliveries` row `sent`
+  (with the number of records matched; for the records kinds, the records
+  added plus the notices) moves `last_delivered_at`; `failed` leaves it, so
+  the next data date's delivery covers what this one missed.
+- More than five: all of them in one message (`digests.ts` `groupDigest`),
+  every kind together (tender, radar, organization, buyer and segment
+  searches). The subject says how many have news and names the data date
+  ("News on 8 of your saved searches, data date 2026-10-31"). Under the
+  title and a lead that says why they came together, a section a search in
+  the account's order (the searches page's): the search's label in its band,
+  its count as a link to its list on the site ("3 new tender notices", "3
+  contracts now within 3 months of their end", "1 new tender notice, 2 new
+  records"), its newest rows as its own message lists them (the tender rows
+  with their segment chips, the radar's rows, a segment's notices then the
+  counts that rose), the line for the rest of its rows ("And 4 more on the
+  site"), and its own stop link, "Stop this search's email". A band's
+  heading is never a link (the mail suite holds every heading alone in its
+  band), so the count under it carries the link. The rows of the whole
+  message are held to `GROUP_ROWS_MAX` (30), at most `GROUP_SECTION_ROWS`
+  (5) a section; a search reached once the 30 are listed is one line, its
+  label linking its list and its count, under one band ("94 more saved
+  searches with news") with a line saying why, so no search is left out.
+  Those two figures, and not the single message's 50, keep the message
+  under the size at which a webmail client clips it: 100 busy searches make
+  about 71,000 characters of HTML in English and 76,000 in French, held
+  under 100,000 by the mail suite. Then the button to the saved searches
+  page, the notes of the kinds it carries (closing times, a contract's
+  value, the records counts), and the footer: why it came, the saved
+  searches page, and "Stop the email of these searches", the link that
+  turns off every search in the message (*Stopping a delivery*). Plain text
+  and HTML parts, the same shell, footer and headers as a single message,
+  with `List-Unsubscribe` naming that link.
+- A grouped message is in the account's mail language (`users.lang`, the
+  overview's Mail language control), whatever the pages its searches were
+  saved from: a label saved in the other language is written again in it, as
+  the searches page writes it (`interestFilter`; an organization or buyer by
+  the name the records database holds), and stays as saved when it no longer
+  writes. Every link in it carries that language. Five or fewer go each in
+  its own search's language, as before.
+- Bookkeeping stays a search's own. Each search of a group is claimed on
+  the same conditions as a single one (delivery on, not delivered for the
+  data date), its statements in one batch, so a search stopped or delivered
+  since the list was read drops out of the group and the rest go. After the
+  send, each search's `deliveries` row, `last_delivered_at` and, for a
+  records search, its mark are written in one batch (`afterSend`, tried once
+  more on a fault). A send that does not go gives every claim of the group
+  back in one batch, with each search's `failed` row when the mail service
+  refused the message, or none at a sending limit, which stops the run. A
+  group is sent whole or not at all.
+- Counts. A grouped message is one message against the run's cap, the day's
+  ceiling and the run log's `sent`, as the quota counts it; each search it
+  carried has its own `deliveries` row, so the console's "Deliveries sent"
+  counts a search a row, and its "Messages sent by the delivery job and the
+  console's runs" counts the run log's messages. The run's report keeps both:
+  `sent` and `failed` are messages, `groups` the grouped messages sent and
+  `grouped` the searches they carried, so the searches sent in a run are
+  `sent` less `groups` plus `grouped`. Its log line says "12 sent (1 of them
+  grouped, carrying 8 searches)".
+- An account whose searches are taken up across two runs (a cap, the
+  ceiling, the query budget or a wait for the records database between
+  them) may get them in two messages; no search is sent twice, since each
+  keeps its own claim for the data date.
 - At most 300 messages a run. A refusal with `E_DAILY_LIMIT_EXCEEDED` or
   `E_RATE_LIMIT_EXCEEDED` stops the run with no row for that search, and
   the next hour goes on from there. Any other refusal is a `failed` row.
@@ -1004,7 +1093,18 @@ so it covers both days.
   stops between a claim and its row and always has the query for its run
   log. Six runs a data date allow 5,100 queries a day. Measured under test:
   a saved search sent costs about 3 queries, an account's watch mail about
-  9, an account passed over on its plan 1 (its plan, read once a run).
+  9, an account passed over on its plan 1 (its plan, read once a run). A
+  grouped message costs at most 4 queries from its claims to its last
+  write, whatever its size (`GROUP_QUERIES`: one batch of claims, one for
+  the stop secrets it lacks, then one batch of rows and marks tried twice at
+  most, or one batch giving the claims back with the failed rows), measured
+  at 3 for 6 searches and for 40, and inside the 8 every claim holds back,
+  so the budget covers the whole group before any of it is claimed. Its
+  reads come first (an organization, buyer or segment search 2 queries, a
+  tender or radar search none but a merged id's); once the budget is spent
+  while an account's searches are read, the account waits whole for the next
+  run with nothing of it claimed but the searches with nothing new already
+  written.
 - A fault reading or writing the accounts database logs one line and ends
   the run. A second run in the same hour finds nothing due.
 - Each run that gets past the switch ends with one row in `delivery_runs`
@@ -1012,7 +1112,8 @@ so it covers both days.
   time), `data_date` (the date `stats.json` gave; NULL when the run stopped
   before reading one), `outcome` (`done`, `capped`, `limited`, `fault`,
   `not_today`, `no_data`, `no_mail`), `sent` and `failed` (the messages sent
-  and the ones the mail service refused, across the five parts),
+  and the ones the mail service refused, across the five parts, a grouped
+  message once),
   `left_due` (the items still due when it ended: those that waited, and
   from the one a stop or a fault was at, the rest of that part's list whose
   plan would send them, by the plan read in the run or the cached plan;
@@ -1023,7 +1124,9 @@ so it covers both days.
   it found, or the records database a wait was for; never an account or an
   address). The row is one batch with the deletion of the run log's rows
   older than 90 days. A row that cannot be written (no table, a fault) logs
-  one line and changes nothing else.
+  one line and changes nothing else. The console's bulk runs write rows to
+  the same table with the outcome `console` (*Sending mail*); they count in
+  the day's sends and in nothing else.
 - `deliveries` rows older than 90 days go at each run, after the list of
   candidates is read, as the watch mail, the briefings and the saved views
   prune theirs. `deliveries` has no index on `sent_at`, so the statement
@@ -1035,7 +1138,9 @@ so it covers both days.
   console's user page for each search's newest row and the account's last
   20, and the console's overview for the last 7 days. A search whose newest
   row is older than 90 days (its delivery off, or its account on Free, that
-  long) shows no last delivery, as a search never delivered does.
+  long) shows no last delivery, as a search never delivered does. The
+  privacy page says a saved search's delivery history is kept that long
+  (`account.privacy_kept`, with `DELIVERY_ROW_DAYS`).
 - The row after a message went (its `deliveries` row, `last_delivered_at`
   and, for a records search, the new mark) is written once more when the
   write fails (`afterSend`), so a passing fault does not leave the next
@@ -1079,6 +1184,41 @@ search is delivered and kept until the search or the account is deleted.
   while the switch is on: each request reads the database, and one-click
   posts come from the mail providers' servers.
 
+A grouped message (*What it sends and writes*) carries each section's own
+link as above, which stops that search alone, and one link for the whole
+message, in its footer and in `List-Unsubscribe`:
+
+```
+List-Unsubscribe: <mailto:contact@awardwatch.ca>, <https://awardwatch.ca/account/stop?g=<user id>&t=<tags>>
+```
+
+- The tags are one a search, in the message's order: the first 6 bytes of
+  SHA-256 over "stop group", the search's id and its stop secret, in
+  base64url, 8 characters each (`group_stop.ts` `groupTag`). No table holds
+  the group; nothing in the schema changed. The route reads the account's
+  searches with their secrets, computes each one's tag and acts on those
+  whose tag the link holds (`provenBy`).
+- `GET` shows those searches' labels and one button and changes nothing;
+  `POST`, or a mail client's one-click `POST`, turns off the delivery of
+  each of them and answers as the single link does ("The deliveries are
+  off."). The searches stay saved, and the searches page turns their
+  delivery back on. The audit row is `delivery_stopped` with the detail
+  `group_link` or `group_one_click`.
+- What a forwarded link can do: turn off the email of the searches in that
+  message, and nothing else. Each tag proves its search's secret, which only
+  that search's messages carry; a tag changed or made up matches a given
+  search once in 2^48, a link under another account's id matches nothing,
+  and a link that proves no search, or is malformed (not a whole number of
+  tags, more than 100, a character outside base64url), is the site's 404.
+  It deletes nothing and shows nothing but the labels the message already
+  showed. A search deleted since drops out and the link still works for the
+  rest, for as long as they exist, as a single link does.
+- Why tags and not ids: Email Sending takes a custom header's value up to
+  2,048 bytes (`E_HEADER_VALUE_TOO_LONG`) and folds long headers at
+  whitespace only, so the URI must also fit a line of RFC 5322's 998
+  characters. A hundred 32-character ids make about 3,300; a hundred tags
+  make 800, and the header with 100 searches is 914 bytes in French.
+
 A reply to the `mailto:` address reaches the contact inbox, where the
 operator turns the delivery off by hand.
 
@@ -1097,7 +1237,8 @@ plans. Delivery rows are kept 90 days.
 npx wrangler d1 execute awardwatch-accounts --remote --command "SELECT substr(sent_at, 1, 10) AS day, status, COUNT(*) AS n, SUM(items) AS items FROM deliveries GROUP BY day, status ORDER BY day DESC LIMIT 20"
 ```
 
-The Worker's logs hold one line per run: the data date and the counts sent,
+The Worker's logs hold one line per run: the data date and the counts sent
+(and how many of them were grouped messages, carrying how many searches),
 failed, with nothing new and not on a plan with delivery, and, when the
 records database kept some waiting, how many organization, buyer or segment
 searches wait and why.
@@ -1117,7 +1258,11 @@ the ceiling and its two figures, what waited, and the Limit Increase
 Request Form); when the last run left items due (its time, outcome, count
 and reason); and when any run faulted (how many, and the first one's
 reason). A day that went well adds nothing. A database without
-`delivery_runs` is one log line and no line in the email.
+`delivery_runs` is one log line and no line in the email. A row of the
+console's (outcome `console`) is not a run of the job: a day with only such
+rows still says that no run was recorded, the last run named is the job's,
+and the ceiling's line counts the console's sends in the day's total and
+says how many of them came from the console.
 
 The records kinds' marks:
 
@@ -1341,11 +1486,20 @@ It shows how many addresses have not had the message (account holders
 included, since telling them apart reads the accounts database address by
 address) and how many it went to, what a run does, the confirm box and
 button, and the message in English and in French as an address with one
-list would get it. The page offers no form while mail cannot leave (the
+list would get it. While `MAIL_DAILY_QUOTA` sets a ceiling it also says how
+many messages the day's ceiling still allows ("Messages the day's sending
+ceiling, shared with the delivery job, still allows today (UTC): 37. A run
+stops there."). The page offers no form while mail cannot leave (the
 stub sender) or while the `interest` table has no `notice_at` column. A
 run writes the audit row `operator_announced` with no user id and the
 detail `by <operator's user id>, <n> sent, <n> not sent, <n> holding an
-account, <n> left`, and the page shows the same figures after it.
+account, <n> left` (and ", stopped at the day's ceiling" when it did), and
+the page shows the same figures after it, with the ceiling's line when the
+run stopped there: "The run stopped at the day's sending ceiling of 160
+messages (MAIL_DAILY_QUOTA 200 less MAIL_DAILY_RESERVE 40, the rest kept for
+sign-in codes), shared with the delivery job; the addresses left wait for
+the next UTC day." Its sends are a `console` row of the run log (*Sending
+mail*).
 
 ### Operator steps
 
@@ -1384,10 +1538,11 @@ a post sends nothing.
 - Who gets it: each address with an `ultra` row not unsubscribed and no
   `ultra` row marked `notice_at`, in address order. An address holding an
   account is not passed over, since it asked for this message on the card.
-- The claim, the give-back on a refused send and the stop at a daily or
-  rate limit work as for the accounts-open message, on the address's
-  `ultra` rows alone: one message never marks the other's rows, so an
-  address on the lists and on the card gets each message once.
+- The claim, the give-back on a refused send, the stop at a daily or
+  rate limit and the stop at the day's sending ceiling, with its run log
+  row, work as for the accounts-open message, on the address's `ultra` rows
+  alone: one message never marks the other's rows, so an address on the
+  lists and on the card gets each message once.
 - The message, a plain-text part and an HTML part in the mail shell, in the
   language the address was entered in: Ultra, the plan above Pro, is open;
   the address asked to be told (also the preheader); "Ultra includes
@@ -2928,7 +3083,11 @@ delete the operator's own account.
   accounts on Pro now and on Ultra now (once `entitlement_tiers` exists),
   each by the source of the row that decides their plan (by hand or
   through Stripe); subscriptions by their last notified
-  status; deliveries sent and not sent in the last 7 days; bug reports in
+  status; deliveries sent and not sent in the last 7 days (the `deliveries`
+  rows, one a saved search, a grouped message's searches each counted) and,
+  once `delivery_runs` exists, the messages the delivery job and the
+  console's bulk runs sent over the same days (the run log's `sent`, a
+  grouped message once); bug reports in
   the last 7 days and in all, with the latest 10, once the `bug_reports`
   table exists; calendar feeds by kind and read in the last 7 days, once
   the `feeds` table exists; sign-in codes issued today (UTC); the last 20 audit
@@ -4283,7 +4442,7 @@ In the account's language (`users.lang`), in the site's one mail shell.
 | The watches' news | "8 updates on 3 of the 4 pages you follow." ("on the page you follow" when it follows one); then one line per watch with news, in the watch mail's order and grouping (`watch_mail.ts` `groupsFor`: single records, organizations, buyers, notices, an event reached twice listed once), at most `WEEKLY_LINES` (5): the watch's name and kind linking its page, and each kind of event with its count ("New award or contract: 2, Contract amended: 1"); a line for the rest ("3 more pages with news are on your watches page"); the button "Open your watches" |
 | The site's week | when there is no news: "Nothing changed this week on the 4 pages you follow" linking the watches page, or, for an account that follows nothing, how to follow a page; then four figures, each linking its list: new tender notices (`/tenders/new`), notices closing within 7 days (`/tenders?closing=7`), new award notices (`/awards`), contracts ending within 3 months (`/expiring/3m`) |
 | Matching notices | for an account that names its organization (*Your organization*), when some of the week's new notices match: "New open notices this week that match <name>", up to `RULES.free.match_mail` (3) or `RULES.pro.match_mail` (10) rows, how many more are on `/account/matches`, for Free the line on what Pro lists, the disclaimer with the Terms as a full https address, and the licence line (*Matching notices*, By email) |
-| What Pro adds | for an account whose plan does not mail its watches (Free) only: "Free: 3 watches and 3 saved searches, on the site. Pro: 25 watches and 25 saved searches, each change by email." and "Plans and prices" (`/pro`); the figures are read from the plans (`RULES`), each plan's own, never compared |
+| What Pro adds | for an account whose plan does not mail its watches (Free) only: "Free: 3 watches and 3 saved searches and briefings, on the site. Pro: 25 watches, each change by email, and 25 saved searches and briefings, by email." (the figure the saved searches and the briefings share, as the plan rows name it) and "Plans and prices" (`/pro`); the figures are read from the plans (`RULES`), each plan's own, never compared |
 | Footer | "You receive this because you turned on the weekly email for your account.", the account page, "Unsubscribe" (the stop link), then "Sent by Award Watch, <MAIL_ADDRESS>." on the next line; then the shell's tagline and contact address |
 
 The site's figures, read once a run (`readWeek`): the new notices of the

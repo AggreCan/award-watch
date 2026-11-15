@@ -488,6 +488,159 @@ export function recordsDigest(o: RecordsDigest): DigestMessage {
   };
 }
 
+// -- several saved searches in one message (deliveries.ts) ------------------------------------
+
+// When more than GROUP_OVER (deliveries.ts) of an account's saved searches
+// have news in one run, they go in one message: a section a search, in the
+// account's order, each with its label in its band, its count linking its
+// list, its newest rows as its own message lists them, and its own stop link;
+// the foot's stop link and List-Unsubscribe stop them all (group_stop.ts).
+// The rows of the whole message are held to GROUP_ROWS_MAX, at most
+// GROUP_SECTION_ROWS a section; a search reached once they are listed is one
+// line with its label linking its list and its count, under one band, so no
+// search is left out and the message stays under the size at which a webmail
+// client clips it (test-mail/group.test.ts: 100 searches under 100,000
+// characters of HTML). Those figures, with a tender row's segment chips, are
+// what keeps 100 searches inside that size; the single message's ROWS_MAX
+// would pass it.
+export const GROUP_ROWS_MAX = 30;
+export const GROUP_SECTION_ROWS = 5;
+
+type SectionBase = {
+  // The label in the message's language (deliveries.ts rebuilds a label saved in the other one).
+  label: string;
+  // The search's page, path and query, at the surviving ids.
+  params: string;
+  // The section's own stop link (/account/stop?s=...&t=...).
+  stopUrl: string;
+};
+
+export type GroupSection = SectionBase & (
+  | { kind: "tenders"; rows: readonly TenderRow[]; total: number }
+  | { kind: "expiring"; rows: readonly ExpiringRow[]; total: number; months: number }
+  | { kind: RecordsKind; rises: readonly Rise[]; more: number; tenders: readonly TenderRow[]; tenderTotal: number }
+);
+
+export interface GroupDigest {
+  lang: Lang;
+  to: string;
+  site: string;
+  dataDate: string;
+  // The message's own stop link (/account/stop?g=...&t=...).
+  stopUrl: string;
+  // The searches with news, in the account's order.
+  sections: readonly GroupSection[];
+  // The figure past which searches are grouped (deliveries.ts GROUP_OVER), for the lead.
+  over: number;
+}
+
+type GroupRow = { html: (first: boolean) => string; text: string };
+
+// A section's rows in the order its own message lists them, and its count in words.
+function sectionRows(o: { site: string; lang: Lang; dataDate: string }, s: GroupSection): { rows: GroupRow[]; all: number; count: string } {
+  const { lang } = o;
+  const n = (v: number) => fmtInt(v, lang);
+  const tenderRow = (r: TenderRow, chips: boolean): GroupRow => {
+    const l = tenderLines(lang, r, o.dataDate);
+    const leftHtml = l.left ? (l.left.days <= AMBER_DAYS ? amber(escapeHtml(l.left.text)) : escapeHtml(l.left.text)) : "";
+    const line3 = [l.closes ? escapeHtml(l.closes) : "", leftHtml].filter(Boolean).join(" · ") +
+      (chips && l.chips.length ? ` &nbsp;${l.chips.map(chip).join(" ")}` : "");
+    const when = [l.closes, l.left?.text].filter(Boolean).join(", ");
+    const third = chips ? [when, l.chips.join(", ")].filter(Boolean).join(" · ") : when;
+    return {
+      html: (first) => row(l.title, tenderLink(o, r), escapeHtml(l.line2), line3, first),
+      text: `- ${l.title}\n  ${l.line2}\n  ${third}\n  ${tenderLink(o, r)}`,
+    };
+  };
+  if (s.kind === "tenders") {
+    return {
+      rows: s.rows.map((r) => tenderRow(r, true)), all: s.total,
+      count: tn(lang, "digest.tenders_subject_all_one", "digest.tenders_subject_all_many", s.total, { n: n(s.total) }),
+    };
+  }
+  if (s.kind === "expiring") {
+    return {
+      rows: s.rows.map((r) => {
+        const l = contractLines(lang, r);
+        return {
+          html: (first: boolean) => row(l.title, contractLink(o, r), escapeHtml(l.line2), escapeHtml(l.line3), first),
+          text: `- ${l.title}\n  ${l.line2}\n  ${l.line3}\n  ${contractLink(o, r)}`,
+        };
+      }),
+      all: s.total,
+      count: tn(lang, "digest.expiring_subject_all_one", "digest.expiring_subject_all_many", s.total, { n: n(s.total), months: s.months }),
+    };
+  }
+  // The records kinds: the segment's notices first, then the counts that rose, as the records message lists them.
+  const what: string[] = [];
+  if (s.tenderTotal) what.push(tn(lang, "digest.tenders_subject_all_one", "digest.tenders_subject_all_many", s.tenderTotal, { n: n(s.tenderTotal) }));
+  if (s.more) what.push(tn(lang, "digest.records_subject_one", "digest.records_subject_many", s.more, { n: n(s.more) }));
+  const rises = s.rises.map((r): GroupRow => {
+    const l = riseLines(lang, r);
+    const href = analyticsLink({ ...o, params: s.params }, r);
+    return { html: (first) => row(l.title, href, escapeHtml(l.line2), escapeHtml(l.line3), first), text: `- ${l.title}\n  ${l.line2}\n  ${l.line3}\n  ${href}` };
+  });
+  return { rows: [...s.tenders.map((r) => tenderRow(r, false)), ...rises], all: s.tenderTotal + s.rises.length, count: what.join(", ") };
+}
+
+const GROUP_NOTE: Record<"tenders" | "expiring" | "records", Key> = {
+  tenders: "digest.tenders_note", expiring: "digest.expiring_note", records: "digest.records_note",
+};
+
+export function groupDigest(o: GroupDigest): DigestMessage {
+  const { lang } = o;
+  const n = o.sections.length;
+  const subject = fitSubject(t(lang, "digest.group_subject", { n: fmtInt(n, lang), date: o.dataDate }));
+  const title = t(lang, "digest.group_title");
+  const lead = tn(lang, "digest.group_lead_one", "digest.group_lead_many", n, { n: fmtInt(n, lang), max: fmtInt(o.over, lang), date: o.dataDate });
+  const searches = siteLink(o.site, "/account/searches", lang);
+  const html: string[] = [h1(title), para(escapeHtml(lead))];
+  const text: string[] = [title, lead];
+  const link = (label: string, url: string) => t(lang, "digest.text_link", { label, url });
+  let left = GROUP_ROWS_MAX;
+  const later: { label: string; page: string; count: string }[] = [];
+  const notes = new Set<Key>();
+  for (const s of o.sections) {
+    notes.add(GROUP_NOTE[s.kind === "tenders" || s.kind === "expiring" ? s.kind : "records"]);
+    if (s.kind !== "tenders" && s.kind !== "expiring" && s.tenderTotal) notes.add(GROUP_NOTE.tenders);
+    const page = siteLink(o.site, s.params, lang);
+    const { rows: all, all: total, count } = sectionRows(o, s);
+    if (left <= 0) {
+      later.push({ label: s.label, page, count });
+      continue;
+    }
+    const shown = all.slice(0, Math.min(GROUP_SECTION_ROWS, left));
+    left -= shown.length;
+    const more = moreLine(lang, shown.length, total, page);
+    const stop = t(lang, "digest.group_stop_one");
+    html.push(
+      h2(s.label), para(inkLink(page, count)), rows(shown.map((r, i) => r.html(i === 0))), more?.html ?? "", para(mutedLink(s.stopUrl, stop), true),
+    );
+    text.push([
+      `${h2Text(lang, s.label)}\n${link(count, page)}`, shown.map((r) => r.text).join("\n\n"), [...(more ? [more.text] : []), link(stop, s.stopUrl)].join("\n"),
+    ].join("\n\n"));
+  }
+  if (later.length) {
+    const head = tn(lang, "digest.group_rest_one", "digest.group_rest_many", later.length, { n: fmtInt(later.length, lang) });
+    const note = t(lang, "digest.group_rest_note", { rows: fmtInt(GROUP_ROWS_MAX, lang) });
+    html.push(h2(head), para(escapeHtml(note), true), para(later.map((l) => `${inkLink(l.page, l.label)} · ${escapeHtml(l.count)}`).join("<br>")));
+    text.push([h2Text(lang, head), note, later.map((l) => `- ${l.label} · ${l.count}\n  ${l.page}`).join("\n")].join("\n\n"));
+  }
+  const button_ = t(lang, "digest.group_button");
+  html.push(button(searches, button_), ...[...notes].map((k) => para(escapeHtml(t(lang, k)), true)));
+  const reason = t(lang, "digest.group_why");
+  const stopAll = t(lang, "digest.group_stop_all");
+  text.push(link(button_, searches), ...[...notes].map((k) => t(lang, k)), [
+    reason, link(t(lang, "digest.text_searches"), searches), link(stopAll, o.stopUrl),
+  ].join("\n") + `\n${textFooter(lang)}`);
+  const why = whyLine(reason, [{ href: searches, label: t(lang, "digest.searches_link") }, { href: o.stopUrl, label: stopAll }]);
+  const labels = o.sections.map((s) => s.label);
+  return {
+    to: o.to, subject, lang, headers: deliveryHeaders(o.stopUrl), text: text.join("\n\n"),
+    html: shell({ lang, site: o.site, subject, preheader: preheader(lang, labels, labels.length), body: html.join(""), why }),
+  };
+}
+
 // -- watches: one message per account (watch_mail.ts) ----------------------------------------
 
 // One watch's part of the message: its page, and its events by kind in the

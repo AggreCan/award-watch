@@ -29,11 +29,20 @@
 // sync that did not finish tonight), those searches wait, unclaimed, and the
 // run's report and log line say why; the next hour reads it again.
 //
-// Nothing new writes an "empty" row and sends nothing. Otherwise one
-// message, in the search's language, goes through the
-// accounts sender, and a "sent" or "failed" row is written; "sent" and
+// The list is read account by account (byAccount), and all of an account's
+// due searches are read before any of them is sent. Nothing new writes an
+// "empty" row and sends nothing. Up to GROUP_OVER searches with news go one
+// message each, in the search's language; past it, all of them go in one
+// message in the account's mail language (users.lang), a section a search,
+// with a stop link a section and one for the whole message
+// (group_stop.ts); it counts as one message against the cap, the day's
+// ceiling and the run log, and each search keeps its own claim, row and
+// mark. Each search's message goes through the accounts sender, and a
+// "sent" or "failed" row is written; "sent" and
 // "empty" move last_delivered_at to the run's time, "failed" leaves it, so
-// the next delivery covers what this one missed. At most RUN_MESSAGES_MAX
+// the next delivery covers what this one missed. A search whose account's
+// plan does not send it is marked for the data date with no row (passedOver),
+// so it leaves the list. At most RUN_MESSAGES_MAX
 // messages a run; a daily-limit or rate-limit refusal stops the run and the
 // next hour goes on from there. A file or the database failing logs one line
 // and ends the run; the next hour tries again. A second run in the same hour
@@ -85,17 +94,21 @@ import {
 import { type Env, type MailCeiling, mailCeiling } from "../env";
 import { pick, segmentShort, type Lang } from "../i18n";
 import { WINDOW_DAYS, filterExpiring, readExpiringQuery } from "../pages/expiring";
+import { interestFilter } from "../pages/interest";
 import { filterTenders, readTenderQuery } from "../pages/tenders";
 import { faultSummary } from "../search_db";
-import { type Cadence, type DigestMessage, ROWS_MAX, expiringDigest, recordsDigest, siteLink, tenderDigest } from "./digests";
+import {
+  type Cadence, type DigestMessage, type GroupSection, GROUP_SECTION_ROWS, ROWS_MAX, expiringDigest, groupDigest, recordsDigest, siteLink, tenderDigest,
+} from "./digests";
 import { allowed, planFor, type Feature, type Plan } from "./entitlements";
+import { groupStopPath } from "./group_stop";
 import {
   type Entity, type Mark, type RecordsWait, type Rise, MARK_WRITE_SQL, entityOf, isRecordsKind, loadMark, markText, missingTable, readCounts,
   rises,
 } from "./records_deliveries";
 import { survivorOf } from "./watches";
 import { BRIEFING_WAIT_WHY, type BriefingReport, briefingActive, briefingCounts, madeBefore, runBriefings, sharedCap } from "./briefings";
-import { DELIVERABLE_KINDS } from "./searches";
+import { DELIVERABLE_KINDS, DELIVERY_ROW_DAYS } from "./searches";
 import { randomHex } from "./secrets";
 import { type MailMessage, senderFor } from "./sender";
 import { accountsEnabled } from "./switch";
@@ -110,6 +123,20 @@ export const RUN_MESSAGES_MAX = 300;
 // Rows listed in one message; the rest are a line linking the page. Set with
 // the messages (digests.ts), which hold the watch mail to it too.
 export { ROWS_MAX };
+// An account's saved searches with news in one run go one message each up to
+// this many; past it, all of them go in one message (groupDigest), so an
+// account at Ultra's 100 daily searches sends one message a day, not 100, of
+// the day's Email Sending quota (docs/accounts.md, Phase 2: delivery).
+export const GROUP_OVER = 5;
+// The most queries a grouped message makes from its claims to its last write,
+// whatever its size: the claims (one batch, each search its own statement and
+// its own condition), the stop secrets it lacks (one batch), then the rows and
+// marks after the send (one batch, tried once more on a fault), or the claims
+// given back with the failed rows (one batch). Within CLAIM_QUERIES, which the
+// run holds back before any claim, so a group is taken up whole or not at all.
+export const GROUP_QUERIES = 4;
+export { groupStopPath, groupTag } from "./group_stop";
+export { DELIVERY_ROW_DAYS };
 // The most days one delivery reaches back, whatever the gap since the last.
 export const SPAN_DAYS_MAX = 7;
 // A weekly search is due again this many days after its last delivery.
@@ -268,11 +295,12 @@ export const ceilingText = (c: MailCeiling): string =>
 // -- the run log ---------------------------------------------------------------------------------
 
 export const RUN_LOG_DAYS = 90;
-// The deliveries rows are kept as long. Nothing reads an older one: the run
-// asks for a failed row of the data date, the searches page and the console
-// for each search's newest row and the account's last 20, and the console's
-// overview for the last 7 days.
-export const DELIVERY_ROW_DAYS = 90;
+// The deliveries rows are kept DELIVERY_ROW_DAYS (searches.ts, which the
+// privacy page reads too). Nothing reads an older one: the run asks for a
+// failed row of the data date, the searches page and the console for each
+// search's newest row and the account's last 20, and the console's overview
+// for the last 7 days.
+
 // The longest reason a row keeps.
 export const RUN_DETAIL_MAX = 120;
 
@@ -329,10 +357,31 @@ async function writeRunLog(env: Env, now: Date, r: RunReport): Promise<void> {
   }
 }
 
+// The console's bulk runs (announce.tsx runAnnouncement: the accounts-open and
+// Ultra messages) go through the same MAIL binding, so they spend the same
+// quota: each run that sent or tried a message writes a row of its own
+// outcome to the run log, with no data date and nothing left due, and
+// DAY_SENT_SQL counts its sends with the job's for the rest of the UTC day.
+// The daily check reads these rows as the day's sends and nothing more
+// (watchdog.ts): they are not runs of the job.
+export const CONSOLE_OUTCOME = "console";
+
+export async function writeConsoleRun(env: Env, now: Date, o: { sent: number; failed: number; detail: string }): Promise<void> {
+  try {
+    await env.ACCOUNTS!.prepare(RUN_LOG_SQL)
+      .bind(now.toISOString(), null, CONSOLE_OUTCOME, o.sent, o.failed, 0, o.detail.slice(0, RUN_DETAIL_MAX)).run();
+  } catch (e) {
+    log(missingTable(e)
+      ? "the console's run was not logged: the accounts database has no delivery_runs table (apply accounts_schema.sql)"
+      : `the console's run was not logged (${faultSummary(e)})`);
+  }
+}
+
 // The messages the day's ceiling still allows this run: the ceiling less the
 // day's sends so far. null without the delivery_runs table, since the day's
-// sends cannot be counted then: no ceiling, and one log line.
-async function dayRoom(env: Env, c: MailCeiling, now: Date): Promise<number | null> {
+// sends cannot be counted then: no ceiling, and one log line. The console's
+// bulk runs read it too.
+export async function dayRoom(env: Env, c: MailCeiling, now: Date): Promise<number | null> {
   try {
     const start = Date.parse(`${now.toISOString().slice(0, 10)}T00:00:00.000Z`);
     const row = await env.ACCOUNTS!.prepare(DAY_SENT_SQL).bind(new Date(start).toISOString(), new Date(start + 86_400_000).toISOString())
@@ -352,8 +401,14 @@ export type RunOutcome = "off" | "no_mail" | "no_data" | "not_today" | "fault" |
 export interface RunReport {
   outcome: RunOutcome;
   dataDate: string | null;
+  // Messages: a grouped message counts once here, as it does against the cap,
+  // the day's ceiling and the run log; each search it carried has its own
+  // deliveries row.
   sent: number;
   failed: number;
+  // Of the messages sent, the grouped ones, and the searches they carried.
+  groups: number;
+  grouped: number;
   empty: number;
   // Due searches whose owner's plan does not allow delivery, or does not
   // cover them (past the plan's figure, after a move to a smaller plan).
@@ -382,7 +437,8 @@ export interface RunReport {
 }
 
 const emptyReport = (): RunReport => ({
-  outcome: "done", dataDate: null, sent: 0, failed: 0, empty: 0, skipped: 0, waiting: 0, records: null, watch: null, left: 0, why: null,
+  outcome: "done", dataDate: null, sent: 0, failed: 0, groups: 0, grouped: 0, empty: 0, skipped: 0, waiting: 0, records: null, watch: null, left: 0,
+  why: null,
 });
 
 // A file or the database could not be read: the message is the run's one log line.
@@ -415,6 +471,8 @@ export function spanStart(deliver: Cadence, lastDelivered: string | null, dataDa
 type DueRow = {
   id: string; user_id: string; kind: string; params: string; label: string; lang: string; deliver: string;
   last_delivered_at: string | null; email: string; plan: string; plan_until: string | null; secret: string | null;
+  // The account's mail language (users.lang), a grouped message's language.
+  user_lang: string;
   // How many of the account's saved searches and briefings were made before this one (the cap they share).
   n_before: number;
 };
@@ -432,7 +490,7 @@ type DueRow = {
 // briefings table is not on the database yet). A function, called at the
 // read, since madeBefore comes from briefings.ts, which imports this module.
 export const candidatesSql = (briefings = true) =>
-  "SELECT s.id, s.user_id, s.kind, s.params, s.label, s.lang, s.deliver, s.last_delivered_at, u.email, u.plan, u.plan_until, k.secret, " +
+  "SELECT s.id, s.user_id, s.kind, s.params, s.label, s.lang, s.deliver, s.last_delivered_at, u.email, u.plan, u.plan_until, k.secret, u.lang AS user_lang, " +
   `${briefings ? `${madeBefore("s", "saved_searches")} + ${madeBefore("s", "briefings")}` : madeBefore("s", "saved_searches")} AS n_before ` +
   "FROM saved_searches s JOIN users u ON u.id = s.user_id LEFT JOIN delivery_tokens k ON k.search_id = s.id " +
   "WHERE u.status = 'active' AND s.deliver IN ('daily', 'weekly') " +
@@ -449,6 +507,20 @@ async function candidates(env: Env, dataDate: string): Promise<DueRow[]> {
       return env.ACCOUNTS!.prepare(candidatesSql(false)).bind(...binds).all<DueRow>();
     });
   return res.results ?? [];
+}
+
+// The candidates account by account, so a run sees all of an account's
+// searches with news before it sends any: each account where its first search
+// stood in the list (paid accounts first, then oldest), its searches in their
+// own order (created_at, id), which the list already has.
+export function byAccount<T extends { user_id: string }>(rows: readonly T[]): T[] {
+  const accounts = new Map<string, T[]>();
+  for (const r of rows) {
+    const mine = accounts.get(r.user_id);
+    if (mine) mine.push(r);
+    else accounts.set(r.user_id, [r]);
+  }
+  return [...accounts.values()].flat();
 }
 
 // -- the published files, each read once a run ------------------------------------------------
@@ -557,6 +629,9 @@ export async function expiringItems(files: Files, window: ExpiringWindow, params
 // as one (it is passed over, as a kind the job cannot serve was).
 export type RecordsItems = {
   entity: Entity; name: string; rises: Rise[]; since: string; tenders: TenderRow[]; mark: Mark;
+  // An organization's or a buyer's name in each language, as the records database holds it (null when it
+  // holds none): a grouped message in the other language writes the search's label with it.
+  names: Record<Lang, string> | null;
 };
 
 export async function recordsItems(
@@ -585,7 +660,9 @@ export async function recordsItems(
     ? `${entity.id} ${segmentShort(lang, entity.id)}`
     : (read.name ? pick(lang, read.name.en, read.name.fr) : null) ?? entity.id;
   const tenders = entity.kind === "segment" ? await tenderItems(files, `/tenders?segment=${entity.id}`, start, dataDate, clock) : [];
-  return { entity, name, rises: rises(comparable, mark) ?? [], since: comparable?.asOf ?? dataDate, tenders, mark };
+  const held = entity.kind !== "segment" && read.name && (read.name.en || read.name.fr) ? read.name : null;
+  const names = held ? { en: pick("en", held.en, held.fr)!, fr: pick("fr", held.en, held.fr)! } : null;
+  return { entity, name, rises: rises(comparable, mark) ?? [], since: comparable?.asOf ?? dataDate, tenders, mark, names };
 }
 
 // -- merged organizations and buyers ---------------------------------------------------------
@@ -635,14 +712,31 @@ async function stopSecret(env: Env, searchId: string, now: Date): Promise<string
   return (read.results?.[0] as { secret?: string } | undefined)?.secret ?? null;
 }
 
+// The stop secrets of a group's searches that have none yet, made in one
+// batch, as stopSecret makes one; a search deleted while the run was going
+// has none.
+async function stopSecrets(env: Env, searchIds: readonly string[], now: Date): Promise<Map<string, string>> {
+  if (!searchIds.length) return new Map();
+  const db = env.ACCOUNTS!;
+  const results = await db.batch([
+    ...searchIds.map((id) => db.prepare(
+      "INSERT INTO delivery_tokens (search_id, secret, created_at) SELECT ?1, ?2, ?3 " +
+      "WHERE EXISTS (SELECT 1 FROM saved_searches WHERE id = ?1) ON CONFLICT (search_id) DO NOTHING",
+    ).bind(id, randomHex(16), now.toISOString())),
+    db.prepare("SELECT search_id, secret FROM delivery_tokens WHERE search_id IN (SELECT value FROM json_each(?))").bind(JSON.stringify(searchIds)),
+  ]);
+  const rows = (results[results.length - 1]?.results ?? []) as { search_id: string; secret: string }[];
+  return new Map(rows.map((r) => [r.search_id, r.secret]));
+}
+
 // One deliveries row, and for "sent" and "empty" the search's
 // last_delivered_at and, for a records search, its new mark, in one batch.
 // Written only while the search exists, so a search deleted during the run
 // is passed over rather than failing it. A "failed" row keeps the old mark,
 // so the next delivery reports what this one did not send.
-async function record(
+function recordStatements(
   env: Env, searchId: string, status: "sent" | "failed" | "empty", items: number, now: Date, mark: Mark | null = null,
-): Promise<void> {
+): D1PreparedStatement[] {
   const db = env.ACCOUNTS!;
   const at = now.toISOString();
   const statements = [
@@ -655,26 +749,77 @@ async function record(
     statements.push(db.prepare("UPDATE saved_searches SET last_delivered_at = ? WHERE id = ?").bind(at, searchId));
     if (mark) statements.push(db.prepare(MARK_WRITE_SQL).bind(searchId, mark.asOf, markText(mark), at));
   }
-  await db.batch(statements);
+  return statements;
+}
+
+async function record(
+  env: Env, searchId: string, status: "sent" | "failed" | "empty", items: number, now: Date, mark: Mark | null = null,
+): Promise<void> {
+  await env.ACCOUNTS!.batch(recordStatements(env, searchId, status, items, now, mark));
 }
 
 // A search taken for the data date by this run: last_delivered_at set to the
 // run's time in one statement that holds only while its delivery is on and no
 // run has delivered it for this data date, so of two runs at once exactly one
 // goes on, and a stop link clicked after the run read its list stops it.
+const CLAIM_SQL =
+  "UPDATE saved_searches SET last_delivered_at = ? WHERE id = ? AND deliver IN ('daily', 'weekly') " +
+  "AND (last_delivered_at IS NULL OR substr(last_delivered_at, 1, 10) < ?)";
+
 async function claim(env: Env, searchId: string, dataDate: string, now: Date): Promise<boolean> {
-  const res = await env.ACCOUNTS!.prepare(
-    "UPDATE saved_searches SET last_delivered_at = ? WHERE id = ? AND deliver IN ('daily', 'weekly') " +
-    "AND (last_delivered_at IS NULL OR substr(last_delivered_at, 1, 10) < ?)",
-  ).bind(now.toISOString(), searchId, dataDate).run();
+  const res = await env.ACCOUNTS!.prepare(CLAIM_SQL).bind(now.toISOString(), searchId, dataDate).run();
   return (res.meta?.changes ?? 0) === 1;
+}
+
+// A group's claims: each search its own statement, on the same conditions,
+// in one batch (one query); whether each one holds, in order. A search
+// stopped or delivered since the list was read drops out of the group.
+async function claimAll(env: Env, searchIds: readonly string[], dataDate: string, now: Date): Promise<boolean[]> {
+  const db = env.ACCOUNTS!;
+  const results = await db.batch(searchIds.map((id) => db.prepare(CLAIM_SQL).bind(now.toISOString(), id, dataDate)));
+  return results.map((r) => (r.meta?.changes ?? 0) === 1);
 }
 
 // A claim given back: last_delivered_at as it was before, if this run's claim
 // still stands, so the next delivery covers what this one did not send.
+const RELEASE_SQL = "UPDATE saved_searches SET last_delivered_at = ? WHERE id = ? AND last_delivered_at = ?";
+
 async function release(env: Env, searchId: string, before: string | null, now: Date): Promise<void> {
-  await env.ACCOUNTS!.prepare("UPDATE saved_searches SET last_delivered_at = ? WHERE id = ? AND last_delivered_at = ?")
-    .bind(before, searchId, now.toISOString()).run();
+  await env.ACCOUNTS!.prepare(RELEASE_SQL).bind(before, searchId, now.toISOString()).run();
+}
+
+// Every claim of a group given back together, and, when the mail service
+// refused the message, each search's failed row with it: one batch.
+async function releaseAll(
+  env: Env, held: readonly { id: string; before: string | null }[], now: Date, failed: readonly { id: string; items: number }[] = [],
+): Promise<void> {
+  const db = env.ACCOUNTS!;
+  await db.batch([
+    ...held.map((h) => db.prepare(RELEASE_SQL).bind(h.before, h.id, now.toISOString())),
+    ...failed.flatMap((f) => recordStatements(env, f.id, "failed", f.items, now)),
+  ]);
+}
+
+// The searches read and passed over because their account's plan does not
+// send them (no delivery, or past the plan's figure after a move to a smaller
+// plan): covered for the data date as a claim would cover them, with no
+// deliveries row, so they leave the run's list and are not read again every
+// hour, as the watch mail, the briefings and the saved views pass theirs
+// over. A plan restored that day sends from the next data date on (a weekly
+// search, a week after). MARKS_BATCH statements a batch, each batch one
+// query, and none once too little is left for a claim and the run log's row:
+// the rest are read again the next hour.
+export const MARKS_BATCH = 100;
+export const PASSED_OVER_SQL =
+  "UPDATE saved_searches SET last_delivered_at = ?1 WHERE id = ?2 AND deliver IN ('daily', 'weekly') " +
+  "AND (last_delivered_at IS NULL OR substr(last_delivered_at, 1, 10) < ?3)";
+
+async function passedOver(env: Env, ids: readonly string[], dataDate: string, now: Date, queries: QueryCount): Promise<void> {
+  const db = env.ACCOUNTS!;
+  for (let i = 0; i < ids.length; i += MARKS_BATCH) {
+    if (!queries.claimable) return;
+    await db.batch(ids.slice(i, i + MARKS_BATCH).map((id) => db.prepare(PASSED_OVER_SQL).bind(now.toISOString(), id, dataDate)));
+  }
 }
 
 // -- sending ---------------------------------------------------------------------------------
@@ -735,6 +880,46 @@ function siteOf(env: Env): string | null {
   } catch {
     return null;
   }
+}
+
+// A search with news, read and not yet sent: what its own message or its
+// section of a grouped one is built from.
+type Ready = {
+  s: DueRow; lang: Lang; cadence: Cadence; start: string;
+  // Its page at the surviving ids (survivingParams), and a radar search's window.
+  params: string; win: string | null;
+  items: TenderRow[] | ExpiringRow[]; found: RecordsItems | null;
+  // Records matched (for the records kinds, the records added plus the notices), and the records added.
+  total: number; more: number; mark: Mark | null;
+};
+
+// A search's label in the grouped message's language: as saved when the
+// search was saved from a page in that language, else written again in it by
+// interestFilter, as the searches page writes it (an organization or a buyer
+// by the name the records database holds), and as saved when it no longer
+// writes.
+async function labelFor(env: Env, lang: Lang, r: Ready): Promise<string> {
+  if (r.s.lang === lang) return r.s.label;
+  const known = r.found?.names ? { name: r.found.names[lang] } : {};
+  const rebuilt = await interestFilter(env, lang, r.s.kind, r.s.params, known).catch(() => null);
+  return rebuilt?.label ?? r.s.label;
+}
+
+// A search's section of a grouped message: its label, its page and its own
+// stop link in the message's language, and its rows (digests.ts groupDigest
+// lists GROUP_SECTION_ROWS of them at most).
+async function groupSection(env: Env, site: string, lang: Lang, r: Ready, secret: string): Promise<GroupSection> {
+  const base = { label: await labelFor(env, lang, r), params: r.params, stopUrl: siteLink(site, `/account/stop?s=${r.s.id}&t=${secret}`, lang) };
+  if (r.found) {
+    return {
+      ...base, kind: r.found.entity.kind, rises: r.found.rises, more: r.more, tenders: r.found.tenders.slice(0, GROUP_SECTION_ROWS),
+      tenderTotal: r.found.tenders.length,
+    };
+  }
+  if (r.s.kind === "tenders") return { ...base, kind: "tenders", rows: (r.items as TenderRow[]).slice(0, GROUP_SECTION_ROWS), total: r.total };
+  return {
+    ...base, kind: "expiring", rows: (r.items as ExpiringRow[]).slice(0, GROUP_SECTION_ROWS), total: r.total, months: WINDOW_MONTHS[r.win as ExpiringWindow],
+  };
 }
 
 // One run: the delivery itself (deliver), then its row in the run log,
@@ -808,137 +993,238 @@ async function deliver(env: Env, now: Date, tally: Tally): Promise<RunReport> {
     }
     return why !== null;
   };
-  // The search this run has claimed and not yet recorded or given back: a
-  // fault in between gives it back too, so the next hour covers it.
-  let held: { id: string; before: string | null } | null = null;
+  const capText = `the cap of ${RUN_MESSAGES_MAX} messages`;
+  // The searches this run has claimed and not yet recorded or given back (one,
+  // or a group's): a fault in between gives them back too, so the next hour
+  // covers them.
+  let held: { id: string; before: string | null }[] = [];
   let list: DueRow[] = [];
+  // The first row of the account in hand: the list runs account by account (byAccount).
   let i = 0;
+  // The rows this run has dealt with (recorded, given to another run or a stop
+  // link, waiting, passed over), left out of what it leaves due.
+  const done = new Set<string>();
+  const passed: string[] = [];
+
+  // Whether the run may take up one more message: under the cap, under the
+  // day's ceiling, and with the queries for a claim and its writes left.
+  const mayTakeUp = (): boolean => {
+    if (report.sent + report.failed >= RUN_MESSAGES_MAX) {
+      stop = capText;
+      report.outcome = "capped";
+      return false;
+    }
+    // The day's ceiling reached: stopped before the claim, as a sending limit stops the run.
+    if (room !== null && report.sent >= room) {
+      stop = ceilingWords;
+      report.outcome = "limited";
+      return false;
+    }
+    return !pause(true);
+  };
+
+  // One search's own message, as before grouping; false when the run must stop.
+  const sendOne = async (r: Ready): Promise<boolean> => {
+    const s = r.s;
+    if (!mayTakeUp()) return false;
+    // Another run at the same moment has it (that run sends it), or its delivery was turned off since the list was read.
+    if (!(await claim(env, s.id, dataDate, now))) {
+      done.add(s.id);
+      return true;
+    }
+    held = [{ id: s.id, before: s.last_delivered_at }];
+    const secret = s.secret ?? (await stopSecret(env, s.id, now));
+    if (!secret) {
+      await release(env, s.id, s.last_delivered_at, now);
+      held = [];
+      done.add(s.id);
+      return true;
+    }
+    const stopUrl = siteLink(site, `/account/stop?s=${s.id}&t=${secret}`, r.lang);
+    const base = { lang: r.lang, to: s.email, site, label: s.label, params: r.params, cadence: r.cadence, dataDate, stopUrl, total: r.total };
+    let message: DigestMessage;
+    if (r.found) {
+      // At most ROWS_MAX rows in all: the counts (40 at most) first, then the
+      // segment's notices, whose rest a line links.
+      const rows = r.found.rises.slice(0, ROWS_MAX);
+      message = recordsDigest({
+        ...base, kind: r.found.entity.kind, name: r.found.name, rows, more: r.more, since: r.found.since,
+        tenders: r.found.tenders.slice(0, ROWS_MAX - rows.length), tenderTotal: r.found.tenders.length, tenderSince: r.start,
+      });
+    } else if (s.kind === "tenders") {
+      message = tenderDigest({ ...base, rows: (r.items as TenderRow[]).slice(0, ROWS_MAX), since: r.start });
+    } else {
+      message = expiringDigest({
+        ...base, rows: (r.items as ExpiringRow[]).slice(0, ROWS_MAX), months: WINDOW_MONTHS[r.win as ExpiringWindow],
+        query: readExpiringQuery(new URL(r.params, BASE)),
+      });
+    }
+    const result = await send(env, site, message);
+    if (result.sent) {
+      // Sent: the claim stands, whatever happens to the row that records it.
+      held = [];
+      done.add(s.id);
+      await afterSend(() => record(env, s.id, "sent", r.total, now, r.mark));
+      report.sent++;
+      return true;
+    }
+    await release(env, s.id, s.last_delivered_at, now);
+    held = [];
+    if (result.code && STOP_CODES.has(result.code)) {
+      stop = result.code;
+      report.outcome = "limited";
+      return false;
+    }
+    done.add(s.id);
+    await record(env, s.id, "failed", r.total, now);
+    report.failed++;
+    return true;
+  };
+
+  // More than GROUP_OVER of an account's searches with news: one message, one
+  // against the cap and the day's ceiling, all or nothing. Each search keeps
+  // its own claim (one batch), its own row and its own mark (one batch after
+  // the send); a send that does not go gives every claim back together. At
+  // most GROUP_QUERIES queries from the claims on, inside what mayTakeUp
+  // holds back. False when the run must stop.
+  const sendGroup = async (rs: Ready[]): Promise<boolean> => {
+    if (!mayTakeUp()) return false;
+    const claimed = await claimAll(env, rs.map((r) => r.s.id), dataDate, now);
+    const members = rs.filter((_, k) => claimed[k]);
+    for (const r of rs) if (!members.includes(r)) done.add(r.s.id);
+    if (!members.length) return true;
+    held = members.map((r) => ({ id: r.s.id, before: r.s.last_delivered_at }));
+    const made = await stopSecrets(env, members.filter((r) => !r.s.secret).map((r) => r.s.id), now);
+    const secretOf = (r: Ready) => r.s.secret ?? made.get(r.s.id) ?? null;
+    // A search deleted while the run was going has no secret any more, and its claim went with its row.
+    const kept = members.filter((r) => secretOf(r));
+    if (!kept.length) {
+      await releaseAll(env, held, now);
+      held = [];
+      for (const r of members) done.add(r.s.id);
+      return true;
+    }
+    const first = kept[0].s;
+    const lang = asLang(first.user_lang);
+    const sections = await Promise.all(kept.map((r) => groupSection(env, site, lang, r, secretOf(r)!)));
+    const stopUrl = siteLink(site, await groupStopPath(first.user_id, kept.map((r) => ({ id: r.s.id, secret: secretOf(r)! }))), lang);
+    const message = groupDigest({ lang, to: first.email, site, dataDate, stopUrl, sections, over: GROUP_OVER });
+    const result = await send(env, site, message);
+    if (result.sent) {
+      // Sent: the claims stand, whatever happens to the rows that record them.
+      held = [];
+      for (const r of members) done.add(r.s.id);
+      await afterSend(() => env.ACCOUNTS!.batch(kept.flatMap((r) => recordStatements(env, r.s.id, "sent", r.total, now, r.mark))));
+      report.sent++;
+      report.groups++;
+      report.grouped += kept.length;
+      return true;
+    }
+    if (result.code && STOP_CODES.has(result.code)) {
+      await releaseAll(env, held, now);
+      held = [];
+      stop = result.code;
+      report.outcome = "limited";
+      return false;
+    }
+    await releaseAll(env, held, now, kept.map((r) => ({ id: r.s.id, items: r.total })));
+    held = [];
+    for (const r of members) done.add(r.s.id);
+    report.failed++;
+    return true;
+  };
+
   try {
     if (ceiling) room = await dayRoom(env, ceiling, now);
-    list = await candidates(env, dataDate);
+    list = byAccount(await candidates(env, dataDate));
     await env.ACCOUNTS!.prepare(DELIVERIES_PRUNE_SQL).bind(daysBefore(now, DELIVERY_ROW_DAYS)).run();
-    for (; i < list.length; i++) {
-      const s = list[i];
-      if (!isDue(s.deliver, s.last_delivered_at, dataDate)) continue;
-      if (pause()) break;
-      let plan = plans.get(s.user_id);
-      if (!plan) {
-        plan = (await planFor(env, { id: s.user_id, plan: s.plan, plan_until: s.plan_until }, now)).plan;
-        plans.set(s.user_id, plan);
-      }
-      // Past the plan's figure (after a move to a smaller plan), the first ones by creation date only.
-      if (!allowed({ plan }, "delivery") || (s.n_before ?? 0) >= sharedCap(plan)) {
-        report.skipped++;
-        continue;
-      }
-      const cadence = s.deliver as Cadence;
-      const lang = asLang(s.lang);
-      const start = spanStart(cadence, s.last_delivered_at, dataDate);
-      const win = s.kind === "expiring" ? /^\/expiring\/(3m|6m|12m)(?:\?|$)/.exec(s.params)?.[1] : null;
-      // A filter on a merged organization or buyer reads the surviving id.
-      const params = s.kind === "tenders" || win ? await survivingParams(env, s.params) : s.params;
-      let items: TenderRow[] | ExpiringRow[] = [];
-      let found: RecordsItems | null = null;
-      if (s.kind === "tenders") items = await tenderItems(files, params, start, dataDate, clock);
-      else if (win && isExpiringWindow(win)) items = await expiringItems(files, win, params, start, dataDate);
-      else if (isRecordsKind(s.kind)) {
-        // Once the records database (or the marks table) is found wanting, the
-        // run's other records searches wait without asking it again.
-        if (report.records) {
-          report.waiting++;
+    accounts: while (i < list.length) {
+      let end = i;
+      while (end < list.length && list[end].user_id === list[i].user_id) end++;
+      // The account's searches with news, read before any is sent, in the account's order.
+      const ready: Ready[] = [];
+      for (let k = i; k < end; k++) {
+        const s = list[k];
+        if (!isDue(s.deliver, s.last_delivered_at, dataDate)) continue;
+        // Past the budget the account waits whole, nothing of it claimed but the empty rows written already.
+        if (pause()) break accounts;
+        let plan = plans.get(s.user_id);
+        if (!plan) {
+          plan = (await planFor(env, { id: s.user_id, plan: s.plan, plan_until: s.plan_until }, now)).plan;
+          plans.set(s.user_id, plan);
+        }
+        // Past the plan's figure (after a move to a smaller plan), the first ones by creation date only.
+        if (!allowed({ plan }, "delivery") || (s.n_before ?? 0) >= sharedCap(plan)) {
+          report.skipped++;
+          passed.push(s.id);
+          done.add(s.id);
           continue;
         }
-        const got = await recordsItems(env, files, s, lang, start, dataDate, clock);
-        if (!got) continue;
-        if ("wait" in got) {
-          report.records = got.wait;
-          report.waiting++;
+        const cadence = s.deliver as Cadence;
+        const lang = asLang(s.lang);
+        const start = spanStart(cadence, s.last_delivered_at, dataDate);
+        const win = s.kind === "expiring" ? (/^\/expiring\/(3m|6m|12m)(?:\?|$)/.exec(s.params)?.[1] ?? null) : null;
+        // A filter on a merged organization or buyer reads the surviving id.
+        const params = s.kind === "tenders" || win ? await survivingParams(env, s.params) : s.params;
+        let items: TenderRow[] | ExpiringRow[] = [];
+        let found: RecordsItems | null = null;
+        if (s.kind === "tenders") items = await tenderItems(files, params, start, dataDate, clock);
+        else if (win && isExpiringWindow(win)) items = await expiringItems(files, win, params, start, dataDate);
+        else if (isRecordsKind(s.kind)) {
+          // Once the records database (or the marks table) is found wanting, the
+          // run's other records searches wait without asking it again.
+          done.add(s.id);
+          if (report.records) {
+            report.waiting++;
+            continue;
+          }
+          const got = await recordsItems(env, files, s, lang, start, dataDate, clock);
+          if (!got) continue;
+          if ("wait" in got) {
+            report.records = got.wait;
+            report.waiting++;
+            continue;
+          }
+          done.delete(s.id);
+          found = got;
+        } else {
+          done.add(s.id);
           continue;
         }
-        found = got;
-      } else continue;
-      const more = found ? found.rises.reduce((n, r) => n + r.more, 0) : 0;
-      const total = found ? more + found.tenders.length : items.length;
-      const mark = found?.mark ?? null;
-      if (total === 0) {
-        if (pause(true)) break;
-        if (!(await claim(env, s.id, dataDate, now))) continue;
-        held = { id: s.id, before: s.last_delivered_at };
-        await record(env, s.id, "empty", 0, now, mark);
-        held = null;
-        report.empty++;
-        continue;
+        const more = found ? found.rises.reduce((n, r) => n + r.more, 0) : 0;
+        const total = found ? more + found.tenders.length : items.length;
+        const mark = found?.mark ?? null;
+        if (total === 0) {
+          if (pause(true)) break accounts;
+          done.add(s.id);
+          if (!(await claim(env, s.id, dataDate, now))) continue;
+          held = [{ id: s.id, before: s.last_delivered_at }];
+          await record(env, s.id, "empty", 0, now, mark);
+          held = [];
+          report.empty++;
+          continue;
+        }
+        ready.push({ s, lang, cadence, start, params, win, items, found, total, more, mark });
       }
-      if (report.sent + report.failed >= RUN_MESSAGES_MAX) {
-        stop = `the cap of ${RUN_MESSAGES_MAX} messages`;
-        report.outcome = "capped";
-        break;
-      }
-      // The day's ceiling reached: stopped before the claim, as a sending limit stops the run.
-      if (room !== null && report.sent >= room) {
-        stop = ceilingWords;
-        report.outcome = "limited";
-        break;
-      }
-      if (pause(true)) break;
-      // Another run at the same moment has it (that run sends it), or its delivery was turned off since the list was read.
-      if (!(await claim(env, s.id, dataDate, now))) continue;
-      held = { id: s.id, before: s.last_delivered_at };
-      const secret = s.secret ?? (await stopSecret(env, s.id, now));
-      if (!secret) {
-        await release(env, s.id, s.last_delivered_at, now);
-        held = null;
-        continue;
-      }
-      const stopUrl = siteLink(site, `/account/stop?s=${s.id}&t=${secret}`, lang);
-      const base = { lang, to: s.email, site, label: s.label, params, cadence, dataDate, stopUrl, total };
-      let message: DigestMessage;
-      if (found) {
-        // At most ROWS_MAX rows in all: the counts (40 at most) first, then the
-        // segment's notices, whose rest a line links.
-        const rows = found.rises.slice(0, ROWS_MAX);
-        message = recordsDigest({
-          ...base, kind: found.entity.kind, name: found.name, rows, more, since: found.since,
-          tenders: found.tenders.slice(0, ROWS_MAX - rows.length), tenderTotal: found.tenders.length, tenderSince: start,
-        });
-      } else if (s.kind === "tenders") {
-        message = tenderDigest({ ...base, rows: (items as TenderRow[]).slice(0, ROWS_MAX), since: start });
+      if (ready.length > GROUP_OVER) {
+        if (!(await sendGroup(ready))) break accounts;
       } else {
-        message = expiringDigest({
-          ...base, rows: (items as ExpiringRow[]).slice(0, ROWS_MAX), months: WINDOW_MONTHS[win as ExpiringWindow],
-          query: readExpiringQuery(new URL(params, BASE)),
-        });
+        for (const r of ready) if (!(await sendOne(r))) break accounts;
       }
-      const result = await send(env, site, message);
-      if (result.sent) {
-        // Sent: the claim stands, whatever happens to the row that records it.
-        held = null;
-        await afterSend(() => record(env, s.id, "sent", total, now, mark));
-        report.sent++;
-      } else if (result.code && STOP_CODES.has(result.code)) {
-        await release(env, s.id, s.last_delivered_at, now);
-        held = null;
-        stop = result.code;
-        report.outcome = "limited";
-        break;
-      } else {
-        await release(env, s.id, s.last_delivered_at, now);
-        held = null;
-        await record(env, s.id, "failed", total, now);
-        report.failed++;
-      }
+      i = end;
     }
+    await passedOver(env, passed, dataDate, now, queries);
   } catch (e) {
-    if (held) await release(env, held.id, held.before, now).catch(() => undefined);
+    if (held.length) await releaseAll(env, held, now).catch(() => undefined);
     fault = e instanceof Fault ? e.message : "the accounts database could not be read or written; the next hour tries again";
     log(`${dataDate}: ${fault} (${counts(report)} before it)`);
     report.outcome = "fault";
     if (!(e instanceof Fault)) return { ...report, why: fault };
   } finally {
-    // What the saved searches left: the ones that waited, and from the one in hand on, those still due.
-    tally.left += report.waiting + unfinished(list, i, (s) => isDue(s.deliver, s.last_delivered_at, dataDate) && likelyServed(plans, s.user_id, s.plan, "delivery"));
+    // What the saved searches left: the ones that waited, and from the account in hand on, those still due.
+    tally.left += report.waiting + unfinished(list, i, (s) =>
+      !done.has(s.id) && isDue(s.deliver, s.last_delivered_at, dataDate) && likelyServed(plans, s.user_id, s.plan, "delivery"));
   }
-  const capText = `the cap of ${RUN_MESSAGES_MAX} messages`;
   if (!stop) {
     try {
       const watch = await runWatchMail(env, {
@@ -1026,7 +1312,8 @@ const watchCounts = (w: WatchReport) =>
   `${w.expired} closed notices' watches ended` + (w.records ? `, ${w.waiting} accounts waiting: ${WATCH_WAIT_WHY[w.records]}` : "");
 
 const counts = (r: RunReport) =>
-  `${r.sent} sent, ${r.failed} failed, ${r.empty} with nothing new, ${r.skipped} not on a plan with delivery` +
+  `${r.sent} sent${r.groups ? ` (${r.groups} of them grouped, carrying ${r.grouped} searches)` : ""}, ${r.failed} failed, ` +
+  `${r.empty} with nothing new, ${r.skipped} not on a plan with delivery` +
   (r.records ? `, ${r.waiting} organization, buyer or segment searches waiting: ${WAIT_WHY[r.records]}` : "") +
   (r.watch && watchActive(r.watch) ? `; ${watchCounts(r.watch)}` : "") +
   (r.briefing && briefingActive(r.briefing) ? `; ${briefingCounts(r.briefing)}` : "") +

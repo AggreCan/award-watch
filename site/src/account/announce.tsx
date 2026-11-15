@@ -45,13 +45,13 @@
 import type { Context } from "hono";
 import { readForm } from "../body";
 import { loadStats } from "../data";
-import type { AppEnv, Env } from "../env";
+import { type AppEnv, type Env, mailCeiling } from "../env";
 import { t, tn, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, page } from "../layout";
 import { CONTACT_EMAIL } from "../pages/docs";
 import { ULTRA_KIND } from "../pages/interest";
 import { ULTRA_LINES, ultraLines } from "../pro";
-import { STOP_CODES, sendWithHeaders } from "./deliveries";
+import { STOP_CODES, ceilingText, dayRoom, sendWithHeaders, writeConsoleRun } from "./deliveries";
 import { deliveryHeaders } from "./digests";
 import { button, escapeHtml, list, mutedLink, para, shell } from "./mail_html";
 import { ultraOnSale } from "./payments";
@@ -245,6 +245,9 @@ export interface AnnounceReport {
   accounts: number;
   // The limit code that ended the run, if one did.
   stopped: string | null;
+  // The run stopped at the day's sending ceiling (MAIL_DAILY_QUOTA less
+  // MAIL_DAILY_RESERVE, the delivery job's; deliveries.ts dayRoom).
+  ceiling: boolean;
   // Addresses that have not had it after the run, those holding an account included.
   left: number;
 }
@@ -254,12 +257,41 @@ export interface AnnounceReport {
 // request's, which picks the sender (sender.ts). A database fault is thrown
 // to the console, which shows its 503 page; the addresses already sent keep
 // their marks.
+//
+// The run spends the Email Sending quota the delivery job and the sign-in
+// code share, so it is held to the job's ceiling for the UTC day: it reads
+// the day's room before it starts (deliveries.ts dayRoom: the ceiling less
+// the day's sends in the run log) and stops before the claim once it has
+// sent that many, with ceiling set, and the rest wait for the next day; and
+// it writes its own row to the run log (deliveries.ts writeConsoleRun,
+// outcome "console", naming no address), even when a fault ends it, so its
+// sends count against the ceiling for the rest of the day. No ceiling (the
+// two figures unset, or no run log table) means none here either.
 export async function runAnnouncement(
   env: Env, base: string, requestUrl: string, now = new Date(), max = ANNOUNCE_MAX, kind: AnnounceKind = "accounts",
 ): Promise<AnnounceReport> {
-  const report: AnnounceReport = { sent: 0, failed: 0, accounts: 0, stopped: null, left: 0 };
+  const report: AnnounceReport = { sent: 0, failed: 0, accounts: 0, stopped: null, ceiling: false, left: 0 };
   const at = now.toISOString();
   const ultra = kind === "ultra";
+  const ceiling = env.ACCOUNTS ? mailCeiling(env) : null;
+  const room = ceiling ? await dayRoom(env, ceiling, now) : null;
+  try {
+    await sendRun(env, base, requestUrl, at, max, kind, ultra, room, report);
+  } finally {
+    if (report.sent + report.failed > 0 && env.ACCOUNTS) {
+      const what = ultra ? "the Ultra message from the console" : "the accounts-open message from the console";
+      await writeConsoleRun(env, now, {
+        sent: report.sent, failed: report.failed, detail: report.ceiling && ceiling ? `${what}, stopped at ${ceilingText(ceiling)}` : what,
+      });
+    }
+  }
+  report.left = (await announceCounts(env, kind)).waiting;
+  return report;
+}
+
+async function sendRun(
+  env: Env, base: string, requestUrl: string, at: string, max: number, kind: AnnounceKind, ultra: boolean, room: number | null, report: AnnounceReport,
+): Promise<void> {
   let cursor = "";
   pages: while (report.sent + report.failed < max) {
     const waiting = (await env.DB.prepare(waitingSql(kind)).bind(cursor, PAGE_SIZE).all<Waiting>()).results ?? [];
@@ -276,6 +308,11 @@ export async function runAnnouncement(
         continue;
       }
       if (report.sent + report.failed >= max) break pages;
+      // The day's ceiling reached: stopped before the claim, as the delivery job stops.
+      if (room !== null && report.sent >= room) {
+        report.ceiling = true;
+        break pages;
+      }
       const claimed = await env.DB.prepare(claimSql(kind)).bind(at, w.email).run();
       // Another run has it, or the address left the lists since the page was read.
       if (!claimed.meta?.changes) continue;
@@ -297,8 +334,6 @@ export async function runAnnouncement(
     }
     if (waiting.length < PAGE_SIZE) break;
   }
-  report.left = (await announceCounts(env, kind)).waiting;
-  return report;
 }
 
 // -- leaving the lists: /interest/stop ---------------------------------------------------------------

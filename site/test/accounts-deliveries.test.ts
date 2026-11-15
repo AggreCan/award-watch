@@ -162,10 +162,11 @@ describe("what is due", () => {
     expect(mail.to(pro)).toHaveLength(3);
     expect(mail.to(free)).toHaveLength(0);
     expect(mail.to(gone)).toHaveLength(0);
-    // last_delivered_at moved to the run's time; the passed-over ones kept theirs.
+    // last_delivered_at moved to the run's time; the ones not due kept theirs. The Free account's search was
+    // passed over and leaves the list for the data date, marked with the run's time and no deliveries row.
     expect((await searchRow(s.dailyNew))?.last_delivered_at).toBe(TEST_NOW.replace("Z", ".000Z"));
     expect((await searchRow(s.dailyToday))?.last_delivered_at).toBe("2026-10-31T15:00:00.000Z");
-    expect((await searchRow(s.freePlan))?.last_delivered_at).toBeNull();
+    expect((await searchRow(s.freePlan))?.last_delivered_at).toBe(TEST_NOW.replace("Z", ".000Z"));
   });
 
   it("send nothing while the switch is off, and read neither the database nor the mail binding", async () => {

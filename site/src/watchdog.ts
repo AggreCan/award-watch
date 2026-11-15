@@ -1,5 +1,5 @@
 import { type Env, type MailCeiling, mailCeiling } from "./env";
-import { CEILING_TEXT_START, DELIVERY_CRON, RUN_DETAIL_MAX } from "./account/deliveries";
+import { CEILING_TEXT_START, CONSOLE_OUTCOME, DELIVERY_CRON, RUN_DETAIL_MAX } from "./account/deliveries";
 import { LIVE_PRO_SQL } from "./account/entitlements";
 import { missingTable } from "./account/records_deliveries";
 import { accountsEnabled } from "./account/switch";
@@ -45,7 +45,10 @@ import { faultSummary } from "./search_db";
 // sending ceiling (MAIL_DAILY_QUOTA less MAIL_DAILY_RESERVE); that the last
 // run left items due; that a run faulted. Nothing when the day went well. A
 // database without the table, or a fault reading it, is one log line and no
-// line in the email, as the paid plans' count is.
+// line in the email, as the paid plans' count is. The console's bulk runs
+// (the accounts-open and Ultra messages) write rows of their own outcome
+// (CONSOLE_OUTCOME): they are the day's sends against the ceiling and
+// nothing more, never a run of the job.
 //
 // The day's figures (pipeline/awardwatch_pipeline/funnel.py): the nightly
 // keeps one line for the last finished UTC day, the account funnel's counts
@@ -476,7 +479,10 @@ const NOT_READ: Record<string, string> = {
 // name no account and no address (deliveries.ts writeRunLog).
 function deliveryAlerts(d: DeliveryDay | null, c: MailCeiling | null): string[] {
   if (!d) return [];
-  const { day, runs } = d;
+  const { day } = d;
+  // The job's runs; the console's rows count only in the day's sends.
+  const runs = d.runs.filter((r) => r.outcome !== CONSOLE_OUTCOME);
+  const fromConsole = d.runs.reduce((n, r) => n + (r.outcome === CONSOLE_OUTCOME ? r.sent : 0), 0);
   if (!runs.length) {
     return [
       `No delivery run was recorded on ${day} (UTC): the hourly job (cron ${DELIVERY_CRON}) did not run, or none of its runs could write the run log ` +
@@ -497,10 +503,11 @@ function deliveryAlerts(d: DeliveryDay | null, c: MailCeiling | null): string[] 
   const last = runs[runs.length - 1];
   const ceilingRun = runs.find((r) => r.detail?.startsWith(CEILING_TEXT_START));
   if (ceilingRun) {
-    const sent = runs.reduce((n, r) => n + r.sent, 0);
+    const sent = d.runs.reduce((n, r) => n + r.sent, 0);
+    const share = fromConsole ? `; ${fromConsole} of them from the console` : "";
     const figures = c
-      ? `${plural(sent, "message")} sent of the ${c.ceiling} it allows (MAIL_DAILY_QUOTA ${c.quota} less MAIL_DAILY_RESERVE ${c.reserve}, kept for sign-in codes)`
-      : `${plural(sent, "message")} sent, then it stopped at ${ceilingRun.detail}`;
+      ? `${plural(sent, "message")} sent of the ${c.ceiling} it allows (MAIL_DAILY_QUOTA ${c.quota} less MAIL_DAILY_RESERVE ${c.reserve}, kept for sign-in codes${share})`
+      : `${plural(sent, "message")} sent${fromConsole ? ` (${fromConsole} of them from the console)` : ""}, then it stopped at ${ceilingRun.detail}`;
     out.push(
       `The delivery job reached the day's sending ceiling on ${day}: ${figures}` +
       `${last.left > 0 ? `, and ${plural(last.left, "item")} waited for the next day` : ""}. Ask Cloudflare for a higher Email Sending daily limit ` +
