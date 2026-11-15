@@ -624,14 +624,18 @@ describe("the stop link", () => {
 // =========================================================================================
 
 const SITE = "https://awardwatch.ca";
-const RUN_DAY = "2026-11-15";
+// The run's clock: 16:00 UTC on the day after the tests run. The rows a test writes carry the real clock (a
+// session, an entitlement, a stop token), and the job reads them as of its own NOW, so its NOW must be ahead of
+// them whatever the hour. A calendar date written here was a day ahead when it was written and failed every
+// delivery test from that day's 16:00 UTC on.
+const RUN_DAY = addDays(new Date().toISOString().slice(0, 10), 1);
 const RUN_NOW = `${RUN_DAY}T16:00:00Z`;
-const LAST = "2026-11-01T00:00:00.000Z";
+const LAST = `${addDays(RUN_DAY, -14)}T00:00:00.000Z`;
 
 function tender(reference: string): TenderRow {
   return {
     reference, amendment: 0, title_en: `Notice ${reference}`, title_fr: `Avis ${reference}`, buyer_id: "dfo-mpo",
-    buyer_en: "Fisheries and Oceans Canada", buyer_fr: "Pêches et Océans Canada", published: RUN_DAY, closing: "2026-12-20T14:00:00",
+    buyer_en: "Fisheries and Oceans Canada", buyer_fr: "Pêches et Océans Canada", published: RUN_DAY, closing: `${addDays(RUN_DAY, 35)}T14:00:00`,
     category: ["SRV"], notice_type_en: "Request for Proposal", notice_type_fr: "Demande de propositions", method_en: null, method_fr: null,
     segments: ["72"], provinces: ["BC"], first_seen: RUN_DAY, status: "open",
   };
