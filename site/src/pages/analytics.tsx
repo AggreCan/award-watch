@@ -45,15 +45,23 @@
 // same two halves a saved view is checked by; a signed-in reader's toolbar
 // ends on Save this view (account/view_pages.tsx), which posts the address
 // the view writes for itself.
+//
+// Each table of a view (VIEW_TABLES) is also a dashboard tile of its own
+// (account/dashboard.tsx kind "analytic"): the tile reads it with the
+// statements the view reads it with (analyticQueries) and draws it with the
+// view's own drawing, held to the tile's rows and sizes (analyticBody, TileFit).
+// An account that holds the dashboard gets, in each panel, the panel's own Add
+// to dashboard and an anchor the tile's Open leads to; no other reader's page
+// changes for it.
 
 import type { Context } from "hono";
 import { ProTag, UltraTag } from "../pro";
 import type { FC } from "hono/jsx";
 import {
-  ChartStack, RankedBars, barGap, fiscalAxis, moneyTip, partOf, recordsText, tipHead, tipText, type Panel as ChartPanel, type RankedBar,
-  type YearPoint,
+  ChartStack, RankedBars, barGap, fiscalAxis, moneyTip, partOf, recordsText, thinLabels, tipHead, tipText, type AxisLabel, type Panel as ChartPanel,
+  type RankedBar, type YearPoint,
 } from "../chart";
-import { Table } from "../columns";
+import { type Sorting, Table } from "../columns";
 import { MONEY_SOURCES, type MoneySource } from "../constants";
 import { BUYER_ID_RE, SEGMENT_RE, loadBuyer, loadBuyerAlias, loadProfile, loadStats, type Stats } from "../data";
 import type { AppEnv } from "../env";
@@ -69,11 +77,11 @@ import {
   SEGMENT_YEARS_SQL, SHARE_SLOTS, SOURCE_NUMBER, TOP_N, type Query, type Read, type Row, dollars,
   fiscalLabel, fiscalYearOf, num, orgIdOf, orgNumber, quarterEnd, readRecords, segmentCode, segmentNumber,
 } from "../records_db";
-import { railAccount } from "../account/session";
-import { AddToDashboard, boardChoices, dashboardAccount, viewPanelRef } from "../account/dashboard_add";
+import { type Account, railAccount } from "../account/session";
+import { AddToDashboard, type BoardChoice, analyticPanelRef, anchorOf, boardChoices, dashboardAccount } from "../account/dashboard_add";
 import { viewLabel } from "../account/saved_views";
 import { SaveViewRow, saveViewControl } from "../account/view_pages";
-import { type Frame, type Link, type View, frameOf, orgMore, rivalsOf, shareSegmentOf, viewQuery } from "../view_address";
+import { type Frame, type Link, type More, type View, frameOf, orgMore, rivalsOf, shareSegmentOf, viewQuery } from "../view_address";
 import { growthPct, windowOf } from "./expiring";
 import { retiredIdRedirect } from "./organization";
 import { contractSearchUrl, grantUrl, money, shareText } from "./shared";
@@ -86,6 +94,32 @@ export const VIEW_TABLES = {
   organization: ["years", "records", "buyers", "segments", "share", "growth"],
   segment: ["years", "values", "records", "buyers", "winners", "entrants", "due"],
 } as const satisfies Record<View, readonly string[]>;
+
+// Each table's panel title, the head of its dashboard tile too.
+export const TABLE_TITLES: Readonly<Record<View, Readonly<Record<string, Key>>>> = {
+  buyer: {
+    quarters: "analytics.panel_quarters", values: "analytics.panel_values", records: "analytics.panel_records", segments: "analytics.panel_segments",
+    competition: "analytics.panel_competition", suppliers: "analytics.panel_suppliers", growth: "analytics.panel_growth", due: "analytics.panel_due",
+  },
+  organization: {
+    years: "analytics.panel_years", records: "analytics.panel_records", buyers: "analytics.panel_buyers", segments: "analytics.panel_segments",
+    share: "analytics.panel_share", growth: "analytics.panel_growth",
+  },
+  segment: {
+    years: "analytics.panel_activity", values: "analytics.panel_values", records: "analytics.panel_records", buyers: "analytics.panel_segment_buyers",
+    winners: "analytics.panel_winners", entrants: "analytics.panel_entrants", due: "analytics.panel_due",
+  },
+};
+
+// A dashboard tile's sizes for a table drawn on it (account/dashboard_fit.ts
+// analyticFit): the rows it lists, each plot's height and width, and the
+// plots' height once the read is known to list fewer rows than the tile holds
+// (grow). The page passes none: every row, at the page's own sizes, sorting
+// in the browser.
+export type TileFit = { rows: number; plot: number; width: number; grow?: (shown: number) => number };
+const sortingOf = (fit: TileFit | undefined): Sorting | undefined => (fit ? "none" : undefined);
+const labelsAt = (labels: AxisLabel[], fit: TileFit | undefined): AxisLabel[] => (fit ? thinLabels(labels, fit.width) : labels);
+const firstRows = <T,>(rows: readonly T[], fit: TileFit | undefined): readonly T[] => (fit ? rows.slice(0, fit.rows) : rows);
 
 // -- the request -------------------------------------------------------------------
 
@@ -228,6 +262,24 @@ const PeriodForm: FC<{ lang: Lang; base: string; frame: Frame; pro: boolean; mor
 
 const CsvLink: FC<{ lang: Lang; href: string }> = ({ lang, href }) => <a href={href} rel="nofollow">{t(lang, "analytics.csv")}</a>;
 
+// A panel's own Add to dashboard (link style, with the choice of dashboard
+// when the account holds several) and its heading's anchor, which the table's
+// tile opens at: only for an account that holds the dashboard. For any other
+// reader neither, and the panel is drawn as it was. more is what the table's
+// tile keeps of the address after the period (the share table's segment and
+// organizations).
+type PanelDash = { id: (table: string) => string | undefined; add: (table: string, more?: More) => unknown };
+function panelDash(lang: Lang, ctx: Pick<Ctx, "dash" | "boards">, base: string, frame: Link): PanelDash {
+  const dash = ctx.dash;
+  if (!dash) return { id: () => undefined, add: () => null };
+  return {
+    id: anchorOf,
+    add: (table, more) => <AddToDashboard lang={lang} account={dash} kind="analytic" panelRef={analyticPanelRef(base, frame, table, more)} boards={ctx.boards} />,
+  };
+}
+// A panel's tools: its CSV link, then its Add to dashboard; none when it has neither.
+const toolsOf = (csv: unknown, add: unknown) => (csv || add ? <>{csv}{add}</> : undefined);
+
 interface Shell {
   view: View;
   lang: Lang;
@@ -254,11 +306,6 @@ async function shell(c: Context<AppEnv>, s: Shell, read: Read, body: unknown): P
   const title = t(lang, "analytics.title_of", { name: s.name });
   const ok = read.state === "ready";
   if (!ok) c.header("Retry-After", "3600");
-  // An Ultra account adds the view, at its source and period, to its dashboard (account/dashboard.tsx), or with several to the
-  // one it chooses; no one else sees it.
-  const dash = s.pro ? await dashboardAccount(c) : null;
-  const boards = dash ? await boardChoices(c.env, dash.userId, lang).catch(() => []) : [];
-  const add = dash ? <AddToDashboard lang={lang} account={dash} kind="view" panelRef={viewPanelRef(s.base, frame)} button boards={boards} /> : null;
   // A signed-in reader saves the view as it writes its own address (account/view_pages.tsx); nothing for anyone else.
   const save = await saveViewControl(c, query(s.base, frame, s.more), viewLabel(lang, s.name, frame));
   return page(
@@ -270,7 +317,7 @@ async function shell(c: Context<AppEnv>, s: Shell, read: Read, body: unknown): P
         lead={t(lang, "analytics.lead", {
           source: sourceLabel(lang, frame.source), first: fiscalLabel(lang, frame.first), last: fiscalLabel(lang, frame.last),
         })}
-        actions={<>{add}<a href={s.back} class="btn">{t(lang, s.backKey)}</a></>}>
+        actions={<a href={s.back} class="btn">{t(lang, s.backKey)}</a>}>
         <p class="page-note">{t(lang, "analytics.note_sources")} {t(lang, "analytics.note_fiscal")}</p>
         {frame.capped ? <p class="page-note">{t(lang, "analytics.period_capped", { n: frame.most })}</p> : null}
         {frame.longer && s.ultra ? <p class="page-note">{t(lang, "analytics.ultra_years", { n: ULTRA_YEARS })}</p> : null}
@@ -312,7 +359,7 @@ const FreeNote: FC<{ lang: Lang; view: View; signedIn: boolean; asked: boolean }
 // A quarter's position on the axis: four units a fiscal year.
 const quarterX = (year: number, q: number) => year * 4 + q - 1;
 
-const QuarterChart: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, rows, frame }) => {
+const QuarterChart: FC<{ lang: Lang; rows: Row[]; frame: Frame; fit?: TileFit }> = ({ lang, rows, frame, fit }) => {
   const axis = fiscalAxis(frame.first, frame.last, (y) => fiscalLabel(lang, y), 4);
   const title = t(lang, "analytics.chart_quarters", { source: sourceLabel(lang, frame.source) });
   const bars = rows.filter((r) => int(r.cents) > 0).map((r) => {
@@ -324,8 +371,8 @@ const QuarterChart: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, row
   const panel: ChartPanel = { title, bars };
   return (
     <div class="chart">
-      <ChartStack domain={[frame.first * 4, (frame.last + 1) * 4]} panels={[panel]} height={140} xLabels={axis.labels} grid={axis.grid}
-        fmt={(v) => fmtMoneyShort(v, lang)} aria={t(lang, "analytics.chart_aria")} gap={barGap(frame.years * 4)} />
+      <ChartStack domain={[frame.first * 4, (frame.last + 1) * 4]} panels={[panel]} height={fit?.plot ?? 140} xLabels={labelsAt(axis.labels, fit)}
+        grid={axis.grid} fmt={(v) => fmtMoneyShort(v, lang)} aria={t(lang, "analytics.chart_aria")} gap={barGap(frame.years * 4, 24, fit?.width)} />
     </div>
   );
 };
@@ -333,9 +380,9 @@ const QuarterChart: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, row
 // Bars a fiscal year apart, one panel each (one scale when shared). fmt
 // writes the axis; each value brings its tip's exact figures, and the head
 // names the year as the tables do (the current one "to date").
-const YearChart: FC<{ lang: Lang; frame: Frame; panels: { title: string; values: YearPoint[] }[]; fmt: (v: number) => string; shared?: boolean }> = ({
-  lang, frame, panels, fmt, shared,
-}) => {
+const YearChart: FC<{
+  lang: Lang; frame: Frame; panels: { title: string; values: YearPoint[] }[]; fmt: (v: number) => string; shared?: boolean; fit?: TileFit;
+}> = ({ lang, frame, panels, fmt, shared, fit }) => {
   const axis = fiscalAxis(frame.first, frame.last, (y) => fiscalLabel(lang, y));
   const stack: ChartPanel[] = panels.map((p) => ({
     title: p.title,
@@ -345,13 +392,13 @@ const YearChart: FC<{ lang: Lang; frame: Frame; panels: { title: string; values:
   }));
   return (
     <div class="chart">
-      <ChartStack domain={[frame.first, frame.last + 1]} panels={stack} height={110} xLabels={axis.labels} fmt={fmt}
-        aria={t(lang, "analytics.chart_aria")} shared={shared} gap={barGap(frame.years)} />
+      <ChartStack domain={[frame.first, frame.last + 1]} panels={stack} height={fit?.plot ?? 110} xLabels={labelsAt(axis.labels, fit)} fmt={fmt}
+        aria={t(lang, "analytics.chart_aria")} shared={shared} gap={barGap(frame.years, 24, fit?.width)} />
     </div>
   );
 };
 
-const ShareLines: FC<{ lang: Lang; frame: Frame; panels: { title: string; values: YearPoint[] }[] }> = ({ lang, frame, panels }) => {
+const ShareLines: FC<{ lang: Lang; frame: Frame; panels: { title: string; values: YearPoint[] }[]; fit?: TileFit }> = ({ lang, frame, panels, fit }) => {
   const axis = fiscalAxis(frame.first, frame.last, (y) => fiscalLabel(lang, y));
   const pct = (v: number) => t(lang, "pct", { n: Math.round(v) });
   const stack: ChartPanel[] = panels.map((p) => ({
@@ -360,7 +407,7 @@ const ShareLines: FC<{ lang: Lang; frame: Frame; panels: { title: string; values
   }));
   return (
     <div class="chart">
-      <ChartStack domain={[frame.first, frame.last + 1]} panels={stack} height={110} xLabels={axis.labels} fmt={pct}
+      <ChartStack domain={[frame.first, frame.last + 1]} panels={stack} height={fit?.plot ?? 110} xLabels={labelsAt(axis.labels, fit)} fmt={pct}
         aria={t(lang, "analytics.chart_aria")} shared />
     </div>
   );
@@ -368,9 +415,10 @@ const ShareLines: FC<{ lang: Lang; frame: Frame; panels: { title: string; values
 
 // -- the tables --------------------------------------------------------------------------
 
-const RankTable: FC<{ lang: Lang; head: string; rows: { label: unknown; n: number; cents: unknown; share: string }[] }> = ({ lang, head, rows }) => (
+type RankRow = { label: unknown; n: number; cents: unknown; share: string };
+const RankTable: FC<{ lang: Lang; head: string; rows: readonly RankRow[]; sorting?: Sorting }> = ({ lang, head, rows, sorting }) => (
   <div class="table-wrap">
-    <Table cols={[
+    <Table sorting={sorting} cols={[
       { kind: "rank", label: t(lang, "analytics.col_rank") },
       { kind: "main", label: head },
       { kind: "count", label: t(lang, "col.records") },
@@ -394,7 +442,7 @@ const RankTable: FC<{ lang: Lang; head: string; rows: { label: unknown; n: numbe
 
 // A row's tip: the name over the exact value, the records it adds up and its
 // share of the period's value.
-function rankBars(lang: Lang, rows: { label: unknown; name: string; n: number; cents: unknown; share: string }[]): RankedBar[] {
+function rankBars(lang: Lang, rows: readonly { label: unknown; name: string; n: number; cents: unknown; share: string }[]): RankedBar[] {
   return rows.map((r) => {
     const value = dollars(r.cents) ?? 0;
     const figures = [money(lang, dollars(r.cents)), recordsText(lang, r.n), ...(r.share ? [t(lang, "tip.share_of_period", { pct: r.share })] : [])];
@@ -410,39 +458,41 @@ const none = (lang: Lang) => <p class="muted">{t(lang, "analytics.none")}</p>;
 // scale, because a few large records put the average far above the median
 // and one scale would flatten the median's bars; the table gives both and
 // the count of records they rest on.
-const ValuesPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; csv: string }> = ({ lang, rows, frame, csv }) => {
+const ValuesPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; csv: string; d: PanelDash }> = ({ lang, rows, frame, csv, d }) => (
+  <Panel title={t(lang, "analytics.panel_values")} id={d.id("values")} tools={toolsOf(rows.length ? <CsvLink lang={lang} href={csv} /> : undefined, d.add("values"))}
+    foot={<span>{t(lang, "analytics.foot_values")}</span>}>
+    <ValuesBody lang={lang} rows={rows} frame={frame} />
+  </Panel>
+);
+
+const ValuesBody: FC<{ lang: Lang; rows: Row[]; frame: Frame; fit?: TileFit }> = ({ lang, rows, frame, fit }) => {
   const average = (r: Row) => (int(r.n_pos) > 0 ? Math.round(int(r.pos) / int(r.n_pos)) / 100 : null);
   const valued = (r: Row) => tn(lang, "tip.valued_one", "tip.valued_many", int(r.n_pos), { n: fmtInt(int(r.n_pos), lang) });
-  return (
-    <Panel title={t(lang, "analytics.panel_values")} tools={rows.length ? <CsvLink lang={lang} href={csv} /> : undefined}
-      foot={<span>{t(lang, "analytics.foot_values")}</span>}>
-      {rows.some((r) => int(r.n_pos) > 0) ? <>
-        <YearChart lang={lang} frame={frame} fmt={(v) => fmtMoneyShort(v, lang)} panels={[
-          { title: t(lang, "analytics.chart_median"), values: rows.map((r): YearPoint => [int(r.fy), int(r.med) / 100, [fmtMoney(int(r.med) / 100, lang), valued(r)]]) },
-          { title: t(lang, "analytics.chart_average"), values: rows.map((r): YearPoint => [int(r.fy), average(r) ?? 0, [fmtMoney(average(r) ?? 0, lang), valued(r)]]) },
-        ]} />
-        <div class="table-wrap">
-          <Table cols={[
-            { kind: "date", label: t(lang, "analytics.col_fy") },
-            { kind: "count", label: t(lang, "analytics.col_valued") },
-            { kind: "value", label: t(lang, "analytics.col_median") },
-            { kind: "main", label: t(lang, "analytics.col_average") },
-          ]}>
-            <tbody>
-              {[...rows].reverse().map((r) => (
-                <tr>
-                  <td data-label={t(lang, "analytics.col_fy")} class="mono"><FyCell lang={lang} year={int(r.fy)} current={frame.current} /></td>
-                  <td data-label={t(lang, "analytics.col_valued")} class="mono num">{fmtInt(int(r.n_pos), lang)}</td>
-                  <td data-label={t(lang, "analytics.col_median")} class="mono num">{int(r.n_pos) > 0 ? money(lang, dollars(r.med)) : ""}</td>
-                  <td data-label={t(lang, "analytics.col_average")} class="mono num">{int(r.n_pos) > 0 ? money(lang, average(r)) : ""}</td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </div>
-      </> : none(lang)}
-    </Panel>
-  );
+  return rows.some((r) => int(r.n_pos) > 0) ? <>
+    <YearChart lang={lang} frame={frame} fit={fit} fmt={(v) => fmtMoneyShort(v, lang)} panels={[
+      { title: t(lang, "analytics.chart_median"), values: rows.map((r): YearPoint => [int(r.fy), int(r.med) / 100, [fmtMoney(int(r.med) / 100, lang), valued(r)]]) },
+      { title: t(lang, "analytics.chart_average"), values: rows.map((r): YearPoint => [int(r.fy), average(r) ?? 0, [fmtMoney(average(r) ?? 0, lang), valued(r)]]) },
+    ]} />
+    <div class="table-wrap">
+      <Table sorting={sortingOf(fit)} cols={[
+        { kind: "date", label: t(lang, "analytics.col_fy") },
+        { kind: "count", label: t(lang, "analytics.col_valued") },
+        { kind: "value", label: t(lang, "analytics.col_median") },
+        { kind: "main", label: t(lang, "analytics.col_average") },
+      ]}>
+        <tbody>
+          {firstRows([...rows].reverse(), fit).map((r) => (
+            <tr>
+              <td data-label={t(lang, "analytics.col_fy")} class="mono"><FyCell lang={lang} year={int(r.fy)} current={frame.current} /></td>
+              <td data-label={t(lang, "analytics.col_valued")} class="mono num">{fmtInt(int(r.n_pos), lang)}</td>
+              <td data-label={t(lang, "analytics.col_median")} class="mono num">{int(r.n_pos) > 0 ? money(lang, dollars(r.med)) : ""}</td>
+              <td data-label={t(lang, "analytics.col_average")} class="mono num">{int(r.n_pos) > 0 ? money(lang, average(r)) : ""}</td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+    </div>
+  </> : none(lang);
 };
 
 // Value growth through amendments by fiscal year of the award: the first
@@ -450,16 +500,25 @@ const ValuesPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; csv: string }> = 
 // panel each on one scale (the same measure before and after), and the
 // change. Award notices and history only: the other sources number no
 // versions.
-const GrowthPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; csv: string }> = ({ lang, rows, frame, csv }) => {
+const GrowthPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; csv: string; d: PanelDash }> = ({ lang, rows, frame, csv, d }) => {
+  const amended = AMENDED_SOURCES.includes(frame.source);
+  return (
+    <Panel title={t(lang, "analytics.panel_growth")} id={d.id("growth")} tools={toolsOf(amended && rows.length ? <CsvLink lang={lang} href={csv} /> : undefined, amended ? d.add("growth") : null)}
+      foot={amended ? <span>{t(lang, "analytics.foot_growth")}</span> : undefined}>
+      <GrowthBody lang={lang} rows={rows} frame={frame} />
+    </Panel>
+  );
+};
+
+const GrowthBody: FC<{ lang: Lang; rows: Row[]; frame: Frame; fit?: TileFit }> = ({ lang, rows, frame, fit }) => {
   const amended = AMENDED_SOURCES.includes(frame.source);
   const n = (v: number) => fmtInt(v, lang);
   const compared = (r: Row) => tn(lang, "tip.compared_one", "tip.compared_many", int(r.n_compared), { n: n(int(r.n_compared)) });
   return (
-    <Panel title={t(lang, "analytics.panel_growth")} tools={amended && rows.length ? <CsvLink lang={lang} href={csv} /> : undefined}
-      foot={amended ? <span>{t(lang, "analytics.foot_growth")}</span> : undefined}>
+    <>
       {!amended ? <p class="muted">{t(lang, "analytics.no_growth")}</p> : !rows.length ? none(lang) : <>
         {rows.some((r) => int(r.first_cents) > 0) ? (
-          <YearChart lang={lang} frame={frame} shared fmt={(v) => fmtMoneyShort(v, lang)} panels={[
+          <YearChart lang={lang} frame={frame} shared fit={fit} fmt={(v) => fmtMoneyShort(v, lang)} panels={[
             {
               title: t(lang, "analytics.chart_growth_first"),
               values: rows.map((r): YearPoint => [int(r.fy), int(r.first_cents) / 100, [fmtMoney(int(r.first_cents) / 100, lang), compared(r)]]),
@@ -472,7 +531,7 @@ const GrowthPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; csv: string }> = 
         ) : <p class="muted">{t(lang, "analytics.growth_none")}</p>}
         <div class="table-wrap">
           {/* From 700 to 1279 px the first and newest values rest and show under the change. */}
-          <Table cols={[
+          <Table sorting={sortingOf(fit)} cols={[
             { kind: "date", label: t(lang, "analytics.col_fy") },
             { kind: "count", label: t(lang, "col.records") },
             { kind: "share", label: t(lang, "analytics.col_amended") },
@@ -482,7 +541,7 @@ const GrowthPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; csv: string }> = 
             { kind: "main", label: t(lang, "analytics.col_change") },
           ]}>
             <tbody>
-              {[...rows].reverse().map((r) => {
+              {firstRows([...rows].reverse(), fit).map((r) => {
                 const before = int(r.first_cents);
                 return (
                   <tr>
@@ -508,7 +567,7 @@ const GrowthPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; csv: string }> = 
           </Table>
         </div>
       </>}
-    </Panel>
+    </>
   );
 };
 
@@ -535,18 +594,23 @@ export function recordLink(src: number, ref: unknown): { href: string; text: str
 // to its page or its government record, with the other party: the
 // organization on a buyer view, the buyer on an organization view, both on a
 // segment view.
-const RecordsPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; party: "organization" | "buyer" | "both"; csv: string }> = ({
-  lang, rows, frame, party, csv,
-}) => {
+type Party = "organization" | "buyer" | "both";
+const RecordsPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; party: Party; csv: string; d: PanelDash }> = ({ lang, rows, frame, party, csv, d }) => (
+  <Panel title={t(lang, "analytics.panel_records")} id={d.id("records")} tools={toolsOf(rows.length ? <CsvLink lang={lang} href={csv} /> : undefined, d.add("records"))}
+    foot={<span>{t(lang, "analytics.foot_records")}</span>}>
+    <RecordsBody lang={lang} rows={rows} frame={frame} party={party} />
+  </Panel>
+);
+
+const RecordsBody: FC<{ lang: Lang; rows: Row[]; frame: Frame; party: Party; fit?: TileFit }> = ({ lang, rows, frame, party, fit }) => {
   const org = party !== "buyer";
   const buyer = party !== "organization";
   return (
-    <Panel title={t(lang, "analytics.panel_records")} tools={rows.length ? <CsvLink lang={lang} href={csv} /> : undefined}
-      foot={<span>{t(lang, "analytics.foot_records")}</span>}>
+    <>
       {rows.length ? (
         <div class="table-wrap">
           {/* With the organization shown, the fiscal year rests from 700 to 1279 px and shows under the reference. */}
-          <Table cols={[
+          <Table sorting={sortingOf(fit)} cols={[
             { kind: "rank", label: t(lang, "analytics.col_rank") },
             { kind: "main", label: t(lang, "col.record") },
             org && { kind: "org", label: t(lang, "col.organization") },
@@ -555,7 +619,7 @@ const RecordsPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; party: "organiza
             { kind: "value", label: t(lang, "col.value") },
           ]}>
             <tbody>
-              {rows.map((r, i) => {
+              {firstRows(rows, fit).map((r, i) => {
                 const link = recordLink(int(r.src), r.ref);
                 const title = typeof r.title === "string" && r.title ? r.title : link?.text ?? t(lang, "common.not_stated");
                 const buyerName = pick(lang, r.name_en as string | null, r.name_fr as string | null);
@@ -586,7 +650,7 @@ const RecordsPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; party: "organiza
           </Table>
         </div>
       ) : none(lang)}
-    </Panel>
+    </>
   );
 };
 
@@ -601,11 +665,18 @@ const DAY_MS = 86_400_000;
 // quarter, counted from the radar's own data date (none past its twelve
 // months). filter is the radar's own (buyer=<id> or segment=<nn>), so the
 // window lists the same contracts and the ones before them.
-const DuePanel: FC<{ lang: Lang; rows: Row[]; from: string; radarDay: string; filter: string; csv: string; noun: Key }> = ({
-  lang, rows, from, radarDay, filter, csv, noun,
-}) => {
+type DueProps = { lang: Lang; rows: Row[]; from: string; radarDay: string; filter: string; noun: Key; fit?: TileFit };
+const DuePanel: FC<DueProps & { csv: string; d: PanelDash }> = ({ csv, d, ...p }) => (
+  <Panel title={t(p.lang, "analytics.panel_due")} id={d.id("due")} tools={toolsOf(p.rows.length ? <CsvLink lang={p.lang} href={csv} /> : undefined, d.add("due"))}
+    foot={<span>{t(p.lang, "analytics.foot_due", { date: p.from })}</span>}>
+    <DueBody {...p} />
+  </Panel>
+);
+
+// The DUE_QUARTERS quarters from the records' date, each with its contracts ending and the radar's window that holds it.
+function dueQuarters(lang: Lang, rows: readonly Row[], from: string, radarDay: string) {
   const start = fiscalYearOf(from) * 4 + fiscalQuarterOf(from) - 1;
-  const quarters = Array.from({ length: DUE_QUARTERS }, (_, k) => {
+  return Array.from({ length: DUE_QUARTERS }, (_, k) => {
     const at = start + k;
     const year = Math.floor(at / 4);
     const q = (at % 4) + 1;
@@ -615,19 +686,24 @@ const DuePanel: FC<{ lang: Lang; rows: Row[]; from: string; radarDay: string; fi
     const label = `${t(lang, "analytics.quarter", { n: q })} ${fiscalLabel(lang, year)}`;
     return { at, year, q, label, ends, n: int(row?.n), cents: row ? num(row.cents) : null, noValue: int(row?.n_no_value), window: windowOf(days) };
   });
+}
+
+const DueBody: FC<DueProps> = ({ lang, rows, from, radarDay, filter, noun, fit }) => {
+  const start = fiscalYearOf(from) * 4 + fiscalQuarterOf(from) - 1;
+  const quarters = dueQuarters(lang, rows, from, radarDay);
   const value = (cents: number | null) => (cents === null ? 0 : cents / 100);
   const contracts = (n: number) => tn(lang, "tip.contracts_one", "tip.contracts_many", n, { n: fmtInt(n, lang) });
   const axis = quarters.map((x, k) => ({ x: x.at + 0.5, text: x.label, minor: k % 2 === 1, phone: k === 0 || k === DUE_QUARTERS - 1 }));
   const grid = quarters.filter((x, k) => k > 0 && x.q === 1).map((x) => x.at);
   const any = quarters.some((x) => x.n > 0);
+  const labels = labelsAt(axis, fit);
   return (
-    <Panel title={t(lang, "analytics.panel_due")} tools={rows.length ? <CsvLink lang={lang} href={csv} /> : undefined}
-      foot={<span>{t(lang, "analytics.foot_due", { date: from })}</span>}>
+    <>
       <p>{t(lang, noun)}</p>
       {any ? <>
         <div class="chart">
-          <ChartStack domain={[start, start + DUE_QUARTERS]} xLabels={axis} grid={grid} height={110} aria={t(lang, "analytics.due_aria")}
-            fmt={(v) => fmtMoneyShort(v, lang)} gap={barGap(DUE_QUARTERS)} panels={[
+          <ChartStack domain={[start, start + DUE_QUARTERS]} xLabels={labels} grid={grid} height={fit?.plot ?? 110} aria={t(lang, "analytics.due_aria")}
+            fmt={(v) => fmtMoneyShort(v, lang)} gap={barGap(DUE_QUARTERS, 24, fit?.width)} panels={[
               {
                 title: t(lang, "analytics.chart_due_value"),
                 bars: quarters.filter((x) => value(x.cents) > 0).map((x) => ({
@@ -636,8 +712,8 @@ const DuePanel: FC<{ lang: Lang; rows: Row[]; from: string; radarDay: string; fi
                 })),
               },
             ]} />
-          <ChartStack domain={[start, start + DUE_QUARTERS]} xLabels={axis} grid={grid} height={80} aria={t(lang, "analytics.due_aria")}
-            fmt={(v) => fmtInt(v, lang)} gap={barGap(DUE_QUARTERS)} panels={[
+          <ChartStack domain={[start, start + DUE_QUARTERS]} xLabels={labels} grid={grid} height={fit?.plot ?? 80} aria={t(lang, "analytics.due_aria")}
+            fmt={(v) => fmtInt(v, lang)} gap={barGap(DUE_QUARTERS, 24, fit?.width)} panels={[
               {
                 title: t(lang, "analytics.chart_due_count"),
                 bars: quarters.filter((x) => x.n > 0).map((x) => ({
@@ -648,7 +724,7 @@ const DuePanel: FC<{ lang: Lang; rows: Row[]; from: string; radarDay: string; fi
             ]} />
         </div>
         <div class="table-wrap">
-          <Table cols={[
+          <Table sorting={sortingOf(fit)} cols={[
             { kind: "date", label: t(lang, "analytics.col_quarter") },
             { kind: "date", label: t(lang, "analytics.col_quarter_ends"), rest: "md" },
             { kind: "count", label: t(lang, "analytics.col_contracts") },
@@ -657,7 +733,7 @@ const DuePanel: FC<{ lang: Lang; rows: Row[]; from: string; radarDay: string; fi
             { kind: "main", label: t(lang, "analytics.col_radar") },
           ]}>
             <tbody>
-              {quarters.map((x) => (
+              {firstRows(quarters, fit).map((x) => (
                 <tr>
                   <td data-label={t(lang, "analytics.col_quarter")} class="mono">{x.label}</td>
                   <td data-label={t(lang, "analytics.col_quarter_ends")} class="mono mdh">{x.ends}</td>
@@ -673,13 +749,13 @@ const DuePanel: FC<{ lang: Lang; rows: Row[]; from: string; radarDay: string; fi
           </Table>
         </div>
       </> : <p class="muted">{t(lang, "analytics.due_none")}</p>}
-    </Panel>
+    </>
   );
 };
 
 // -- the buyer view ------------------------------------------------------------------------
 
-function buyerQueries(id: string, f: Frame, tables: readonly string[]): Record<string, Query> {
+export function buyerQueries(id: string, f: Frame, tables: readonly string[]): Record<string, Query> {
   const params = [id, SOURCE_NUMBER[f.source], f.first, f.last];
   const out: Record<string, Query> = {};
   for (const table of tables) {
@@ -700,7 +776,10 @@ function buyerQueries(id: string, f: Frame, tables: readonly string[]): Record<s
 // Ultra's period is offered to a reader whose plan lacks it, which is only
 // while Ultra is on sale (payments.ts ultraOnSale, whose cheap checks come
 // first, so a site without Ultra's variables reads nothing for it).
-type Ctx = { c: Context<AppEnv>; lang: Lang; stats: Stats; pro: boolean; most: number; ultra: boolean };
+// dash: the account, when it holds the dashboard, that adds each panel's
+// table to it (panelDash), with its dashboards to choose from when it holds
+// several (boards); nothing is read for it for anyone else.
+type Ctx = { c: Context<AppEnv>; lang: Lang; stats: Stats; pro: boolean; most: number; ultra: boolean; dash: Account | null; boards: BoardChoice[] };
 
 async function context(c: Context<AppEnv>): Promise<Ctx | Response> {
   const plan = await analyticsPlan(c);
@@ -709,7 +788,10 @@ async function context(c: Context<AppEnv>): Promise<Ctx | Response> {
   const stats = await loadStats(c.env);
   if (!stats) return noDataPage(c, "analytics.title");
   const most = planYears(plan);
-  return { c, lang, stats, pro: allowsAnalytics(plan), most, ultra: most < ULTRA_YEARS && (await ultraOnSale(c.env)) };
+  const pro = allowsAnalytics(plan);
+  const dash = pro ? await dashboardAccount(c) : null;
+  const boards = dash ? await boardChoices(c.env, dash.userId, lang).catch(() => []) : [];
+  return { c, lang, stats, pro, most, ultra: most < ULTRA_YEARS && (await ultraOnSale(c.env)), dash, boards };
 }
 
 async function signedIn(c: Context<AppEnv>): Promise<boolean> {
@@ -754,8 +836,9 @@ export async function buyerAnalytics(c: Context<AppEnv>): Promise<Response> {
   const quarters = rows.quarters ?? [];
   const total = quarters.reduce((sum, r) => sum + int(r.cents), 0);
   const csv = (table: string) => query(`${base}/${table}.csv`, frame);
+  const d = panelDash(lang, ctx, base, frame);
   const first = (
-    <Panel title={t(lang, "analytics.panel_quarters")} tools={pro ? <CsvLink lang={lang} href={csv("quarters")} /> : undefined}
+    <Panel title={t(lang, "analytics.panel_quarters")} id={d.id("quarters")} tools={toolsOf(pro ? <CsvLink lang={lang} href={csv("quarters")} /> : undefined, d.add("quarters"))}
       foot={<span>{t(lang, "analytics.foot_quarters")}</span>}>
       {quarters.length ? <QuarterChart lang={lang} rows={quarters} frame={frame} /> : <p class="muted">{t(lang, "analytics.none")}</p>}
       {pro && quarters.length ? <QuarterTable lang={lang} rows={quarters} frame={frame} /> : null}
@@ -778,33 +861,83 @@ export async function buyerAnalytics(c: Context<AppEnv>): Promise<Response> {
   const segments = rows.segments ?? [];
   const competition = rows.competition ?? [];
   const suppliers = rows.suppliers ?? [];
-  const nOrgs = int(suppliers[0]?.n_orgs);
-  const topShare = (k: number) => share(lang, suppliers.slice(0, k).reduce((sum, r) => sum + int(r.cents), 0), total);
-  const segRows = segments.map((r) => ({ label: segmentLink(lang, int(r.sid)), name: segmentLabel(lang, segmentCode(int(r.sid))), n: int(r.n), cents: r.cents, share: share(lang, num(r.cents), total) }));
-  const supRows = suppliers.map((r) => {
-    const oid = orgIdOf(int(r.oid));
-    return { label: <a href={`/organizations/${oid}`}>{orgName(r)}</a>, name: orgName(r), n: int(r.n), cents: r.cents, share: share(lang, num(r.cents), total) };
-  });
   return shell(c, s, read, <>
     {first}
-    <ValuesPanel lang={lang} rows={rows.values ?? []} frame={frame} csv={csv("values")} />
-    <RecordsPanel lang={lang} rows={rows.records ?? []} frame={frame} party="organization" csv={csv("records")} />
-    <Panel title={t(lang, "analytics.panel_segments")} tools={segments.length ? <CsvLink lang={lang} href={csv("segments")} /> : undefined}
+    <ValuesPanel lang={lang} rows={rows.values ?? []} frame={frame} csv={csv("values")} d={d} />
+    <RecordsPanel lang={lang} rows={rows.records ?? []} frame={frame} party="organization" csv={csv("records")} d={d} />
+    <Panel title={t(lang, "analytics.panel_segments")} id={d.id("segments")}
+      tools={toolsOf(segments.length ? <CsvLink lang={lang} href={csv("segments")} /> : undefined, SEGMENT_SOURCES.includes(frame.source) ? d.add("segments") : null)}
       foot={SEGMENT_SOURCES.includes(frame.source) ? <span>{t(lang, "analytics.foot_segments")}</span> : undefined}>
-      {!SEGMENT_SOURCES.includes(frame.source) ? <p class="muted">{t(lang, "analytics.no_segments")}</p>
-        : segRows.length ? <>
-          <RankedBars rows={rankBars(lang, segRows)} aria={t(lang, "analytics.panel_segments")} />
-          <RankTable lang={lang} head={t(lang, "col.segment")} rows={segRows} />
-        </> : <p class="muted">{t(lang, "analytics.none")}</p>}
+      <SegmentsBody lang={lang} source={frame.source} lines={segmentLines(lang, segments, total)} />
     </Panel>
-    <Panel title={t(lang, "analytics.panel_competition")} tools={competition.length ? <CsvLink lang={lang} href={csv("competition")} /> : undefined}
+    <Panel title={t(lang, "analytics.panel_competition")} id={d.id("competition")}
+      tools={toolsOf(competition.length ? <CsvLink lang={lang} href={csv("competition")} /> : undefined, frame.source === "grants" ? null : d.add("competition"))}
       foot={frame.source === "grants" ? undefined : <span>{t(lang, "analytics.foot_competition")}</span>}>
-      {frame.source === "grants" ? <p class="muted">{t(lang, "analytics.no_competition")}</p>
-        : competition.length ? <CompetitionView lang={lang} rows={competition} frame={frame} /> : <p class="muted">{t(lang, "analytics.none")}</p>}
+      <CompetitionBody lang={lang} rows={competition} frame={frame} />
     </Panel>
-    <Panel title={t(lang, "analytics.panel_suppliers")} tools={suppliers.length ? <CsvLink lang={lang} href={csv("suppliers")} /> : undefined}
+    <Panel title={t(lang, "analytics.panel_suppliers")} id={d.id("suppliers")}
+      tools={toolsOf(suppliers.length ? <CsvLink lang={lang} href={csv("suppliers")} /> : undefined, d.add("suppliers"))}
       foot={<span>{t(lang, "analytics.foot_suppliers")}</span>}>
-      {supRows.length ? <>
+      <SuppliersBody lang={lang} rows={suppliers} total={total} />
+    </Panel>
+    <GrowthPanel lang={lang} rows={rows.growth ?? []} frame={frame} csv={csv("growth")} d={d} />
+    <DuePanel lang={lang} rows={rows.due ?? []} from={read.asOf ?? todayOf(stats.data_as_of)} radarDay={todayOf(stats.data_as_of)}
+      filter={`buyer=${id}`} csv={csv("due")} noun="analytics.due_lead_buyer" d={d} />
+  </>);
+}
+
+// -- the ranked tables (a buyer's segments and suppliers, an organization's buyers and segments, a segment's buyers,
+// largest organizations and newcomers) -----------------------------------------------------------------------------
+
+// A ranked row: what its label links, the name its tip gives, its records, its value and its share of the period's.
+type RankLine = RankRow & { name: string };
+const segmentLines = (lang: Lang, rows: readonly Row[], total: number): RankLine[] => rows.map((r) => ({
+  label: segmentLink(lang, int(r.sid)), name: segmentLabel(lang, segmentCode(int(r.sid))), n: int(r.n), cents: r.cents, share: share(lang, num(r.cents), total),
+}));
+const orgLines = (lang: Lang, rows: readonly Row[], total: number): RankLine[] => rows.map((r) => {
+  const oid = orgIdOf(int(r.oid));
+  return { label: <a href={`/organizations/${oid}`}>{orgName(r)}</a>, name: orgName(r), n: int(r.n), cents: r.cents, share: share(lang, num(r.cents), total) };
+});
+const buyerLines = (lang: Lang, rows: readonly Row[], total: number): RankLine[] => rows.map((r) => {
+  const label = pick(lang, r.name_en as string, r.name_fr as string | null) ?? String(r.id);
+  return { label: <a href={`/buyers/${r.id}`}>{label}</a>, name: label, n: int(r.n), cents: r.cents, share: share(lang, num(r.cents), total) };
+});
+
+// The bars, then the table of the same rows (on a tile, the rows it holds).
+const Ranked: FC<{ lang: Lang; lines: readonly RankLine[]; aria: string; head: string; fit?: TileFit }> = ({ lang, lines, aria, head, fit }) => {
+  const shown = firstRows(lines, fit);
+  return (
+    <>
+      <RankedBars rows={rankBars(lang, shown)} aria={aria} />
+      <RankTable lang={lang} head={head} rows={shown} sorting={sortingOf(fit)} />
+    </>
+  );
+};
+
+// A buyer's or an organization's segments: none for a source whose records carry no UNSPSC code.
+const SegmentsBody: FC<{ lang: Lang; source: MoneySource; lines: readonly RankLine[]; fit?: TileFit }> = ({ lang, source, lines, fit }) => (
+  <>
+    {!SEGMENT_SOURCES.includes(source) ? <p class="muted">{t(lang, "analytics.no_segments")}</p>
+      : lines.length ? <Ranked lang={lang} lines={lines} aria={t(lang, "analytics.panel_segments")} head={t(lang, "col.segment")} fit={fit} />
+      : <p class="muted">{t(lang, "analytics.none")}</p>}
+  </>
+);
+
+const CompetitionBody: FC<{ lang: Lang; rows: Row[]; frame: Frame; fit?: TileFit }> = ({ lang, rows, frame, fit }) => (
+  <>
+    {frame.source === "grants" ? <p class="muted">{t(lang, "analytics.no_competition")}</p>
+      : rows.length ? <CompetitionView lang={lang} rows={rows} frame={frame} fit={fit} /> : <p class="muted">{t(lang, "analytics.none")}</p>}
+  </>
+);
+
+// A buyer's suppliers: the shares the largest one, five and ten take of the period's value, then the ranking.
+const SuppliersBody: FC<{ lang: Lang; rows: Row[]; total: number; fit?: TileFit }> = ({ lang, rows, total, fit }) => {
+  const nOrgs = int(rows[0]?.n_orgs);
+  const topShare = (k: number) => share(lang, rows.slice(0, k).reduce((sum, r) => sum + int(r.cents), 0), total);
+  const lines = orgLines(lang, rows, total);
+  return (
+    <>
+      {lines.length ? <>
         {total > 0 ? (
           <p class="figures">
             <span>{t(lang, "analytics.top_1")} <b>{topShare(1)}</b></span>
@@ -813,26 +946,28 @@ export async function buyerAnalytics(c: Context<AppEnv>): Promise<Response> {
             <span>{tn(lang, "analytics.orgs_one", "analytics.orgs_many", nOrgs, { n: fmtInt(nOrgs, lang) })}</span>
           </p>
         ) : null}
-        <RankedBars rows={rankBars(lang, supRows)} aria={t(lang, "analytics.panel_suppliers")} />
-        <RankTable lang={lang} head={t(lang, "col.organization")} rows={supRows} />
+        <Ranked lang={lang} lines={lines} aria={t(lang, "analytics.panel_suppliers")} head={t(lang, "col.organization")} fit={fit} />
       </> : <p class="muted">{t(lang, "analytics.none")}</p>}
-    </Panel>
-    <GrowthPanel lang={lang} rows={rows.growth ?? []} frame={frame} csv={csv("growth")} />
-    <DuePanel lang={lang} rows={rows.due ?? []} from={read.asOf ?? todayOf(stats.data_as_of)} radarDay={todayOf(stats.data_as_of)}
-      filter={`buyer=${id}`} csv={csv("due")} noun="analytics.due_lead_buyer" />
-  </>);
-}
+    </>
+  );
+};
 
-const QuarterTable: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, rows, frame }) => {
+// The fiscal years listed by a table by year: the frame's, newest first.
+const yearsOf = (frame: Frame): number[] => {
   const years: number[] = [];
   for (let y = frame.last; y >= frame.first; y--) years.push(y);
+  return years;
+};
+
+const QuarterTable: FC<{ lang: Lang; rows: Row[]; frame: Frame; fit?: TileFit }> = ({ lang, rows, frame, fit }) => {
+  const years = firstRows(yearsOf(frame), fit);
   const cell = (y: number, q: number) => rows.find((r) => int(r.fy) === y && int(r.fq) === q);
   const quarter = (q: number) => t(lang, "analytics.quarter", { n: q });
   return (
     <div class="table-wrap">
       {/* With the four quarters shown (from 1280 px) the count without a published value rests below
           1440 px; from 700 to 1439 px it shows under the year's value. */}
-      <Table cols={[
+      <Table sorting={sortingOf(fit)} cols={[
         { kind: "date", label: t(lang, "analytics.col_fy") },
         ...[1, 2, 3, 4].map((q) => ({ kind: "value" as const, label: quarter(q), rest: "md" as const })),
         { kind: "main", label: t(lang, "analytics.col_year_value") },
@@ -866,7 +1001,7 @@ const QuarterTable: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, row
   );
 };
 
-const CompetitionView: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, rows, frame }) => {
+const CompetitionView: FC<{ lang: Lang; rows: Row[]; frame: Frame; fit?: TileFit }> = ({ lang, rows, frame, fit }) => {
   const n = (v: number) => fmtInt(v, lang);
   const m = (v: number) => fmtMoney(v / 100, lang);
   const byCount: YearPoint[] = rows.filter((r) => int(r.n) > 0)
@@ -875,12 +1010,12 @@ const CompetitionView: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, 
     .map((r) => [int(r.fy), (int(r.pos_nc) / int(r.pos)) * 100, [partOf(lang, int(r.pos_nc), int(r.pos), m)]]);
   return (
     <>
-      <ShareLines lang={lang} frame={frame} panels={[
+      <ShareLines lang={lang} frame={frame} fit={fit} panels={[
         { title: t(lang, "analytics.nc_by_count"), values: byCount },
         { title: t(lang, "analytics.nc_by_value"), values: byValue },
       ]} />
       <div class="table-wrap">
-        <Table cols={[
+        <Table sorting={sortingOf(fit)} cols={[
           { kind: "date", label: t(lang, "analytics.col_fy") },
           { kind: "count", label: t(lang, "col.records") },
           { kind: "share", label: <span title={t(lang, "competitive.def_no")}>{t(lang, "org.col_nc_count")}</span> },
@@ -888,7 +1023,7 @@ const CompetitionView: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, 
           { kind: "main", label: <span title={t(lang, "competitive.def_no")}>{t(lang, "org.col_nc_value")}</span> },
         ]}>
           <tbody>
-            {[...rows].reverse().map((r) => (
+            {firstRows([...rows].reverse(), fit).map((r) => (
               <tr>
                 <td data-label={t(lang, "analytics.col_fy")} class="mono"><FyCell lang={lang} year={int(r.fy)} current={frame.current} /></td>
                 <td data-label={t(lang, "col.records")} class="mono num">{n(int(r.n))}</td>
@@ -906,7 +1041,7 @@ const CompetitionView: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, 
 
 // -- the organization view -------------------------------------------------------------------
 
-interface ShareSpec { segment: number; rivals: number[]; chosen: boolean }
+export interface ShareSpec { segment: number; rivals: number[]; chosen: boolean }
 
 function shareParams(oid: number, f: Frame, spec: ShareSpec): (string | number)[] {
   const slots = [oid, ...spec.rivals];
@@ -915,7 +1050,7 @@ function shareParams(oid: number, f: Frame, spec: ShareSpec): (string | number)[
   return [spec.segment, SOURCE_NUMBER[f.source], f.first, f.last, ...slots, spec.chosen ? 0 : MAX_RIVALS];
 }
 
-function orgQueries(oid: number, f: Frame, tables: readonly string[], spec: ShareSpec | null): Record<string, Query> {
+export function orgQueries(oid: number, f: Frame, tables: readonly string[], spec: ShareSpec | null): Record<string, Query> {
   const params = [oid, SOURCE_NUMBER[f.source], f.first, f.last];
   const out: Record<string, Query> = {};
   const segments = SEGMENT_SOURCES.includes(f.source);
@@ -993,15 +1128,10 @@ export async function organizationAnalytics(c: Context<AppEnv>): Promise<Respons
 
   const years = rows.years ?? [];
   const csv = (table: string) => query(`${base}/${table}.csv`, frame, more);
+  const d = panelDash(lang, ctx, base, frame);
   const first = (
-    <Panel title={t(lang, "analytics.panel_years")} tools={pro ? <CsvLink lang={lang} href={csv("years")} /> : undefined}>
-      {years.length ? (
-        <YearChart lang={lang} frame={frame} fmt={(v) => fmtMoneyShort(v, lang)}
-          panels={[{
-            title: t(lang, "analytics.chart_years", { source: sourceLabel(lang, frame.source) }),
-            values: years.map((r): YearPoint => [int(r.fy), int(r.cents) / 100, [fmtMoney(int(r.cents) / 100, lang), recordsText(lang, int(r.n))]]),
-          }]} />
-      ) : <p class="muted">{t(lang, "analytics.none")}</p>}
+    <Panel title={t(lang, "analytics.panel_years")} id={d.id("years")} tools={toolsOf(pro ? <CsvLink lang={lang} href={csv("years")} /> : undefined, d.add("years"))}>
+      {years.length ? <OrgYearChart lang={lang} rows={years} frame={frame} /> : <p class="muted">{t(lang, "analytics.none")}</p>}
       {pro && years.length ? <OrgYearTable lang={lang} rows={years} frame={frame} /> : null}
       {pro ? null : <FreeNote lang={lang} view="organization" signedIn={await signedIn(c)} asked={frame.asked} />}
     </Panel>
@@ -1018,42 +1148,45 @@ export async function organizationAnalytics(c: Context<AppEnv>): Promise<Respons
   }
 
   const total = years.reduce((sum, r) => sum + int(r.cents), 0);
-  const buyers = (rows.buyers ?? []).map((r) => {
-    const label = pick(lang, r.name_en as string, r.name_fr as string | null) ?? String(r.id);
-    return { label: <a href={`/buyers/${r.id}`}>{label}</a>, name: label, n: int(r.n), cents: r.cents, share: share(lang, num(r.cents), total) };
-  });
-  const segRows = (rows.segments ?? []).map((r) => ({
-    label: segmentLink(lang, int(r.sid)), name: segmentLabel(lang, segmentCode(int(r.sid))), n: int(r.n), cents: r.cents, share: share(lang, num(r.cents), total),
-  }));
+  const buyers = buyerLines(lang, rows.buyers ?? [], total);
+  const segRows = segmentLines(lang, rows.segments ?? [], total);
   const segmentSource = SEGMENT_SOURCES.includes(frame.source);
   return shell(c, s, read, <>
     {first}
-    <RecordsPanel lang={lang} rows={rows.records ?? []} frame={frame} party="buyer" csv={csv("records")} />
-    <Panel title={t(lang, "analytics.panel_buyers")} tools={buyers.length ? <CsvLink lang={lang} href={csv("buyers")} /> : undefined}>
-      {buyers.length ? <>
-        <RankedBars rows={rankBars(lang, buyers)} aria={t(lang, "analytics.panel_buyers")} />
-        <RankTable lang={lang} head={t(lang, "col.buyer")} rows={buyers} />
-      </> : <p class="muted">{t(lang, "analytics.none")}</p>}
+    <RecordsPanel lang={lang} rows={rows.records ?? []} frame={frame} party="buyer" csv={csv("records")} d={d} />
+    <Panel title={t(lang, "analytics.panel_buyers")} id={d.id("buyers")} tools={toolsOf(buyers.length ? <CsvLink lang={lang} href={csv("buyers")} /> : undefined, d.add("buyers"))}>
+      <RankedBody lang={lang} lines={buyers} aria={t(lang, "analytics.panel_buyers")} head={t(lang, "col.buyer")} />
     </Panel>
-    <Panel title={t(lang, "analytics.panel_segments")} tools={segRows.length ? <CsvLink lang={lang} href={csv("segments")} /> : undefined}
+    <Panel title={t(lang, "analytics.panel_segments")} id={d.id("segments")}
+      tools={toolsOf(segRows.length ? <CsvLink lang={lang} href={csv("segments")} /> : undefined, segmentSource ? d.add("segments") : null)}
       foot={segmentSource ? <span>{t(lang, "analytics.foot_segments")}</span> : undefined}>
-      {!segmentSource ? <p class="muted">{t(lang, "analytics.no_segments")}</p> : segRows.length ? <>
-        <RankedBars rows={rankBars(lang, segRows)} aria={t(lang, "analytics.panel_segments")} />
-        <RankTable lang={lang} head={t(lang, "col.segment")} rows={segRows} />
-      </> : <p class="muted">{t(lang, "analytics.none")}</p>}
+      <SegmentsBody lang={lang} source={frame.source} lines={segRows} />
     </Panel>
     <SharePanel lang={lang} oid={oid} name={name} frame={frame} base={base} segment={data.segment} segmentSource={segmentSource}
       options={(rows.segments ?? []).map((r) => int(r.sid))} rivals={rows.rivals ?? []} share={rows.share ?? []} chosen={chosen}
-      csv={data.segment !== null ? csv("share") : null} />
-    <GrowthPanel lang={lang} rows={rows.growth ?? []} frame={frame} csv={csv("growth")} />
+      csv={data.segment !== null ? csv("share") : null} d={d} />
+    <GrowthPanel lang={lang} rows={rows.growth ?? []} frame={frame} csv={csv("growth")} d={d} />
   </>);
 }
 
-const OrgYearTable: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, rows, frame }) => {
+// A ranked table with its bars, or the line that the period holds none.
+const RankedBody: FC<{ lang: Lang; lines: readonly RankLine[]; aria: string; head: string; fit?: TileFit }> = ({ lang, lines, aria, head, fit }) => (
+  <>{lines.length ? <Ranked lang={lang} lines={lines} aria={aria} head={head} fit={fit} /> : <p class="muted">{t(lang, "analytics.none")}</p>}</>
+);
+
+const OrgYearChart: FC<{ lang: Lang; rows: Row[]; frame: Frame; fit?: TileFit }> = ({ lang, rows, frame, fit }) => (
+  <YearChart lang={lang} frame={frame} fit={fit} fmt={(v) => fmtMoneyShort(v, lang)}
+    panels={[{
+      title: t(lang, "analytics.chart_years", { source: sourceLabel(lang, frame.source) }),
+      values: rows.map((r): YearPoint => [int(r.fy), int(r.cents) / 100, [fmtMoney(int(r.cents) / 100, lang), recordsText(lang, int(r.n))]]),
+    }]} />
+);
+
+const OrgYearTable: FC<{ lang: Lang; rows: Row[]; frame: Frame; fit?: TileFit }> = ({ lang, rows, frame, fit }) => {
   const n = (v: number) => fmtInt(v, lang);
   return (
     <div class="table-wrap">
-      <Table cols={[
+      <Table sorting={sortingOf(fit)} cols={[
         { kind: "date", label: t(lang, "analytics.col_fy") },
         { kind: "count", label: t(lang, "col.records") },
         { kind: "main", label: t(lang, "col.value") },
@@ -1061,7 +1194,7 @@ const OrgYearTable: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, row
         { kind: "share", label: <span title={t(lang, "competitive.def_no")}>{t(lang, "org.col_nc_count")}</span> },
       ]}>
         <tbody>
-          {[...rows].reverse().map((r) => (
+          {firstRows([...rows].reverse(), fit).map((r) => (
             <tr>
               <td data-label={t(lang, "analytics.col_fy")} class="mono"><FyCell lang={lang} year={int(r.fy)} current={frame.current} /></td>
               <td data-label={t(lang, "col.records")} class="mono num">{n(int(r.n))}</td>
@@ -1082,38 +1215,21 @@ const OrgYearTable: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, row
 // organization is told apart by colour alone.
 const SharePanel: FC<{
   lang: Lang; oid: number; name: string; frame: Frame; base: string; segment: number | null; segmentSource: boolean;
-  options: number[]; rivals: Row[]; share: Row[]; chosen: string[]; csv: string | null;
-}> = ({ lang, oid, name, frame, base, segment, segmentSource, options, rivals, share: shareRows, chosen, csv }) => {
+  options: number[]; rivals: Row[]; share: Row[]; chosen: string[]; csv: string | null; d: PanelDash;
+}> = ({ lang, oid, name, frame, base, segment, segmentSource, options, rivals, share: shareRows, chosen, csv, d }) => {
   const title = t(lang, "analytics.panel_share");
   if (!segmentSource || segment === null) {
-    return <Panel title={title}><p class="muted">{t(lang, segmentSource ? "analytics.none" : "analytics.no_segments")}</p></Panel>;
+    return <Panel title={title} id={d.id("share")}><p class="muted">{t(lang, segmentSource ? "analytics.none" : "analytics.no_segments")}</p></Panel>;
   }
-  const names = new Map(rivals.map((r) => [int(r.oid), orgName(r)]));
-  const allowed = new Set(rivals.map((r) => int(r.oid)));
-  // Only organizations among the segment's largest are compared; the profile's own always is.
-  const shown = [oid, ...[...new Set(shareRows.map((r) => num(r.oid)).filter((v): v is number => v !== null && v !== oid))]
-    .filter((v) => allowed.has(v))];
-  const segTotal = new Map<number, number>();
-  for (const r of shareRows) segTotal.set(int(r.fy), int(r.seg_cents));
-  const periodTotal = [...segTotal.values()].reduce((a, b) => a + b, 0);
-  const label = (o: number) => (o === oid ? name : names.get(o) ?? orgIdOf(o));
-  const panels = shown.map((o) => {
-    const mine = shareRows.filter((r) => num(r.oid) === o);
-    return {
-      title: label(o),
-      values: mine.filter((r) => int(r.seg_cents) > 0).map((r): YearPoint => [
-        int(r.fy), (int(r.cents) / int(r.seg_cents)) * 100, [partOf(lang, int(r.cents), int(r.seg_cents), (v) => fmtMoney(v / 100, lang))],
-      ]),
-      n: mine.reduce((s, r) => s + int(r.n), 0),
-      cents: mine.reduce((s, r) => s + int(r.cents), 0),
-    };
-  });
+  const s = shareOf(lang, oid, name, rivals, shareRows);
+  const { shown } = s;
   const code = segmentCode(segment);
   const choices = [...new Set([segment, ...options])];
+  // Its tile keeps the segment and the organizations the reader chose, as its address writes them (orgMore).
   return (
-    <Panel title={title} tools={csv ? <CsvLink lang={lang} href={csv} /> : undefined}
+    <Panel title={title} id={d.id("share")} tools={toolsOf(csv ? <CsvLink lang={lang} href={csv} /> : undefined, d.add("share", orgMore(segment, chosen)))}
       foot={<span>{t(lang, "analytics.foot_share", { n: MAX_RIVALS, m: RIVALS_N })}</span>}>
-      <p>{tj(lang, "analytics.share_lead", { segment: segmentLink(lang, segment), source: sourceLabel(lang, frame.source) })}</p>
+      <ShareLead lang={lang} frame={frame} segment={segment} />
       <form method="get" action={base} class="toolbar">
         <FrameFields frame={frame} />
         <div class="toolbar-fields">
@@ -1143,12 +1259,55 @@ const SharePanel: FC<{
           <a href={query(base, frame, { segment: code })} class="btn" rel="nofollow">{t(lang, "analytics.share_reset")}</a>
         </div>
       </form>
-      {periodTotal > 0 ? (
-        <YearChart lang={lang} frame={frame} shared fmt={(v) => t(lang, "pct", { n: Math.round(v) })}
+      <ShareFigures lang={lang} frame={frame} oid={oid} s={s} />
+    </Panel>
+  );
+};
+
+// The organizations compared, each one's chart panel and its figures over the period.
+type ShareOf = {
+  shown: number[]; periodTotal: number;
+  panels: { title: string; values: YearPoint[]; n: number; cents: number }[];
+};
+function shareOf(lang: Lang, oid: number, name: string, rivals: readonly Row[], shareRows: readonly Row[]): ShareOf {
+  const names = new Map(rivals.map((r) => [int(r.oid), orgName(r)]));
+  const allowed = new Set(rivals.map((r) => int(r.oid)));
+  // Only organizations among the segment's largest are compared; the profile's own always is.
+  const shown = [oid, ...[...new Set(shareRows.map((r) => num(r.oid)).filter((v): v is number => v !== null && v !== oid))]
+    .filter((v) => allowed.has(v))];
+  const segTotal = new Map<number, number>();
+  for (const r of shareRows) segTotal.set(int(r.fy), int(r.seg_cents));
+  const periodTotal = [...segTotal.values()].reduce((a, b) => a + b, 0);
+  const label = (o: number) => (o === oid ? name : names.get(o) ?? orgIdOf(o));
+  const panels = shown.map((o) => {
+    const mine = shareRows.filter((r) => num(r.oid) === o);
+    return {
+      title: label(o),
+      values: mine.filter((r) => int(r.seg_cents) > 0).map((r): YearPoint => [
+        int(r.fy), (int(r.cents) / int(r.seg_cents)) * 100, [partOf(lang, int(r.cents), int(r.seg_cents), (v) => fmtMoney(v / 100, lang))],
+      ]),
+      n: mine.reduce((s, r) => s + int(r.n), 0),
+      cents: mine.reduce((s, r) => s + int(r.cents), 0),
+    };
+  });
+  return { shown, periodTotal, panels };
+}
+
+const ShareLead: FC<{ lang: Lang; frame: Frame; segment: number }> = ({ lang, frame, segment }) => (
+  <p>{tj(lang, "analytics.share_lead", { segment: segmentLink(lang, segment), source: sourceLabel(lang, frame.source) })}</p>
+);
+
+// The chart, a panel an organization on one scale, and the table; on a tile, the organizations its rows hold.
+const ShareFigures: FC<{ lang: Lang; frame: Frame; oid: number; s: ShareOf; fit?: TileFit }> = ({ lang, frame, oid, s, fit }) => {
+  const panels = firstRows(s.panels, fit);
+  return (
+    <>
+      {s.periodTotal > 0 ? (
+        <YearChart lang={lang} frame={frame} shared fit={fit} fmt={(v) => t(lang, "pct", { n: Math.round(v) })}
           panels={panels.map((p) => ({ title: p.title, values: p.values }))} />
       ) : <p class="muted">{t(lang, "analytics.none")}</p>}
       <div class="table-wrap">
-        <Table cols={[
+        <Table sorting={sortingOf(fit)} cols={[
           { kind: "main", label: t(lang, "col.organization") },
           { kind: "count", label: t(lang, "col.records") },
           { kind: "total", label: t(lang, "col.value") },
@@ -1158,23 +1317,23 @@ const SharePanel: FC<{
             {panels.map((p, i) => (
               <tr>
                 <td data-label={t(lang, "col.organization")}>
-                  {shown[i] === oid ? <strong>{p.title}</strong> : <a href={`/organizations/${orgIdOf(shown[i])}`}>{p.title}</a>}
+                  {s.shown[i] === oid ? <strong>{p.title}</strong> : <a href={`/organizations/${orgIdOf(s.shown[i])}`}>{p.title}</a>}
                 </td>
                 <td data-label={t(lang, "col.records")} class="mono num">{fmtInt(p.n, lang)}</td>
                 <td data-label={t(lang, "col.value")} class="mono num">{money(lang, p.n ? p.cents / 100 : null)}</td>
-                <td data-label={t(lang, "analytics.col_share")} class="mono num">{share(lang, p.cents, periodTotal)}</td>
+                <td data-label={t(lang, "analytics.col_share")} class="mono num">{share(lang, p.cents, s.periodTotal)}</td>
               </tr>
             ))}
           </tbody>
         </Table>
       </div>
-    </Panel>
+    </>
   );
 };
 
 // -- the segment view ------------------------------------------------------------------------
 
-function segmentQueries(sid: number, f: Frame, tables: readonly string[]): Record<string, Query> {
+export function segmentQueries(sid: number, f: Frame, tables: readonly string[]): Record<string, Query> {
   const params = [sid, SOURCE_NUMBER[f.source], f.first, f.last];
   const out: Record<string, Query> = {};
   for (const table of tables) {
@@ -1211,15 +1370,11 @@ export async function segmentAnalytics(c: Context<AppEnv>): Promise<Response> {
 
   const years = rows.years ?? [];
   const csv = (table: string) => query(`${base}/${table}.csv`, frame);
+  const d = panelDash(lang, ctx, base, frame);
   const first = (
-    <Panel title={t(lang, "analytics.panel_activity")} tools={pro ? <CsvLink lang={lang} href={csv("years")} /> : undefined}
+    <Panel title={t(lang, "analytics.panel_activity")} id={d.id("years")} tools={toolsOf(pro ? <CsvLink lang={lang} href={csv("years")} /> : undefined, d.add("years"))}
       foot={<span>{t(lang, "analytics.foot_activity")}</span>}>
-      {years.length ? (
-        <YearChart lang={lang} frame={frame} fmt={(v) => fmtInt(v, lang)} panels={[
-          { title: t(lang, "analytics.chart_buyers"), values: years.map((r): YearPoint => [int(r.fy), int(r.n_buyers), [fmtInt(int(r.n_buyers), lang)]]) },
-          { title: t(lang, "analytics.chart_orgs"), values: years.map((r): YearPoint => [int(r.fy), int(r.n_orgs), [fmtInt(int(r.n_orgs), lang)]]) },
-        ]} />
-      ) : <p class="muted">{t(lang, "analytics.none")}</p>}
+      {years.length ? <SegmentYearChart lang={lang} rows={years} frame={frame} /> : <p class="muted">{t(lang, "analytics.none")}</p>}
       {pro && years.length ? <SegmentYearTable lang={lang} rows={years} frame={frame} /> : null}
       {pro ? null : <FreeNote lang={lang} view="segment" signedIn={await signedIn(c)} asked={frame.asked} />}
     </Panel>
@@ -1237,53 +1392,61 @@ export async function segmentAnalytics(c: Context<AppEnv>): Promise<Response> {
   }
 
   const total = years.reduce((sum, r) => sum + int(r.cents), 0);
-  const buyers = (rows.buyers ?? []).map((r) => {
-    const label = pick(lang, r.name_en as string, r.name_fr as string | null) ?? String(r.id);
-    return { label: <a href={`/buyers/${r.id}`}>{label}</a>, name: label, n: int(r.n), cents: r.cents, share: share(lang, num(r.cents), total) };
-  });
-  const winners = (rows.winners ?? []).slice(0, TOP_N).map((r) => ({
-    label: <a href={`/organizations/${orgIdOf(int(r.oid))}`}>{orgName(r)}</a>, name: orgName(r), n: int(r.n), cents: r.cents,
-    share: share(lang, num(r.cents), total),
-  }));
+  const buyers = buyerLines(lang, rows.buyers ?? [], total);
+  const winners = orgLines(lang, (rows.winners ?? []).slice(0, TOP_N), total);
   const entrants = rows.entrants ?? [];
-  const nNew = int(entrants[0]?.n_new);
   return shell(c, s, read, <>
     {first}
-    <ValuesPanel lang={lang} rows={rows.values ?? []} frame={frame} csv={csv("values")} />
-    <RecordsPanel lang={lang} rows={rows.records ?? []} frame={frame} party="both" csv={csv("records")} />
-    <Panel title={t(lang, "analytics.panel_segment_buyers")} tools={buyers.length ? <CsvLink lang={lang} href={csv("buyers")} /> : undefined}
+    <ValuesPanel lang={lang} rows={rows.values ?? []} frame={frame} csv={csv("values")} d={d} />
+    <RecordsPanel lang={lang} rows={rows.records ?? []} frame={frame} party="both" csv={csv("records")} d={d} />
+    <Panel title={t(lang, "analytics.panel_segment_buyers")} id={d.id("buyers")}
+      tools={toolsOf(buyers.length ? <CsvLink lang={lang} href={csv("buyers")} /> : undefined, d.add("buyers"))}
       foot={<span>{t(lang, "analytics.foot_segments")}</span>}>
-      {buyers.length ? <>
-        <RankedBars rows={rankBars(lang, buyers)} aria={t(lang, "analytics.panel_segment_buyers")} />
-        <RankTable lang={lang} head={t(lang, "col.buyer")} rows={buyers} />
-      </> : <p class="muted">{t(lang, "analytics.none")}</p>}
+      <RankedBody lang={lang} lines={buyers} aria={t(lang, "analytics.panel_segment_buyers")} head={t(lang, "col.buyer")} />
     </Panel>
-    <Panel title={t(lang, "analytics.panel_winners")} tools={winners.length ? <CsvLink lang={lang} href={csv("winners")} /> : undefined}>
-      {winners.length ? <>
-        <RankedBars rows={rankBars(lang, winners)} aria={t(lang, "analytics.panel_winners")} />
-        <RankTable lang={lang} head={t(lang, "col.organization")} rows={winners} />
-      </> : <p class="muted">{t(lang, "analytics.none")}</p>}
+    <Panel title={t(lang, "analytics.panel_winners")} id={d.id("winners")}
+      tools={toolsOf(winners.length ? <CsvLink lang={lang} href={csv("winners")} /> : undefined, d.add("winners"))}>
+      <RankedBody lang={lang} lines={winners} aria={t(lang, "analytics.panel_winners")} head={t(lang, "col.organization")} />
     </Panel>
-    <Panel title={t(lang, "analytics.panel_entrants")} tools={entrants.length ? <CsvLink lang={lang} href={csv("entrants")} /> : undefined}
+    <Panel title={t(lang, "analytics.panel_entrants")} id={d.id("entrants")}
+      tools={toolsOf(entrants.length ? <CsvLink lang={lang} href={csv("entrants")} /> : undefined, d.add("entrants"))}
       foot={<span>{t(lang, "analytics.foot_entrants", { n: ENTRANT_LOOKBACK })}</span>}>
+      <EntrantsBody lang={lang} rows={entrants} years={years} frame={frame} />
+    </Panel>
+    <DuePanel lang={lang} rows={rows.due ?? []} from={read.asOf ?? todayOf(stats.data_as_of)} radarDay={todayOf(stats.data_as_of)}
+      filter={`segment=${code}`} csv={csv("due")} noun="analytics.due_lead_segment" d={d} />
+  </>);
+}
+
+const SegmentYearChart: FC<{ lang: Lang; rows: Row[]; frame: Frame; fit?: TileFit }> = ({ lang, rows, frame, fit }) => (
+  <YearChart lang={lang} frame={frame} fit={fit} fmt={(v) => fmtInt(v, lang)} panels={[
+    { title: t(lang, "analytics.chart_buyers"), values: rows.map((r): YearPoint => [int(r.fy), int(r.n_buyers), [fmtInt(int(r.n_buyers), lang)]]) },
+    { title: t(lang, "analytics.chart_orgs"), values: rows.map((r): YearPoint => [int(r.fy), int(r.n_orgs), [fmtInt(int(r.n_orgs), lang)]]) },
+  ]} />
+);
+
+// The organizations new to the segment in the period's last fiscal year: how many, then the largest of them, each
+// one's share of that year's value in the segment.
+const EntrantsBody: FC<{ lang: Lang; rows: Row[]; years: Row[]; frame: Frame; fit?: TileFit }> = ({ lang, rows, years, frame, fit }) => {
+  const nNew = int(rows[0]?.n_new);
+  return (
+    <>
       <p>{tn(lang, "analytics.entrants_one", "analytics.entrants_many", nNew, { n: fmtInt(nNew, lang), fy: fy(lang, frame.last, frame.current) })}</p>
-      {entrants.length ? (
-        <RankTable lang={lang} head={t(lang, "col.organization")} rows={entrants.map((r) => ({
+      {rows.length ? (
+        <RankTable lang={lang} head={t(lang, "col.organization")} sorting={sortingOf(fit)} rows={firstRows(rows, fit).map((r) => ({
           label: <a href={`/organizations/${orgIdOf(int(r.oid))}`}>{orgName(r)}</a>, n: int(r.n), cents: r.cents,
           share: share(lang, num(r.cents), int(years.find((y) => int(y.fy) === frame.last)?.cents)),
         }))} />
       ) : null}
-    </Panel>
-    <DuePanel lang={lang} rows={rows.due ?? []} from={read.asOf ?? todayOf(stats.data_as_of)} radarDay={todayOf(stats.data_as_of)}
-      filter={`segment=${code}`} csv={csv("due")} noun="analytics.due_lead_segment" />
-  </>);
-}
+    </>
+  );
+};
 
-const SegmentYearTable: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang, rows, frame }) => {
+const SegmentYearTable: FC<{ lang: Lang; rows: Row[]; frame: Frame; fit?: TileFit }> = ({ lang, rows, frame, fit }) => {
   const n = (v: number) => fmtInt(v, lang);
   return (
     <div class="table-wrap">
-      <Table cols={[
+      <Table sorting={sortingOf(fit)} cols={[
         { kind: "date", label: t(lang, "analytics.col_fy") },
         { kind: "count", label: t(lang, "col.records") },
         { kind: "main", label: t(lang, "col.value") },
@@ -1292,7 +1455,7 @@ const SegmentYearTable: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang,
         { kind: "count", label: t(lang, "analytics.col_orgs") },
       ]}>
         <tbody>
-          {[...rows].reverse().map((r) => (
+          {firstRows([...rows].reverse(), fit).map((r) => (
             <tr>
               <td data-label={t(lang, "analytics.col_fy")} class="mono"><FyCell lang={lang} year={int(r.fy)} current={frame.current} /></td>
               <td data-label={t(lang, "col.records")} class="mono num">{n(int(r.n))}</td>
@@ -1307,6 +1470,136 @@ const SegmentYearTable: FC<{ lang: Lang; rows: Row[]; frame: Frame }> = ({ lang,
     </div>
   );
 };
+
+// -- a table on a dashboard tile (account/dashboard.tsx kind "analytic") --------------------------------
+
+// What a table's tile reads besides the table: a ranked table's shares are of
+// the period's value, which the view's first table holds.
+const ALSO: Readonly<Record<string, readonly string[]>> = {
+  "buyer/segments": ["quarters"], "buyer/suppliers": ["quarters"], "organization/buyers": ["years"], "organization/segments": ["years"],
+  "segment/buyers": ["years"], "segment/winners": ["years"], "segment/entrants": ["years"],
+};
+
+// A table's statements as its view reads them (buyerQueries, orgQueries,
+// segmentQueries), named as the view names them, with what it reads besides
+// (ALSO). key: the buyer's id, the organization's number or the segment's.
+// share: the share table's segment and the organizations chosen (none: the
+// statement takes the segment's largest).
+export function analyticQueries(
+  view: View, key: string | number, frame: Frame, table: string, share?: { segment: number; rivals: number[] },
+): Record<string, Query> {
+  const tables = [...(ALSO[`${view}/${table}`] ?? []), table];
+  if (view === "buyer") return buyerQueries(String(key), frame, tables);
+  if (view === "segment") return segmentQueries(Number(key), frame, tables);
+  return orgQueries(Number(key), frame, tables, share ? { segment: share.segment, rivals: share.rivals, chosen: share.rivals.length > 0 } : null);
+}
+
+// A tile's frame: its source and fiscal years at a data date's (current), as
+// the tile's address names them (custom: by first and last); Ultra's, whose
+// period no plan caps.
+export function tileFrame(source: MoneySource, first: number, last: number, current: number, custom: boolean): Frame {
+  return { source, years: last - first + 1, first, last, current, custom, capped: false, asked: false, most: ULTRA_YEARS, longer: false };
+}
+
+// What a tile draws a table from: the rows its statements read (by name), and
+// for the share table the organization's number and name and the segment, for
+// the contracts ending the radar's filter, the records' date and the radar's.
+export type AnalyticData = {
+  view: View; table: string; lang: Lang; frame: Frame; rows: Record<string, Row[]>; from: string; radarDay: string;
+  oid?: number; name?: string; segment?: number | null; filter?: string;
+};
+
+// A table drawn on a tile with the view's own drawing: its body at the tile's
+// sizes, and the rows it lists of all there are (the foot's "5 of 31").
+export function analyticBody(a: AnalyticData, fit: TileFit): { body: unknown; shown: number; total: number } {
+  const { lang, frame, rows } = a;
+  // The tile's sizes once the rows read are known: the plots take the room of rows the read does not fill.
+  const at = (total: number, draw: (f: TileFit) => unknown) => {
+    const shown = Math.min(fit.rows, total);
+    return { body: draw({ ...fit, plot: fit.grow ? fit.grow(shown) : fit.plot }), shown, total };
+  };
+  const sum = (list: readonly Row[]) => list.reduce((s, r) => s + int(r.cents), 0);
+  switch (`${a.view}/${a.table}`) {
+    case "buyer/quarters": {
+      const q = rows.quarters ?? [];
+      return q.length ? at(frame.years, (f) => <><QuarterChart lang={lang} rows={q} frame={frame} fit={f} /><QuarterTable lang={lang} rows={q} frame={frame} fit={f} /></>)
+        : at(0, () => none(lang));
+    }
+    case "organization/years": {
+      const y = rows.years ?? [];
+      return y.length ? at(y.length, (f) => <><OrgYearChart lang={lang} rows={y} frame={frame} fit={f} /><OrgYearTable lang={lang} rows={y} frame={frame} fit={f} /></>)
+        : at(0, () => none(lang));
+    }
+    case "segment/years": {
+      const y = rows.years ?? [];
+      return y.length ? at(y.length, (f) => <><SegmentYearChart lang={lang} rows={y} frame={frame} fit={f} /><SegmentYearTable lang={lang} rows={y} frame={frame} fit={f} /></>)
+        : at(0, () => none(lang));
+    }
+    case "buyer/values":
+    case "segment/values": {
+      const v = rows.values ?? [];
+      return at(v.some((r) => int(r.n_pos) > 0) ? v.length : 0, (f) => <ValuesBody lang={lang} rows={v} frame={frame} fit={f} />);
+    }
+    case "buyer/records":
+    case "organization/records":
+    case "segment/records": {
+      const party: Party = a.view === "buyer" ? "organization" : a.view === "organization" ? "buyer" : "both";
+      const r = rows.records ?? [];
+      return at(r.length, (f) => <RecordsBody lang={lang} rows={r} frame={frame} party={party} fit={f} />);
+    }
+    case "buyer/segments":
+    case "organization/segments": {
+      const lines = segmentLines(lang, rows.segments ?? [], sum(rows[a.view === "buyer" ? "quarters" : "years"] ?? []));
+      return at(SEGMENT_SOURCES.includes(frame.source) ? lines.length : 0, (f) => <SegmentsBody lang={lang} source={frame.source} lines={lines} fit={f} />);
+    }
+    case "buyer/competition": {
+      const c = rows.competition ?? [];
+      return at(frame.source === "grants" ? 0 : c.length, (f) => <CompetitionBody lang={lang} rows={c} frame={frame} fit={f} />);
+    }
+    case "buyer/suppliers": {
+      const s = rows.suppliers ?? [];
+      return at(s.length, (f) => <SuppliersBody lang={lang} rows={s} total={sum(rows.quarters ?? [])} fit={f} />);
+    }
+    case "buyer/growth":
+    case "organization/growth": {
+      const g = rows.growth ?? [];
+      return at(AMENDED_SOURCES.includes(frame.source) ? g.length : 0, (f) => <GrowthBody lang={lang} rows={g} frame={frame} fit={f} />);
+    }
+    case "buyer/due":
+    case "segment/due": {
+      const d = rows.due ?? [];
+      const noun: Key = a.view === "buyer" ? "analytics.due_lead_buyer" : "analytics.due_lead_segment";
+      return at(dueQuarters(lang, d, a.from, a.radarDay).some((x) => x.n > 0) ? DUE_QUARTERS : 0, (f) => (
+        <DueBody lang={lang} rows={d} from={a.from} radarDay={a.radarDay} filter={a.filter ?? ""} noun={noun} fit={f} />
+      ));
+    }
+    case "organization/buyers":
+    case "segment/buyers": {
+      const lines = buyerLines(lang, rows.buyers ?? [], sum(rows.years ?? []));
+      const aria = t(lang, a.view === "segment" ? "analytics.panel_segment_buyers" : "analytics.panel_buyers");
+      return at(lines.length, (f) => <RankedBody lang={lang} lines={lines} aria={aria} head={t(lang, "col.buyer")} fit={f} />);
+    }
+    case "segment/winners": {
+      const lines = orgLines(lang, (rows.winners ?? []).slice(0, TOP_N), sum(rows.years ?? []));
+      return at(lines.length, (f) => <RankedBody lang={lang} lines={lines} aria={t(lang, "analytics.panel_winners")} head={t(lang, "col.organization")} fit={f} />);
+    }
+    case "segment/entrants": {
+      const e = rows.entrants ?? [];
+      return at(e.length, (f) => <EntrantsBody lang={lang} rows={e} years={rows.years ?? []} frame={frame} fit={f} />);
+    }
+    case "organization/share": {
+      if (!SEGMENT_SOURCES.includes(frame.source) || a.segment === null || a.segment === undefined || a.oid === undefined) {
+        return at(0, () => <p class="muted">{t(lang, SEGMENT_SOURCES.includes(frame.source) ? "analytics.none" : "analytics.no_segments")}</p>);
+      }
+      const s = shareOf(lang, a.oid, a.name ?? orgIdOf(a.oid), rows.rivals ?? [], rows.share ?? []);
+      const segment = a.segment;
+      const oid = a.oid;
+      return at(s.panels.length, (f) => <><ShareLead lang={lang} frame={frame} segment={segment} /><ShareFigures lang={lang} frame={frame} oid={oid} s={s} fit={f} /></>);
+    }
+    default:
+      return at(0, () => none(lang));
+  }
+}
 
 // -- the CSV files ----------------------------------------------------------------------------
 

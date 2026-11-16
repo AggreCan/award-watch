@@ -87,7 +87,7 @@ const BILLING_POSTS = new Set(["/account/billing/checkout", "/account/billing/po
 // views' (account/view_pages.tsx): save one, its email, remove it; and the
 // dashboard's read of one tile (DASHBOARD_TILE, a GET).
 const DASHBOARD_POSTS =
-  /^\/account\/dashboard\/(?:panels(?:\/[^/]+\/(?:move|width|delete))?|layout|boards(?:\/[^/]+\/(?:rename|move|delete))?|tiles\/[^/]+\/(?:move|size|board|delete))$/;
+  /^\/account\/dashboard\/(?:panels(?:\/[^/]+\/(?:move|width|delete))?|layout|boards(?:\/[^/]+\/(?:rename|move|delete))?|tiles\/[^/]+\/(?:move|size|board|delete|text))$/;
 const DASHBOARD_TILE = /^\/account\/dashboard\/tiles\/[^/]+$/;
 const VIEW_POSTS = /^\/account\/views(?:\/[^/]+(?:\/delete)?)?$/;
 // The overview's Sign out on another of the account's browsers (account/routes.tsx).

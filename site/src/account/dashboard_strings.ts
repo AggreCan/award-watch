@@ -20,8 +20,8 @@ export const DASHBOARD_STRINGS = {
   // -- the page -------------------------------------------------------------------------
   "dash.title": { en: "Dashboard", fr: "Tableau de bord" },
   "dash.lead": {
-    en: "Tiles from your saved searches, watches, the lists of contracts ending, analytics views, briefings and your organization's page. Drag a tile by its grip to move it and by its corner to size it, or use its menu.",
-    fr: "Des tuiles tirées de vos recherches enregistrées, de vos suivis, des listes de contrats prenant fin, des vues d'analyse, des bulletins et de la page de votre organisation. Faites glisser une tuile par sa poignée pour la déplacer et par son coin pour la redimensionner, ou servez-vous de son menu.",
+    en: "Tiles from your saved searches, watches, the lists of contracts ending, the tables of analytics views, briefings, your organization's page and your own notes. Drag a tile by its grip to move it and by its corner to size it, or use its menu.",
+    fr: "Des tuiles tirées de vos recherches enregistrées, de vos suivis, des listes de contrats prenant fin, des tableaux des vues d'analyse, des bulletins, de la page de votre organisation et de vos propres notes. Faites glisser une tuile par sa poignée pour la déplacer et par son coin pour la redimensionner, ou servez-vous de son menu.",
   },
   "dash.starter": {
     en: "These are the tiles a dashboard starts with. Your first change keeps them as your own.",
@@ -36,6 +36,31 @@ export const DASHBOARD_STRINGS = {
   "dash.add_label": { en: "What the tile shows", fr: "Ce que montre la tuile" },
   "dash.add": { en: "Add", fr: "Ajouter" },
   "dash.add_here": { en: "Add to dashboard", fr: "Ajouter au tableau de bord" },
+  // Add a Tile's three groups (dashboard.tsx AddTile): what the account holds, the analytics tables, a text.
+  "dash.add_lists": { en: "From Your Lists", fr: "Depuis vos listes" },
+  "dash.add_analytics": { en: "Analytics", fr: "Analyses" },
+  "dash.add_analytics_line": {
+    en: "Each table and chart of an analytics view has its own Add to dashboard: open a view from {link}.",
+    fr: "Chaque tableau et chaque graphique d'une vue d'analyse a sa propre commande Ajouter au tableau de bord : ouvrez une vue depuis {link}.",
+  },
+  "dash.add_text": { en: "Text", fr: "Texte" },
+  // A text tile (dashboard.tsx TextTile): the field, its note, the menu's Edit and the form's Save.
+  "dash.text_label": { en: "A heading or a note", fr: "Un titre ou une note" },
+  "dash.text_note": {
+    en: "Plain text, {n} characters at most. A single short line shows as a heading.",
+    fr: "Texte brut, {n} caractères au plus. Une seule ligne courte s'affiche comme un titre.",
+  },
+  "dash.text_edit": { en: "Edit", fr: "Modifier" },
+  "dash.text_save": { en: "Save", fr: "Enregistrer" },
+  "dash.text_empty_tile": { en: "This note is empty. Edit it from the tile's menu.", fr: "Cette note est vide. Modifiez-la depuis le menu de la tuile." },
+  // What an add of a text says when it adds nothing: no text typed; the grid's tables absent.
+  "dash.text_empty": { en: "Type a heading or a note to add it.", fr: "Tapez un titre ou une note pour l'ajouter." },
+  "dash.text_unsaved": {
+    en: "A note can be kept once the dashboard can save positions and sizes.",
+    fr: "Une note pourra être conservée quand le tableau de bord pourra enregistrer les positions et les tailles.",
+  },
+  // The foot of an analytics table of contracts ending, which follow neither the source nor the period: their first day.
+  "dash.meta_due": { en: "Contracts ending from {date}", fr: "Contrats prenant fin à partir du {date}" },
   "dash.added": { en: "Added to the dashboard.", fr: "Ajouté au tableau de bord." },
   "dash.count": { en: "{n} of {cap} tiles", fr: "{n} tuiles sur {cap}" },
   "dash.full": {
@@ -166,6 +191,7 @@ export const DASHBOARD_STRINGS = {
   "dash.kind_org": { en: "Your organization: {block}", fr: "Votre organisation : {block}" },
   "dash.kind_matches": { en: "Matching notices", fr: "Avis correspondants" },
   "dash.kind_api": { en: "API requests today", fr: "Requêtes à l'API aujourd'hui" },
+  "dash.kind_text": { en: "Your note", fr: "Votre note" },
 
   // -- More Kinds of Tile (dashboard.tsx moreKinds): each kind the account cannot add yet, the one step that
   // gives it what the tile shows, and the page where that is done ({link}, its words the _link key) ----------
@@ -186,8 +212,8 @@ export const DASHBOARD_STRINGS = {
   },
   "dash.more_records_link": { en: "your saved searches", fr: "vos recherches enregistrées" },
   "dash.more_view": {
-    en: "A chart from an analytics view: open a view from {link} and choose Add to dashboard.",
-    fr: "Un graphique d'une vue d'analyse : ouvrez une vue depuis {link} et choisissez Ajouter au tableau de bord.",
+    en: "A table or chart of an analytics view: open a view from {link} and choose Add to dashboard on it.",
+    fr: "Un tableau ou un graphique d'une vue d'analyse : ouvrez une vue depuis {link} et choisissez Ajouter au tableau de bord sur celui-ci.",
   },
   "dash.more_view_link": { en: "Analytics", fr: "Analyses" },
   "dash.more_briefing": {
@@ -213,7 +239,8 @@ export const DASHBOARD_STRINGS = {
     en: "Pages of tiles you choose from what the site already shows you: {line}.",
     fr: "Des pages de tuiles que vous choisissez parmi ce que le site vous montre déjà : {line}.",
   },
-  // The nine kinds, one sentence each, in PANEL_KINDS order. A list shows as many rows as its size holds.
+  // The kinds, one sentence each, in PANEL_KINDS order (an earlier view's tile is an analytics table's). A list shows
+  // as many rows as its size holds.
   "dash.what_tenders": {
     en: "A saved tender search: how many open notices match it, and the ones closing soonest, as many as its size holds.",
     fr: "Une recherche d'appels d'offres enregistrée : combien d'avis ouverts y correspondent, et les prochains à fermer, autant que sa taille en contient.",
@@ -230,9 +257,9 @@ export const DASHBOARD_STRINGS = {
     en: "Your watches: the week's events by kind, and the newest, as many as its size holds.",
     fr: "Vos suivis : les événements de la semaine par genre, et les derniers, autant que sa taille en contient.",
   },
-  "dash.what_view": {
-    en: "An analytics view of a buyer, an organization or a segment: its first chart, at the source and period you chose.",
-    fr: "Une vue d'analyse d'un acheteur, d'une organisation ou d'un segment : son premier graphique, avec la source et la période choisies.",
+  "dash.what_analytic": {
+    en: "A table or chart of a buyer's, an organization's or a segment's analytics, drawn in full at the source and period you chose, as many rows as its size holds.",
+    fr: "Un tableau ou un graphique des analyses d'un acheteur, d'une organisation ou d'un segment, tracé en entier avec la source et la période choisies, autant de lignes que sa taille en contient.",
   },
   "dash.what_briefing": {
     en: "A weekly briefing: this week's new notices, awards, notable amendments and contracts ending next quarter, as counts.",
@@ -250,10 +277,11 @@ export const DASHBOARD_STRINGS = {
     en: "The API: each key's requests today and the plan's daily cap.",
     fr: "L'API : les requêtes de chaque clé aujourd'hui et le plafond quotidien du forfait.",
   },
+  "dash.what_text": { en: "A heading or a note you type.", fr: "Un titre ou une note que vous tapez." },
   "dash.gate": { en: "The dashboard is part of Ultra.", fr: "Le tableau de bord fait partie d'Ultra." },
   // The privacy page's line (account/privacy.tsx), while Ultra is on sale.
   "dash.privacy": {
-    en: "A dashboard keeps the name you give it, its place among your dashboards, the tiles you chose, the position and size of each, and each tile's own choices. A tile names a saved search, a briefing, an analytics view's address or a block of your organization's page. The dashboards and their tiles are deleted with the account.",
-    fr: "Un tableau de bord conserve le nom que vous lui donnez, sa place parmi vos tableaux de bord, les tuiles que vous avez choisies, la position et la taille de chacune, et les choix propres à chaque tuile. Une tuile nomme une recherche enregistrée, un bulletin, l'adresse d'une vue d'analyse ou un bloc de la page de votre organisation. Les tableaux de bord et leurs tuiles sont supprimés avec le compte.",
+    en: "A dashboard keeps the name you give it, its place among your dashboards, the tiles you chose, the position and size of each, each tile's own choices and the text of a note you type. A tile names a saved search, a briefing, an analytics view's address and one of its tables, or a block of your organization's page. The dashboards and their tiles are deleted with the account.",
+    fr: "Un tableau de bord conserve le nom que vous lui donnez, sa place parmi vos tableaux de bord, les tuiles que vous avez choisies, la position et la taille de chacune, les choix propres à chaque tuile et le texte d'une note que vous tapez. Une tuile nomme une recherche enregistrée, un bulletin, l'adresse d'une vue d'analyse et l'un de ses tableaux, ou un bloc de la page de votre organisation. Les tableaux de bord et leurs tuiles sont supprimés avec le compte.",
   },
 } as const satisfies Record<string, { en: string; fr: string }>;

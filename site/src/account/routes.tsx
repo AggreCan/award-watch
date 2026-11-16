@@ -81,6 +81,7 @@
 //   POST /account/dashboard/tiles/:id/size     wider, narrower, taller, shorter (to)   (session, CSRF)
 //   POST /account/dashboard/tiles/:id/board    to another of the account's dashboards (board) (session, CSRF)
 //   POST /account/dashboard/tiles/:id/delete   remove it                               (session, CSRF)
+//   POST /account/dashboard/tiles/:id/text     a text tile's text (text)               (session, CSRF)
 //   POST /account/dashboard/panels/:id/move|width|delete  the earlier page's three posts, kept for a page
 //                                      loaded before the grid                         (session, CSRF)
 //   GET  /account/views                saved analytics views, each with its email      (session; the site's 404 until
@@ -1602,7 +1603,7 @@ account.post("/dashboard/panels", async (c) => {
 });
 
 // A tile's changes from its menu: a step of a place (move, dir) or of a size
-// (size, to), and its removal; the earlier page's three posts (one place up
+// (size, to), a text tile's text (text), and its removal; the earlier page's three posts (one place up
 // or down, full or half width, removed) answer as they did.
 const isStep = (v: unknown): v is Step => typeof v === "string" && (STEPS as readonly string[]).includes(v);
 const MOVES: ReadonlySet<Step> = new Set(["left", "right", "up", "down"]);
@@ -1611,6 +1612,8 @@ const TILE_OPS: Record<string, (fields: Record<string, string>) => EditOp | null
   size: (f) => (isStep(f.to) && !MOVES.has(f.to) ? { op: "step", step: f.to } : null),
   board: (f) => (typeof f.board === "string" && /^[0-9a-f]{32}$/.test(f.board) ? { op: "board", board: f.board } : null),
   delete: () => ({ op: "delete" }),
+  // A text tile's text as typed; dashboard.tsx cleans it as it cleans a new one.
+  text: (f) => ({ op: "text", text: f.text ?? "" }),
 };
 const PANEL_OPS: Record<string, (fields: Record<string, string>) => EditOp | null> = {
   move: (f) => (f.dir === "up" || f.dir === "down" ? { op: "step", step: f.dir } : null),
@@ -1618,7 +1621,7 @@ const PANEL_OPS: Record<string, (fields: Record<string, string>) => EditOp | nul
   delete: () => ({ op: "delete" }),
 };
 
-account.post("/dashboard/tiles/:id/:op{move|size|board|delete}", async (c) => {
+account.post("/dashboard/tiles/:id/:op{move|size|board|delete|text}", async (c) => {
   const post = await signedInPost(c);
   if (post instanceof Response) return post;
   const op = TILE_OPS[c.req.param("op") ?? ""]?.(post.fields) ?? null;

@@ -607,6 +607,30 @@ const DASH_TILES_24 = [...DASH_TILES, ...([
   ["org", "share", 0, 134, 6, 8], ["org", "buyers", 6, 134, 6, 12],
 ] as const).map(([kind, ref, x, y, w, h], i) => ({ id: `${i + 12}`.padStart(32, "d"), kind, ref, opts: "", x, y, w, h }))];
 
+// A dashboard of 24 analytics tables (B3a, 2026-11-16): every table of a buyer's, an organization's and a segment's
+// view, then three of them again at another source or period, at sizes from each shape's least to the whole row.
+const BUYER_VIEW = "/buyers/pwgsc-tpsgc/analytics?source=awards&years=10";
+const ORG_VIEW = "/organizations/org-a000000001/analytics?source=awards&years=10";
+const SEGMENT_VIEW = "/segments/81/analytics?source=awards&years=10";
+const ANALYTIC_REFS = [
+  ...["quarters", "values", "records", "segments", "competition", "suppliers", "growth", "due"].map((x) => `${BUYER_VIEW}#table-${x}`),
+  ...["years", "records", "buyers", "segments", "growth"].map((x) => `${ORG_VIEW}#table-${x}`), `${ORG_VIEW}&segment=81#table-share`,
+  ...["years", "values", "records", "buyers", "winners", "entrants", "due"].map((x) => `${SEGMENT_VIEW}#table-${x}`),
+  "/buyers/pwgsc-tpsgc/analytics?source=contracts&years=10#table-quarters", "/organizations/org-a000000001/analytics?source=history&years=20#table-years",
+  "/segments/81/analytics?source=history&years=5#table-records",
+];
+const ANALYTIC_SIZES: readonly [number, number][] = [[12, 16], [7, 12], [12, 14], [4, 14], [6, 16], [8, 13]];
+const DASH_ANALYTICS_24 = ANALYTIC_REFS.map((ref, i) => {
+  const [w, h] = ANALYTIC_SIZES[i % ANALYTIC_SIZES.length];
+  return { id: `${i}`.padStart(32, "e"), kind: "analytic", ref, opts: "", x: 0, y: i * 16, w, h };
+});
+// That page's records batch: the state row and each table's statements as its view reads them, with its subject's
+// name (a segment's needs none): the buyer's eight tables 18 (two each, three for the segments and the suppliers,
+// which read the quarters for their shares), the organization's six 15 (two each, three for the buyers, the
+// segments and the share, which reads the segment's largest organizations), the segment's seven 10 (one each, two
+// for the buyers, the largest organizations and the newcomers, which read the years), and the three again 5.
+const DASHBOARD_ANALYTICS_STATEMENTS = 1 + 18 + 15 + 10 + 5;
+
 function ultraAccounts(tokenHash: string, tiles: readonly Record<string, unknown>[] = DASH_TILES): D1Database {
   const at = DASH_AT;
   const session = {
@@ -799,5 +823,28 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
     expect(Math.max(...batches), batches.join(" ")).toBe(DASHBOARD_24_STATEMENTS);
     const r = await signedInRatio("/account/dashboard", 8, accounts, '<div class="dash-grid" id="dash-grid">', { RECORDS: dashRecords });
     expect(r, `/account/dashboard, 24 tiles ${r.toFixed(2)}`).toBeLessThanOrEqual(DASHBOARD_24_BOUND);
+  }, 120_000);
+
+  // A dashboard of 24 analytics tables (B3a, 2026-11-16), each a whole table of a view drawn by the view's own code
+  // at its size: about three times the larger of two ratios measured then (in brackets), rounded up, beside the
+  // 24 tiles of every other kind in the same run (in the comment after).
+  const DASHBOARD_ANALYTICS_BOUND = 41; // [13.33, 13.57]; two runs more: [12.69, 13.17], the 24 tiles [17.08, 16.88], twelve tiles [10.64, 10.08]
+  it("keeps an Ultra account's dashboard of 24 analytics tables within its bound, their records read in one batch", async () => {
+    clearParsedCache();
+    clearClosingCache();
+    const accounts = ultraAccounts(await sha256Hex(SECRET), DASH_ANALYTICS_24);
+    const batches: number[] = [];
+    const records = { ...dashRecords, batch: (list: D1PreparedStatement[]) => (batches.push(list.length), dashRecords.batch(list)) } as D1Database;
+    const first = await app.request("/account/dashboard", { headers: { "sec-fetch-mode": "navigate", cookie: COOKIE } },
+      { ...env, ASSETS: assetsOf(FIT_BODIES, "v1-fit"), ACCOUNTS: accounts, ACCOUNTS_ENABLED: "true", RECORDS: records });
+    const html = await first.text();
+    expect(html.match(/<section class="panel dash-tile/g)).toHaveLength(24);
+    expect(html).not.toContain("This tile cannot be read right now.");
+    expect(html).not.toContain("What this tile showed was removed.");
+    expect(html.match(/<div class="dash-body dash-rest/g)).toHaveLength(24);
+    // One batch, and nothing read apart from it.
+    expect(batches).toEqual([DASHBOARD_ANALYTICS_STATEMENTS]);
+    const r = await signedInRatio("/account/dashboard", 8, accounts, '<div class="dash-grid" id="dash-grid">', { RECORDS: dashRecords });
+    expect(r, `/account/dashboard, 24 analytics tables ${r.toFixed(2)}`).toBeLessThanOrEqual(DASHBOARD_ANALYTICS_BOUND);
   }, 120_000);
 });

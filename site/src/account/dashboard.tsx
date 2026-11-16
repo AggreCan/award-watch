@@ -43,6 +43,15 @@
 // More Kinds of Tile (moreKinds) lists the kinds the account cannot add yet,
 // each with the step that gives it what the tile shows, from the rows above
 // and nothing else read.
+//
+// An analytics table (kind "analytic") is one table of a buyer's, an
+// organization's or a segment's analytics view, drawn in full by the view's
+// own code (pages/analytics.tsx analyticBody) from the statements the view
+// reads it with (analyticQueries), at the tile's size; its ref is the view's
+// address with the table's anchor (analyticAddress). A view's tile from before
+// (kind "view") draws as its view's first table. A text tile (kind "text") is a
+// heading or a note the reader typed, its ref an id of its own and its text in
+// the tile's opts (noteOf).
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
@@ -53,7 +62,7 @@ import {
 import { MATCH_MIN, blockState, rankNotices, type Score } from "../../public/fit.js";
 import { templatePieces } from "../../public/refresh.js";
 import { keyQuota } from "../api_keyed_spec";
-import { ChartStack, type AxisLabel, barGap, fiscalAxis, moneyTip, recordsText, tipHead, tipText, type Panel as ChartPanel } from "../chart";
+import { recordsText } from "../chart";
 import { type Clock, clockOf, closingPassed } from "../closing";
 import { Table } from "../columns";
 import { MONEY_SOURCES, type MoneySource } from "../constants";
@@ -63,24 +72,26 @@ import {
 } from "../data";
 import type { AppEnv, Env } from "../env";
 import { FitDisclaimer, MatchBand, countsText, profileMatching } from "../fit";
-import { fmtInt, fmtMoney, fmtMoneyShort, fmtPct, pick, segmentLabel, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
+import { fmtInt, fmtMoney, fmtPct, pick, segmentLabel, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import { instrumentPath } from "../instruments";
 import { ClientData, Layout, PageHead, Panel, page, todayOf } from "../layout";
+import { TABLE_TITLES, VIEW_TABLES, analyticBody, analyticQueries, tileFrame } from "../pages/analytics";
 import { contractReference, radarParams, radarRow, readExpiringQuery, sitePath as recordPath } from "../pages/expiring";
 import { money } from "../pages/shared";
 import { filterTenders, readTenderQuery } from "../pages/tenders";
 import { PlanCards, checkoutPrice, dashboardsWording, planCards, ultraCheckoutPrice } from "../pro";
 import {
-  BUYER_QUARTERS_SQL, EARLIEST_FY, MAX_YEARS, ORG_YEARS_SQL, PERIODS, ULTRA_YEARS, SEGMENT_SOURCES, SEGMENT_YEARS_SQL, SOURCE_NUMBER, type Query, type Read,
-  type Row, fiscalLabel, fiscalYearOf, num, orgNumber, readRecords, segmentCode, segmentNumber,
+  EARLIEST_FY, MAX_YEARS, PERIODS, ULTRA_YEARS, SEGMENT_SOURCES, SOURCE_NUMBER, type Query, type Read, type Row, fiscalLabel, fiscalYearOf, num,
+  orgNumber, readRecords, segmentCode, segmentNumber,
 } from "../records_db";
+import { rivalsOf, shareSegmentOf } from "../view_address";
 import { RADAR_PROV_ROWS_END_SQL, RADAR_PROV_TOTAL_SQL, RADAR_ROWS_END_SQL, RADAR_TOTAL_SQL, radarBinds, radarProvBinds } from "../records_tables";
 import { type KeyRow, listKeys } from "./api_keys";
 import { keyUsage, nowOf } from "./api_usage";
 import { briefingLabel } from "./briefing_pages";
 import { type Briefing, briefingPath, listBriefings, readBriefing, weekAnchor } from "./briefings";
-import { BOARD_NAME_MAX, boardLabels } from "./dashboard_add";
-import { type ChartFit, ROWS_MAX, tileFit } from "./dashboard_fit";
+import { BOARD_NAME_MAX, anchorOf, boardLabels } from "./dashboard_add";
+import { ANALYTIC_BODIES, ROWS_MAX, analyticFit, analyticKey, analyticPlot, tileFit } from "./dashboard_fit";
 import { DASHBOARD_PATH, boardCap, boardPath, holdsDashboard, missingTiles, tileCap } from "./dashboard_rule";
 import { EVENT_KEY, watchEventLines } from "./digests";
 import { allowed, matchCap, type Plan } from "./entitlements";
@@ -106,7 +117,7 @@ import { type Watch, listWatches } from "./watches";
 // The kinds of tile, in the order the page explains them and the Add select
 // lists them. The tables hold kind as text (no CHECK), so a new kind needs no
 // rebuild of a table; a stored kind the site no longer knows is not shown.
-export const PANEL_KINDS = ["tenders", "radar", "records", "watches", "view", "briefing", "org", "matches", "api"] as const;
+export const PANEL_KINDS = ["tenders", "radar", "records", "watches", "view", "analytic", "briefing", "org", "matches", "api", "text"] as const;
 export type PanelKind = (typeof PANEL_KINDS)[number];
 // The row of dashboard_panels that says an account emptied the layout it
 // wrote there, before the tiles' tables: a kind no tile has (isPanelKind
@@ -121,14 +132,20 @@ export const BRIEFING_PANELS_MAX = 2;
 // The data dates a watches tile reads: the week ending with the data date.
 export const WATCH_DAYS = 7;
 
+// A tile's head, by kind: an analytics table's and a view's are the table's own title (TABLE_TITLES), and
+// these name them only where the table is gone.
 const KIND_KEY: Readonly<Record<PanelKind, Key>> = {
   tenders: "dash.kind_tenders", radar: "dash.kind_radar", records: "dash.kind_records", watches: "dash.kind_watches", view: "dash.kind_view",
-  briefing: "dash.kind_briefing", org: "dash.kind_org", matches: "dash.kind_matches", api: "dash.kind_api",
+  analytic: "dash.kind_view", briefing: "dash.kind_briefing", org: "dash.kind_org", matches: "dash.kind_matches", api: "dash.kind_api",
+  text: "dash.kind_text",
 };
 const WHAT_KEY: Readonly<Record<PanelKind, Key>> = {
-  tenders: "dash.what_tenders", radar: "dash.what_radar", records: "dash.what_records", watches: "dash.what_watches", view: "dash.what_view",
-  briefing: "dash.what_briefing", org: "dash.what_org", matches: "dash.what_matches", api: "dash.what_api",
+  tenders: "dash.what_tenders", radar: "dash.what_radar", records: "dash.what_records", watches: "dash.what_watches", view: "dash.what_analytic",
+  analytic: "dash.what_analytic", briefing: "dash.what_briefing", org: "dash.what_org", matches: "dash.what_matches", api: "dash.what_api",
+  text: "dash.what_text",
 };
+// What a reader without the dashboard reads it holds, a line a kind: a view's tile is an analytics table's now.
+export const TEASE_KINDS: readonly PanelKind[] = PANEL_KINDS.filter((k) => k !== "view");
 // Each block of "Your organization" by its page's own panel title (org_pages.tsx).
 const BLOCK_KEY: Readonly<Record<ClaimBlock, Key>> = {
   years: "orgclaim.panel_years", segments: "orgclaim.panel_segments", share: "orgclaim.panel_share", ending: "orgclaim.panel_ending",
@@ -209,6 +226,74 @@ export function viewSpan(v: ViewRef, today: string): { first: number; last: numb
   const first = Math.max(v.from ?? last, last - ULTRA_YEARS + 1, EARLIEST_FY);
   return first <= last ? { first, last, current } : null;
 }
+
+// -- one table of an analytics view as a tile's ref ----------------------------------------------
+
+// A table of a view: the view's address as a view's ref reads it (viewRef), the table (one of the view's
+// VIEW_TABLES), and for the share table its segment and the organizations chosen.
+export type AnalyticRef = { v: ViewRef; table: string; segment: number | null; rivals: string[] };
+
+// A table's ref as its panel posts it (dashboard_add.tsx analyticPanelRef): the view's address, the anchor of the
+// table's panel; the share table names its segment, and may name the organizations it compares. null for
+// anything else, a table the view does not draw included.
+export function analyticRef(raw: unknown): AnalyticRef | null {
+  if (typeof raw !== "string" || raw.length > 400) return null;
+  const at = raw.indexOf("#");
+  if (at < 0) return null;
+  const address = raw.slice(0, at);
+  const v = viewRef(address);
+  const anchor = raw.slice(at + 1);
+  const table = VIEW_TABLES[v?.view ?? "buyer"].find((x) => anchorOf(x) === anchor);
+  if (!v || !table) return null;
+  if (v.view !== "organization" || table !== "share") return { v, table, segment: null, rivals: [] };
+  const url = new URL(address, "https://view.invalid");
+  const segment = shareSegmentOf(url);
+  return segment === null ? null : { v, table, segment, rivals: rivalsOf(url, v.id) };
+}
+
+// The ref stored and the address its Open leads to: the view's address, the share table's segment and
+// organizations, the table's anchor.
+export function analyticAddress(a: AnalyticRef): string {
+  const share = a.segment === null ? "" : `&segment=${segmentCode(a.segment)}${a.rivals.map((r) => `&vs=${r}`).join("")}`;
+  return `${viewAddress(a.v)}${share}#${anchorOf(a.table)}`;
+}
+
+// A table's name by its view, as the fit and the shapes key it ("buyer/quarters").
+const tableName = (view: ViewRef["view"], table: string) => `${view}/${table}`;
+// The table a view's tile draws: its view's first.
+const firstTable = (v: ViewRef) => VIEW_TABLES[v.view][0];
+
+// -- a text tile's text ------------------------------------------------------------------------
+
+// The longest text a reader types on a tile, in characters, and the longest a heading drawn as one may be.
+export const NOTE_MAX = 500;
+export const HEADING_MAX = 80;
+// The longest opts a tile keeps (accounts_schema.sql dashboard_tiles.opts).
+export const OPTS_MAX = 2000;
+// Every control character but the line break, and a half of a surrogate pair standing alone.
+const NOTE_CONTROL_RE = /[\u0000-\u0009\u000B-\u001F\u007F-\u009F]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
+// Text as a reader types it, kept as plain text: line breaks as one character, control characters dropped, each
+// line's trailing spaces and blank lines past one in a row dropped, cut to NOTE_MAX characters (code points, so
+// a character outside the basic plane is never cut in half).
+export function noteText(raw: unknown): string {
+  const s = (typeof raw === "string" ? raw : "").replace(/\r\n?/g, "\n").replace(NOTE_CONTROL_RE, "")
+    .split("\n").map((l) => l.trimEnd()).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  return Array.from(s).slice(0, NOTE_MAX).join("").trim();
+}
+
+// A text tile's opts as stored, and its text as read back: cleaned again, and empty for opts that do not parse.
+export const noteOpts = (text: string): string => JSON.stringify({ text: noteText(text) });
+export function noteOf(opts: unknown): string {
+  try {
+    const o = JSON.parse(typeof opts === "string" ? opts : "") as unknown;
+    return o && typeof o === "object" && typeof (o as { text?: unknown }).text === "string" ? noteText((o as { text: string }).text) : "";
+  } catch {
+    return "";
+  }
+}
+// A text of one short line reads as a heading; anything else as a note.
+export const isHeading = (text: string): boolean => !!text && !text.includes("\n") && Array.from(text).length <= HEADING_MAX;
 
 // -- the panels' table, before the grid -------------------------------------------------------------
 
@@ -356,13 +441,18 @@ export const DELETE_BOARD_SQL = [
 // so two posts at once cannot pass any of them. ?1 the id, ?2 the user, ?3 the
 // kind, ?4 the ref, ?5 to ?8 its x, y, w and h, ?9 the time, ?10 the plan's
 // figure, ?11 the briefings' cap. The first change writes each tile of the
-// layout through it too. No choices are written yet (opts '').
+// layout through it too. No choices are written here (opts ''); a text tile
+// goes in through ADD_TEXT_SQL, the same insert with its text.
 export const ADD_TILE_SQL =
   "INSERT INTO dashboard_tiles (id, dashboard_id, user_id, kind, ref, opts, x, y, w, h, created_at) " +
   `SELECT ?1, d.id, ?2, ?3, ?4, '', ?5, ?6, ?7, ?8, ?9 FROM dashboards d WHERE d.id = COALESCE(?12, ${firstOf("?2")}) AND d.user_id = ?2 ` +
   "AND (SELECT COUNT(*) FROM dashboard_tiles WHERE dashboard_id = d.id) < ?10 " +
   "AND (?3 <> 'briefing' OR (SELECT COUNT(*) FROM dashboard_tiles WHERE dashboard_id = d.id AND kind = 'briefing') < ?11) " +
   "AND NOT EXISTS (SELECT 1 FROM dashboard_tiles WHERE dashboard_id = d.id AND kind = ?3 AND ref = ?4) ON CONFLICT DO NOTHING";
+// The same insert with the tile's choices (?13, opts): a text tile, its text.
+export const ADD_TEXT_SQL = ADD_TILE_SQL.replace("?4, '', ?5", "?4, ?13, ?5");
+// A text tile's text, its own and the account's only (?1 the opts, ?2 the tile, ?3 the user).
+export const SET_TEXT_SQL = "UPDATE dashboard_tiles SET opts = ?1 WHERE id = ?2 AND user_id = ?3 AND kind = 'text'";
 export const MOVE_TILE_SQL = "UPDATE dashboard_tiles SET x = ?1, y = ?2, w = ?3, h = ?4 WHERE id = ?5 AND user_id = ?6";
 export const DELETE_TILE_SQL = "DELETE FROM dashboard_tiles WHERE id = ? AND user_id = ?";
 // A tile to another dashboard of the account's, at the place given, held
@@ -536,15 +626,26 @@ function shownPanels(h: Holdings): { list: PanelShown[]; starter: boolean } {
 }
 
 // A tile as the page draws it: its id (a stored tile's, a panel's, or a
-// starter's "s" and its place), its kind and ref, its place and size, and its
-// size key (sizeKey), which the grid's least sizes read.
-export type Shown = { id: string; kind: PanelKind; ref: string; x: number; y: number; w: number; h: number; key: string };
+// starter's "s" and its place), its kind and ref, its choices (opts: a text
+// tile's text), its place and size, and its size key (sizeKey), which the
+// grid's least sizes read.
+export type Shown = { id: string; kind: PanelKind; ref: string; opts: string; x: number; y: number; w: number; h: number; key: string };
 
 // What sets a tile's least size apart within its kind (public/dash-grid.js
-// LEAST): a segment's view draws two charts, and three blocks of the
-// organization hold taller rows. A saved view's tile reads its address.
-export function sizeKey(kind: PanelKind, ref: string, views: readonly Pick<SavedView, "id" | "address">[] = []): string {
-  if (kind === "view") return /^\/segments\//.test(viewOf(ref, views)) ? "view:segment" : "view";
+// LEAST): an analytics table's shape (a chart over its table, two charts, or
+// the table alone; a view's tile is its first table's), three blocks of the
+// organization that hold taller rows, and a note against a heading. A saved
+// view's tile reads its address.
+export function sizeKey(kind: PanelKind, ref: string, views: readonly Pick<SavedView, "id" | "address">[] = [], opts = ""): string {
+  if (kind === "view") {
+    const v = viewRef(viewOf(ref, views));
+    return analyticKey(v ? tableName(v.view, firstTable(v)) : "buyer/quarters");
+  }
+  if (kind === "analytic") {
+    const a = analyticRef(ref);
+    return analyticKey(a ? tableName(a.v.view, a.table) : "");
+  }
+  if (kind === "text") return isHeading(noteOf(opts)) ? "text" : "text:note";
   if (kind === "org" && (ref === "share" || ref === "ending" || ref === "instruments")) return `org:${ref}`;
   return kind;
 }
@@ -564,15 +665,15 @@ function fromTiles(tiles: readonly Tile[], by: ReadonlyMap<string, Omit<Shown, "
 // earlier page out (fromPanels), computed and not stored.
 export function shownTiles(h: Holdings): { list: Shown[]; starter: boolean; keeping: Keeping } {
   const keeping = keepingOf(h);
-  const key = (kind: PanelKind, ref: string) => sizeKey(kind, ref, h.views);
+  const key = (kind: PanelKind, ref: string, opts = "") => sizeKey(kind, ref, h.views, opts);
   if (keeping === "tiles") {
     const rows = h.board!.tiles.filter((r) => isPanelKind(r.kind));
-    const by = new Map(rows.map((r) => [r.id, { id: r.id, kind: r.kind as PanelKind, ref: r.ref, key: key(r.kind as PanelKind, r.ref) }]));
+    const by = new Map(rows.map((r) => [r.id, { id: r.id, kind: r.kind as PanelKind, ref: r.ref, opts: r.opts ?? "", key: key(r.kind as PanelKind, r.ref, r.opts) }]));
     const laid = normalize(rows.map((r) => ({ id: r.id, kind: by.get(r.id)!.key, x: r.x, y: r.y, w: r.w, h: r.h })));
     return { list: fromTiles(laid, by), starter: false, keeping };
   }
   const { list, starter } = shownPanels(h);
-  const by = new Map(list.map((p) => [p.id, { id: p.id, kind: p.kind, ref: p.ref, key: key(p.kind, p.ref) }]));
+  const by = new Map(list.map((p) => [p.id, { id: p.id, kind: p.kind, ref: p.ref, opts: "", key: key(p.kind, p.ref) }]));
   return { list: fromTiles(fromPanels(list.map((p) => ({ id: p.id, kind: by.get(p.id)!.key, wide: p.wide }))), by), starter, keeping };
 }
 
@@ -585,7 +686,10 @@ const SEARCH_KINDS: Readonly<Partial<Record<PanelKind, (kind: string) => boolean
 
 // The tile a post names, its ref in its stored form, if it names one the
 // account holds; null for anything else. A view tile names a view's address,
-// or one of the account's saved views by its id (saved_views.ts).
+// or one of the account's saved views by its id (saved_views.ts); an
+// analytics table, a view's address and one of that view's tables
+// (analyticRef). A text tile is named by no post: its ref is made when it is
+// added (addPanelPost).
 export function specOf(kind: unknown, rawRef: unknown, h: Pick<Holdings, "searches" | "briefings"> & { views?: readonly Pick<SavedView, "id">[] }): Spec | null {
   if (!isPanelKind(kind) || typeof rawRef !== "string") return null;
   const ref = rawRef.trim();
@@ -606,6 +710,12 @@ export function specOf(kind: unknown, rawRef: unknown, h: Pick<Holdings, "search
       const v = viewRef(ref);
       return v ? spec(viewAddress(v)) : null;
     }
+    case "analytic": {
+      const a = analyticRef(ref);
+      return a ? spec(analyticAddress(a)) : null;
+    }
+    case "text":
+      return null;
     default:
       return ref === "" ? spec("") : null;
   }
@@ -616,8 +726,10 @@ export function specOf(kind: unknown, rawRef: unknown, h: Pick<Holdings, "search
 // What a tile's body is once read: its count for the foot, its body, the
 // item's name when only the read knows it (a view's buyer or organization),
 // the rows it lists of the rows there are (the foot says "5 of 31" when they
-// differ), and the muted line its foot carries (a source and a period).
-type Body = { count?: unknown; body: unknown; item?: string; shown?: number; total?: number; meta?: unknown };
+// differ), the muted line its foot carries (a source and a period), and the
+// classes its body takes (an analytics table's: where its secondary columns
+// rest and where it stacks, public/styles.css).
+type Body = { count?: unknown; body: unknown; item?: string; shown?: number; total?: number; meta?: unknown; cls?: string };
 // A tile's reads: its statements for the page's records batch, any other
 // read (a static file, the watches' or a briefing's own batch), and how the
 // rows become its body; null from draw says the tile cannot be read now.
@@ -626,10 +738,13 @@ type Job = { queries: Query[]; extra?: () => Promise<unknown>; draw: (rows: Row[
 // and its reads; job null when what it showed was removed.
 type Resolved = { shown: Shown; title: string; item: string | null; href: string; job: Job | null };
 
+// asOf: the records' own date, once the page's records batch is read (an
+// analytics table's contracts ending count from it, as the view's do).
 type Ctx = {
   lang: Lang; env: Env; who: Account; h: Holdings; today: string; clock: Clock; frame: ClaimFrame;
   open: () => Promise<TenderRow[] | null>;
   org: { id: string; profile: Profile } | null;
+  asOf?: string | null;
 };
 
 const int = (v: unknown): number => num(v) ?? 0;
@@ -824,94 +939,47 @@ function watchesJob(ctx: Ctx, n: number): Job {
   };
 }
 
-// An axis's labels at the chart's width: one in about every LABEL_PX of the
-// plot, the first and the last always, the others resting from the end
-// back, so a narrow tile's axis never crowds.
-const LABEL_PX = 64;
-function thinLabels(labels: readonly AxisLabel[], width: number): AxisLabel[] {
-  const room = Math.max(2, Math.floor(width / LABEL_PX));
-  if (labels.length <= room) return [...labels];
-  const step = Math.ceil((labels.length - 1) / (room - 1));
-  const last = labels.length - 1;
-  return labels.map((l, i) => (i === 0 || i === last || (last - i) % step === 0 ? l : { ...l, hidden: true }));
-}
-
-// An analytics view's first chart (pages/analytics.tsx): value by fiscal
-// quarter for a buyer, by fiscal year for an organization, buyers and
-// organizations by fiscal year for a segment; at the ref's source and
-// period, from the one statement the view reads for it, with the
-// buyer's or organization's name read by its key; drawn to the tile's width
-// and height (dashboard_fit.ts tileFit), the source and period in the foot.
-function viewJob(ctx: Ctx, v: ViewRef, size: ChartFit): Job | null {
+// One table of an analytics view (pages/analytics.tsx): its statements as the
+// view reads it (analyticQueries) at the ref's source and period, with the
+// buyer's or organization's name read by its key, then drawn by the view's own
+// code at the tile's size (dashboard_fit.ts analyticFit): the rows its height
+// holds, its charts to its width and height. The source and period go in the
+// foot (the contracts ending, which follow neither, their date), the classes
+// on its body say where its table rests and stacks.
+function analyticJob(ctx: Ctx, s: Shown, v: ViewRef, table: string, share: { segment: number; rivals: string[] } | null): Job | null {
   const { lang } = ctx;
   const span = viewSpan(v, ctx.today);
   if (!span) return null;
-  const src = SOURCE_NUMBER[v.source];
   const key: number | string | null = v.view === "buyer" ? v.id : v.view === "organization" ? orgNumber(v.id) : segmentNumber(v.id);
   if (key === null) return null;
-  const chart = v.view === "buyer" ? BUYER_QUARTERS_SQL : v.view === "organization" ? ORG_YEARS_SQL : SEGMENT_YEARS_SQL;
-  const queries: Query[] = [{ sql: chart, params: [key, src, span.first, span.last] }];
+  const frame = tileFrame(v.source, span.first, span.last, span.current, v.years === null);
+  const rivals = share ? share.rivals.map((r) => orgNumber(r)).filter((x): x is number => x !== null) : [];
+  const named = analyticQueries(v.view, key, frame, table, share ? { segment: share.segment, rivals } : undefined);
+  const names = Object.keys(named);
+  const queries: Query[] = names.map((n) => named[n]);
   if (v.view === "buyer") queries.push({ sql: BUYER_NAME_SQL, params: [v.id] });
   if (v.view === "organization") queries.push({ sql: ORG_NAME_SQL, params: [key] });
-  const years = span.last - span.first + 1;
+  const name = tableName(v.view, table);
+  const fit = analyticFit(name, s.w, s.h);
+  const stack = ANALYTIC_BODIES[name]?.stack ?? 440;
+  const cls = `dash-rest${stack > 440 ? ` dash-stack-${stack}` : ""}`;
   return {
     queries,
     draw: (rows) => {
       if (!rows) return null;
-      const data = rows[0] ?? [];
-      const nameRow = rows[1]?.[0];
-      const name = v.view === "segment" ? `${v.id} ${segmentLabel(lang, v.id)}`
+      const byName: Record<string, Row[]> = Object.fromEntries(names.map((n, i) => [n, rows[i] ?? []]));
+      const nameRow = rows[names.length]?.[0];
+      const item = v.view === "segment" ? `${v.id} ${segmentLabel(lang, v.id)}`
         : v.view === "buyer" ? pick(lang, (nameRow?.name_en as string | null) ?? null, (nameRow?.name_fr as string | null) ?? null) ?? v.id
         : typeof nameRow?.name === "string" ? nameRow.name : v.id;
-      const meta = t(lang, "analytics.lead", { source: sourceLabel(lang, v.source), first: fiscalLabel(lang, span.first), last: fiscalLabel(lang, span.last) });
-      if (!data.length) return { item: name, meta, body: <p class="muted">{t(lang, "analytics.none")}</p> };
-      const fy = (y: number) => (y === span.current ? t(lang, "analytics.to_date", { fy: fiscalLabel(lang, y) }) : fiscalLabel(lang, y));
-      let panels: ChartPanel[];
-      let domain: [number, number];
-      let fmt = (x: number) => fmtMoneyShort(x, lang);
-      let axis = fiscalAxis(span.first, span.last, (y) => fiscalLabel(lang, y));
-      let gap = barGap(years, 24, size.width);
-      if (v.view === "buyer") {
-        const title = t(lang, "analytics.chart_quarters", { source: sourceLabel(lang, v.source) });
-        axis = fiscalAxis(span.first, span.last, (y) => fiscalLabel(lang, y), 4);
-        domain = [span.first * 4, (span.last + 1) * 4];
-        gap = barGap(years * 4, 24, size.width);
-        panels = [{
-          title, bars: data.filter((r) => int(r.cents) > 0).map((r) => {
-            const x = int(r.fy) * 4 + int(r.fq) - 1;
-            const value = int(r.cents) / 100;
-            const period = `${fiscalLabel(lang, int(r.fy))} ${t(lang, "analytics.quarter", { n: int(r.fq) })}`;
-            return { x0: x, x1: x + 1, value, title: moneyTip(lang, title, period, value, recordsText(lang, int(r.n))) };
-          }),
-        }];
-      } else {
-        domain = [span.first, span.last + 1];
-        const series: { title: string; value: (r: Row) => number; figures: (r: Row) => string[] }[] = v.view === "organization"
-          ? [{
-            title: t(lang, "analytics.chart_years", { source: sourceLabel(lang, v.source) }), value: (r) => int(r.cents) / 100,
-            figures: (r) => [fmtMoney(int(r.cents) / 100, lang), recordsText(lang, int(r.n))],
-          }]
-          : [
-            { title: t(lang, "analytics.chart_buyers"), value: (r) => int(r.n_buyers), figures: (r) => [fmtInt(int(r.n_buyers), lang)] },
-            { title: t(lang, "analytics.chart_orgs"), value: (r) => int(r.n_orgs), figures: (r) => [fmtInt(int(r.n_orgs), lang)] },
-          ];
-        if (v.view === "segment") fmt = (x) => fmtInt(x, lang);
-        panels = series.map((s) => ({
-          title: s.title,
-          bars: data.filter((r) => s.value(r) > 0).map((r) => ({
-            x0: int(r.fy), x1: int(r.fy) + 1, value: s.value(r), title: tipText(tipHead(lang, s.title, fy(int(r.fy))), s.figures(r)),
-          })),
-        }));
-      }
-      return {
-        item: name, meta,
-        body: (
-          <div class="chart">
-            <ChartStack domain={domain} panels={panels} height={size.height} xLabels={thinLabels(axis.labels, size.width)}
-              grid={v.view === "buyer" ? axis.grid : undefined} fmt={fmt} aria={t(lang, "analytics.chart_aria")} gap={gap} />
-          </div>
-        ),
-      };
+      const from = ctx.asOf ?? ctx.today;
+      const meta = table === "due" ? t(lang, "dash.meta_due", { date: from })
+        : t(lang, "analytics.lead", { source: sourceLabel(lang, v.source), first: fiscalLabel(lang, span.first), last: fiscalLabel(lang, span.last) });
+      const drawn = analyticBody({
+        view: v.view, table, lang, frame, rows: byName, from, radarDay: ctx.today, filter: `${v.view === "buyer" ? "buyer" : "segment"}=${v.id}`,
+        oid: typeof key === "number" ? key : undefined, name: item, segment: share?.segment ?? null,
+      }, { rows: fit.rows, plot: fit.plot, width: fit.width, grow: (shown) => analyticPlot(name, fit, shown) });
+      return { item, meta, body: drawn.body, shown: drawn.shown, total: drawn.total, cls };
     },
   };
 }
@@ -1211,8 +1279,13 @@ function resolve(ctx: Ctx, s: Shown): Resolved {
   const title = s.kind === "org" && isClaimBlock(s.ref) ? t(lang, "dash.kind_org", { block: t(lang, BLOCK_KEY[s.ref]) }) : t(lang, KIND_KEY[s.kind]);
   const gone = (href: string): Resolved => ({ shown: s, title, item: null, href, job: null });
   const search = (ok: (kind: string) => boolean) => h.searches.find((x) => x.id === s.ref && ok(x.kind));
-  const fit = tileFit(s.kind, s.kind === "view" ? viewOf(s.ref, h.views) : s.ref, s.w, s.h);
-  const n = fit.rows;
+  const n = s.kind === "view" || s.kind === "analytic" || s.kind === "text" ? 0 : tileFit(s.kind, s.ref, s.w, s.h).rows;
+  // An analytics table at a view's address: headed by the table's own title, opening its view at the table.
+  const analytic = (v: ViewRef, table: string, share: { segment: number; rivals: string[] } | null, item: string | null, href: string, back: string): Resolved => {
+    const job = analyticJob(ctx, s, v, table, share);
+    const head = t(lang, TABLE_TITLES[v.view][table]);
+    return job ? { shown: s, title: head, item, href, job } : { shown: s, title: head, item: null, href: back, job: null };
+  };
   switch (s.kind) {
     case "tenders": {
       const found = search((k) => k === "tenders");
@@ -1237,19 +1310,27 @@ function resolve(ctx: Ctx, s: Shown): Resolved {
     case "watches":
       return { shown: s, title, item: null, href: "/account/watches", job: watchesJob(ctx, n) };
     case "view": {
-      // A saved view by its id: its name in the head and its address as saved (the saved views page moves a merged id).
+      // A view's tile from before the analytics tables: its view's first table, as an analytics table of it draws.
+      // A saved view by its id: its name as the item and its address as saved (the saved views page moves a merged id).
       if (ID_RE.test(s.ref)) {
         const saved = h.views.find((x) => x.id === s.ref);
         const v = saved ? viewRef(saved.address) : null;
-        const read = v ? viewJob(ctx, v, fit.chart!) : null;
+        if (!saved || !v) return gone("/account/views");
+        const r = analytic(v, firstTable(v), null, saved.name, `${saved.address}#${anchorOf(firstTable(v))}`, "/account/views");
         // The reader's name for the view heads the tile, in place of the buyer's or organization's the read gives.
-        const job: Job | null = read ? { ...read, draw: (rows, extra) => { const b = read.draw(rows, extra); return b ? { ...b, item: undefined } : null; } } : null;
-        return saved && job ? { shown: s, title, item: saved.name, href: saved.address, job } : gone("/account/views");
+        const read = r.job;
+        return read ? { ...r, job: { ...read, draw: (rows, extra) => { const b = read.draw(rows, extra); return b ? { ...b, item: undefined } : null; } } } : r;
       }
       const v = viewRef(s.ref);
-      const job = v ? viewJob(ctx, v, fit.chart!) : null;
-      return v && job ? { shown: s, title, item: null, href: viewAddress(v), job } : gone("/analytics");
+      return v ? analytic(v, firstTable(v), null, null, `${viewAddress(v)}#${anchorOf(firstTable(v))}`, "/analytics") : gone("/analytics");
     }
+    case "analytic": {
+      const a = analyticRef(s.ref);
+      return a ? analytic(a.v, a.table, a.segment === null ? null : { segment: a.segment, rivals: a.rivals }, null, analyticAddress(a), "/analytics")
+        : gone("/analytics");
+    }
+    case "text":
+      return { shown: s, title, item: null, href: "", job: null };
     case "briefing": {
       const b = h.briefings.find((x) => x.id === s.ref);
       return b ? { shown: s, title, item: briefingLabel(lang, b), href: briefingPath(b), job: briefingJob(ctx, b, n) } : gone("/account/searches#briefings");
@@ -1277,6 +1358,7 @@ async function readAll(ctx: Ctx, list: readonly Resolved[]): Promise<Map<Resolve
   const extras = Promise.all(jobs.map((r) => (r.job!.extra ? r.job!.extra().catch(() => null) : Promise.resolve(null))));
   const [read, extra] = await Promise.all([batch, extras]);
   if (read?.state === "ready") {
+    ctx.asOf = read.asOf;
     let at = 0;
     for (const r of jobs) {
       const n = r.job!.queries.length;
@@ -1286,7 +1368,11 @@ async function readAll(ctx: Ctx, list: readonly Resolved[]): Promise<Map<Resolve
   } else if (read?.state === "failed") {
     // One tile's statement (a table the nightly has not made yet) leaves the others.
     const alone = await Promise.all(jobs.map((r) => (r.job!.queries.length ? readRecords(ctx.env, r.job!.queries) : Promise.resolve(null))));
-    jobs.forEach((r, i) => rows.set(r, (alone[i] as Read | null)?.state === "ready" ? (alone[i] as Extract<Read, { state: "ready" }>).rows : null));
+    jobs.forEach((r, i) => {
+      const one = alone[i] as Read | null;
+      if (one?.state === "ready") ctx.asOf ??= one.asOf;
+      rows.set(r, one?.state === "ready" ? one.rows : null);
+    });
   }
   const out = new Map<Resolved, Body | null>();
   jobs.forEach((r, i) => {
@@ -1321,6 +1407,7 @@ const NOTICE: Readonly<Record<string, Key>> = {
   added: "dash.added", exists: "dash.added", full: "dash.full", briefings_full: "dash.briefings_full", unsaved: "dash.unsaved",
   unsaved_layout: "dash.unsaved_layout", boards_full: "dash.boards_full", renamed: "dash.board_renamed", board_deleted: "dash.board_deleted",
   board_emptied: "dash.board_emptied", moved: "dash.moved", move_exists: "dash.move_exists", move_full: "dash.move_full",
+  text_empty: "dash.text_empty", text_unsaved: "dash.text_unsaved",
 };
 
 // The Add select's choices: what the account holds that is not on the
@@ -1366,7 +1453,8 @@ export function moreKinds(h: Holdings, plan: Plan, shown: readonly Pick<Shown, "
   if (!saved((k) => k === "tenders")) add(["tenders"], "dash.more_tenders", "dash.more_tenders_link", "/tenders");
   if (!saved((k) => k === "expiring")) add(["radar"], "dash.more_radar", "dash.more_radar_link", "/expiring/12m");
   if (!saved(isRecordsKind)) add(["records"], "dash.more_records", "dash.more_records_link", "/account/searches");
-  if (!h.views.length && !shown.some((s) => s.kind === "view") && !(h.panels ?? []).some((r) => r.kind === "view")) {
+  const fromView = (kind: string) => kind === "view" || kind === "analytic";
+  if (!h.views.length && !shown.some((s) => fromView(s.kind)) && !(h.panels ?? []).some((r) => fromView(r.kind))) {
     add(["view"], "dash.more_view", "dash.more_view_link", "/analytics");
   }
   if (!h.absent?.briefings && !h.briefings.length) add(["briefing"], "dash.more_briefing", "dash.more_briefing_link", "/segments");
@@ -1392,15 +1480,21 @@ const MorePanel: FC<{ lang: Lang; lines: readonly MoreLine[] }> = ({ lang, lines
 const ADD_ANCHOR = "dash-add";
 
 // Add a Tile: the page's one filled button, a details element, so it opens
-// without the script: the count of tiles, then the select of what the account
-// holds and Add, or why nothing can be added; More Kinds of Tile under it. An
-// emptied dashboard draws it open, as the one thing the page can do. Its post
-// names the dashboard shown once one is stored (board), so the tile goes there.
+// without the script: the count of tiles, then what can be added in three
+// groups (From Your Lists: the select of what the account holds and Add;
+// Analytics: each table on an analytics page has its own Add to dashboard;
+// Text: a heading or a note typed here, and Add), or why nothing can be added;
+// More Kinds of Tile under it, less the analytics line the Analytics group
+// says already. An emptied dashboard draws it open, as the one thing the page
+// can do. Its posts name the dashboard shown once one is stored (board), so
+// the tile goes there. A text tile is kept only with the grid's tables.
 const AddTile: FC<{
   lang: Lang; account: Account; h: Holdings; n: number; cap: number; keeping: Keeping; taken: ReadonlySet<string>; more: readonly MoreLine[]; open: boolean;
 }> = ({ lang, account, h, n, cap, keeping, taken, more, open }) => {
   const choices = addChoices(lang, h, taken);
   const board = keeping === "tiles" ? h.board?.id ?? null : null;
+  const lines = more.filter((l) => !l.kinds.includes("view"));
+  const part = (id: string, key: Key) => <p class="dash-adder-part" id={id}>{t(lang, key)}</p>;
   return (
     <details class="dash-adder" id={ADD_ANCHOR} open={open || undefined}>
       <summary class="btn btn-primary">{t(lang, "dash.add_tile")}</summary>
@@ -1408,20 +1502,39 @@ const AddTile: FC<{
         <p class="muted small">{t(lang, "dash.count", { n: fmtInt(n, lang), cap: fmtInt(cap, lang) })}</p>
         {keeping === "none" ? <p class="muted">{t(lang, "dash.unsaved")}</p>
           : n >= cap ? <p>{t(lang, "dash.full", { cap: fmtInt(cap, lang) })}</p>
-          : choices.length ? (
-            <form method="post" action={`${DASHBOARD_PATH}/panels`} class="stack">
-              <Csrf account={account} />
-              {board ? <input type="hidden" name="board" value={board} /> : null}
-              <label>
-                {t(lang, "dash.add_label")}
-                <select name="panel">
-                  {choices.map((g) => <optgroup label={g.label}>{g.options.map(([v, label]) => <option value={v}>{label}</option>)}</optgroup>)}
-                </select>
-              </label>
-              <button type="submit" class="btn">{t(lang, "dash.add")}</button>
-            </form>
-          ) : <p class="muted">{t(lang, "dash.none_left")}</p>}
-        {more.length ? <><p class="dash-adder-head">{t(lang, "dash.more_title")}</p><MoreList lang={lang} lines={more} /></> : null}
+          : <>
+            {part("dash-add-lists", "dash.add_lists")}
+            {choices.length ? (
+              <form method="post" action={`${DASHBOARD_PATH}/panels`} class="stack" aria-labelledby="dash-add-lists">
+                <Csrf account={account} />
+                {board ? <input type="hidden" name="board" value={board} /> : null}
+                <label>
+                  {t(lang, "dash.add_label")}
+                  <select name="panel">
+                    {choices.map((g) => <optgroup label={g.label}>{g.options.map(([v, label]) => <option value={v}>{label}</option>)}</optgroup>)}
+                  </select>
+                </label>
+                <button type="submit" class="btn">{t(lang, "dash.add")}</button>
+              </form>
+            ) : <p class="muted">{t(lang, "dash.none_left")}</p>}
+            {part("dash-add-analytics", "dash.add_analytics")}
+            <p class="muted small">{tj(lang, "dash.add_analytics_line", { link: <a href="/analytics">{t(lang, "dash.more_view_link")}</a> }) as any}</p>
+            {part("dash-add-text", "dash.add_text")}
+            {keeping === "panels" ? <p class="muted small">{t(lang, "dash.text_unsaved")}</p> : (
+              <form method="post" action={`${DASHBOARD_PATH}/panels`} class="stack" aria-labelledby="dash-add-text">
+                <Csrf account={account} />
+                {board ? <input type="hidden" name="board" value={board} /> : null}
+                <input type="hidden" name="kind" value="text" />
+                <label>
+                  {t(lang, "dash.text_label")}
+                  <textarea name="text" rows={3} maxlength={NOTE_MAX}></textarea>
+                </label>
+                <p class="muted small">{t(lang, "dash.text_note", { n: fmtInt(NOTE_MAX, lang) })}</p>
+                <button type="submit" class="btn">{t(lang, "dash.add")}</button>
+              </form>
+            )}
+          </>}
+        {lines.length ? <><p class="dash-adder-head">{t(lang, "dash.more_title")}</p><MoreList lang={lang} lines={lines} /></> : null}
       </div>
     </details>
   );
@@ -1532,6 +1645,7 @@ export const DashTile: FC<{ lang: Lang; account: Account; d: Drawn; offer: Recor
 ) => {
   const { r, body } = d;
   const s = r.shown;
+  if (s.kind === "text") return <TextTile lang={lang} account={account} s={s} offer={offer} moves={moves} />;
   const item = body?.item ?? r.item;
   const label = item ? `${r.title}: ${item}` : r.title;
   const head = `tile-${s.id}-t`;
@@ -1546,33 +1660,10 @@ export const DashTile: FC<{ lang: Lang; account: Account; d: Drawn; offer: Recor
       <div class="dash-head">
         <button type="button" class="dash-grip" aria-label={t(lang, "dash.grip", { title: label })} aria-describedby="dash-keys-move">{GRIP}</button>
         <h2 id={head} class="dash-title" title={label}>{r.title}{item ? <span class="dash-item">{item}</span> : null}</h2>
-        <details class="dash-menu">
-          <summary class="dash-menu-button" aria-label={t(lang, "dash.menu", { title: label })} title={t(lang, "dash.menu", { title: label })}>{DOTS}</summary>
-          <div class="dash-menu-list">
-            {r.job ? <a href={r.href} class="dash-menu-item">{t(lang, "dash.open")}</a> : null}
-            {MENU.map((m) => (
-              <form method="post" action={`${tilePath(s.id)}/${m.op}`}>
-                <Csrf account={account} />
-                <input type="hidden" name={m.field} value={m.step} />
-                <button type="submit" class="dash-menu-item" data-step={m.step} disabled={!offer[m.step] || undefined}>{t(lang, m.key)}</button>
-              </form>
-            ))}
-            {moves && moves.length ? <p class="dash-menu-head">{t(lang, "dash.move_to")}</p> : null}
-            {(moves ?? []).map((m) => (
-              <form method="post" action={`${tilePath(s.id)}/board`}>
-                <Csrf account={account} />
-                <input type="hidden" name="board" value={m.id} />
-                <button type="submit" class="dash-menu-item" aria-label={t(lang, "dash.move_to_name", { name: m.label })} disabled={m.full || undefined}>{m.label}</button>
-              </form>
-            ))}
-            <form method="post" action={`${tilePath(s.id)}/delete`}>
-              <Csrf account={account} />
-              <button type="submit" class="dash-menu-item">{t(lang, "dash.remove")}</button>
-            </form>
-          </div>
-        </details>
+        <TileMenu lang={lang} account={account} id={s.id} label={label} offer={offer} moves={moves}
+          lead={r.job ? <a href={r.href} class="dash-menu-item">{t(lang, "dash.open")}</a> : null} />
       </div>
-      <div class="dash-body">
+      <div class={body?.cls ? `dash-body ${body.cls}` : "dash-body"}>
         {!r.job ? <p>{t(lang, "dash.gone")}</p>
           : body ? (body.body as any)
           : <p class="muted">{t(lang, "dash.unavailable")}</p>}
@@ -1581,6 +1672,86 @@ export const DashTile: FC<{ lang: Lang; account: Account; d: Drawn; offer: Recor
         <span class="dash-meta" title={typeof body?.meta === "string" ? body.meta : undefined}>{(body?.meta ?? null) as any}</span>
         {count !== null && count !== undefined ? <span class="dash-count">{count as any}</span> : null}
         {r.job ? <a href={r.href}>{t(lang, "dash.open")}</a> : null}
+      </div>
+      <button type="button" class="dash-corner" aria-label={t(lang, "dash.corner", { title: label })} aria-describedby="dash-keys-size"></button>
+    </section>
+  );
+};
+
+// A tile's menu: what leads it (a tile's Open, a text tile's Edit), the moves
+// and sizes, Move To the other dashboards, then Remove.
+const TileMenu: FC<{ lang: Lang; account: Account; id: string; label: string; offer: Record<Step, boolean>; moves?: readonly MoveTarget[]; lead: unknown }> = (
+  { lang, account, id, label, offer, moves, lead },
+) => (
+  <details class="dash-menu">
+    <summary class="dash-menu-button" aria-label={t(lang, "dash.menu", { title: label })} title={t(lang, "dash.menu", { title: label })}>{DOTS}</summary>
+    <div class="dash-menu-list">
+      {lead as any}
+      {MENU.map((m) => (
+        <form method="post" action={`${tilePath(id)}/${m.op}`}>
+          <Csrf account={account} />
+          <input type="hidden" name={m.field} value={m.step} />
+          <button type="submit" class="dash-menu-item" data-step={m.step} disabled={!offer[m.step] || undefined}>{t(lang, m.key)}</button>
+        </form>
+      ))}
+      {moves && moves.length ? <p class="dash-menu-head">{t(lang, "dash.move_to")}</p> : null}
+      {(moves ?? []).map((m) => (
+        <form method="post" action={`${tilePath(id)}/board`}>
+          <Csrf account={account} />
+          <input type="hidden" name="board" value={m.id} />
+          <button type="submit" class="dash-menu-item" aria-label={t(lang, "dash.move_to_name", { name: m.label })} disabled={m.full || undefined}>{m.label}</button>
+        </form>
+      ))}
+      <form method="post" action={`${tilePath(id)}/delete`}>
+        <Csrf account={account} />
+        <button type="submit" class="dash-menu-item">{t(lang, "dash.remove")}</button>
+      </form>
+    </div>
+  </details>
+);
+
+// A text tile: the reader's text on the tile's own ground, with no head band
+// and no foot. A heading (one short line) is the tile's heading; a note keeps
+// its line breaks under a heading only assistive technology reads. Always
+// drawn as text, never as markup or a link; opts that do not parse draw an
+// empty note. The menu leads with Edit, a details element with the text in a
+// field and Save, which opens without the script; no browser dialog.
+const TextTile: FC<{ lang: Lang; account: Account; s: Shown; offer: Record<Step, boolean>; moves?: readonly MoveTarget[] }> = (
+  { lang, account, s, offer, moves },
+) => {
+  const text = noteOf(s.opts);
+  const heading = isHeading(text);
+  const head = `tile-${s.id}-t`;
+  const first = Array.from(text.split("\n")[0] ?? "");
+  const label = text ? `${t(lang, "dash.kind_text")}: ${first.slice(0, 60).join("")}${first.length > 60 ? "…" : ""}` : t(lang, "dash.kind_text");
+  const edit = (
+    <details class="dash-text-edit">
+      <summary class="dash-menu-item">{t(lang, "dash.text_edit")}</summary>
+      <form method="post" action={`${tilePath(s.id)}/text`} class="stack dash-text-form">
+        <Csrf account={account} />
+        <label>
+          {t(lang, "dash.text_label")}
+          <textarea name="text" rows={5} maxlength={NOTE_MAX}>{text}</textarea>
+        </label>
+        <p class="muted small">{t(lang, "dash.text_note", { n: fmtInt(NOTE_MAX, lang) })}</p>
+        <button type="submit" class="btn">{t(lang, "dash.text_save")}</button>
+      </form>
+    </details>
+  );
+  return (
+    <section class={`panel dash-tile dash-text${takesBoth(s) ? " dash-both" : ""}`} id={`tile-${s.id}`} aria-labelledby={head}
+      data-id={s.id} data-key={s.key} data-x={String(s.x)} data-y={String(s.y)} data-w={String(s.w)} data-h={String(s.h)} data-title={label}
+      style={`--gc:${s.x + 1};--gr:${s.y + 1};--gw:${s.w};--gh:${s.h}`}>
+      <button type="button" class="dash-grip" aria-label={t(lang, "dash.grip", { title: label })} aria-describedby="dash-keys-move">{GRIP}</button>
+      <div class="dash-body">
+        {heading ? <h2 id={head} class="dash-heading">{text}</h2> : <>
+          <h2 id={head} class="visually-hidden">{t(lang, "dash.kind_text")}</h2>
+          {text ? <p class="dash-note">{text.split("\n").map((line, i) => <>{i ? <br /> : null}{line}</>)}</p>
+            : <p class="muted">{t(lang, "dash.text_empty_tile")}</p>}
+        </>}
+      </div>
+      <div class="dash-head dash-text-menu">
+        <TileMenu lang={lang} account={account} id={s.id} label={label} offer={offer} moves={moves} lead={edit} />
       </div>
       <button type="button" class="dash-corner" aria-label={t(lang, "dash.corner", { title: label })} aria-describedby="dash-keys-size"></button>
     </section>
@@ -1659,7 +1830,7 @@ export function teaseView(lang: Lang, cards: ReturnType<typeof planCards>) {
       <PageHead lang={lang} title={t(lang, "dash.title")} />
       <Panel title={t(lang, "dash.what_title")}>
         <p>{t(lang, "dash.what_lead", { line: t(lang, ultra.key, ultra.vars?.(lang)) })}</p>
-        <ul>{PANEL_KINDS.map((k) => <li>{t(lang, WHAT_KEY[k])}</li>)}</ul>
+        <ul>{TEASE_KINDS.map((k) => <li>{t(lang, WHAT_KEY[k])}</li>)}</ul>
       </Panel>
       <p class="muted">{t(lang, "dash.gate")} <a href="/account/billing">{t(lang, "billing.link_plans")}</a></p>
       <PlanCards lang={lang} plans={own} />
@@ -1806,7 +1977,9 @@ const boardField = (v: unknown): string | null | false => (v === undefined || v 
 // Add: the tile a page's "Add to dashboard" names (kind and ref) or the Add
 // select's choice (panel, "kind:ref"), checked against what the account
 // holds, placed under the others at the left of the dashboard the post names
-// (board), else of the first.
+// (board), else of the first. A text tile (kind text, its text in text) gets
+// a new id as its ref and its text, cleaned (noteText), as its opts; it is
+// kept only with the grid's tables, and an empty text adds nothing.
 export async function addPanelPost(c: Context<AppEnv>, who: Account, fields: Record<string, string>): Promise<Response> {
   const lang = c.get("lang");
   if (!holdsDashboard(who.plan)) return c.redirect(DASHBOARD_PATH, 303);
@@ -1815,13 +1988,16 @@ export async function addPanelPost(c: Context<AppEnv>, who: Account, fields: Rec
   const [kind, ref] = typeof fields.panel === "string"
     ? [fields.panel.slice(0, Math.max(0, fields.panel.indexOf(":"))), fields.panel.slice(fields.panel.indexOf(":") + 1)]
     : [fields.kind, fields.ref ?? ""];
+  const text = typeof fields.panel !== "string" && kind === "text" ? noteText(fields.text) : null;
   const h = await readHoldings(c.env, who.userId, { board: want });
-  const spec = specOf(kind, ref, h);
+  const spec: Spec | null = text !== null ? { kind: "text", ref: newId(), wide: false } : specOf(kind, ref, h);
   if (!spec) return c.text(t(lang, "form.rejected"), 400);
   // A dashboard deleted meanwhile (another tab): the first, with nothing added.
   if (want && h.board && !h.board.found) return back(c);
   const { list, keeping } = shownTiles(h);
   if (keeping === "none") return back(c, "unsaved");
+  if (text !== null && keeping === "panels") return back(c, "text_unsaved", ADD_ANCHOR);
+  if (text === "") return back(c, "text_empty", ADD_ANCHOR, hereOf(h));
   if (keeping === "panels") {
     // The grid's tables absent: the panel goes where the dashboard kept its panels.
     if (!h.panels!.length && !h.emptied) await writeStarter(c.env, who, startingLayout(h), new Date());
@@ -1834,13 +2010,14 @@ export async function addPanelPost(c: Context<AppEnv>, who: Account, fields: Rec
   const at = hereOf({ board });
   const here = board.tiles.find((r) => r.kind === spec.kind && r.ref === spec.ref);
   if (here) return back(c, "exists", here.id, at);
-  const key = sizeKey(spec.kind, spec.ref, h.views);
+  const opts = text !== null ? noteOpts(text) : "";
+  const key = sizeKey(spec.kind, spec.ref, h.views, opts);
   const id = newId();
   const now = shownTiles({ ...h, board }).list.map(asTile);
   const placed = place(now, { id, kind: key, x: 0, y: 0, ...startSize(key, false) }).find((x) => x.id === id)!;
   const db = c.env.ACCOUNTS!;
-  const res = await db.prepare(ADD_TILE_SQL).bind(id, who.userId, spec.kind, spec.ref, placed.x, placed.y, placed.w, placed.h, new Date().toISOString(),
-    tileCap(who.plan), BRIEFING_PANELS_MAX, board.id).run();
+  const binds = [id, who.userId, spec.kind, spec.ref, placed.x, placed.y, placed.w, placed.h, new Date().toISOString(), tileCap(who.plan), BRIEFING_PANELS_MAX, board.id];
+  const res = await (text !== null ? db.prepare(ADD_TEXT_SQL).bind(...binds, opts.slice(0, OPTS_MAX)) : db.prepare(ADD_TILE_SQL).bind(...binds)).run();
   if ((res.meta?.changes ?? 0) === 1) return back(c, "added", id, at);
   // Refused inside the insert: the same item meanwhile, the plan's figure, or the briefings'.
   const again = (await readBoard(c.env, who.userId, { board: board.id }))!.tiles;
@@ -1849,14 +2026,14 @@ export async function addPanelPost(c: Context<AppEnv>, who: Account, fields: Rec
   return back(c, again.length >= tileCap(who.plan) ? "full" : "briefings_full", null, at);
 }
 
-export type EditOp = { op: "step"; step: Step } | { op: "width"; wide: boolean } | { op: "delete" } | { op: "board"; board: string };
+export type EditOp = { op: "step"; step: Step } | { op: "width"; wide: boolean } | { op: "delete" } | { op: "board"; board: string } | { op: "text"; text: unknown };
 
 // A step, a width (the earlier page's posts: full or half the row), a
-// removal and a move to another dashboard, on the account's own tile only (a
-// stored one's on the dashboard that holds it; a panel's or a starter's in
-// the computed layout). A step or a width the account cannot keep yet (the
-// grid's tables absent) answers that it cannot be saved; a removal goes to
-// the panels there, as before.
+// removal, a move to another dashboard and a text tile's text, on the
+// account's own tile only (a stored one's on the dashboard that holds it; a
+// panel's or a starter's in the computed layout). A step or a width the
+// account cannot keep yet (the grid's tables absent) answers that it cannot
+// be saved; a removal goes to the panels there, as before.
 export async function editPanelPost(c: Context<AppEnv>, who: Account, id: string, op: EditOp): Promise<Response> {
   if (!holdsDashboard(who.plan)) return c.redirect(DASHBOARD_PATH, 303);
   const starter = STARTER_ID_RE.exec(id);
@@ -1869,6 +2046,12 @@ export async function editPanelPost(c: Context<AppEnv>, who: Account, id: string
   const target = list.find((s) => s.id === id);
   if (!target) return back(c, "", null, at);
   if (op.op === "board") return moveTile(c, who, h, target, op.board);
+  if (op.op === "text") {
+    // A text tile's text, saved as typed and cleaned as on its add; emptied, the tile stays and says it is empty.
+    if (keeping !== "tiles" || target.kind !== "text") return back(c, "", id, at);
+    await c.env.ACCOUNTS!.prepare(SET_TEXT_SQL).bind(noteOpts(noteText(op.text)), id, who.userId).run();
+    return back(c, "", id, at);
+  }
   const tiles = list.map(asTile);
   if (op.op === "delete") {
     // The tile that takes its place in reading order, else the one before it, else Add a Tile.

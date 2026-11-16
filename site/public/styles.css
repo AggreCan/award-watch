@@ -695,8 +695,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ink); width: 1
   .dash-grip, .dash-corner { transition: none; }
 }
 /* A table in a tile narrower than itself: each row a block, its first cell
-   as its heading, every other cell a line, its column's name before it. A
-   phone restacks every table as the site does, so this is from 700 px. */
+   as its heading, every other cell a line, its column's name before it (a
+   resting column's too, as on a phone, so its figure is not repeated under
+   another). A phone restacks every table as the site does, so this is from
+   700 px. */
 @media (min-width: 700px) {
   @container dash-tile (max-width: 439px) {
     .dash-body table.restack { min-width: 0; }
@@ -709,8 +711,64 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ink); width: 1
     .dash-body .restack td + td::before { content: attr(data-label); margin-right: 6px; color: var(--muted); font-size: 12px; }
     .dash-body .restack td.mono { overflow-wrap: anywhere; }
     .dash-body .restack tbody tr:hover > td:first-child { box-shadow: none; }
+    .dash-body .restack :is(.md-only, .lg-down) { display: none; }
+  }
+  /* An analytics table (src/account/dashboard.tsx kind "analytic", its body .dash-rest): in a tile narrower than
+     the widest table of a view (960 px with every column, dashboard_fit.ts REST_BELOW), its secondary columns
+     rest and what they hold shows under a figure that stays, as the page draws it from 700 to 1279 px. */
+  @container dash-tile (max-width: 959px) {
+    .dash-rest .mdh, .dash-rest .lgh, .dash-rest .xlh, .dash-rest .xxh { display: none; }
+    .dash-rest .md-only, .dash-rest .lg-down { display: block; }
+    .dash-rest table.cols { min-width: var(--tmin-md, var(--tmin, 0px)); }
+  }
+  /* Then, narrower than the table itself with those columns rested (its least width, 540 or 640 px at most,
+     dashboard_fit.ts stack), it stacks as any tile's table does below 440 px, every column a labelled line as
+     on a phone, and its ranked bars put each name on a line of its own. */
+  @container dash-tile (max-width: 539px) {
+    .dash-stack-540 table.restack { min-width: 0; }
+    .dash-stack-540 .restack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .dash-stack-540 :is(.restack, .restack tbody, .restack tr, .restack td) { display: block; width: 100%; }
+    .dash-stack-540 .restack tr { padding: 8px 16px; border-bottom: 1px solid var(--border); }
+    .dash-stack-540 .restack tbody tr:last-child { border-bottom: 0; }
+    .dash-stack-540 .restack td { padding: 0; border: 0; text-align: left; white-space: normal; }
+    .dash-stack-540 .restack td + td { margin-top: 2px; }
+    .dash-stack-540 .restack td + td::before { content: attr(data-label); margin-right: 6px; color: var(--muted); font-size: 12px; }
+    .dash-stack-540 .restack td.mono { overflow-wrap: anywhere; }
+    .dash-stack-540 .restack tbody tr:hover > td:first-child { box-shadow: none; }
+    .dash-stack-540 .restack :is(.md-only, .lg-down) { display: none; }
+    .dash-stack-540 .rank-bars li { grid-template-columns: minmax(0, 1fr) auto; row-gap: 4px; }
+    .dash-stack-540 .rank-label { grid-column: 1 / -1; }
+  }
+  @container dash-tile (max-width: 639px) {
+    .dash-stack-640 table.restack { min-width: 0; }
+    .dash-stack-640 .restack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .dash-stack-640 :is(.restack, .restack tbody, .restack tr, .restack td) { display: block; width: 100%; }
+    .dash-stack-640 .restack tr { padding: 8px 16px; border-bottom: 1px solid var(--border); }
+    .dash-stack-640 .restack tbody tr:last-child { border-bottom: 0; }
+    .dash-stack-640 .restack td { padding: 0; border: 0; text-align: left; white-space: normal; }
+    .dash-stack-640 .restack td + td { margin-top: 2px; }
+    .dash-stack-640 .restack td + td::before { content: attr(data-label); margin-right: 6px; color: var(--muted); font-size: 12px; }
+    .dash-stack-640 .restack td.mono { overflow-wrap: anywhere; }
+    .dash-stack-640 .restack tbody tr:hover > td:first-child { box-shadow: none; }
+    .dash-stack-640 .restack :is(.md-only, .lg-down) { display: none; }
   }
 }
+/* A text tile (dashboard.tsx TextTile): the reader's heading or note on the tile's ground, no band, no foot; the
+   menu at the top right over it. */
+.dash-text > .dash-text-menu { position: absolute; top: 6px; right: 6px; z-index: 2; min-height: 0; padding: 0; background: none; border: 0; }
+.dash-text > .dash-body { padding: 12px 44px 12px 16px; }
+.dash-text > .dash-body > * { margin: 0; }
+@media (min-width: 1100px) {
+  .dash-live .dash-text > .dash-body { padding-left: 32px; }
+}
+.dash-heading { font-size: 18px; line-height: 24px; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.dash-note { font-size: 14px; line-height: 20px; color: var(--ink); overflow-wrap: anywhere; }
+/* Edit in a text tile's menu: the field and Save under it, the menu as wide as the field needs. */
+.dash-text-edit > summary { list-style: none; }
+.dash-text-edit > summary::-webkit-details-marker { display: none; }
+.dash-menu-list form.dash-text-form { width: min(320px, calc(100vw - 48px)); margin: 0; padding: 8px 12px 12px; border-top: 1px solid var(--border); }
+.dash-text-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.dash-text-form p { margin: 0; }
 /* Add a Tile: the page's one filled button, its choices under the page head's row, at its right. */
 .page-head-row:has(> .page-actions > .dash-adder) { position: relative; }
 .dash-adder > summary { list-style: none; }
@@ -722,7 +780,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ink); width: 1
 .dash-adder-body > :first-child { margin-top: 0; }
 .dash-adder-body > :last-child { margin-bottom: 0; }
 .dash-adder-body select { width: 100%; }
-.dash-adder-head { margin: 16px 0 4px; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
+.dash-adder-head, .dash-adder-part { margin: 16px 0 4px; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
+/* Add a Tile's groups: From Your Lists, Analytics and Text, each its head over its form or its line. */
+.dash-adder-body > .dash-adder-part + * { margin-top: 0; }
+.dash-adder-body > * + .dash-adder-part { padding-top: 12px; border-top: 1px solid var(--border); }
 .dash-adder-body ul { font-size: 13px; line-height: 20px; }
 /* Add to dashboard stands on its own line under a row's label. */
 td > .dash-add { margin-top: 4px; }
@@ -733,6 +794,10 @@ td > .dash-add { margin-top: 4px; }
 .dash-add-list { min-width: 184px; max-width: 100%; margin: 4px 0 0; padding: 4px 0; background: var(--panel); border: 1px solid var(--border-2); }
 .page-head-row:has(> .page-actions > .dash-add-menu) { position: relative; }
 .page-actions > .dash-add-menu > .dash-add-list { position: absolute; right: 0; top: calc(100% + 8px); z-index: 15; width: min(320px, 100%); margin: 0; }
+/* An analytics panel's own Add to dashboard, beside its CSV link in the panel's head: with several dashboards the
+   names hang under the head at its right, over the panel. */
+.panel-head:has(> .panel-tools > .dash-add-menu) { position: relative; }
+.panel-tools > .dash-add-menu > .dash-add-list { position: absolute; right: 8px; top: calc(100% - 4px); z-index: 15; width: min(320px, calc(100% - 16px)); margin: 0; font-size: 13px; }
 /* A menu item names a dashboard as its reader typed it: a long word wraps inside the menu. */
 .dash-menu-item { overflow-wrap: anywhere; }
 /* Move To in a tile's menu: its head over the other dashboards' names. */

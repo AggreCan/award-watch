@@ -10,16 +10,22 @@
 // the cap and the briefings' cap inside the insert; rows and charts that
 // follow a tile's size; the page's one filled button, its fit at every
 // width, its cache header; the rail's item; "Add to dashboard" for Ultra
-// alone; both languages. The records database is built here from
-// pipeline/records_schema.sql with the rows below.
+// alone; both languages. The analytics tables (kind "analytic"): one table
+// of each view drawn in full at its size, the same item once, a table the
+// view does not draw refused, a view's tile from before drawn as its first
+// table, the per-panel Add to dashboard on each analytics page for Ultra
+// alone. The text tile (kind "text"): added, edited, emptied, cut, escaped.
+// The records database is built here from pipeline/records_schema.sql with
+// the rows below.
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { LEAST, START_H, least, normalize, steps as gridSteps } from "../public/dash-grid.js";
 import {
-  ADD_PANEL_SQL, ADD_TILE_SQL, BRIEFING_PANELS_MAX, MOVE_TO_SQL, NEW_BOARD_SQL, PANEL_KINDS, RADAR_TOP_SQL, specOf, startingLayout, viewAddress, viewRef,
-  viewSpan,
+  ADD_PANEL_SQL, ADD_TEXT_SQL, ADD_TILE_SQL, BRIEFING_PANELS_MAX, MOVE_TO_SQL, NEW_BOARD_SQL, NOTE_MAX, PANEL_KINDS, RADAR_TOP_SQL, TEASE_KINDS, analyticAddress,
+  analyticRef, isHeading, noteOf, noteText, specOf, startingLayout, viewAddress, viewRef, viewSpan,
 } from "../src/account/dashboard";
-import { tileFit } from "../src/account/dashboard_fit";
+import { analyticFit, analyticPlot, tileFit } from "../src/account/dashboard_fit";
+import { VIEW_TABLES } from "../src/pages/analytics";
 import { DASHBOARDS_MAX, TILES_MAX, boardCap, tileCap } from "../src/account/dashboard_rule";
 import { DASHBOARD_STRINGS } from "../src/account/dashboard_strings";
 import { RULES } from "../src/account/entitlements";
@@ -80,6 +86,16 @@ const RECS = [
   { src: 2, fy: 2026, fq: 1, bid: DFO, oid: n(A1), sid: 43, cents: 20_000_000 },
   { src: 3, fy: 2026, fq: 2, bid: DFO, oid: n(A1), sid: null, cents: 1_234_500 },
 ];
+// A third buyer, Shared Services Canada: a record a fiscal year in its contract history (2), 2013-14 to 2026-27, in
+// segment 81, every third from one organization (org-c000000001, five fiscal years) and the others each from one
+// organization of its own, the largest withheld (no organization): more rows than a small tile lists of the tables
+// an analytics tile draws, apart from every row the other tests count.
+const SSC = 104;
+const C = (i: number) => `org-c0000000${String(i).padStart(2, "0")}`;
+const CASCADE = "Cascade Systems Ltd.";
+const MORE = Array.from({ length: 14 }, (_, i) => ({
+  src: 2, fy: 2013 + i, fq: (i % 4) + 1, bid: SSC, oid: i === 13 ? null : n(C(i % 3 === 0 ? 1 : i + 1)), sid: 81, cents: (i + 1) * 2_000_000,
+}));
 function radar(ref: string, end: string, value: number, org: string): string {
   return JSON.stringify({
     kind: "award", reference: ref, title_en: `Contract ${ref}`, title_fr: `Contrat ${ref}`, organization_id: org, organization: org === A1 ? NAME1 : "Other Ltd.",
@@ -113,6 +129,11 @@ async function seedRecords(): Promise<void> {
     ...RECS.map((r, i) => RECORDS.prepare(
       "INSERT INTO records (src, fy, fq, bid, oid, sid, extra, cents, vnote, comp, ref, title) VALUES (?, ?, ?, ?, ?, ?, 0, ?, 0, 1, ?, ?)",
     ).bind(r.src, r.fy, r.fq, r.bid, r.oid, r.sid, r.cents, `REF-${i}`, `Record ${i}`)),
+    ...MORE.map((r, i) => RECORDS.prepare(
+      "INSERT INTO records (src, fy, fq, bid, oid, sid, extra, cents, vnote, comp, ref, title) VALUES (?, ?, ?, ?, ?, ?, 0, ?, 0, 1, ?, ?)",
+    ).bind(r.src, r.fy, r.fq, r.bid, r.oid, r.sid, r.cents, `SSC-${i}`, `Network record ${i}`)),
+    RECORDS.prepare("INSERT INTO rec_buyers (bid, id, name_en, name_fr) VALUES (?, 'ssc-spc', 'Shared Services Canada', 'Services partagés Canada')").bind(SSC),
+    ...Array.from({ length: 13 }, (_, i) => RECORDS.prepare("INSERT INTO rec_orgs (oid, name) VALUES (?, ?)").bind(n(C(i + 1)), i ? `Supplier ${i + 1} Inc.` : CASCADE)),
     RECORDS.prepare("INSERT INTO rec_segment_years (sid, src, fy, n, cents, n_no_value, n_buyers, n_orgs, n_pos) SELECT sid, src, fy, COUNT(*), " +
       "SUM(cents), 0, COUNT(DISTINCT bid), COUNT(DISTINCT oid), COUNT(*) FROM records WHERE sid IS NOT NULL GROUP BY sid, src, fy"),
     RECORDS.prepare("INSERT INTO rec_buyer_quarters (bid, src, fy, fq, n, cents, n_no_value) SELECT bid, src, fy, fq, COUNT(*), SUM(cents), 0 " +
@@ -271,7 +292,11 @@ describe("a Free or Pro account while Ultra is on sale", () => {
           : `${RULES.ultra.dashboards} dashboards of ${RULES.ultra.dashboard_tiles} tiles each`;
         expect(main).toContain(norm(t(lang, "dash.what_lead", { line })));
         expect(main).not.toMatch(/panels|panneaux/);
-        for (const k of PANEL_KINDS) expect(main, k).toContain(`<li>${norm(t(lang, `dash.what_${k}` as Key))}</li>`);
+        // A line a kind, an earlier view's tile being an analytics table's; none still says a view shows its first chart.
+        for (const k of TEASE_KINDS) expect(main, k).toContain(`<li>${norm(t(lang, `dash.what_${k}` as Key))}</li>`);
+        const what = /<h2>[^<]*<\/h2><\/div><p>[^<]*<\/p><ul>([\s\S]*?)<\/ul>/.exec(main)![1];
+        expect(what.match(/<li>/g)).toHaveLength(TEASE_KINDS.length);
+        expect(what).not.toMatch(/first chart|premier graphique/);
         expect(main).toContain(`<p class="muted">${norm(t(lang, "dash.gate"))} <a href="/account/billing">${norm(t(lang, "billing.link_plans"))}</a></p>`);
         expect(main.match(/<div class="plan-card[ "]/g)).toHaveLength(3);
         expect(main).toContain("plan-card plan-card-ultra");
@@ -359,12 +384,12 @@ describe("an Ultra account", () => {
     expect(heads(html)).toEqual(expect.arrayContaining([
       "Your watches this week", "Contracts ending | Ending within 3 months", "Matching notices", `Your organization: Records by Fiscal Year | ${NAME1}`,
       "API requests today", "Contracts ending | Ending within 12 months", `Saved search: records | When ${NAME1} is named on a new award, contract or grant`,
-      `Analytics view | ${NAME1}`, "Weekly briefing, this week so far | 81 Engineering", `Your organization: Records by Segment | ${NAME1}`,
+      `Value by Fiscal Year | ${NAME1}`, "Weekly briefing, this week so far | 81 Engineering", `Your organization: Records by Segment | ${NAME1}`,
     ]));
     // Each tile's Open, to the page it comes from.
     expect(opens(html).sort()).toEqual([
       "/account/watches", "/expiring/3m", "/account/matches", "/account/organization", "/tenders?segment=82", "/account/api",
-      "/expiring/12m?buyer=pwgsc-tpsgc", "/expiring/12m", `/organizations/${A1}`, view, "/segments/81", "/account/organization",
+      "/expiring/12m?buyer=pwgsc-tpsgc", "/expiring/12m", `/organizations/${A1}`, `${view}#table-years`, "/segments/81", "/account/organization",
     ].sort());
     // The watches: the claimed organization's two events this week, not the one before it.
     expect(by("Your watches this week")).toContain("A new award this week");
@@ -398,11 +423,14 @@ describe("an Ultra account", () => {
     expect(records).toContain("2025-26");
     expect(records).toContain("$500,000");
     expect(records).toContain("$12,345");
-    // The view: its first chart at its source and period (in its foot), named from the records, at the tile's height.
-    const v = drawn(html).find((x) => x.head.startsWith("Analytics view"))!;
+    // The view: its first table drawn in full (the chart and the table) at its source and period (in its foot), named
+    // from the records, at the tile's size: its two fiscal years with records, the plot taking the rows' room left.
+    const v = drawn(html).find((x) => x.head.startsWith("Value by Fiscal Year"))!;
     expect(v.html).toContain("Award notices, federal fiscal years 2017-18 to 2026-27.");
     expect(v.html).toContain('class="chart"');
-    expect(v.html).toContain(`<div class="chart-plot" style="height:${tileFit("view", view, v.w, v.h).chart!.height}px">`);
+    const vfit = analyticFit("organization/years", v.w, v.h);
+    expect(v.html).toContain(`<div class="chart-plot" style="height:${analyticPlot("organization/years", vfit, 2)}px">`);
+    expect(rowsIn(v.html)).toBe(2);
     // The briefing: the week's counts, one line each.
     expect(by(/^Weekly briefing/)).toContain('<ul class="plain dash-counts">');
     expect(by(/^Weekly briefing/).match(/<li>/g)).toHaveLength(4);
@@ -818,21 +846,30 @@ describe("a tile's size", () => {
     expect((await readTile(free, "s0")).status).toBe(404);
   });
 
-  it("draws a view's chart to the tile's width and height", async () => {
+  it("draws a view's tile from before as its view's first table, chart and table to the tile's width and height", async () => {
     const r = await reader("dash-chart");
-    const view = "/buyers/pwgsc-tpsgc/analytics?source=awards&years=10";
+    const view = "/buyers/ssc-spc/analytics?source=history&years=20";
     await send(r, "/account/dashboard/panels", { kind: "view", ref: view });
     const id = (await tileRows(r.id)).find((x) => x.kind === "view")!.id;
     const plot = (html: string) => Number(/<div class="chart-plot" style="height:(\d+)px">/.exec(html)?.[1]);
     const labels = (html: string) => (html.match(/<div class="chart-x">([\s\S]*?)<\/div>/)?.[1].match(/<span /g) ?? []).length;
-    const small = norm(decode(await (await readTile(r, id, `?w=${LEAST.view.w}&h=${LEAST.view.h}`)).text()));
-    const big = norm(decode(await (await readTile(r, id, "?w=12&h=14")).text()));
-    expect(plot(small)).toBe(tileFit("view", view, LEAST.view.w, LEAST.view.h).chart!.height);
-    expect(plot(big)).toBe(tileFit("view", view, 12, 14).chart!.height);
+    const least = LEAST["analytic:chart"];
+    const small = norm(decode(await (await readTile(r, id, `?w=${least.w}&h=${least.hn}`)).text()));
+    const big = norm(decode(await (await readTile(r, id, "?w=12&h=16")).text()));
+    const fit = (w: number, h: number) => analyticFit("buyer/quarters", w, h);
+    expect(plot(small)).toBe(fit(least.w, least.hn).plot);
+    expect(plot(big)).toBe(fit(12, 16).plot);
     expect(plot(big)).toBeGreaterThan(plot(small));
-    // A narrow chart's axis keeps fewer of its years' labels.
+    // A narrow chart's axis keeps fewer of its years' labels; its table lists as many years as its height holds.
     expect(labels(big)).toBeGreaterThan(labels(small));
-    expect(small).toContain("Award notices, federal fiscal years 2017-18 to 2026-27.");
+    expect(rowsIn(small)).toBe(fit(least.w, least.hn).rows);
+    expect(rowsIn(big)).toBe(fit(12, 16).rows);
+    expect(small).toContain(`<span class="dash-count">${fit(least.w, least.hn).rows} of 20</span>`);
+    // Headed by the table, named from the records, its source and period in the foot, Open at the table's anchor.
+    expect(small).toContain(`<h2 id="tile-${id}-t" class="dash-title" title="Value by Fiscal Quarter: Shared Services Canada">Value by Fiscal Quarter<span class="dash-item">Shared Services Canada</span></h2>`);
+    expect(small).toContain("PSPC contract history, federal fiscal years 2007-08 to 2026-27.");
+    expect(small).toContain(`<a href="${view}#table-quarters">Open</a>`);
+    expect(small).not.toMatch(/See all|Voir tout/);
   });
 });
 
@@ -872,7 +909,7 @@ describe("the page", () => {
     for (const path of ["/account/dashboard/panels", "/account/dashboard/layout", `/account/dashboard/tiles/${id}/move`, `/account/dashboard/tiles/${id}/size`,
       `/account/dashboard/tiles/${id}/delete`, `/account/dashboard/tiles/${id}/board`, `/account/dashboard/panels/${id}/move`,
       `/account/dashboard/panels/${id}/width`, `/account/dashboard/panels/${id}/delete`, "/account/dashboard/boards", `/account/dashboard/boards/${id}/rename`,
-      `/account/dashboard/boards/${id}/move`, `/account/dashboard/boards/${id}/delete`, "/account/dashboard/boards/first/rename"]) {
+      `/account/dashboard/boards/${id}/move`, `/account/dashboard/boards/${id}/delete`, "/account/dashboard/boards/first/rename", `/account/dashboard/tiles/${id}/text`]) {
       expect(bucketFor("POST", path), path).toBe("edit");
     }
     expect(bucketFor("GET", `/account/dashboard/tiles/${id}`)).toBe("edit");
@@ -929,7 +966,7 @@ describe("the rail's Dashboard item", () => {
 });
 
 describe("Add to dashboard", () => {
-  it("is on each analytics view, each saved search a tile can show and each briefing, for an Ultra account alone", async () => {
+  it("is on each saved search a tile can show and each briefing, and on each panel of an analytics view, for an Ultra account alone", async () => {
     const ultra = await reader("dash-add-ultra");
     const pro = await reader("dash-add-pro", "pro");
     for (const r of [ultra, pro]) {
@@ -939,20 +976,21 @@ describe("Add to dashboard", () => {
     const form = (kind: string) => new RegExp(`<form method="post" action="/account/dashboard/panels" class="account-inline dash-add"><input type="hidden" name="csrf" value="[0-9a-f]{32}"/><input type="hidden" name="kind" value="${kind}"/>`);
     const analytics = async (r: Reader) => text(await get(`/organizations/${A1}/analytics?source=awards&years=5`, { cookie: r.cookie, env: off() }));
     const a = await analytics(ultra);
-    expect(a).toMatch(form("view"));
-    expect(a).toContain(`<input type="hidden" name="ref" value="/organizations/${A1}/analytics?source=awards&years=5"/>`);
-    expect(a).toContain('<button type="submit" class="btn">Add to dashboard</button>');
+    expect(a).toMatch(form("analytic"));
+    expect(a).toContain(`<input type="hidden" name="ref" value="/organizations/${A1}/analytics?source=awards&years=5#table-years"/>`);
+    expect(a).toContain('<button type="submit" class="btn-link">Add to dashboard</button>');
+    expect(a).not.toMatch(form("view"));
     expect(await analytics(pro)).not.toContain("account-inline dash-add");
     const searches = await text(await get("/account/searches", { cookie: ultra.cookie, env: off() }));
     expect(searches).toMatch(form("tenders"));
     expect(searches).toMatch(form("briefing"));
     expect(await text(await get("/account/searches", { cookie: pro.cookie, env: off() }))).not.toContain("account-inline dash-add");
-    // The view's own address, posted from its page, is stored as the dashboard writes it, under the others.
+    // A view's own address, posted, is stored as the dashboard writes it, under the others, at its first table's size.
     const res = await send(ultra, "/account/dashboard/panels", { kind: "view", ref: `/organizations/${A1}/analytics?years=5&source=awards&lang=fr` });
     expect(res.headers.get("location")).toMatch(/^\/account\/dashboard\?m=added#tile-[0-9a-f]{32}$/);
     const rows = await tileRows(ultra.id);
     const added = rows.find((p) => p.ref === `/organizations/${A1}/analytics?source=awards&years=5`)!;
-    expect(added).toMatchObject({ kind: "view", x: 0, w: 6, h: START_H.view });
+    expect(added).toMatchObject({ kind: "view", x: 0, w: 6, h: START_H["analytic:chart"] });
     expect(added.y).toBe(Math.max(...rows.filter((p) => p !== added).map((p) => p.y + p.h)));
     // Added again: the tile it has.
     expect((await send(ultra, "/account/dashboard/panels", { kind: "view", ref: `/organizations/${A1}/analytics?source=awards&years=5` })).headers.get("location"))
@@ -1377,7 +1415,11 @@ describe("several dashboards", () => {
       `<button type="submit" name="board" value="${b2}" class="dash-menu-item">Bids</button></form></details>`);
     expect(several[0]).toMatch(/<details class="dash-add dash-add-menu"><summary class="btn-link">Add to dashboard<\/summary><form [^>]*><input [^>]*\/><input type="hidden" name="kind" value="briefing"\/>/);
     expect(several[1]).toMatch(/<details class="dash-add dash-add-menu"><summary class="btn-link">Add to dashboard<\/summary><form [^>]*><input [^>]*\/><input type="hidden" name="kind" value="view"\/><input type="hidden" name="ref" value="c{32}"\/>/);
-    expect(several[2]).toContain('<details class="dash-add dash-add-menu"><summary class="btn">Add to dashboard</summary>');
+    // On the analytics page, in each panel's tools, link style, the dashboards' names under it.
+    expect(several[2]).toContain('<div class="panel-tools"><a href="/organizations/org-a000000001/analytics/years.csv?source=awards&years=5&segment=81" rel="nofollow">CSV file</a>' +
+      '<details class="dash-add dash-add-menu"><summary class="btn-link">Add to dashboard</summary>');
+    expect(several[2]).toContain(`<input type="hidden" name="kind" value="analytic"/><input type="hidden" name="ref" value="/organizations/${A1}/analytics?source=awards&years=5#table-records"/>` +
+      `<button type="submit" name="board" value="${b1}" class="dash-menu-item">Dashboard 1</button>`);
     several.forEach((html, i) => expect(filled(html), String(i)).toBe(filled(one[i])));
     const fr = await text(await get("/account/searches?lang=fr", { cookie: r.cookie, env: off() }));
     expect(fr).toContain(`<button type="submit" name="board" value="${b1}" class="dash-menu-item">Tableau de bord 1</button>`);
@@ -1549,5 +1591,453 @@ describe("a dashboard of 24 tiles", () => {
     } finally {
       await seedRecords();
     }
+  });
+});
+
+// =====================================================================================
+// Analytics tables (B3a): one table of a view on a tile, drawn in full at its size
+// =====================================================================================
+
+// A table's ref as its panel posts it, and its tile as the page draws it.
+const SSC_VIEW = "/buyers/ssc-spc/analytics?source=history&years=20";
+const CASCADE_VIEW = `/organizations/${C(1)}/analytics?source=history&years=20`;
+const SEG_VIEW = "/segments/81/analytics?source=history&years=20";
+const tableRef = (view: string, table: string) => `${view}#table-${table}`;
+const addTable = (r: Reader, ref: string, e: object = off(), board = "") => send(r, "/account/dashboard/panels", { kind: "analytic", ref, ...(board ? { board } : {}) }, e);
+const tileOfRef = async (r: Reader, ref: string) => (await tileRows(r.id)).find((x) => x.kind === "analytic" && x.ref === ref)!;
+// A tile's foot: its count line and its Open.
+const countIn = (html: string) => /<span class="dash-count">([^<]*)<\/span>/.exec(html)?.[1] ?? null;
+const openIn = (html: string) => /<div class="dash-foot">[\s\S]*?<a href="([^"]*)">(?:Open|Ouvrir)<\/a>/.exec(html)?.[1] ?? null;
+
+describe("an analytics table on a tile", () => {
+  // Each view's tables as tiles: name, ref, the head, the rows its read gives, the subject's name.
+  const CASES: { name: string; ref: string; head: string; item: string; total: number }[] = [
+    { name: "buyer/quarters", ref: tableRef(SSC_VIEW, "quarters"), head: "Value by Fiscal Quarter", item: "Shared Services Canada", total: 20 },
+    { name: "buyer/records", ref: tableRef(SSC_VIEW, "records"), head: "Ten Largest Records", item: "Shared Services Canada", total: 10 },
+    { name: "buyer/suppliers", ref: tableRef(SSC_VIEW, "suppliers"), head: "Largest Organizations", item: "Shared Services Canada", total: 9 },
+    { name: "organization/years", ref: tableRef(CASCADE_VIEW, "years"), head: "Value by Fiscal Year", item: CASCADE, total: 5 },
+    { name: "organization/records", ref: tableRef(CASCADE_VIEW, "records"), head: "Ten Largest Records", item: CASCADE, total: 5 },
+    { name: "segment/years", ref: tableRef(SEG_VIEW, "years"), head: "Buyers and Organizations by Fiscal Year", item: "81 Engineering and Research and Technology Based Services", total: 14 },
+    { name: "segment/winners", ref: tableRef(SEG_VIEW, "winners"), head: "Largest Organizations in the Segment", item: "81 Engineering and Research and Technology Based Services", total: 9 },
+    { name: "segment/records", ref: tableRef(SEG_VIEW, "records"), head: "Ten Largest Records", item: "81 Engineering and Research and Technology Based Services", total: 10 },
+  ];
+
+  it("draws one table of each view in full at two sizes: the rows its height holds, its count, its chart, Open at its anchor", async () => {
+    const r = await reader("dash-analytic");
+    for (const x of CASES) expect((await addTable(r, x.ref)).headers.get("location"), x.name).toMatch(/^\/account\/dashboard\?m=added#tile-[0-9a-f]{32}$/);
+    const ids = new Map<string, string>();
+    for (const x of CASES) ids.set(x.name, (await tileOfRef(r, x.ref)).id);
+    // Stored as posted, a tile each, no choices written.
+    expect((await tileRows(r.id)).filter((x) => x.kind === "analytic").every((x) => x.opts === "")).toBe(true);
+    for (const [w, h] of [[7, 16], [12, 16]] as const) {
+      // Every table at one size, one under another.
+      await save(r, CASES.map((x, i) => ({ id: ids.get(x.name)!, x: 0, y: i * 16, w, h })));
+      const html = await text(await open(r));
+      for (const x of CASES) {
+        const tile = drawn(html).find((d) => d.id === ids.get(x.name))!;
+        expect([tile.w, tile.h], x.name).toEqual([w, h]);
+        const fit = analyticFit(x.name, w, h);
+        const shown = Math.min(fit.rows, x.total);
+        expect(tile.head, x.name).toBe(`${x.head} | ${x.item}`);
+        expect(rowsIn(tile.html), `${x.name} ${w}x${h}`).toBe(shown);
+        expect(countIn(tile.html), `${x.name} ${w}x${h}`).toBe(shown < x.total ? `${shown} of ${x.total}` : null);
+        expect(tile.html).toContain(`data-total="${x.total}"`);
+        expect(openIn(tile.html), x.name).toBe(x.ref);
+        expect(tile.html).toContain(`<a href="${x.ref}" class="dash-menu-item">Open</a>`);
+        expect(tile.html).toContain("PSPC contract history, federal fiscal years 2007-08 to 2026-27.");
+        // Its body's classes: where its secondary columns rest and where it stacks (styles.css).
+        expect(tile.html).toMatch(/<div class="dash-body dash-rest( dash-stack-(540|640))?">/);
+        // The page's own drawing: a chart over a table drawn to the tile, the plot as the fit says, no sorting in a tile.
+        if (fit.chart) expect(tile.html, x.name).toContain(`<div class="chart-plot" style="height:${analyticPlot(x.name, fit, shown)}px">`);
+        expect(tile.html).not.toContain("data-sorting");
+        expect(tile.html).not.toContain(t("en", "dash.unavailable"));
+      }
+      // A tall tile lists more than a short one would, never more than 25, never a scroll bar's worth: the rows follow the height.
+      expect(analyticFit("buyer/quarters", w, h).rows).toBeGreaterThan(analyticFit("buyer/quarters", w, 10).rows);
+      expect(misfits(html)).toEqual([]);
+      expect(mainOf(html).match(/btn-primary/g)).toHaveLength(1);
+    }
+    // Ranked: the bars and the table list the same organizations; a withheld supplier is named by no one.
+    const page = await text(await open(r));
+    const suppliers = drawn(page).find((d) => d.id === ids.get("buyer/suppliers"))!.html;
+    expect(suppliers.match(/<li title=/g)?.length).toBe(rowsIn(suppliers));
+    expect(suppliers).toContain(`<a href="/organizations/${C(1)}">${CASCADE}</a>`);
+    const records = drawn(page).find((d) => d.id === ids.get("buyer/records"))!.html;
+    expect(records).toContain(`<span class="muted">${t("en", "common.not_stated")}</span>`);
+    // The quarters' figures are the records': 2026-27's one record, $28,000 (the withheld one), and 2013-14's $20,000.
+    const quarters = drawn(page).find((d) => d.id === ids.get("buyer/quarters"))!.html;
+    expect(quarters).toContain("$280,000");
+    // One of each view's tables at a size read alone (the page's script after a resize), rows at that size.
+    for (const x of [CASES[0], CASES[3], CASES[5]]) {
+      const fragment = norm(decode(await (await readTile(r, ids.get(x.name)!, "?w=12&h=12")).text()));
+      expect(fragment).toContain('data-w="12" data-h="12"');
+      expect(rowsIn(fragment), x.name).toBe(Math.min(analyticFit(x.name, 12, 12).rows, x.total));
+    }
+  });
+
+  it("reads every analytics table of a page view in the one records batch, each with the view's own statements", async () => {
+    const r = await reader("dash-analytic-batch");
+    for (const x of CASES) await addTable(r, x.ref);
+    // The records binding watched: each statement's text and binds, in the order prepared, and each batch's size.
+    const batches: number[] = [];
+    const prepared: { sql: string; params: unknown[] }[] = [];
+    const db = new Proxy(RECORDS, {
+      get(target, prop) {
+        if (prop === "batch") return (list: D1PreparedStatement[]) => (batches.push(list.length), target.batch(list));
+        if (prop === "prepare") {
+          return (sql: string) => {
+            const st = target.prepare(sql);
+            const seen = { sql, params: [] as unknown[] };
+            prepared.push(seen);
+            const bind = st.bind.bind(st);
+            (st as unknown as { bind: (...p: unknown[]) => D1PreparedStatement }).bind = (...p: unknown[]) => ((seen.params = p), bind(...p));
+            return st;
+          };
+        }
+        const v = Reflect.get(target, prop);
+        return typeof v === "function" ? v.bind(target) : v;
+      },
+    });
+    const html = await text(await open(r, "/account/dashboard", off({ RECORDS: db })));
+    for (const d of drawn(html)) expect(d.html, d.head).not.toContain(t("en", "dash.unavailable"));
+    // The starting layout's 3-month list (two) and the state row, then each table's statements and its subject's name
+    // (a segment's needs none): quarters 1+1, records 1+1, suppliers 2+1, years 1+1, records 1+1, segment years 1,
+    // winners 2, records 1.
+    const size = 1 + 2 + 2 + 2 + 3 + 2 + 2 + 1 + 2 + 1;
+    expect(Math.max(...batches)).toBe(size);
+    expect(batches.filter((b) => b > 2)).toHaveLength(1);
+    // Each statement bounded (a LIMIT, as on the analytics page) and read through an index: its plan reads no table
+    // whole (a SCAN of a table without an index), whatever it then does with what it read.
+    const start = prepared.findIndex((x) => /FROM rec_meta/.test(x.sql));
+    for (const x of prepared.slice(start + 1, start + size)) {
+      expect(x.sql, x.sql).toMatch(/LIMIT (\d+|\?\d+)\s*$/);
+      const plan = ((await RECORDS.prepare(`EXPLAIN QUERY PLAN ${x.sql}`).bind(...x.params).all()).results ?? []).map((p) => String((p as { detail?: unknown }).detail));
+      const made = new Set(plan.flatMap((p) => /^(?:MATERIALIZE|CO-ROUTINE) (\S+)/.exec(p)?.[1] ?? []));
+      const whole = plan.filter((p) => /^SCAN /.test(p) && !/USING|CONSTANT ROW/i.test(p) && !made.has(/^SCAN (\S+)/.exec(p)![1]));
+      expect(whole, `${x.sql}\n${plan.join("\n")}`).toEqual([]);
+    }
+  });
+
+  it("keeps the same table once on a dashboard and two tables of one view as two tiles; a table its view does not draw is refused", async () => {
+    const r = await reader("dash-analytic-once");
+    const ref = tableRef(SSC_VIEW, "records");
+    expect((await addTable(r, ref)).headers.get("location")).toMatch(/\?m=added#tile-/);
+    const first = await tileOfRef(r, ref);
+    // The same table again, in another order and language: the tile it has.
+    expect((await addTable(r, "/buyers/ssc-spc/analytics?years=20&source=history&lang=fr#table-records")).headers.get("location"))
+      .toBe(`/account/dashboard?m=exists#tile-${first.id}`);
+    // Another table of the same view, and the same table at another period or source: tiles of their own.
+    await addTable(r, tableRef(SSC_VIEW, "quarters"));
+    await addTable(r, "/buyers/ssc-spc/analytics?source=history&years=10#table-records");
+    await addTable(r, "/buyers/ssc-spc/analytics?source=awards&years=20#table-records");
+    const refs = (await tileRows(r.id)).filter((x) => x.kind === "analytic").map((x) => x.ref).sort();
+    expect(refs).toEqual([
+      "/buyers/ssc-spc/analytics?source=awards&years=20#table-records", "/buyers/ssc-spc/analytics?source=history&years=10#table-records",
+      tableRef(SSC_VIEW, "quarters"), ref,
+    ].sort());
+    // The statement alone holds the same item once.
+    const board = (await boards(r.id))[0].id;
+    const again = await ACCOUNTS.prepare(ADD_TILE_SQL).bind("e".repeat(32), r.id, "analytic", ref, 0, 0, 6, 9, new Date().toISOString(), 24, 2, board).run();
+    expect(again.meta.changes).toBe(0);
+    // A table not the view's, no table, an unknown anchor, the share table without its segment, a view the ref check refuses.
+    for (const bad of [
+      `/organizations/${C(1)}/analytics?source=history&years=20#table-quarters`, "/segments/81/analytics?source=history&years=20#table-share",
+      SSC_VIEW, `${SSC_VIEW}#records`, `${SSC_VIEW}#table-nope`, `${CASCADE_VIEW}#table-share`, "/buyers/ssc-spc/analytics?source=history&years=7#table-records",
+      "/buyers/ssc-spc/analytics?source=history&years=20&evil=1#table-records", "https://evil.example/buyers/ssc-spc/analytics?source=history&years=20#table-records",
+    ]) {
+      expect((await addTable(r, bad)).status, bad).toBe(400);
+    }
+    // The ref as the dashboard reads and writes it.
+    const share = analyticRef(`${CASCADE_VIEW}&vs=${C(2)}&segment=81&vs=${C(1)}#table-share`)!;
+    expect(share).toMatchObject({ table: "share", segment: 81, rivals: [C(2)] });
+    expect(analyticAddress(share)).toBe(`${CASCADE_VIEW}&segment=81&vs=${C(2)}#table-share`);
+    expect(analyticRef(`${SSC_VIEW}&segment=81#table-records`)).toMatchObject({ table: "records", segment: null });
+    expect(analyticAddress(analyticRef(`${SSC_VIEW}&segment=81#table-records`)!)).toBe(tableRef(SSC_VIEW, "records"));
+    for (const view of ["buyer", "organization", "segment"] as const) {
+      for (const table of VIEW_TABLES[view]) {
+        const base = view === "buyer" ? SSC_VIEW : view === "organization" ? `${CASCADE_VIEW}&segment=81` : SEG_VIEW;
+        expect(specOf("analytic", `${base}#table-${table}`, { searches: [], briefings: [] })?.kind, `${view} ${table}`).toBe("analytic");
+      }
+    }
+  });
+
+  it("draws the share table of an organization with its segment and the organizations chosen", async () => {
+    const r = await reader("dash-analytic-share");
+    const ref = `${CASCADE_VIEW}&segment=81&vs=${C(2)}#table-share`;
+    expect((await addTable(r, ref)).headers.get("location")).toMatch(/\?m=added#tile-/);
+    const html = await text(await open(r));
+    const tile = drawn(html).find((d) => d.head.startsWith("Share of a Segment"))!;
+    expect(tile.head).toBe(`Share of a Segment | ${CASCADE}`);
+    expect(tile.html).toContain(`<strong>${CASCADE}</strong>`);
+    expect(tile.html).toContain(`<a href="/organizations/${C(2)}">Supplier 2 Inc.</a>`);
+    expect(tile.html).toContain('<a href="/segments/81">');
+    expect(openIn(tile.html)).toBe(ref);
+    // The tile draws no form of the panel's: its one filled button stays the page's Add a Tile.
+    expect(tile.html).not.toContain("<form method=\"get\"");
+    expect(mainOf(html).match(/btn-primary/g)).toHaveLength(1);
+    expect(misfits(html)).toEqual([]);
+  });
+
+  it("draws a saved view's tile as its first table, under the reader's name for it", async () => {
+    const r = await reader("dash-analytic-saved");
+    const id = crypto.randomUUID().replace(/-/g, "");
+    await ACCOUNTS.prepare(
+      "INSERT INTO saved_views (id, user_id, kind, address, name, lang, deliver, created_at) VALUES (?, ?, 'segment', ?, 'Engineering', 'en', 'off', ?)",
+    ).bind(id, r.id, SEG_VIEW, new Date().toISOString()).run();
+    await send(r, "/account/dashboard/panels", { kind: "view", ref: id });
+    const tile = drawn(await text(await open(r))).find((d) => d.head.startsWith("Buyers and Organizations"))!;
+    expect(tile.head).toBe("Buyers and Organizations by Fiscal Year | Engineering");
+    expect(openIn(tile.html)).toBe(`${SEG_VIEW}#table-years`);
+    expect(tile.html.match(/<div class="chart-plot"/g)).toHaveLength(2);
+    expect(rowsIn(tile.html)).toBeGreaterThanOrEqual(3);
+    // Its saved view removed: the tile goes with it.
+    await send(r, `/account/views/${id}/delete`);
+    expect((await tileRows(r.id)).some((x) => x.ref === id)).toBe(false);
+  });
+
+  it("moves to another dashboard and is removed as any tile is", async () => {
+    const r = await reader("dash-analytic-move");
+    const b2 = await newBoard(r);
+    const ref = tableRef(SEG_VIEW, "winners");
+    await addTable(r, ref);
+    const tile = await tileOfRef(r, ref);
+    expect((await send(r, `/account/dashboard/tiles/${tile.id}/board`, { board: b2 })).headers.get("location")).toMatch(new RegExp(`m=moved&to=${b2}`));
+    expect((await boardTiles(b2)).map((x) => x.ref)).toEqual([ref]);
+    // The same table on both dashboards, once on each; on the second it is there already.
+    await addTable(r, ref);
+    const back = (await tileRows(r.id)).find((x) => x.ref === ref && x.id !== tile.id)!;
+    expect((await send(r, `/account/dashboard/tiles/${back.id}/board`, { board: b2 })).headers.get("location")).toMatch(/m=move_exists/);
+    expect((await send(r, `/account/dashboard/tiles/${back.id}/delete`)).status).toBe(303);
+    expect((await tileRows(r.id)).filter((x) => x.ref === ref)).toHaveLength(1);
+  });
+
+  it("is added in each state of storage: into the panels while the grid's tables are absent, with the first change, or stored", async () => {
+    const ref = tableRef(SSC_VIEW, "records");
+    // The grid's tables absent: into the panels' table, drawn on the page from there.
+    const a = await reader("dash-analytic-state-a");
+    await without("tiles", async () => {
+      expect((await addTable(a, ref)).headers.get("location")).toMatch(/^\/account\/dashboard\?m=added#tile-[0-9a-f]{32}$/);
+      expect((await panelRows(a.id)).map((p) => `${p.kind}:${p.ref}`)).toContain(`analytic:${ref}`);
+      const tile = drawn(await text(await open(a))).find((d) => d.head.startsWith("Ten Largest Records"))!;
+      expect(tile.html).not.toContain(t("en", "dash.unavailable"));
+    });
+    // Neither table: nothing kept.
+    const none = await reader("dash-analytic-state-none");
+    await without("all", async () => {
+      expect((await addTable(none, ref)).headers.get("location")).toBe("/account/dashboard?m=unsaved");
+    });
+    // The tables there and nothing stored: the starting layout written, then the table under it.
+    const b = await reader("dash-analytic-state-b");
+    await addTable(b, ref);
+    expect((await tileRows(b.id)).map((x) => `${x.kind}:${x.ref}`)).toEqual(["watches:", "radar:3m", `analytic:${ref}`]);
+    expect(await boards(b.id)).toHaveLength(1);
+  });
+});
+
+// =====================================================================================
+// The per-panel Add to dashboard on each analytics page
+// =====================================================================================
+
+describe("each analytics page's panels", () => {
+  const PAGES = [
+    { view: "buyer", path: "/buyers/pwgsc-tpsgc/analytics?source=awards&years=5" },
+    { view: "organization", path: `/organizations/${A1}/analytics?source=awards&years=5` },
+    { view: "segment", path: "/segments/81/analytics?source=awards&years=5" },
+  ] as const;
+  // A page's main without what only an Ultra account's carries (each panel's Add to dashboard and its anchor) and the
+  // period tabs, which offer Ultra's period to Ultra; the session's own values blanked.
+  const bare = (html: string) => mainOf(html)
+    .replace(/<form method="post" action="\/account\/dashboard\/panels" class="account-inline dash-add">[\s\S]*?<\/form>/g, "")
+    .replace(/<details class="dash-add dash-add-menu">[\s\S]*?<\/details>/g, "")
+    .replace(/<div class="panel-tools"><\/div>/g, "")
+    .replace(/ id="table-[a-z]+"/g, "")
+    .replace(/<nav class="tabs tabs-small toolbar-row"[\s\S]*?<\/nav>/, "")
+    .replace(/[0-9a-f]{32}/g, "X");
+
+  it("carry each its own Add to dashboard and an anchor for an Ultra account, the page's own one gone, and nothing for any other reader", async () => {
+    const ultra = await reader("dash-panels-ultra");
+    const pro = await reader("dash-panels-pro", "pro");
+    const free = await reader("dash-panels-free", "free");
+    for (const p of PAGES) {
+      for (const lang of ["en", "fr"] as const) {
+        const path = lang === "fr" ? `${p.path}&lang=fr` : p.path;
+        const u = await text(await get(path, { cookie: ultra.cookie, env: off() }));
+        const tables = VIEW_TABLES[p.view] as readonly string[];
+        // Each panel's heading carries its table's anchor, in page order; each panel that draws its table its own control.
+        const anchors = [...mainOf(u).matchAll(/<h2 id="table-([a-z]+)">/g)].map((m) => m[1]);
+        expect(anchors, `${p.view} ${lang}`).toEqual(tables);
+        const refs = [...mainOf(u).matchAll(/<input type="hidden" name="kind" value="analytic"\/><input type="hidden" name="ref" value="([^"]*)"\/>/g)].map((m) => m[1]);
+        expect(refs.map((x) => x.slice(x.indexOf("#table-") + 7)), `${p.view} ${lang}`).toEqual(tables);
+        for (const ref of refs) {
+          expect(analyticRef(ref), ref).not.toBeNull();
+          expect(specOf("analytic", ref, { searches: [], briefings: [] })?.ref, ref).toBe(ref);
+        }
+        expect(refs[0]).toBe(`${p.path}#table-${tables[0]}`);
+        // Link style, never a filled button; the page head's own Add to dashboard is gone.
+        expect(mainOf(u)).toContain(`<button type="submit" class="btn-link">${norm(t(lang, "dash.add_here"))}</button>`);
+        expect(mainOf(u).indexOf("dash-add")).toBeGreaterThan(mainOf(u).indexOf('<section class="panel'));
+        expect(mainOf(u).match(/<form method="post" action="\/account\/dashboard\/panels" class="account-inline dash-add">/g)?.length).toBe(refs.length);
+        expect(u).not.toContain(EM_DASH);
+        expect(misfits(u)).toEqual([]);
+        for (const r of [null, free, pro]) {
+          const other = await text(await get(path, { cookie: r?.cookie, env: off() }));
+          expect(other, p.path).not.toContain("dash-add");
+          expect(other, p.path).not.toContain('id="table-');
+        }
+        // Pro's page and Ultra's are the same page but for each panel's control and anchor (and Ultra's longer period).
+        const pr = await text(await get(path, { cookie: pro.cookie, env: off() }));
+        expect(bare(u), `${p.view} ${lang}`).toBe(bare(pr));
+      }
+    }
+  });
+
+  it("add their table to the dashboard, and with several dashboards to the one chosen", async () => {
+    const r = await reader("dash-panels-add");
+    const html = await text(await get(PAGES[2].path, { cookie: r.cookie, env: off() }));
+    const ref = [...mainOf(html).matchAll(/name="ref" value="([^"]*#table-winners)"/g)][0][1];
+    expect((await addTable(r, ref)).headers.get("location")).toMatch(/\?m=added#tile-/);
+    expect((await tileRows(r.id)).some((x) => x.kind === "analytic" && x.ref === ref)).toBe(true);
+    const b2 = await newBoard(r);
+    const several = await text(await get(PAGES[2].path, { cookie: r.cookie, env: off() }));
+    expect(several).toContain(`<details class="dash-add dash-add-menu"><summary class="btn-link">Add to dashboard</summary><form method="post" action="/account/dashboard/panels" class="dash-add-list">`);
+    expect((await addTable(r, tableRef(PAGES[2].path, "records"), off(), b2)).headers.get("location")).toMatch(new RegExp(`^/account/dashboard/${b2}\\?m=added#tile-`));
+  });
+});
+
+// =====================================================================================
+// The text tile
+// =====================================================================================
+
+describe("a text tile", () => {
+  const addText = (r: Reader, value: string, board = "") => send(r, "/account/dashboard/panels", { kind: "text", text: value, ...(board ? { board } : {}) });
+  const texts = async (r: Reader) => (await tileRows(r.id)).filter((x) => x.kind === "text");
+  const tileHtml = (html: string, id: string) => drawn(html).find((d) => d.id === id)!.html;
+
+  it("is added from Add a Tile as a heading or a note, plain text, its markup drawn as text, edited from its menu", async () => {
+    const r = await reader("dash-text");
+    // Add a Tile's Text group: a field and Add, no filled button.
+    const page = mainOf(await text(await open(r)));
+    expect(page).toContain('<p class="dash-adder-part" id="dash-add-text">Text</p>');
+    expect(page).toContain(`<textarea name="text" rows="3" maxlength="${NOTE_MAX}"></textarea>`);
+    expect(page.match(/btn-primary/g)).toHaveLength(1);
+    // A heading: one short line.
+    expect((await addText(r, "  Network spending  ")).headers.get("location")).toMatch(/^\/account\/dashboard\?m=added#tile-[0-9a-f]{32}$/);
+    const [heading] = await texts(r);
+    expect(heading.ref).toMatch(/^[0-9a-f]{32}$/);
+    expect(heading.ref).not.toBe(heading.id);
+    expect(JSON.parse(heading.opts)).toEqual({ text: "Network spending" });
+    // A note: lines kept, control characters dropped, markup as typed.
+    await addText(r, "Watch these buyers\r\n<b>closely</b> & \u0007often\n\n\n\nEvery Monday");
+    const note = (await texts(r)).find((x) => x.id !== heading.id)!;
+    expect(noteOf(note.opts)).toBe("Watch these buyers\n<b>closely</b> & often\n\nEvery Monday");
+    // Two notes on one dashboard: each its own ref.
+    expect(note.ref).not.toBe(heading.ref);
+    const raw = await (await open(r)).text();
+    const h = tileHtml(raw, heading.id);
+    expect(h).toContain(`<h2 id="tile-${heading.id}-t" class="dash-heading">Network spending</h2>`);
+    expect(h).toContain('data-key="text"');
+    const n2 = tileHtml(raw, note.id);
+    expect(n2).toContain(`<h2 id="tile-${note.id}-t" class="visually-hidden">Your note</h2>`);
+    expect(n2).toContain('<p class="dash-note">Watch these buyers<br/>&lt;b&gt;closely&lt;/b&gt; &amp; often<br/><br/>Every Monday</p>');
+    expect(n2).toContain('data-key="text:note"');
+    expect(raw).not.toContain("<b>closely</b>");
+    // No foot, no Open; the menu leads with Edit, a details element with the text and Save, never a dialog.
+    expect(n2).not.toContain("dash-foot");
+    expect(n2).toContain(`<details class="dash-text-edit"><summary class="dash-menu-item">Edit</summary><form method="post" action="/account/dashboard/tiles/${note.id}/text" class="stack dash-text-form">`);
+    expect(n2).toContain(`maxlength="${NOTE_MAX}">Watch these buyers\n&lt;b&gt;closely&lt;/b&gt; &amp; often\n\nEvery Monday</textarea>`);
+    expect(raw).not.toMatch(/confirm\(|prompt\(|onclick/);
+    // Edited: the heading becomes a note, and back.
+    expect((await send(r, `/account/dashboard/tiles/${heading.id}/text`, { text: "Two\nlines" })).headers.get("location")).toBe(`/account/dashboard#tile-${heading.id}`);
+    expect(noteOf((await texts(r)).find((x) => x.id === heading.id)!.opts)).toBe("Two\nlines");
+    expect(drawn(await text(await open(r))).find((d) => d.id === heading.id)!.html).toContain('data-key="text:note"');
+    // Another account's tile: nothing changes.
+    const other = await reader("dash-text-other");
+    await send(other, `/account/dashboard/tiles/${heading.id}/text`, { text: "Theirs" });
+    expect(noteOf((await texts(r)).find((x) => x.id === heading.id)!.opts)).toBe("Two\nlines");
+    // A text post on a tile of another kind changes nothing.
+    const watches = (await tileRows(r.id)).find((x) => x.kind === "watches")!;
+    await send(r, `/account/dashboard/tiles/${watches.id}/text`, { text: "x" });
+    expect((await tileRows(r.id)).find((x) => x.id === watches.id)!.opts).toBe("");
+    expect(misfits(raw)).toEqual([]);
+  });
+
+  it("holds 500 characters and cuts what is past them, refuses an empty add, keeps an emptied one, and draws broken opts as an empty note", async () => {
+    const r = await reader("dash-text-bounds");
+    await addText(r, "x".repeat(NOTE_MAX));
+    await addText(r, `${"y".repeat(NOTE_MAX)}z`);
+    const [a, b] = (await texts(r)).sort((p, q) => p.opts.localeCompare(q.opts));
+    expect(noteOf(a.opts)).toBe("x".repeat(NOTE_MAX));
+    expect(noteOf(b.opts)).toBe("y".repeat(NOTE_MAX));
+    expect(a.opts.length).toBeLessThanOrEqual(2000);
+    // A character outside the basic plane counts once and is never cut in half.
+    expect(noteText("\u{1F600}".repeat(NOTE_MAX + 3))).toBe("\u{1F600}".repeat(NOTE_MAX));
+    expect(noteText("a\uD800b")).toBe("ab");
+    expect(isHeading("x".repeat(80))).toBe(true);
+    expect(isHeading("x".repeat(81))).toBe(false);
+    // Nothing typed, or only spaces and control characters: nothing added, the page says why.
+    const before = (await tileRows(r.id)).length;
+    for (const empty of ["", "   ", "\u0000\u0007\n\n"]) {
+      expect((await addText(r, empty)).headers.get("location"), JSON.stringify(empty)).toBe("/account/dashboard?m=text_empty#dash-add");
+    }
+    expect((await tileRows(r.id)).length).toBe(before);
+    expect(await text(await open(r, "/account/dashboard?m=text_empty"))).toContain(t("en", "dash.text_empty"));
+    // Emptied by Edit: the tile stays and says it is empty.
+    await send(r, `/account/dashboard/tiles/${a.id}/text`, { text: "" });
+    expect(noteOf((await texts(r)).find((x) => x.id === a.id)!.opts)).toBe("");
+    expect(drawn(await text(await open(r))).find((d) => d.id === a.id)!.html).toContain(t("en", "dash.text_empty_tile"));
+    // Opts that do not parse, or of another shape: an empty note, never a fault.
+    for (const broken of ["{nope", "[]", '{"text":42}', "null"]) {
+      await ACCOUNTS.prepare("UPDATE dashboard_tiles SET opts = ? WHERE id = ?").bind(broken, b.id).run();
+      const res = await open(r);
+      expect(res.status, broken).toBe(200);
+      expect(drawn(await text(res)).find((d) => d.id === b.id)!.html, broken).toContain(t("en", "dash.text_empty_tile"));
+    }
+    // The statement writes the text as given (the post cleans it first).
+    const board = (await boards(r.id))[0].id;
+    const written = await ACCOUNTS.prepare(ADD_TEXT_SQL)
+      .bind("d".repeat(32), r.id, "text", "e".repeat(32), 0, 99, 3, 2, new Date().toISOString(), 24, 2, board, JSON.stringify({ text: "Direct" })).run();
+    expect(written.meta.changes).toBe(1);
+    expect(noteOf((await tileRows(r.id)).find((x) => x.id === "d".repeat(32))!.opts)).toBe("Direct");
+  });
+
+  it("is sized from 3 columns by 2 rows as a heading, moves to another dashboard and is removed as any tile is", async () => {
+    const r = await reader("dash-text-move");
+    await addText(r, "Bids");
+    const [x] = await texts(r);
+    expect([x.w, x.h]).toEqual([6, START_H.text]);
+    await save(r, [{ id: x.id, x: 0, y: 0, w: 3, h: 2 }]);
+    const kept = (await texts(r))[0];
+    expect([kept.w, kept.h]).toEqual([LEAST.text.w, LEAST.text.h]);
+    await save(r, [{ id: x.id, x: 0, y: 0, w: 1, h: 1 }]);
+    expect([(await texts(r))[0].w, (await texts(r))[0].h]).toEqual([3, 2]);
+    // Read alone at a size, as the page's script reads it after a resize.
+    const fragment = await (await readTile(r, x.id, "?w=4&h=3")).text();
+    expect(fragment).toContain('<h2 id="tile-' + x.id + '-t" class="dash-heading">Bids</h2>');
+    const b2 = await newBoard(r);
+    expect((await send(r, `/account/dashboard/tiles/${x.id}/board`, { board: b2 })).headers.get("location")).toMatch(/m=moved/);
+    expect((await boardTiles(b2)).map((t2) => t2.kind)).toEqual(["text"]);
+    expect((await send(r, `/account/dashboard/tiles/${x.id}/delete`)).status).toBe(303);
+    expect(await texts(r)).toEqual([]);
+  });
+
+  it("is kept only with the grid's tables: while they are absent Add a Tile says so and a post adds nothing", async () => {
+    const r = await reader("dash-text-absent");
+    await without("tiles", async () => {
+      const page = mainOf(await text(await open(r)));
+      expect(page).toContain(t("en", "dash.text_unsaved"));
+      expect(page).not.toContain('<textarea name="text"');
+      expect((await addText(r, "Kept?")).headers.get("location")).toBe("/account/dashboard?m=text_unsaved#dash-add");
+      expect((await panelRows(r.id)).some((p) => p.kind === "text")).toBe(false);
+    });
+    // The first change writes the starting layout, then the text under it.
+    const b = await reader("dash-text-first");
+    await addText(b, "First");
+    expect((await tileRows(b.id)).map((x) => x.kind)).toEqual(["watches", "radar", "text"]);
+    // In French: the group, the field and the empty note's words.
+    const fr = mainOf(await text(await open(b, "/account/dashboard?lang=fr")));
+    expect(fr).toContain('<p class="dash-adder-part" id="dash-add-text">Texte</p>');
+    expect(fr).toContain(norm(t("fr", "dash.text_label")));
+    expect(fr).not.toContain(EM_DASH);
+    expect(fr).not.toContain(EN_DASH);
   });
 });

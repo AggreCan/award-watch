@@ -473,6 +473,25 @@ export function fiscalAxis(first: number, last: number, label: (fy: number) => s
   return { labels, grid: per > 1 ? grid : [] };
 }
 
+// An axis's labels at a plot's width in pixels, for a chart drawn to its own
+// width (a dashboard tile's): as many as the longest label's width (about
+// 6.2 px a character of the axis's 11 px type, and a gap) leaves room for,
+// the first and the last always, the others resting from the end back. An
+// end label near its end is anchored there and runs inward its whole width,
+// so no other shows within a label and a half of either end; a narrow
+// chart's axis, or a French one's longer years, never crowds.
+const LABEL_CHAR_PX = 6.2;
+const LABEL_GAP_PX = 12;
+export function thinLabels(labels: readonly AxisLabel[], width: number): AxisLabel[] {
+  const px = Math.max(0, ...labels.map((l) => l.text.length)) * LABEL_CHAR_PX + LABEL_GAP_PX;
+  const room = Math.max(2, Math.floor(width / px));
+  if (labels.length <= room) return [...labels];
+  const step = Math.ceil((labels.length - 1) / (room - 1));
+  const last = labels.length - 1;
+  const clear = Math.ceil((1.5 * px) / (width / labels.length));
+  return labels.map((l, i) => (i === 0 || i === last || ((last - i) % step === 0 && i >= clear && last - i >= clear) ? l : { ...l, hidden: true }));
+}
+
 // The gap that keeps a bar near `px` pixels wide on a plot about `plot`
 // pixels wide holding `slots` one-unit slots (thinner on a phone, where the
 // plot is narrower), never less than the default gap and never closing the

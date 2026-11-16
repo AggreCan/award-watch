@@ -2,8 +2,9 @@
 // the kinds of tile an Ultra account cannot add yet, each with the one step
 // that gives it what the tile shows and a link to the page where that is
 // done. Inside Add a Tile on every view of the page (the page has no edit
-// mode), and under the starting layout's tiles too, so a first visit finds
-// it; each line goes once the account holds what its kind needs, and the
+// mode; there the analytics line is left out, Add a Tile's Analytics group
+// saying it already), and under the starting layout's tiles too, so a first
+// visit finds it; each line goes once the account holds what its kind needs, and the
 // list goes once none is left; the briefings' and the claims' lines only
 // while their tables are on the database; none while nothing can be added
 // (a full dashboard, or no table to keep a tile in); nothing read for it
@@ -16,6 +17,7 @@ import { ACCOUNTS, PRO_SALE, csrf, decode, get, grantUltra, nbsp, newEmail, onEn
 import { FILES, makeFakeAssets } from "./assets";
 import { applySql, splitSql } from "./setup";
 import { misfits } from "./table-fit";
+import { type Holdings, moreKinds } from "../src/account/dashboard";
 import accountsSchema from "../accounts_schema.sql?raw";
 
 useAccountsDb();
@@ -92,8 +94,8 @@ const LINES: Line[] = [
     ["An organization's, a buyer's or a segment's records: paste the address of its page into Add a Search on ", "your saved searches", "."],
     ["Les dossiers d'une organisation, d'un acheteur ou d'un segment : collez l'adresse de sa page dans Ajouter une recherche, sur ", "vos recherches enregistrées", "."]),
   line("view", "/analytics",
-    ["A chart from an analytics view: open a view from ", "Analytics", " and choose Add to dashboard."],
-    ["Un graphique d'une vue d'analyse : ouvrez une vue depuis ", "Analyses", " et choisissez Ajouter au tableau de bord."]),
+    ["A table or chart of an analytics view: open a view from ", "Analytics", " and choose Add to dashboard on it."],
+    ["Un tableau ou un graphique d'une vue d'analyse : ouvrez une vue depuis ", "Analyses", " et choisissez Ajouter au tableau de bord sur celui-ci."]),
   line("briefing", "/segments",
     ["A weekly briefing, this week so far: save a briefing on a ", "segment's page", " or a buyer's page."],
     ["Un bulletin hebdomadaire, semaine en cours : enregistrez un bulletin sur la ", "page d'un segment", " ou celle d'un acheteur."]),
@@ -106,6 +108,8 @@ const LINES: Line[] = [
 ];
 const TITLE = { en: "More Kinds of Tile", fr: "Autres genres de tuiles" };
 const all = (lang: "en" | "fr", but: readonly string[] = []) => LINES.filter((l) => !but.includes(l.name)).map((l) => l[lang]);
+// The lines inside Add a Tile: all but the analytics line, which its Analytics group says.
+const inAdd = (lang: "en" | "fr", but: readonly string[] = []) => all(lang, [...but, "view"]);
 
 // What gives an account each kind's need, by the pages' own posts (a saved view as its page stores it).
 const VIEW = "/buyers/pwgsc-tpsgc/analytics?source=awards&years=5";
@@ -153,7 +157,10 @@ describe("an Ultra account holding nothing", () => {
       const more = moreOf(html);
       expect(more, lang).not.toBeNull();
       expect(more!.title).toBe(TITLE[lang]);
-      expect(more!.lines).toEqual(all(lang));
+      expect(more!.lines).toEqual(inAdd(lang));
+      // Add a Tile's Analytics group says what the analytics line says, with its link.
+      expect(mainOf(html)).toContain(`<p class="dash-adder-part" id="dash-add-analytics">${lang === "fr" ? "Analyses" : "Analytics"}</p>`);
+      expect(mainOf(html)).toMatch(/<p class="muted small">[^<]*<a href="\/analytics">(Analytics|Analyses)<\/a>\.<\/p>/);
       const panel = panelOf(html);
       expect(panel!.title).toBe(TITLE[lang]);
       expect(panel!.lines).toEqual(all(lang));
@@ -169,7 +176,8 @@ describe("an Ultra account holding nothing", () => {
 
   it("follows every link to a page that answers for the account", async () => {
     const r = await reader("aid-links");
-    const more = moreOf(await text(await open(r)));
+    // The starting layout's list, which holds every line.
+    const more = panelOf(await text(await open(r)));
     const hrefs = [...(more?.lines ?? []).join("").matchAll(/<a href="([^"]+)">/g)].map((m) => m[1]);
     expect(hrefs).toEqual(LINES.map((l) => l.href));
     for (const href of hrefs) {
@@ -185,7 +193,7 @@ describe("an Ultra account holding nothing", () => {
     const r = await reader("aid-edit");
     for (const lang of ["en", "fr"] as const) {
       const html = await text(await open(r, `/account/dashboard?edit=1${lang === "fr" ? "&lang=fr" : ""}`));
-      expect(moreOf(html)?.lines, lang).toEqual(all(lang));
+      expect(moreOf(html)?.lines, lang).toEqual(inAdd(lang));
       expect(mainOf(html).match(/btn-primary/g)).toHaveLength(1);
       expect(misfits(html)).toEqual([]);
     }
@@ -200,37 +208,42 @@ describe("each line", () => {
       await MEET[l.name](r);
       for (const lang of ["en", "fr"] as const) {
         const html = await text(await open(r, `/account/dashboard${lang === "fr" ? "?lang=fr" : ""}`));
-        expect(moreOf(html)?.lines, lang).toEqual(all(lang, [l.name]));
+        expect(moreOf(html)?.lines, lang).toEqual(inAdd(lang, [l.name]));
         expect(panelOf(html)?.lines, lang).toEqual(all(lang, [l.name]));
       }
     });
   }
 
-  it("of the analytics views goes with a view on the dashboard, added from the view's own page", async () => {
+  it("of the analytics views goes with a view or an analytics table on the dashboard, added from the view's own page", async () => {
     const r = await reader("aid-view-tile");
     const res = await send(r, "/account/dashboard/panels", { kind: "view", ref: VIEW });
     expect(res.headers.get("location")).toMatch(/^\/account\/dashboard\?m=added#tile-[0-9a-f]{32}$/);
-    expect(moreOf(await text(await open(r)))?.lines).toEqual(all("en", ["view"]));
+    expect(moreOf(await text(await open(r)))?.lines).toEqual(inAdd("en"));
+    // The list's own rule, the starting layout's panel being gone once a tile is added: a view's or a table's tile on the
+    // dashboard takes the analytics line away.
+    const none = { searches: [], briefings: [], claim: null, watches: [], keys: [], views: [], panels: [], absent: {} } as unknown as Holdings;
+    expect(moreKinds(none, "ultra").map((l) => l.kinds[0])).toContain("view");
+    for (const kind of ["view", "analytic"] as const) expect(moreKinds(none, "ultra", [{ kind }]).map((l) => l.kinds[0]), kind).not.toContain("view");
   });
 
   it("of the API stays while every key is revoked", async () => {
     const r = await reader("aid-revoked");
     await MEET.api(r);
     const key = (await ACCOUNTS.prepare("SELECT id FROM api_keys WHERE user_id = ?").bind(r.id).first<{ id: string }>())!.id;
-    expect(moreOf(await text(await open(r)))?.lines).toEqual(all("en", ["api"]));
+    expect(moreOf(await text(await open(r)))?.lines).toEqual(inAdd("en", ["api"]));
     await send(r, `/account/keys/${key}/revoke`);
-    expect(moreOf(await text(await open(r)))?.lines).toEqual(all("en"));
+    expect(moreOf(await text(await open(r)))?.lines).toEqual(inAdd("en"));
   });
 
   it("of the briefings and of the organization shows only while its table is on the database", async () => {
     const r = await reader("aid-tables");
     await without(["briefings"], async () => {
-      expect(moreOf(await text(await open(r)))?.lines).toEqual(all("en", ["briefing"]));
+      expect(moreOf(await text(await open(r)))?.lines).toEqual(inAdd("en", ["briefing"]));
     });
     await without(["org_claims"], async () => {
-      expect(moreOf(await text(await open(r)))?.lines).toEqual(all("en", ["org"]));
+      expect(moreOf(await text(await open(r)))?.lines).toEqual(inAdd("en", ["org"]));
     });
-    expect(moreOf(await text(await open(r)))?.lines).toEqual(all("en"));
+    expect(moreOf(await text(await open(r)))?.lines).toEqual(inAdd("en"));
   });
 });
 
@@ -261,7 +274,7 @@ describe("where the list shows", () => {
       const main = mainOf(html);
       expect(main).not.toContain('<section class="panel dash-tile');
       expect(main).toContain('<details class="dash-adder" id="dash-add" open="">');
-      expect(moreOf(html)?.lines, lang).toEqual(all(lang));
+      expect(moreOf(html)?.lines, lang).toEqual(inAdd(lang));
       expect(panelOf(html), lang).toBeNull();
     }
   });
@@ -272,7 +285,7 @@ describe("where the list shows", () => {
     await send(r, "/account/dashboard/panels", { kind: "radar", ref: "6m" });
     for (const path of ["/account/dashboard", "/account/dashboard?lang=fr"]) {
       const html = await text(await open(r, path));
-      expect(moreOf(html)?.lines, path).toEqual(all(path.includes("fr") ? "fr" : "en"));
+      expect(moreOf(html)?.lines, path).toEqual(inAdd(path.includes("fr") ? "fr" : "en"));
       expect(panelOf(html), path).toBeNull();
     }
     // The plan's figure of tiles (24): nothing more can be added, so nothing is listed; one removed, the list is back.
@@ -288,11 +301,11 @@ describe("where the list shows", () => {
     expect(full).toContain("The dashboard holds its 24 tiles.");
     expect(moreOf(full)).toBeNull();
     await send(r, `/account/dashboard/tiles/${rows[23].id}/delete`);
-    expect(moreOf(await text(await open(r)))?.lines).toEqual(all("en"));
+    expect(moreOf(await text(await open(r)))?.lines).toEqual(inAdd("en"));
     // Without the grid's tables a tile still goes into the panels' table, so the list shows; without that too, none.
     const fresh = await reader("aid-unsaved");
     await without(["dashboard_tiles", "dashboards"], async () => {
-      expect(moreOf(await text(await open(fresh)))?.lines).toEqual(all("en"));
+      expect(moreOf(await text(await open(fresh)))?.lines).toEqual(inAdd("en"));
     });
     await without(["dashboard_tiles", "dashboards", "dashboard_panels"], async () => {
       expect(moreOf(await text(await open(fresh)))).toBeNull();
@@ -347,6 +360,6 @@ describe("a page view", () => {
     expect({ statements: starter.statements, files: starter.files }).toEqual(BEFORE.starter);
     expect({ statements: emptied.statements, files: emptied.files }).toEqual(BEFORE.emptied);
     // And each drew the list.
-    for (const v of [starter, emptied]) expect(moreOf(v.html)?.lines).toEqual(all("en"));
+    for (const v of [starter, emptied]) expect(moreOf(v.html)?.lines).toEqual(inAdd("en"));
   });
 });

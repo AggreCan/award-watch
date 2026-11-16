@@ -15,7 +15,7 @@ import {
 import { DELAY_MS, KEY_STEPS, UNDO_MAX, fill, layoutJson } from "../public/dashboard.js";
 import dashboardJs from "../public/dashboard.js?raw";
 import { env } from "cloudflare:test";
-import { ROWS_MAX, ROWS_MIN, rowsHeld, tileFit } from "../src/account/dashboard_fit";
+import { ANALYTIC_BODIES, ROWS_MAX, ROWS_MIN, analyticFit, analyticKey, rowsHeld, tileFit } from "../src/account/dashboard_fit";
 
 // A small seeded generator (mulberry32), so every run checks the same cases and a failure names its seed.
 function rng(seed: number) {
@@ -220,7 +220,9 @@ describe("the grid's rules", () => {
       w: `0,0 12x${START_H.watches}`, h1: `0,${START_H.watches} 6x${START_H.radar}`, h2: `6,${START_H.watches} 6x${START_H.api}`,
       h3: `0,${START_H.watches + START_H.radar} 6x${START_H.tenders}`, f: `0,${START_H.watches + START_H.radar + START_H.tenders} 12x${START_H.org}`,
     });
-    expect(startSize("view:segment", true)).toEqual({ w: 12, h: START_H["view:segment"] });
+    expect(startSize("analytic:chart", true)).toEqual({ w: 12, h: START_H["analytic:chart"] });
+    // A two-chart table never starts narrower than it holds its table: its least width, not half the row.
+    expect(startSize("analytic:two", false)).toEqual({ w: LEAST["analytic:two"].w, h: START_H["analytic:two"] });
     // An added tile goes under the others at the left, then slides up.
     expect(at(place(column(), { id: "n", kind: "x", x: 9, y: 0, w: 6, h: 3 }))).toEqual({ ...at(column()), n: "0,12 6x3" });
     expect(at(place([{ id: "a", kind: "x", x: 6, y: 0, w: 6, h: 8 }], { id: "n", kind: "x", x: 0, y: 0, w: 6, h: 3 }))).toEqual({ a: "6,0 6x8", n: "0,0 6x3" });
@@ -234,12 +236,14 @@ describe("the grid's rules", () => {
   });
 });
 
-// The size keys of each kind and a ref that gives it (dashboard.tsx sizeKey).
+// The size keys of each kind and a ref that gives it (dashboard.tsx sizeKey): every table of the three analytics views
+// under its shape's key (dashboard_fit.ts tileFit takes the table's view and name), and a heading and a note.
 const SIZED: [string, string, string][] = [
-  ["tenders", "tenders", ""], ["radar", "radar", "3m"], ["records", "records", ""], ["watches", "watches", ""], ["view", "view", "/buyers/pwgsc-tpsgc/analytics?source=awards&years=10"],
-  ["view:segment", "view", "/segments/81/analytics?source=awards&years=10"], ["briefing", "briefing", ""], ["org", "org", "years"], ["org", "org", "segments"],
+  ["tenders", "tenders", ""], ["radar", "radar", "3m"], ["records", "records", ""], ["watches", "watches", ""],
+  ...Object.keys(ANALYTIC_BODIES).map((name): [string, string, string] => [analyticKey(name), "analytic", name]),
+  ["briefing", "briefing", ""], ["org", "org", "years"], ["org", "org", "segments"],
   ["org", "org", "buyers"], ["org:share", "org", "share"], ["org:ending", "org", "ending"], ["org:instruments", "org", "instruments"], ["matches", "matches", ""],
-  ["api", "api", ""],
+  ["api", "api", ""], ["text", "text", ""], ["text:note", "text", ""],
 ];
 
 describe("the least and starting sizes", () => {
@@ -248,9 +252,10 @@ describe("the least and starting sizes", () => {
       for (let w = least(key).w; w <= COLS; w++) {
         expect(rowsHeld(kind, ref, w, least(key, w).h), `${key} ${ref} at ${w} columns`).toBeGreaterThanOrEqual(ROWS_MIN);
       }
+      // A list starts with five rows; an analytics table with three or more under its charts.
       const half = startSize(key, false);
-      expect(rowsHeld(kind, ref, half.w, half.h), `${key} ${ref} starting`).toBeGreaterThanOrEqual(kind === "view" ? ROWS_MIN : 5);
-      expect(rowsHeld(kind, ref, COLS, startSize(key, true).h), `${key} ${ref} starting wide`).toBeGreaterThanOrEqual(kind === "view" ? ROWS_MIN : 5);
+      expect(rowsHeld(kind, ref, half.w, half.h), `${key} ${ref} starting`).toBeGreaterThanOrEqual(kind === "analytic" ? ROWS_MIN : 5);
+      expect(rowsHeld(kind, ref, COLS, startSize(key, true).h), `${key} ${ref} starting wide`).toBeGreaterThanOrEqual(kind === "analytic" ? ROWS_MIN : 5);
     }
     // Every key the grid lists is one a tile can have.
     expect(new Set(SIZED.map(([k]) => k))).toEqual(new Set(Object.keys(LEAST)));
@@ -265,11 +270,18 @@ describe("the least and starting sizes", () => {
     expect(tileFit("radar", "3m", 4, 12).stacked).toBe(true);
     expect(tileFit("radar", "3m", 6, 12).stacked).toBe(false);
     expect(tileFit("radar", "3m", 4, 12).rows).toBeLessThan(tileFit("radar", "3m", 6, 12).rows);
-    const small = tileFit("view", "/buyers/pwgsc-tpsgc/analytics?source=awards&years=10", 4, 5).chart!;
-    const big = tileFit("view", "/buyers/pwgsc-tpsgc/analytics?source=awards&years=10", 12, 12).chart!;
+    // An analytics table: its chart to the tile's width and height, its rows to what is left under it.
+    const small = tileFit("analytic", "buyer/quarters", 4, LEAST["analytic:chart"].hn).chart!;
+    const big = tileFit("analytic", "buyer/quarters", 12, 16).chart!;
     expect(big.width).toBeGreaterThan(small.width);
     expect(big.height).toBeGreaterThan(small.height);
-    expect(tileFit("view", "/segments/81/analytics?source=awards&years=10", 12, 12).chart!.panels).toBe(2);
+    expect(analyticFit("buyer/quarters", 12, 16).rows).toBeGreaterThan(analyticFit("buyer/quarters", 12, 10).rows);
+    expect(tileFit("analytic", "segment/years", 12, 12).chart!.panels).toBe(2);
+    expect(tileFit("analytic", "buyer/records", 12, 12).chart).toBeNull();
+    // A table narrower than its stacking width stacks, and its rows stand taller.
+    expect(analyticFit("buyer/records", 6, 12).stacked).toBe(true);
+    expect(analyticFit("buyer/records", 7, 12).stacked).toBe(false);
+    expect(analyticFit("buyer/records", 6, 12).rows).toBeLessThan(analyticFit("buyer/records", 7, 12).rows);
   });
 });
 

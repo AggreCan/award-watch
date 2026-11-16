@@ -318,18 +318,29 @@ function start() {
 
   // -- a list to its tile's height ------------------------------------------------------------
 
+  /**
+   * A body's rows as the units taken off together: a ranked bar with its table's row (an analytics table's bars
+   * list the rows of its table), else each row alone.
+   * @param {HTMLElement} body @returns {Element[][]}
+   */
+  function unitsOf(body) {
+    const rows = Array.from(body.querySelectorAll("tbody > tr, ul.dash-counts > li"));
+    const bars = Array.from(body.querySelectorAll("ol.rank-bars > li"));
+    return bars.length === rows.length && bars.length ? rows.map((r, i) => [bars[i], r]) : rows.map((r) => [r]);
+  }
+
   /** Rows that do not fit the tile's body are taken off, and its foot says how many it shows. @param {HTMLElement} el */
   function trim(el) {
     const body = /** @type {HTMLElement | null} */ (el.querySelector(".dash-body"));
     const count = /** @type {HTMLElement | null} */ (el.querySelector(".dash-count"));
     if (!body) return;
-    const rows = Array.from(body.querySelectorAll("tbody > tr, ul.dash-counts > li"));
-    for (const r of rows) r.removeAttribute("hidden");
+    const rows = unitsOf(body);
+    for (const r of rows) for (const x of r) x.removeAttribute("hidden");
     if (count && count.dataset.text !== undefined) count.textContent = count.dataset.text;
     if (!wide.matches || !rows.length) return;
     let shown = rows.length;
     // Never fewer than one row: a tile at its least size holds three, and a body cut by its own height keeps its first.
-    while (shown > 1 && body.scrollHeight > body.clientHeight + 1) rows[--shown].setAttribute("hidden", "");
+    while (shown > 1 && body.scrollHeight > body.clientHeight + 1) for (const x of rows[--shown]) x.setAttribute("hidden", "");
     const total = Number(el.dataset.total || "");
     if (count && shown < rows.length && Number.isFinite(total) && total > 0) {
       if (count.dataset.text === undefined) count.dataset.text = count.textContent || "";

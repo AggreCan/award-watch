@@ -51,7 +51,14 @@ export const SHEET = {
   dashGridFrom: px(/@media \(min-width: (\d+)px\) \{\n\s*\.dash-grid \{ grid-template-columns: repeat\(12, minmax\(0, 1fr\)\);/, "where the dashboard is its grid"),
   dashGap: px(/^\.dash-grid \{[^}]*gap: (\d+)px;/m, "the dashboard's gap"),
   dashStackBelow: px(/@container dash-tile \(max-width: (\d+)px\)/, "where a tile stacks its table") + 1,
+  // An analytics table on a tile (its body .dash-rest): the width below which its secondary columns rest.
+  dashRestBelow: px(/@container dash-tile \(max-width: (\d+)px\) \{\n\s*\.dash-rest /, "where an analytics tile rests its columns") + 1,
 };
+
+// The widths below which an analytics table stacks, by its body's class (.dash-stack-540): each class's own query.
+const DASH_STACKS: ReadonlyMap<string, number> = new Map(
+  [...styles.matchAll(/@container dash-tile \(max-width: (\d+)px\) \{\n\s*\.(dash-stack-\d+) /g)].map((m) => [m[2], Number(m[1]) + 1]),
+);
 
 // The blocks that run to a panel's edges rather than keep its inset: the
 // ones the inset rule leaves out, and any the stylesheet sets to no margin.
@@ -221,12 +228,32 @@ export function dashTileWidth(tile: El, w: number, main = mainWidth(w)): number 
   return main;
 }
 
-// Whether a table stands stacked in labelled rows at window w: in a dashboard tile narrower than its table's
-// stacking width, from the window where tables no longer restack for a phone.
-export function stackedInTile(table: El, w: number): boolean {
+// The tile and its body a table sits in, if it sits in one.
+function tileOf(table: El): { tile: El; body: El | null } | null {
+  let body: El | null = null;
   let tile: El | null = table.parent;
-  while (tile && !has(tile, "dash-tile")) tile = tile.parent;
-  return !!tile && w >= RANGES[0].from && dashTileWidth(tile, w) - 2 * SHEET.panelBorder < SHEET.dashStackBelow;
+  while (tile && !has(tile, "dash-tile")) {
+    if (has(tile, "dash-body")) body = tile;
+    tile = tile.parent;
+  }
+  return tile ? { tile, body } : null;
+}
+
+// Whether a table stands stacked in labelled rows at window w: in a dashboard tile narrower than its table's
+// stacking width (an analytics table's body names its own, .dash-stack-540), from the window where tables no
+// longer restack for a phone.
+export function stackedInTile(table: El, w: number): boolean {
+  const at = tileOf(table);
+  if (!at || w < RANGES[0].from) return false;
+  const own = at.body?.cls.map((c) => DASH_STACKS.get(c)).find((x) => x !== undefined);
+  return dashTileWidth(at.tile, w) - 2 * SHEET.panelBorder < Math.max(SHEET.dashStackBelow, own ?? 0);
+}
+
+// Whether an analytics table's secondary columns rest at window w: in a tile narrower than the stylesheet's
+// width for it (.dash-rest), it shows the columns the md range shows, whatever the window's range.
+export function restedInTile(table: El, w: number): boolean {
+  const at = tileOf(table);
+  return !!at && !!at.body && has(at.body, "dash-rest") && w >= RANGES[0].from && dashTileWidth(at.tile, w) - 2 * SHEET.panelBorder < SHEET.dashRestBelow;
 }
 
 // The column a table gets at window w. The tender list beside its detail
@@ -324,7 +351,7 @@ export function misfits(html: string, skip: (table: El) => boolean = () => false
     const least = leastWidths(table);
     for (const w of edges()) {
       if (stackedInTile(table, w)) continue;
-      const range = rangeOf(w);
+      const range = restedInTile(table, w) ? "md" : rangeOf(w);
       const column = tableColumn(table, w);
       if (least[range] > column) out.push({ table: tableName(table), window: w, range, least: least[range], column: Math.floor(column * 10) / 10 });
     }

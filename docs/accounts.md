@@ -2804,12 +2804,15 @@ dashboards, the page, its posts and its read), `site/public/dash-grid.js`
 `site/public/dashboard.js` (the page's script), `dashboard_rule.ts` (who
 has it, the ceilings, a dashboard's address and the rail's item),
 `dashboard_add.tsx` (Add to dashboard, and the dashboards' names) and
-`dashboard_strings.ts`; the rail item is in `site/src/layout.tsx`. The
-tests are `site/test/dash-grid.test.ts` (the grid),
-`site/test/dashboard.test.ts` (the page, the three states of storage, the
-posts, several dashboards, a dashboard of 24 tiles),
-`site/test/dashboard-aid.test.ts` (More Kinds of Tile) and a 12-tile and a
-24-tile entry in `site/test/cpu-budget.test.ts`.
+`dashboard_strings.ts`; the rail item is in `site/src/layout.tsx`. An
+analytics table on a tile is drawn by the analytics view's own code in
+`site/src/pages/analytics.tsx` (*Analytics tables*). The tests are
+`site/test/dash-grid.test.ts` (the grid), `site/test/dashboard.test.ts`
+(the page, the three states of storage, the posts, several dashboards, a
+dashboard of 24 tiles, the analytics tables and the analytics pages' own
+Add to dashboard, the text tile), `site/test/dashboard-aid.test.ts` (More
+Kinds of Tile) and a 12-tile, a 24-tile and a 24-analytics-table entry in
+`site/test/cpu-budget.test.ts`.
 
 ### Several dashboards
 
@@ -2858,9 +2861,9 @@ posts, several dashboards, a dashboard of 24 tiles),
   disabled. The dashboard it left closes up, and the reader stays there,
   told where it went (`?m=moved&to=<id>`).
 - **Add to dashboard** on the other pages (each saved search a tile can
-  show, each briefing, each saved view, an analytics view's head): one
-  dashboard (or none stored yet), the one button, and the tile goes on the
-  first; several, the same words open on the dashboards' names, each a
+  show, each briefing, each saved view, each panel of an analytics view):
+  one dashboard (or none stored yet), the one button, and the tile goes on
+  the first; several, the same words open on the dashboards' names, each a
   submit button of one form naming its dashboard (`boardChoices`, one
   statement on those pages for an Ultra account). No filled button is
   added to those pages.
@@ -2899,19 +2902,25 @@ nowhere else:
   again by these rules.
 - A tile narrower than 6 columns (narrower than its table at 1,280 px)
   needs more height for its three rows, so its least height is taller
-  (`hn` in `LEAST`).
+  (`hn` in `LEAST`). An analytics table's wider tables stack below 7
+  columns, so its shapes' `hn` holds below 7 (`nb` in `LEAST`).
 
-The least and starting sizes, by size key (a segment's view draws two
-charts; three blocks of the organization hold taller rows):
+The least and starting sizes, by size key (an analytics table's shape:
+one chart or ranked bars over its table, two charts over it, a chart an
+organization over it (the share table), or the table alone; three blocks
+of the organization hold taller rows; a text tile's one-line heading or
+its note):
 
-| Size key | Least w | Least h (6 columns and up) | Least h (narrower) | Starts at h |
+| Size key | Least w | Least h (6 columns and up; 7 for an analytics table) | Least h (narrower) | Starts at h |
 |---|---|---|---|---|
 | `tenders` | 4 | 7 | 10 | 10 |
 | `radar` | 4 | 8 | 10 | 11 |
 | `records` | 4 | 6 | 9 | 9 |
 | `watches` | 3 | 8 | 10 | 11 |
-| `view` | 4 | 5 | 5 | 7 |
-| `view:segment` | 4 | 7 | 7 | 8 |
+| `analytic:chart` | 4 | 10 | 14 | 14 |
+| `analytic:two` | 7 | 12 | (none narrower) | 12 |
+| `analytic:share` | 4 | 14 | 16 | 16 |
+| `analytic:table` | 4 | 12 | 13 | 13 |
 | `briefing` | 3 | 4 | 4 | 6 |
 | `org` (years, segments, buyers) | 4 | 6 | 9 | 9 |
 | `org:share` | 4 | 7 | 9 | 8 |
@@ -2919,11 +2928,15 @@ charts; three blocks of the organization hold taller rows):
 | `org:instruments` | 4 | 7 | 8 | 10 |
 | `matches` | 4 | 7 | 10 | 10 |
 | `api` | 3 | 7 | 8 | 9 |
+| `text` (a heading) | 3 | 2 | 2 | 2 |
+| `text:note` | 3 | 3 | 3 | 4 |
 
-A tile starts half the row wide (an add) or as its panel was (the earlier
-page: full or half width), at its starting height, which holds the five
-rows every list showed before tiles had sizes. `site/test/dash-grid.test.ts`
-holds both tables to `dashboard_fit.ts`.
+A tile starts half the row wide (an add; never narrower than its least) or
+as its panel was (the earlier page: full or half width), at its starting
+height, which holds the five rows every list showed before tiles had sizes,
+and for an analytics table three rows or more under its charts.
+`site/test/dash-grid.test.ts` holds both tables to `dashboard_fit.ts`, an
+analytics shape at every width for each of its tables.
 
 Below 1,100 px the layout is derived, never stored: two columns from 700
 px (a tile of 7 columns or more takes both, a smaller one takes one), one
@@ -2952,7 +2965,7 @@ inside a tile.
 | `radar` | the soonest ending | `RADAR_TOP_SQL`, `LIMIT ?13` bound to the rows (at most 25), through `rec_expiring_end`; a province search reads its page of 100 and shows the rows |
 | `records`, `org` years | the sources, two fiscal years each | the counts statement (a row a source and year) |
 | `watches` | the newest events of the week | `readEvents`, as before |
-| `view` | its chart: the plot's height and width from the tile, the axis's years thinned to one label in about 64 px | the view's statement, as before |
+| `analytic`, `view` | the table's rows its height holds under its chart, the plot's height and width from the tile (`analyticFit`), the axis's labels thinned to one in about 64 px | the view's own statements for the table (*Analytics tables*) |
 | `briefing` | the week's four counts | `readBriefing`, as before |
 | `org` segments, buyers, instruments, share | the block's first rows | the block's statement (LIMIT 114, 100 and 10,000 as on the organization's page; the share's years) |
 | `org` ending | the soonest ending | `RADAR_TOP_SQL` at the rows |
@@ -2968,11 +2981,12 @@ before.
 | Table | Columns | Rule |
 |---|---|---|
 | `dashboards` | `id`, `user_id`, `name` (the reader's, 40 characters at most, or '' for the site's label), `pos` (the tabs' order), `created_at` | The first written with the account's first change unless one is there (`BOARD_INSERT_SQL`), the others by New dashboard within the plan's figure (`NEW_BOARD_SQL`); a row with no tile is a dashboard the reader emptied; index `idx_dashboards_user` (`user_id`, `pos`) |
-| `dashboard_tiles` | `id`, `dashboard_id`, `user_id`, `kind`, `ref`, `opts` (the tile's own choices as JSON, 2,000 characters at most; '' in this build), `x`, `y`, `w`, `h`, `created_at` | At most the plan's figure and at most 2 briefings a dashboard, the same item once on a dashboard, all held inside the insert (`ADD_TILE_SQL`) and inside a move to another dashboard (`MOVE_TO_SQL`), so two posts at once cannot pass any of them; indexes `idx_dashboard_tiles_user` (`user_id`, `kind`, `ref`) and `idx_dashboard_tiles_board` (`dashboard_id`), through which a page reads one dashboard's tiles |
+| `dashboard_tiles` | `id`, `dashboard_id`, `user_id`, `kind`, `ref`, `opts` (the tile's own choices as JSON, 2,000 characters at most; a text tile's text, `{"text": ...}`, and '' for every other kind in this build), `x`, `y`, `w`, `h`, `created_at` | At most the plan's figure and at most 2 briefings a dashboard, the same item once on a dashboard, all held inside the insert (`ADD_TILE_SQL`) and inside a move to another dashboard (`MOVE_TO_SQL`), so two posts at once cannot pass any of them; indexes `idx_dashboard_tiles_user` (`user_id`, `kind`, `ref`) and `idx_dashboard_tiles_board` (`dashboard_id`), through which a page reads one dashboard's tiles |
 | `dashboard_panels` | `id`, `user_id`, `kind`, `ref`, `pos`, `wide`, `created_at`; unique on (`user_id`, `kind`, `ref`) | The earlier page's table: read until the account's first change on the grid, written while the grid's tables are absent (`ADD_PANEL_SQL`), then read no more for that account |
 
 `kind` is checked by the site (`PANEL_KINDS`), not by a CHECK, so a new
-kind needs no rebuild. Every dashboard and tile goes with the account
+kind needs no rebuild: the analytics tables and the text tiles added no
+table and no column. Every dashboard and tile goes with the account
 (`deleteAccount`); a tile goes with its dashboard, and from every dashboard
 with the saved search, briefing or view it shows when that is removed on
 its page. No table or column was added for several dashboards: `name` and
@@ -2993,7 +3007,10 @@ Each state holds per dashboard; the page works in each, and nothing answers
   page arranges them, saves no place or size and says so ("Positions and
   sizes cannot be saved yet"); the script posts nothing, the menu's steps
   answer the same line, and the layout save answers `{"state":"unsaved"}`.
-  Adding and removing go to `dashboard_panels` as before; without that
+  Adding and removing go to `dashboard_panels` as before (an analytics
+  table too, its ref in that table's `ref`); a text tile, whose text needs
+  the tiles' `opts`, is not kept there: Add a Tile's Text group says so in
+  place of its field, and a post answers `?m=text_unsaved`. Without that
   table too, nothing is kept and the page says the dashboard cannot be
   saved yet. Nothing answers 500.
 - **The tables there, nothing stored for the account**: the same layout,
@@ -3019,11 +3036,16 @@ Move right, Move up, Move down, Wider, Narrower, Taller, Shorter (each a
 post; a step that would change nothing is disabled), then Remove. There is
 no edit mode: `?edit=1` shows the same page. The page's one filled button
 is Add a Tile, at the head's right, a `details` too: the count of tiles,
-the select of what the account holds and is not on the dashboard shown yet
-(its choices as before), Add, and More Kinds of Tile; its post names the
-dashboard shown. An emptied dashboard draws it open. The tabs sit in the
-head under the lead, so Add a Tile's choices, which hang below the head's
-row, never cover them (*Several dashboards*).
+then three groups. From Your Lists: the select of what the account holds
+and is not on the dashboard shown yet (its choices as before) and Add.
+Analytics: a line saying each table and chart of an analytics view has its
+own Add to dashboard, with the link to Analytics. Text: a field for a
+heading or a note and Add (a plain button, so Add a Tile stays the one
+filled one). Then More Kinds of Tile, less its analytics line, which the
+Analytics group says. Each post names the dashboard shown. An emptied
+dashboard draws it open. The tabs sit in the head under the lead, so Add a
+Tile's choices, which hang below the head's row, never cover them
+(*Several dashboards*).
 
 The script (`dashboard.js`, a module loaded on this page only):
 
@@ -3078,7 +3100,14 @@ fragment reads the same rows (the dashboard holding the tile) and that
 tile's statements in their own batch.
 
 A dashboard of 24 tiles still sends one records batch: the state row and
-each tile's statements, every one bounded and read through an index. With
+each tile's statements, every one bounded and read through an index. A
+dashboard of 24 analytics tables (every table of a buyer's, an
+organization's and a segment's view, and three again at another source or
+period) sends 49: the state row and each table's statements with its
+subject's name (*Analytics tables*); the CPU budget's entry for it
+measured 13.33 and 13.57 (bound 41); beside it, the 24 tiles of every
+other kind, their three views now drawn as tables, measured about 17
+(bound 44). With
 every kind that reads the records, that is 25 statements (two each for the
 3-, 6- and 12-month lists and a saved search of contracts ending, the
 organization's share and ending blocks, and a buyer's or an organization's
@@ -3096,7 +3125,7 @@ entry measured 14.62 against the 12 tiles' 8.62 (bound 44).
 |---|---|
 | `GET /account/dashboard` | the first dashboard's tiles on the grid; `?edit=1` is the same page |
 | `GET /account/dashboard/:id` | a dashboard by its id, the same page; an id the account does not hold, 303 to `/account/dashboard` |
-| `POST /account/dashboard/panels` | add a tile: `kind` and `ref` from a page's Add to dashboard, or `panel` (`kind:ref`) from Add a Tile, to the dashboard `board` names (none, the first); it goes under the others at the left, half the row wide, at its kind's starting height |
+| `POST /account/dashboard/panels` | add a tile: `kind` and `ref` from a page's Add to dashboard (an analytics table: `kind=analytic`, its ref), `panel` (`kind:ref`) from Add a Tile, or `kind=text` and `text` from Add a Tile's Text group, to the dashboard `board` names (none, the first); it goes under the others at the left, half the row wide (never narrower than its least), at its kind's starting height |
 | `POST /account/dashboard/layout` | the script's save, for the dashboard `?board=` names (none, the first): `layout`, JSON `[{id, x, y, w, h}]` (8,000 characters and 50 tiles at most); only that dashboard's own ids count, a tile the post leaves out keeps its place, the whole goes through `normalize`; answers JSON `{state: "saved", tiles, renamed}`, `{state: "unsaved"}` while the tables are absent, 404 for a dashboard the account does not hold, 400 for anything that is not such a list |
 | `POST /account/dashboard/boards` | New dashboard, within the plan's figure; lands on it |
 | `POST /account/dashboard/boards/:id/rename` | `name`; `:id` a dashboard's id, or `first` for the computed first |
@@ -3107,6 +3136,7 @@ entry measured 14.62 against the 12 tiles' 8.62 (bound 44).
 | `POST /account/dashboard/tiles/:id/size` | `to` wider, narrower, taller or shorter |
 | `POST /account/dashboard/tiles/:id/board` | `board`, another of the account's dashboards: Move to |
 | `POST /account/dashboard/tiles/:id/delete` | remove it |
+| `POST /account/dashboard/tiles/:id/text` | a text tile's `text`, cleaned as on its add; emptied, the tile stays and says it is empty; on any other kind, nothing |
 | `POST /account/dashboard/panels/:id/move`, `/width`, `/delete` | the earlier page's posts, for a page loaded before the grid: up or down, full or half width, remove |
 
 Every post is behind the session, the CSRF value and the Origin; the read
@@ -3116,7 +3146,8 @@ a minute per address; `bucketFor` "edit"), so arranging never spends the
 forms' 5. A post from the menu returns to the dashboard it changed (the
 bare address while that is the first) with what happened (`?m=added`,
 `exists`, `full`, `briefings_full`, `unsaved`, `unsaved_layout`,
-`boards_full`, `renamed`, `board_deleted`, `board_emptied`, and `moved`,
+`boards_full`, `renamed`, `board_deleted`, `board_emptied`, `text_empty`,
+`text_unsaved`, and `moved`,
 `move_exists`, `move_full` with `to=<id>` naming the dashboard), at the
 place the change was made: a step or a size at
 the tile's own anchor (`#tile-<id>`), an add at the tile added (or found
@@ -3154,7 +3185,7 @@ statements added).
 | A tender search's open notices | `/tenders` | a saved search of kind tenders |
 | A filtered list of contracts ending | `/expiring/12m` | a saved search of kind expiring; the 3, 6 and 12-month windows need nothing, and Add a Tile always offers them |
 | An organization's, a buyer's or a segment's records | `/account/searches`, where Add a Search takes the page's address | a saved search of kind organization, buyer or segment |
-| A chart from an analytics view | `/analytics`; a view's head has Add to dashboard | a saved view, or a view tile on the dashboard |
+| A table or chart of an analytics view | `/analytics`; each panel of a view has Add to dashboard | a saved view, or a view's or an analytics table's tile on the dashboard; inside Add a Tile the line is left out, its Analytics group saying it |
 | A weekly briefing, this week so far | `/segments`; a segment's or a buyer's page has Save this briefing | a briefing; the line waits for the `briefings` table |
 | Your organization's figures and matching notices | `/account/organization` | a claim; the line waits for the `org_claims` table |
 | API requests today | `/account/keys` | a key not revoked; the line shows only on a plan with the keyed API (`api`) |
@@ -3170,14 +3201,16 @@ panels' table).
 
 - **Ultra**, whether or not Ultra is on sale (a grant by hand included): the
   tabs, the tiles, Add a Tile, More Kinds of Tile while a kind needs a step
-  first, and Add to dashboard on each analytics view's head, on each saved
-  search a tile can show, on each briefing of the searches page and on each
-  row of the saved views page.
+  first, and Add to dashboard in each panel of an analytics view (with the
+  panel's anchor), on each saved search a tile can show, on each briefing
+  of the searches page and on each row of the saved views page.
 - **Free and Pro while Ultra is on sale**: the head, What the Dashboard Holds
   ("Pages of tiles you choose from what the site already shows you: 5
   dashboards of 24 tiles each.", Ultra's figures from `RULES`; then the
-  nine kinds, one sentence each; the lists say they show as many rows as a
-  tile's size holds), the gate line with Plans and prices, and the three
+  kinds, one sentence each (`TEASE_KINDS`: an analytics table, drawn in
+  full, in place of a view's first chart, and a heading or a note; the lists
+  say they show as many rows as a tile's size holds), the gate line with
+  Plans and prices, and the three
   plan cards, Ultra's link the page's filled button. No records read, no
   script. The same at any dashboard's address.
 - **Free and Pro while Ultra is off sale**: the site's 404, as before Ultra.
@@ -3191,8 +3224,91 @@ panels' table).
   show it in the hollow ring, muted. Only beside Ultra's card: the two cards
   drawn while Ultra is off sale keep their rows. The privacy page (while
   Ultra is on sale) says a dashboard keeps its name, its place among the
-  account's dashboards, its tiles, their places and sizes and their own
-  choices, all deleted with the account.
+  account's dashboards, its tiles, their places and sizes, their own
+  choices and the text of a note the reader types, all deleted with the
+  account.
+
+### Analytics tables
+
+An analytics table (kind `analytic`) is one table of a buyer's, an
+organization's or a segment's analytics view (`VIEW_TABLES`: 8, 6 and 7 of
+them) as a tile of its own, for its subject at a source and a period, drawn
+in full: the panel's chart or charts and its table, as the view draws them.
+
+- **Its ref** is the view's address as a view's tile writes it (the path,
+  then `source` and the period, `years` or `from` and `to`), then, for the
+  share table alone, its `segment` and the organizations chosen (`vs`, in
+  the view's order), then the table's anchor:
+  `/buyers/pwgsc-tpsgc/analytics?source=awards&years=10#table-records`,
+  `/organizations/org-a000000001/analytics?source=awards&years=10&segment=81#table-share`.
+  `analyticRef` reads it through the checks a view's ref passes
+  (`viewRef`) and refuses a table its view does not draw, and the share
+  table without a segment; `analyticAddress` writes it in its one form. So
+  the same table once on a dashboard (kind and ref), two tables of one view
+  are two tiles, and the ref is the address its Open leads to. `opts` stays
+  ''.
+- **Its reads** are the statements the view reads the table with
+  (`analyticQueries` over `buyerQueries`, `orgQueries`,
+  `segmentQueries`), each bounded and indexed as on the view: a ranked
+  table also reads the view's first table, whose value its shares are of,
+  and the share table reads the segment's largest organizations with it.
+  The buyer's or the organization's name is read by its key
+  (`BUYER_NAME_SQL`, `ORG_NAME_SQL`); a segment's is its label. All of a
+  page view's tables go in the page's one records batch.
+- **Its drawing** is the view's (`analyticBody`, the same components the
+  page draws with, given a `TileFit`): the rows the tile's height holds
+  (newest years first, the largest first), every chart to the tile's width
+  and height (`analyticFit`; the plots take the rows' room when the read
+  has fewer rows than the tile holds, `analyticPlot`), no sorting in the
+  tile, and none of the panel's forms (the share table's choice of segment
+  and organizations stays on the page; the tile keeps the ones its ref
+  names). What the view withholds stays withheld: a record whose supplier
+  is not published reads "Not stated". In a tile narrower than 960 px the
+  table's secondary columns rest as the page's do from 700 to 1,279 px
+  (`.dash-rest`); narrower than the table itself, it stacks into labelled
+  rows, every column a line as on a phone (`.dash-stack-540`,
+  `.dash-stack-640`, by the table's least width), and ranked bars put each
+  name on its own line. No table widens its tile.
+- **Its head** is the panel's title with the subject's name; its foot the
+  source and period (the contracts ending, which follow neither, their
+  first day), the rows shown of all there are, and Open, which leads to the
+  view at the table's anchor.
+- **A view's tile from before** (kind `view`) draws, as it is stored, as
+  its view's first table (a buyer's quarters, an organization's years, a
+  segment's buyers and organizations), with the same head and foot; a saved
+  view's tile keeps following its saved view and its name.
+- **The analytics pages**: for an account that holds the dashboard, each
+  panel's head carries the panel's own Add to dashboard beside its CSV
+  link (link style; with several dashboards, their names under it) and the
+  panel's heading its anchor (`table-<name>`); a panel whose table does not
+  apply to the source (a segment's table on a source without segments, the
+  competition of grants, the growth of a source that numbers no versions,
+  the share table without a segment) offers none. The page head's own Add
+  to dashboard is gone. Every other reader's analytics pages are byte for
+  byte as they were (compared when the tables were built, on each view,
+  signed out, Free and Pro, on and off sale, both languages);
+  `site/test/dashboard.test.ts` holds Ultra's page to Pro's but for the
+  controls, the anchors and Ultra's period, and finds neither on any other
+  reader's.
+
+### Text tiles
+
+A text tile (kind `text`) is a heading or a note the reader types. Its ref
+is an id of its own, so two notes can sit on one dashboard; its text is in
+`opts` as `{"text": ...}`. The text is plain: line breaks kept (blank lines
+past one in a row dropped), every other control character dropped, 500
+characters at most (`NOTE_MAX`, counted in characters, never cutting one in
+half), cleaned on its add, on its edit and again when read. It is drawn as
+text, never as markup or a link, its line breaks kept. One short line (80
+characters at most) is the tile's heading; anything else is a note under a
+heading only assistive technology reads. An `opts` that does not parse
+draws as an empty note, never a fault. The tile has no head band, no foot
+and no Open; its menu leads with Edit, a `details` element with the text in
+a field and Save (`POST /account/dashboard/tiles/:id/text`), never a
+browser dialog, then the moves, Move to and Remove as any tile's. It is
+added from Add a Tile's Text group; an add with no text adds nothing
+(`?m=text_empty`). It is kept only with the grid's tables
+(*The three states of storage*).
 
 ### Operator step
 

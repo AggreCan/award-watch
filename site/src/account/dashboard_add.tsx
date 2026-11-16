@@ -1,5 +1,5 @@
 // "Add to dashboard": the one control an Ultra account gets beside what can
-// become a tile (an analytics view's head, a saved search's row, a
+// become a tile (each panel of an analytics view, a saved search's row, a
 // briefing's row, a saved view's row). It posts the tile's kind and its ref to the dashboard
 // (dashboard.tsx addPanelPost), which keeps it within the plan's figure and
 // answers on the dashboard itself. Callers draw it only for an account that
@@ -63,10 +63,27 @@ export async function dashboardAccount(c: Context<AppEnv>): Promise<Account | nu
   return read?.state === "ok" && holdsDashboard(read.account.plan) ? read.account : null;
 }
 
-// An analytics view's address as a panel's ref (dashboard.tsx viewRef reads it
+// An analytics view's address as a tile's ref (dashboard.tsx viewRef reads it
 // back): its path, then its source and its period, the keys in order.
 export function viewPanelRef(base: string, f: { source: string; years: number; first: number; last: number; custom: boolean }): string {
   return f.custom ? `${base}?from=${f.first}&source=${f.source}&to=${f.last}` : `${base}?source=${f.source}&years=${f.years}`;
+}
+
+// The anchor of a table's panel on its analytics page, which the table's tile
+// opens at: drawn only for an account that holds the dashboard.
+export const anchorOf = (table: string): string => `table-${table}`;
+
+// One table of an analytics view as a tile's ref (dashboard.tsx analyticRef
+// reads it back): the view's address as viewPanelRef writes it, then what
+// the table keeps of the rest of the address (the share table's segment and
+// organizations, in the view's own order), then the table's anchor. So two
+// tables of one view are two items, and the ref is the address the tile opens.
+export function analyticPanelRef(
+  base: string, f: { source: string; years: number; first: number; last: number; custom: boolean }, table: string,
+  more: Readonly<Record<string, string | readonly string[]>> = {},
+): string {
+  const rest = Object.entries(more).flatMap(([k, v]) => (typeof v === "string" ? [v] : [...v]).map((one) => `&${k}=${encodeURIComponent(one)}`)).join("");
+  return `${viewPanelRef(base, f)}${rest}#${anchorOf(table)}`;
 }
 
 // -- the dashboards' names ---------------------------------------------------------------------

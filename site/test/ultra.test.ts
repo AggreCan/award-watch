@@ -430,7 +430,7 @@ describe("the Terms", () => {
   });
 
   it("say on the privacy page what a dashboard keeps, and on the Data page each paid plan's API figure for the day, only while Ultra is on sale", async () => {
-    const kept = "A dashboard keeps the name you give it, its place among your dashboards, the tiles you chose, the position and size of each, and each tile's own choices.";
+    const kept = "A dashboard keeps the name you give it, its place among your dashboards, the tiles you chose, the position and size of each, each tile's own choices and the text of a note you type.";
     expect(text((await page("/privacy", payEnv())).body)).not.toContain(kept);
     const privacy = text((await page("/privacy", saleEnv())).body);
     expect(privacy).toContain(kept);

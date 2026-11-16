@@ -94,17 +94,127 @@ const lines = (chars: number, px: number) => Math.min(3, Math.max(1, Math.ceil((
 // The body's height inside a tile of h rows, under its head and over its foot.
 export const bodyPx = (h: number, item: boolean): number => tileHeightPx(h) - 2 - (item ? HEAD_ITEM_PX : HEAD_PX) - FOOT_PX;
 
-// A view's chart (the analytics view's first, dashboard.tsx viewJob): its
-// plot's height, each panel's, and its width, from the body less the chart's
-// margins (16 each side), each panel's title (26 for the first, 36 for the
-// next), the axis's labels (24) and the column of figures (70 and a gap of 8).
-function chartFit(w: number, h: number, panels: number): ChartFit {
+const bodyOf = (kind: string, ref: string): Body => (kind === "org" ? BLOCKS[ref as ClaimBlock] ?? BLOCKS.years : BODIES[kind] ?? BLOCKS.years);
+
+// -- a table of an analytics view on a tile (dashboard.tsx kind "analytic", pages/analytics.tsx analyticBody) --------
+
+// What a table's panel draws over its table: one chart (or ranked bars, a bar a row), two charts, a chart an
+// organization (the share table), or nothing. Each shape has its own least and starting size (public/dash-grid.js
+// LEAST, "analytic:<shape>").
+export type AnalyticShape = "chart" | "two" | "share" | "table";
+
+// How a table of a view is built on a tile. lead: the blocks over its charts (a line, the figures). plots: the
+// plots whose height follows the tile's; frame: the charts' own height besides them (titles, the axis, margins).
+// per: what each row listed adds beside its table row (a ranked bar; an organization's own chart in the share
+// table, whose plot is rowPlot), at the tile's width and below its stacking width. row: the table's row as the md layout draws it
+// (src/columns.tsx; a tile narrower than REST_BELOW rests its secondary columns, as the page does from 700 to
+// 1279 px). stack: the tile width below which the table stacks into labelled rows (the stylesheet's container
+// queries, .dash-stack-540 and .dash-stack-640, else the tiles' own 440).
+type AnalyticBody = { shape: AnalyticShape; lead: number; plots: number; frame: number; per: [number, number]; row: Body; stack: number; rowPlot?: number };
+
+// A tile narrower than this inside its border rests its table's secondary columns (styles.css .dash-rest), at
+// least as wide as the widest table of a view (the buyer's quarters, 960 px with every column).
+export const REST_BELOW = 960;
+// A plot's height in the share table: each organization's own chart, a row each.
+export const SHARE_PLOT = CHART_LEAST;
+// The share of the room under the leads a tile gives its charts, before its rows; and the tallest a plot grows when
+// the rows read are fewer than the tile holds.
+const CHART_SHARE = 0.45;
+export const PLOT_MAX = 320;
+
+// A chart's frame: the chart's margins (16 each side), each stack's first title (26) and its axis (24), each
+// further panel's title (36).
+const frameOf = (stacks: number, panels: number): number => 32 + stacks * (26 + 24) + 36 * (panels - stacks);
+// A row of a table by fiscal year: the year, short figures. The current year's row is a line taller (its "(to
+// date)" under the year), once a table (NOW_PX, with the leads), unless its rows are two lines anyway.
+const yearRow = (fixed: number, under: number, cells: number): Body => ({ item: true, lead: 0, fixed, chars: 14, under, cells, least: 37 });
+const NOW_PX = LINE_PX;
+// A ranked table (rank, a name, records, value, share) and its bars, a row each.
+const RANK_ROW: Body = { item: true, lead: 0, fixed: 396, chars: 30, under: 0, cells: 88, least: 37 };
+const RANKED = { lead: 0, plots: 0, frame: BLOCK_PX, per: [28, 52] as [number, number], row: RANK_ROW, stack: 540 };
+// A records table: the title over its reference, the organization or the buyer beside it.
+const recordsRow = (fixed: number, under: number, cells: number): Body => ({ item: true, lead: 0, fixed, chars: 50, under, cells, least: 37 });
+const NONE: [number, number] = [0, 0];
+
+export const ANALYTIC_BODIES: Readonly<Record<string, AnalyticBody>> = {
+  "buyer/quarters": { shape: "chart", lead: 0, plots: 1, frame: frameOf(1, 1), per: NONE, row: yearRow(208, UNDER_PX, 66), stack: 440 },
+  "buyer/values": { shape: "two", lead: NOW_PX, plots: 2, frame: frameOf(1, 2), per: NONE, row: yearRow(340, 0, 66), stack: 540 },
+  "buyer/records": { shape: "table", lead: 0, plots: 0, frame: 0, per: NONE, row: recordsRow(404, 2 * UNDER_PX, 66), stack: 540 },
+  "buyer/segments": { shape: "chart", ...RANKED },
+  "buyer/competition": { shape: "two", lead: NOW_PX, plots: 2, frame: frameOf(1, 2), per: NONE, row: yearRow(368, 0, 66), stack: 540 },
+  // The shares of the largest one, five and ten over the bars, in two lines.
+  "buyer/suppliers": { shape: "chart", ...RANKED, lead: BLOCK_PX + 2 * LINE_PX },
+  "buyer/growth": { shape: "two", lead: 0, plots: 2, frame: frameOf(1, 2), per: NONE, row: yearRow(368, 2 * UNDER_PX, 110), stack: 540 },
+  // What the contracts ending are, a line over two charts of their own, then the quarters.
+  "buyer/due": {
+    shape: "two", lead: BLOCK_PX + 2 * LINE_PX, plots: 2, frame: frameOf(2, 2), per: NONE,
+    row: { item: true, lead: 0, fixed: 356, chars: 24, under: 0, cells: 66, least: 37 }, stack: 540,
+  },
+  "organization/years": { shape: "chart", lead: NOW_PX, plots: 1, frame: frameOf(1, 1), per: NONE, row: yearRow(368, 0, 66), stack: 540 },
+  "organization/records": { shape: "table", lead: 0, plots: 0, frame: 0, per: NONE, row: recordsRow(500, UNDER_PX, 110), stack: 640 },
+  "organization/buyers": { shape: "chart", ...RANKED },
+  "organization/segments": { shape: "chart", ...RANKED },
+  // The segment's line, then each organization's chart over its row of the table.
+  "organization/share": {
+    shape: "share", lead: BLOCK_PX + 2 * LINE_PX, plots: 0, frame: frameOf(1, 1) - 26, per: [36 + SHARE_PLOT, 36 + SHARE_PLOT], rowPlot: SHARE_PLOT,
+    row: { item: true, lead: 0, fixed: 340, chars: 30, under: 0, cells: 66, least: 37 }, stack: 540,
+  },
+  "organization/growth": { shape: "two", lead: 0, plots: 2, frame: frameOf(1, 2), per: NONE, row: yearRow(368, 2 * UNDER_PX, 110), stack: 540 },
+  "segment/years": { shape: "two", lead: NOW_PX, plots: 2, frame: frameOf(1, 2), per: NONE, row: yearRow(400, 0, 88), stack: 540 },
+  "segment/values": { shape: "two", lead: NOW_PX, plots: 2, frame: frameOf(1, 2), per: NONE, row: yearRow(340, 0, 66), stack: 540 },
+  "segment/records": { shape: "table", lead: 0, plots: 0, frame: 0, per: NONE, row: recordsRow(404, 2 * UNDER_PX, 66), stack: 540 },
+  "segment/buyers": { shape: "chart", ...RANKED },
+  "segment/winners": { shape: "chart", ...RANKED },
+  // The count of newcomers, a line over the ranked table.
+  "segment/entrants": { shape: "table", lead: BLOCK_PX + 2 * LINE_PX, plots: 0, frame: 0, per: NONE, row: RANK_ROW, stack: 540 },
+  "segment/due": {
+    shape: "two", lead: BLOCK_PX + 2 * LINE_PX, plots: 2, frame: frameOf(2, 2), per: NONE,
+    row: { item: true, lead: 0, fixed: 356, chars: 24, under: 0, cells: 66, least: 37 }, stack: 540,
+  },
+};
+
+// A table's shape and its tile's size key ("analytic:chart"), by its view and name ("buyer/quarters").
+export const analyticShape = (name: string): AnalyticShape => ANALYTIC_BODIES[name]?.shape ?? "table";
+export const analyticKey = (name: string): string => `analytic:${analyticShape(name)}`;
+
+// The rows a table of a view lists on a tile, at its size, and its charts: each plot's height and its width. held
+// is the rows before the floor of ROWS_MIN, unit a row's height with what it adds (the plots may take the room of
+// the rows a read does not fill, analyticPlot).
+export type AnalyticFit = Fit & { plot: number; width: number; held: number; unit: number };
+
+export function analyticFit(name: string, w: number, h: number): AnalyticFit {
+  const b = ANALYTIC_BODIES[name] ?? ANALYTIC_BODIES["buyer/records"];
   const body = bodyPx(h, true);
-  const height = Math.floor((body - 32 - 26 - 36 * (panels - 1) - 24) / panels);
-  return { width: Math.floor(tileWidthPx(w) - 2 - 32 - 78), height: Math.max(CHART_LEAST, height), panels };
+  const inner = tileWidthPx(w) - 2;
+  const stacked = inner < b.stack;
+  const r = b.row;
+  const row = stacked
+    ? ROW_FRAME_PX + LINE_PX * lines(r.chars, inner - 32) + r.under + r.cells
+    : Math.max(r.least, ROW_FRAME_PX + LINE_PX * lines(r.chars, inner - r.fixed - 16) + r.under);
+  const unit = row + (stacked ? b.per[1] : b.per[0]);
+  let room = body - b.lead - b.frame - (stacked ? 0 : TABLE_HEAD_PX);
+  let plot = b.rowPlot ?? 0;
+  if (b.plots) {
+    const least = b.plots * CHART_LEAST;
+    const total = Math.max(least, Math.min(Math.floor(room * CHART_SHARE), room - ROWS_MIN * unit));
+    plot = Math.min(PLOT_MAX, Math.floor(total / b.plots));
+    room -= plot * b.plots;
+  }
+  const held = Math.floor(room / unit);
+  const width = Math.floor(tileWidthPx(w) - 2 - 32 - 78);
+  return {
+    rows: Math.min(ROWS_MAX, Math.max(ROWS_MIN, held)), stacked, body, held, unit, plot, width,
+    chart: b.plots ? { width, height: plot, panels: b.plots } : null,
+  };
 }
 
-const bodyOf = (kind: string, ref: string): Body => (kind === "org" ? BLOCKS[ref as ClaimBlock] ?? BLOCKS.years : BODIES[kind] ?? BLOCKS.years);
+// Each plot's height once the read gives fewer rows than the tile holds: the rows' room left over shared by the
+// plots, up to PLOT_MAX.
+export function analyticPlot(name: string, fit: AnalyticFit, shown: number): number {
+  const plots = ANALYTIC_BODIES[name]?.plots ?? 0;
+  if (!plots || shown >= fit.rows) return fit.plot;
+  return Math.max(fit.plot, Math.min(PLOT_MAX, fit.plot + Math.floor(((fit.rows - shown) * fit.unit) / plots)));
+}
 
 // The room a tile's list has and the height of one of its rows.
 function measure(kind: string, ref: string, w: number, h: number): { room: number; row: number; stacked: boolean; body: number } {
@@ -118,22 +228,22 @@ function measure(kind: string, ref: string, w: number, h: number): { room: numbe
 }
 
 // The tile's rows (ROWS_MIN to ROWS_MAX), whether its table stacks, and its
-// chart's size. ref names a block of the organization, or a view's address
-// (a segment's view draws two panels).
+// chart's size. ref names a block of the organization, or for an analytics
+// table its view and name ("buyer/quarters", analyticFit); a view's tile is
+// its first table's (dashboard.tsx).
 export function tileFit(kind: string, ref: string, w: number, h: number): Fit {
-  if (kind === "view") return { rows: ROWS_MIN, stacked: false, body: bodyPx(h, true), chart: chartFit(w, h, /^\/segments\//.test(ref) ? 2 : 1) };
+  if (kind === "analytic") return analyticFit(ref, w, h);
   const m = measure(kind, ref, w, h);
   return { rows: Math.min(ROWS_MAX, Math.max(ROWS_MIN, Math.floor(m.room / m.row))), stacked: m.stacked, body: m.body, chart: null };
 }
 
-// How many rows fit before the floor of ROWS_MIN is applied (a chart: whether
-// its plot keeps its least height): what the least and starting sizes in
-// public/dash-grid.js are held to (test/dash-grid.test.ts).
+// How many rows fit before the floor of ROWS_MIN is applied (an analytics
+// table: with its plots at their least height or more): what the least and
+// starting sizes in public/dash-grid.js are held to (test/dash-grid.test.ts).
+// A text tile lists no row, so any size holds it.
 export function rowsHeld(kind: string, ref: string, w: number, h: number): number {
-  if (kind === "view") {
-    const c = chartFit(w, h, /^\/segments\//.test(ref) ? 2 : 1);
-    return Math.floor((bodyPx(h, true) - 32 - 26 - 36 * (c.panels - 1) - 24) / c.panels) >= CHART_LEAST ? ROWS_MAX : 0;
-  }
+  if (kind === "text") return ROWS_MAX;
+  if (kind === "analytic") return analyticFit(ref, w, h).held;
   const m = measure(kind, ref, w, h);
   return Math.floor(m.room / m.row);
 }

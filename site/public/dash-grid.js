@@ -39,20 +39,24 @@ export const BOTH_FROM = 7;
 export const NARROW_BELOW = 6;
 
 /**
- * The least size of each kind of tile: w, h from NARROW_BELOW columns, and hn below that, where the table
- * stacks. Each holds three of the kind's rows at the least (src/account/dashboard_fit.ts reckons them; a test
- * holds the two together). A tile's kind here is its size key (the page's sizeKey): the kind, or the kind and
- * what sets its size apart (a segment's view draws two charts; three blocks of the organization stand taller
- * than the others). A key not listed takes its kind's, and an unknown kind the grid's own least.
- * @type {Readonly<Record<string, { w: number, h: number, hn: number }>>}
+ * The least size of each kind of tile: w, h from NARROW_BELOW columns (or the key's own nb), and hn below that,
+ * where the table stacks. Each holds three of the kind's rows at the least (src/account/dashboard_fit.ts reckons
+ * them; a test holds the two together). A tile's kind here is its size key (the page's sizeKey): the kind, or the
+ * kind and what sets its size apart (an analytics table's shape: a chart over its table, two charts, a chart an
+ * organization, or the table alone, whose wider tables stack below 7 columns; three blocks of the organization
+ * stand taller than the others; a note against a one-line heading). A key not listed takes its kind's, and an
+ * unknown kind the grid's own least.
+ * @type {Readonly<Record<string, { w: number, h: number, hn: number, nb?: number }>>}
  */
 export const LEAST = {
   tenders: { w: 4, h: 7, hn: 10 },
   radar: { w: 4, h: 8, hn: 10 },
   records: { w: 4, h: 6, hn: 9 },
   watches: { w: 3, h: 8, hn: 10 },
-  view: { w: 4, h: 5, hn: 5 },
-  "view:segment": { w: 4, h: 7, hn: 7 },
+  "analytic:chart": { w: 4, h: 10, hn: 14, nb: 7 },
+  "analytic:two": { w: 7, h: 12, hn: 12, nb: 7 },
+  "analytic:share": { w: 4, h: 14, hn: 16, nb: 7 },
+  "analytic:table": { w: 4, h: 12, hn: 13, nb: 7 },
   briefing: { w: 3, h: 4, hn: 4 },
   org: { w: 4, h: 6, hn: 9 },
   "org:share": { w: 4, h: 7, hn: 9 },
@@ -60,16 +64,20 @@ export const LEAST = {
   "org:instruments": { w: 4, h: 7, hn: 8 },
   matches: { w: 4, h: 7, hn: 10 },
   api: { w: 3, h: 7, hn: 8 },
+  text: { w: 3, h: 2, hn: 2 },
+  "text:note": { w: 3, h: 3, hn: 3 },
 };
 
 /**
  * The height a tile of each size key starts at: the five rows each list showed before tiles had sizes, at
- * half the row (dashboard_fit.ts again); the whole row holds as many or more.
+ * half the row (dashboard_fit.ts again); the whole row holds as many or more. An analytics table starts with
+ * three rows or more under its charts at half the row (two charts: at their least width), a heading at one line
+ * and a note at three.
  * @type {Readonly<Record<string, number>>}
  */
 export const START_H = {
-  tenders: 10, radar: 11, records: 9, watches: 11, view: 7, "view:segment": 8, briefing: 6, org: 9, "org:share": 8, "org:ending": 11,
-  "org:instruments": 10, matches: 10, api: 9,
+  tenders: 10, radar: 11, records: 9, watches: 11, "analytic:chart": 14, "analytic:two": 12, "analytic:share": 16, "analytic:table": 13, briefing: 6,
+  org: 9, "org:share": 8, "org:ending": 11, "org:instruments": 10, matches: 10, api: 9, text: 2, "text:note": 4,
 };
 
 /** A key's own entry in a table, else its kind's (the part before the colon). @template V @param {Readonly<Record<string, V>>} table @param {string | undefined} key @returns {V | null} */
@@ -94,12 +102,12 @@ function bound(v, lo, hi, fallback) {
 export function least(kind, w = COLS) {
   const l = entry(LEAST, kind);
   const lw = Math.max(W_MIN, l ? l.w : W_MIN);
-  return { w: lw, h: Math.max(H_MIN, l ? (w < NARROW_BELOW ? l.hn : l.h) : H_MIN) };
+  return { w: lw, h: Math.max(H_MIN, l ? (w < (l.nb ?? NARROW_BELOW) ? l.hn : l.h) : H_MIN) };
 }
 
-/** The size a tile of this kind starts at. @param {string | undefined} kind @param {boolean} wide */
+/** The size a tile of this kind starts at: the whole row or half of it, never narrower than its kind's least. @param {string | undefined} kind @param {boolean} wide */
 export function startSize(kind, wide) {
-  const w = wide ? COLS : COLS / 2;
+  const w = Math.max(wide ? COLS : COLS / 2, least(kind).w);
   const h = entry(START_H, kind) ?? H_MIN;
   return { w, h: Math.max(h, least(kind, w).h) };
 }
