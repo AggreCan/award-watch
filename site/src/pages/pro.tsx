@@ -31,7 +31,7 @@ import type { AppEnv } from "../env";
 import { decimal, fmtInt, t, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, page } from "../layout";
 import {
-  PLAN_ROWS, PlanCards, PriceLine, ProTag, SUBSCRIBE_PATH, type PlanReader, type ProPrice, checkoutPrice, planCards, planLine,
+  PLAN_ROWS, PlanCards, PriceLine, ProTag, SUBSCRIBE_PATH, type PlanReader, type ProPrice, checkoutPrice, dashboardsWording, planCards, planLine,
   ultraCheckoutPrice,
 } from "../pro";
 import { CONTACT_EMAIL } from "./docs";
@@ -69,7 +69,8 @@ export function proFaq(lang: Lang, price: ProPrice | null, ultra: ProPrice | nul
 
 // Ultra's section of the page, while it is on sale: what it holds, with
 // Ultra's own figures from the plans and the constants, whom it is for, and
-// its price.
+// its price. The dashboards read as Ultra's plan card reads them.
+const dashboards = dashboardsWording("ultra");
 const UltraSection: FC<{ lang: Lang; ultra: ProPrice }> = ({ lang, ultra }) => (
   <>
     <h2 id="ultra">{t(lang, "propage.ultra_title")}</h2>
@@ -77,7 +78,7 @@ const UltraSection: FC<{ lang: Lang; ultra: ProPrice }> = ({ lang, ultra }) => (
       {t(lang, "propage.ultra_text", {
         searches: fmtInt(RULES.ultra.saved_searches, lang), watches: fmtInt(RULES.ultra.watchlists, lang), years: fmtInt(planYears("ultra"), lang),
         day: fmtInt(keyQuota("ultra")?.perDay ?? 0, lang),
-        panels: fmtInt(RULES.ultra.dashboard, lang),
+        dashboards: t(lang, dashboards.key, dashboards.vars?.(lang)),
       })}
     </p>
     <p>{t(lang, "propage.ultra_who")}</p>

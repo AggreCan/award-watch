@@ -10,8 +10,12 @@
 export const DASHBOARD_STRINGS = {
   // The rail's item, first in "Your lists", with the Ultra chip (src/layout.tsx Rail).
   "rail.dashboard": { en: "Dashboard", fr: "Tableau de bord" },
-  // The Ultra card's own row (src/pro.tsx PLAN_ROWS), and the Ultra message's line: the plan's own figure.
-  "plans.dashboard": { en: "A dashboard of up to {n} panels", fr: "Tableau de bord de {n} panneaux au plus" },
+  // The Ultra card's own row (src/pro.tsx PLAN_ROWS, dashboardsWording), and the Ultra message's line: the plan's own
+  // dashboards ({n}) and tiles a dashboard ({tiles}), the key chosen by the two figures so a 1 reads in the singular.
+  "plans.dashboards": { en: "{n} dashboards of {tiles} tiles each", fr: "{n} tableaux de bord de {tiles} tuiles chacun" },
+  "plans.dashboards_tile": { en: "{n} dashboards of {tiles} tile each", fr: "{n} tableaux de bord de {tiles} tuile chacun" },
+  "plans.dashboard_one": { en: "{n} dashboard of {tiles} tiles", fr: "{n} tableau de bord de {tiles} tuiles" },
+  "plans.dashboard_one_tile": { en: "{n} dashboard of {tiles} tile", fr: "{n} tableau de bord de {tiles} tuile" },
 
   // -- the page -------------------------------------------------------------------------
   "dash.title": { en: "Dashboard", fr: "Tableau de bord" },
@@ -61,6 +65,48 @@ export const DASHBOARD_STRINGS = {
   // The watches tile when no watch had an event in the week's data dates.
   "dash.none_week": { en: "No event on your watches this week.", fr: "Aucun événement sur vos suivis cette semaine." },
 
+  // -- the dashboards' row (dashboard.tsx BoardTabs) -------------------------------------------
+  "dash.boards_nav": { en: "Your dashboards", fr: "Vos tableaux de bord" },
+  // The name of a dashboard the reader has not named, numbered in the order the account made them.
+  "dash.board_n": { en: "Dashboard {n}", fr: "Tableau de bord {n}" },
+  "dash.board_new": { en: "New dashboard", fr: "Nouveau tableau de bord" },
+  "dash.board_edit": { en: "Rename, order or delete", fr: "Renommer, classer ou supprimer" },
+  "dash.board_name": { en: "Name", fr: "Nom" },
+  "dash.board_name_note": {
+    en: "{n} characters at most. Left empty, it is named {label}.",
+    fr: "{n} caractères au plus. Laissé vide, il se nomme {label}.",
+  },
+  "dash.board_rename": { en: "Rename", fr: "Renommer" },
+  "dash.board_earlier": { en: "Move earlier", fr: "Placer avant" },
+  "dash.board_later": { en: "Move later", fr: "Placer après" },
+  "dash.board_delete": { en: "Delete this dashboard", fr: "Supprimer ce tableau de bord" },
+  // The question inside Delete this dashboard, by the dashboard's count of tiles.
+  "dash.board_delete_q": { en: "Delete the dashboard {name} and its {n} tiles?", fr: "Supprimer le tableau de bord {name} et ses {n} tuiles?" },
+  "dash.board_delete_q_one": { en: "Delete the dashboard {name} and its tile?", fr: "Supprimer le tableau de bord {name} et sa tuile?" },
+  "dash.board_delete_q_none": { en: "Delete the dashboard {name}?", fr: "Supprimer le tableau de bord {name}?" },
+  "dash.board_delete_last": {
+    en: "It is the account's only dashboard: its tiles are removed and it stays, empty.",
+    fr: "C'est le seul tableau de bord du compte : ses tuiles sont retirées et il reste, vide.",
+  },
+  "dash.board_delete_yes": { en: "Delete", fr: "Supprimer" },
+  // What a post on the dashboards says once it is done ({boards}: the plan's figure; {name}: the dashboard named).
+  "dash.boards_full": {
+    en: "The account holds its {boards} dashboards. Delete one to make another.",
+    fr: "Le compte contient ses {boards} tableaux de bord. Supprimez-en un pour en créer un autre.",
+  },
+  "dash.board_renamed": { en: "The dashboard was renamed.", fr: "Le tableau de bord a été renommé." },
+  "dash.board_deleted": { en: "The dashboard was deleted.", fr: "Le tableau de bord a été supprimé." },
+  "dash.board_emptied": {
+    en: "The dashboard's tiles were removed. It is the account's only dashboard, so it stays.",
+    fr: "Les tuiles du tableau de bord ont été retirées. C'est le seul tableau de bord du compte : il reste.",
+  },
+  "dash.moved": { en: "The tile was moved to {name}.", fr: "La tuile a été déplacée vers {name}." },
+  "dash.move_exists": { en: "The dashboard {name} shows this already.", fr: "Le tableau de bord {name} présente déjà ce contenu." },
+  "dash.move_full": {
+    en: "The dashboard {name} holds its {cap} tiles. Remove one there to make room.",
+    fr: "Le tableau de bord {name} contient ses {cap} tuiles. Retirez-en une là pour faire de la place.",
+  },
+
   // -- a tile's handles and its menu (dashboard.tsx DashTile) -------------------------------------
   "dash.grip": { en: "Move: {title}", fr: "Déplacer : {title}" },
   "dash.corner": { en: "Resize: {title}", fr: "Redimensionner : {title}" },
@@ -82,6 +128,9 @@ export const DASHBOARD_STRINGS = {
   "dash.taller": { en: "Taller", fr: "Plus haute" },
   "dash.shorter": { en: "Shorter", fr: "Moins haute" },
   "dash.remove": { en: "Remove", fr: "Retirer" },
+  // Move To: the head of the other dashboards' names in a tile's menu, and each name's words for assistive technology.
+  "dash.move_to": { en: "Move to", fr: "Déplacer vers" },
+  "dash.move_to_name": { en: "Move to {name}", fr: "Déplacer vers {name}" },
 
   // -- what the page's script says (public/dashboard.js): the status line and the live region -------------------
   "dash.status_saving": { en: "Saving the layout.", fr: "Enregistrement de la disposition." },
@@ -159,9 +208,10 @@ export const DASHBOARD_STRINGS = {
 
   // -- what a Free or Pro reader sees -------------------------------------------------------------
   "dash.what_title": { en: "What the Dashboard Holds", fr: "Ce que contient le tableau de bord" },
+  // {line} is Ultra's plan line (src/pro.tsx dashboardsWording): "5 dashboards of 24 tiles each".
   "dash.what_lead": {
-    en: "One page of up to {cap} panels you choose from what the site already shows you.",
-    fr: "Une page d'au plus {cap} panneaux que vous choisissez parmi ce que le site vous montre déjà.",
+    en: "Pages of tiles you choose from what the site already shows you: {line}.",
+    fr: "Des pages de tuiles que vous choisissez parmi ce que le site vous montre déjà : {line}.",
   },
   // The nine kinds, one sentence each, in PANEL_KINDS order. A list shows as many rows as its size holds.
   "dash.what_tenders": {
@@ -203,7 +253,7 @@ export const DASHBOARD_STRINGS = {
   "dash.gate": { en: "The dashboard is part of Ultra.", fr: "Le tableau de bord fait partie d'Ultra." },
   // The privacy page's line (account/privacy.tsx), while Ultra is on sale.
   "dash.privacy": {
-    en: "A dashboard keeps the tiles you chose, the position and size of each, and each tile's own choices. A tile names a saved search, a briefing, an analytics view's address or a block of your organization's page. The tiles are deleted with the account.",
-    fr: "Un tableau de bord conserve les tuiles que vous avez choisies, la position et la taille de chacune, et les choix propres à chaque tuile. Une tuile nomme une recherche enregistrée, un bulletin, l'adresse d'une vue d'analyse ou un bloc de la page de votre organisation. Les tuiles sont supprimées avec le compte.",
+    en: "A dashboard keeps the name you give it, its place among your dashboards, the tiles you chose, the position and size of each, and each tile's own choices. A tile names a saved search, a briefing, an analytics view's address or a block of your organization's page. The dashboards and their tiles are deleted with the account.",
+    fr: "Un tableau de bord conserve le nom que vous lui donnez, sa place parmi vos tableaux de bord, les tuiles que vous avez choisies, la position et la taille de chacune, et les choix propres à chaque tuile. Une tuile nomme une recherche enregistrée, un bulletin, l'adresse d'une vue d'analyse ou un bloc de la page de votre organisation. Les tableaux de bord et leurs tuiles sont supprimés avec le compte.",
   },
 } as const satisfies Record<string, { en: string; fr: string }>;

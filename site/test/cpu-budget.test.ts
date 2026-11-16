@@ -557,8 +557,24 @@ const DASH_TILES = ([
   ["watches", "", 0, 29, 12, 11], ["view", "/organizations/org-a000000001/analytics?source=awards&years=10", 0, 40, 6, 8], ["briefing", B1, 6, 40, 3, 4],
   ["org", "years", 9, 40, 3, 9], ["org", "ending", 0, 49, 12, 16], ["matches", "", 0, 65, 7, 12], ["api", "", 7, 65, 5, 8],
 ] as const).map(([kind, ref, x, y, w, h], i) => ({ id: `${i}`.padStart(32, "d"), kind, ref, opts: "", x, y, w, h }));
+// A dashboard at Ultra's figure of 24 tiles: the twelve above and twelve more of the kinds that read the records
+// database (two more tender searches, the 6-month list and a saved search of one, a buyer's and a segment's records,
+// a buyer's and a segment's analytics view, a second briefing, three more blocks of the organization), at sizes from
+// the least to the whole row, under the others.
+const S4 = "5".repeat(32);
+const S5 = "6".repeat(32);
+const S6 = "7".repeat(32);
+const S7 = "8".repeat(32);
+const S8 = "9".repeat(32);
+const B2 = "a".repeat(32);
+const DASH_TILES_24 = [...DASH_TILES, ...([
+  ["tenders", S4, 0, 77, 6, 10], ["tenders", S5, 6, 77, 6, 12], ["radar", "6m", 0, 89, 12, 11], ["radar", S6, 0, 100, 4, 16], ["records", S7, 4, 100, 4, 9],
+  ["records", S8, 8, 100, 4, 9], ["view", "/buyers/pwgsc-tpsgc/analytics?source=awards&years=10", 0, 116, 8, 9],
+  ["view", "/segments/81/analytics?source=awards&years=10", 8, 116, 4, 9], ["briefing", B2, 0, 125, 3, 6], ["org", "segments", 3, 125, 9, 9],
+  ["org", "share", 0, 134, 6, 8], ["org", "buyers", 6, 134, 6, 12],
+] as const).map(([kind, ref, x, y, w, h], i) => ({ id: `${i + 12}`.padStart(32, "d"), kind, ref, opts: "", x, y, w, h }))];
 
-function ultraAccounts(tokenHash: string): D1Database {
+function ultraAccounts(tokenHash: string, tiles: readonly Record<string, unknown>[] = DASH_TILES): D1Database {
   const at = DASH_AT;
   const session = {
     id: FIT_SESSION_ID, token_hash: tokenHash, expires_at: "2999-01-01T00:00:00.000Z", revoked_at: null, last_seen_at: at, user_id: "budget-ultra",
@@ -569,17 +585,26 @@ function ultraAccounts(tokenHash: string): D1Database {
     if (sql.includes("FROM entitlements e LEFT JOIN entitlement_tiers")) {
       return [{ id: "e-ultra", plan: "ultra", starts_at: "2026-01-01T00:00:00.000Z", ends_at: null, created_at: "2026-01-01T00:00:00.000Z", revoked_at: null }];
     }
-    if (sql.includes("FROM dashboards")) return [{ id: "b".repeat(32) }];
-    if (sql.includes("FROM dashboard_tiles")) return DASH_TILES;
+    // The account's one dashboard (dashboard.tsx BOARDS_SQL), then its tiles (TILES_SQL): both statements name both tables.
+    if (sql.startsWith("SELECT d.id, d.name")) return [{ id: "b".repeat(32), name: "", pos: 0, created_at: at, n: tiles.length }];
+    if (sql.startsWith("SELECT id, dashboard_id")) return tiles.map((x) => ({ ...x, dashboard_id: "b".repeat(32) }));
     if (sql.includes("FROM saved_searches")) {
       return [
         { id: S1, kind: "tenders", params: "/tenders?segment=82", label: "Notices in segment 82", lang: "en", created_at: at, deliver: "off" },
         { id: S2, kind: "tenders", params: "/tenders?q=services", label: "Notices with services", lang: "en", created_at: at, deliver: "off" },
         { id: S3, kind: "organization", params: "/organizations/org-a000000001", label: "Exemplar", lang: "en", created_at: at, deliver: "off" },
+        { id: S4, kind: "tenders", params: "/tenders?segment=72", label: "Notices in segment 72", lang: "en", created_at: at, deliver: "off" },
+        { id: S5, kind: "tenders", params: "/tenders?segment=43", label: "Notices in segment 43", lang: "en", created_at: at, deliver: "off" },
+        { id: S6, kind: "expiring", params: "/expiring/12m?buyer=pwgsc-tpsgc", label: "Ending at PSPC", lang: "en", created_at: at, deliver: "off" },
+        { id: S7, kind: "buyer", params: "/buyers/pwgsc-tpsgc", label: "PSPC", lang: "en", created_at: at, deliver: "off" },
+        { id: S8, kind: "segment", params: "/segments/81", label: "Segment 81", lang: "en", created_at: at, deliver: "off" },
       ];
     }
     if (sql.includes("FROM briefings")) {
-      return [{ id: B1, kind: "segment", subject: "81", segment: "", label: "81", lang: "en", created_at: at, deliver: "off", last_delivered_at: null }];
+      return [
+        { id: B1, kind: "segment", subject: "81", segment: "", label: "81", lang: "en", created_at: at, deliver: "off", last_delivered_at: null },
+        { id: B2, kind: "segment", subject: "43", segment: "", label: "43", lang: "en", created_at: at, deliver: "off", last_delivered_at: null },
+      ];
     }
     if (sql.startsWith("SELECT organization_id, segment, competitors")) {
       return [{ organization_id: "org-a000000001", segment: null, competitors: "[]", created_at: at, updated_at: at }];
@@ -704,5 +729,32 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
     expect(html).not.toContain("This tile cannot be read right now.");
     const r = await signedInRatio("/account/dashboard", 8, accounts, '<div class="dash-grid" id="dash-grid">', { RECORDS: dashRecords });
     expect(r, `/account/dashboard, 12 tiles ${r.toFixed(2)}`).toBeLessThanOrEqual(DASHBOARD_BOUND);
+  }, 120_000);
+
+  // A dashboard at Ultra's figure, 24 tiles (B1b, 2026-11-15): about three times the larger of two ratios measured
+  // then (in brackets), rounded up, beside the twelve tiles' in the same run (in the comment after).
+  const DASHBOARD_24_BOUND = 44; // [14.62, 14.62]; twelve tiles [8.62, 8.77]
+  // The records batch of that page: the state row and the tiles' 23 statements (two each for a window or a saved
+  // search of contracts ending, the organization's ending and share blocks, and a buyer's or an organization's view;
+  // one each for a records search, a segment's view and the other blocks; none for the tiles read from files or
+  // from their own readers).
+  const DASHBOARD_24_STATEMENTS = 24;
+  it("keeps an Ultra account's dashboard of 24 tiles within its bound, its records read in one batch", async () => {
+    clearParsedCache();
+    clearClosingCache();
+    const accounts = ultraAccounts(await sha256Hex(SECRET), DASH_TILES_24);
+    // What the entry times: 24 tiles, each drawn from its reads at its size, none unreadable; the tiles' records
+    // statements in one batch (the watches' and the two briefings' readers send their own, as on any page).
+    const batches: number[] = [];
+    const records = { ...dashRecords, batch: (list: D1PreparedStatement[]) => (batches.push(list.length), dashRecords.batch(list)) } as D1Database;
+    const first = await app.request("/account/dashboard", { headers: { "sec-fetch-mode": "navigate", cookie: COOKIE } },
+      { ...env, ASSETS: assetsOf(FIT_BODIES, "v1-fit"), ACCOUNTS: accounts, ACCOUNTS_ENABLED: "true", RECORDS: records });
+    const html = await first.text();
+    expect(html.match(/<section class="panel dash-tile/g)).toHaveLength(24);
+    expect(html).not.toContain("This tile cannot be read right now.");
+    expect(html).toContain('<p class="muted small">24 of 24 tiles</p>');
+    expect(Math.max(...batches), batches.join(" ")).toBe(DASHBOARD_24_STATEMENTS);
+    const r = await signedInRatio("/account/dashboard", 8, accounts, '<div class="dash-grid" id="dash-grid">', { RECORDS: dashRecords });
+    expect(r, `/account/dashboard, 24 tiles ${r.toFixed(2)}`).toBeLessThanOrEqual(DASHBOARD_24_BOUND);
   }, 120_000);
 });

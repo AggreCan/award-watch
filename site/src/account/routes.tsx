@@ -62,14 +62,22 @@
 //   POST /account/billing/change       a move between Pro and Ultra, on the portal    (session, CSRF)
 //   POST /account/billing/refund       refund the first payment, then cancel at once  (session read from the database, CSRF)
 //   POST /account/billing/webhook      the payment service's notices                  (signature only)
-//   GET  /account/dashboard            the dashboard's tiles on the grid (?edit=1 is the same page) (session; Ultra,
-//                                      else what it holds while Ultra is on sale, else the site's 404)
-//   POST /account/dashboard/panels     add a tile (kind and ref, or panel)             (session, CSRF, plan's figure)
-//   POST /account/dashboard/layout     the page's script saves the layout (JSON in layout), answers the layout kept
-//                                                                                      (session, CSRF)
+//   GET  /account/dashboard            the first dashboard's tiles on the grid (?edit=1 is the same page) (session;
+//                                      Ultra, else what it holds while Ultra is on sale, else the site's 404)
+//   GET  /account/dashboard/:board     a dashboard by its id, the same page; one the account does not hold goes
+//                                      to the first                                    (session; as above)
+//   POST /account/dashboard/panels     add a tile (kind and ref, or panel) to a dashboard (board, else the first)
+//                                                                                      (session, CSRF, plan's figure)
+//   POST /account/dashboard/layout     the page's script saves a dashboard's layout (?board=, JSON in layout),
+//                                      answers the layout kept                         (session, CSRF)
+//   POST /account/dashboard/boards     a new dashboard, then its page                  (session, CSRF, plan's figure)
+//   POST /account/dashboard/boards/:id/rename  a dashboard's name (name)               (session, CSRF)
+//   POST /account/dashboard/boards/:id/move    earlier or later among the account's (dir) (session, CSRF)
+//   POST /account/dashboard/boards/:id/delete  delete it and its tiles (confirm=yes)   (session, CSRF)
 //   GET  /account/dashboard/tiles/:id  one tile at a size (?w=&h=), for the script     (session, CSRF in X-CSRF-Token)
 //   POST /account/dashboard/tiles/:id/move     a step left, right, up or down (dir)    (session, CSRF)
 //   POST /account/dashboard/tiles/:id/size     wider, narrower, taller, shorter (to)   (session, CSRF)
+//   POST /account/dashboard/tiles/:id/board    to another of the account's dashboards (board) (session, CSRF)
 //   POST /account/dashboard/tiles/:id/delete   remove it                               (session, CSRF)
 //   POST /account/dashboard/panels/:id/move|width|delete  the earlier page's three posts, kept for a page
 //                                      loaded before the grid                         (session, CSRF)
@@ -124,11 +132,12 @@ import {
 import { bugPage, fileBug } from "./bugs";
 import { refererPath, safeNext } from "./next";
 import {
-  CSRF_HEADER, type EditOp, addPanelPost, dashboardOpen, dashboardPage, deletePanelsFor, deletePanelsOf, editPanelPost, layoutPost, tileFragment,
-  tileReadAllowed,
+  type BoardOp, CSRF_HEADER, type EditOp, addPanelPost, boardName, boardPost, dashboardOpen, dashboardPage, deletePanelsFor, deletePanelsOf,
+  editPanelPost, layoutPost, tileFragment, tileReadAllowed,
 } from "./dashboard";
 import { STEPS, type Step } from "../../public/dash-grid.js";
-import { DASHBOARD_PATH } from "./dashboard_rule";
+import { boardChoices } from "./dashboard_add";
+import { DASHBOARD_PATH, holdsDashboard } from "./dashboard_rule";
 import { type Plan, RULES, allowed, planFor, savedViewCap, watchCap } from "./entitlements";
 import {
   FEEDS_MAX, FEED_SEARCH_KIND, type FeedKind, type FeedRead, type FeedRow, createFeed, deleteFeeds, feedAddress, feedCalendar, feedName,
@@ -186,7 +195,8 @@ account.use("*", async (c, next) => {
   await next();
   // A calendar feed is read by a calendar app, never a page: private as
   // well; so is the organization an account claims, its page and its files,
-  // and the notices matching it; and the dashboard, whose 404 stays as it was, with its posts and its one read.
+  // and the notices matching it; and the dashboard, whose 404 stays as it was, with each dashboard's own address,
+  // its posts and its one read.
   const own = FEED_ICS.test(c.req.path) || c.req.path === ORG_PATH || c.req.path.startsWith(`${ORG_PATH}/`) || c.req.path === MATCH_PATH ||
     (c.req.path === DASHBOARD_PATH && c.res.status === 200) || c.req.path.startsWith(`${DASHBOARD_PATH}/`);
   c.header("Cache-Control", own ? "private, no-store" : "no-store");
@@ -570,15 +580,17 @@ async function labelIn(c: Context<AppEnv>, lang: Lang, row: { kind: string; para
 
 async function searchesPage(c: Context<AppEnv>, who: Account, extra: { errors?: Key[]; url?: string; status?: number } = {}) {
   const lang = c.get("lang");
-  const [stored, waiting, last, feeds, briefings] = await Promise.all([
+  // An Ultra account's dashboards, for Add to dashboard's choice when it holds several (dashboard_add.tsx).
+  const [stored, waiting, last, feeds, briefings, boards] = await Promise.all([
     listSearches(c.env, who.userId), pendingInterest(c.env, who.email, who.userId), lastDeliveries(c.env, who.userId),
     listFeeds(c.env, who.userId), listBriefings(c.env, who.userId),
+    holdsDashboard(who.plan) ? boardChoices(c.env, who.userId, lang) : Promise.resolve([]),
   ]);
   // No briefings table on the database yet: the page leaves the panel out.
   const runs = briefings?.length ? await lastBriefingRuns(c.env, who.userId) : new Map();
   const briefed = briefings === null ? null : {
     n: briefings.length,
-    panel: <BriefingsPanel lang={lang} account={who} briefings={briefings.map((b) => ({ ...b, last: runs.get(b.id) ?? null }))} />,
+    panel: <BriefingsPanel lang={lang} account={who} briefings={briefings.map((b) => ({ ...b, last: runs.get(b.id) ?? null }))} boards={boards} />,
   };
   const searches = await Promise.all(stored.map(async (s) => ({ ...s, label: await labelIn(c, lang, s), last: last.get(s.id) ?? null })));
   const pending = await Promise.all(waiting.map(async (r) => ({ ...r, label: await labelIn(c, lang, r) })));
@@ -593,7 +605,7 @@ async function searchesPage(c: Context<AppEnv>, who: Account, extra: { errors?: 
     ? who.plan === "free" ? t(lang, "account.cap_free", { cap }) : paidCapLine(lang, stored.length + (briefings?.length ?? 0), cap, ultra)
     : SEARCH_NOTICE[m] ? t(lang, SEARCH_NOTICE[m]) : null;
   return accountPage(c, t(lang, "account.searches_title"),
-    searchesView(lang, who, { searches, cap, pending, notice, errors: extra.errors, url: extra.url, calendar, briefings: briefed, ultra }),
+    searchesView(lang, who, { searches, cap, pending, notice, errors: extra.errors, url: extra.url, calendar, briefings: briefed, ultra, boards }),
     extra.status ?? 200);
 }
 
@@ -1534,8 +1546,8 @@ account.post("/bug", async (c) => {
 
 // While Ultra is not on sale the address is the site's 404 for anyone who does
 // not hold it (dashboardOpen), so it reads as it did before Ultra; a reader
-// signed out signs in and comes back (?next).
-account.get("/dashboard", async (c) => {
+// signed out signs in and comes back (?next), to the dashboard the address names.
+async function dashboardGet(c: Context<AppEnv>, board: string | null): Promise<Response> {
   const open = await dashboardOpen(c, async () => {
     if (!getCookie(c, SESSION_COOKIE)) return { state: "none" };
     const read = await readSession(c);
@@ -1544,7 +1556,14 @@ account.get("/dashboard", async (c) => {
   if (!open) return c.notFound();
   const who = await signedIn(c);
   if (who instanceof Response) return who;
-  return guarded(c, () => dashboardPage(c, who));
+  return guarded(c, () => dashboardPage(c, who, board));
+}
+
+account.get("/dashboard", (c) => dashboardGet(c, null));
+// A dashboard's id is 32 hexadecimal characters; any other path under the address is the site's 404.
+account.get("/dashboard/:board{[0-9a-f]+}", (c) => {
+  const board = c.req.param("board") ?? "";
+  return board.length === 32 ? dashboardGet(c, board) : c.notFound();
 });
 
 account.post("/dashboard/panels", async (c) => {
@@ -1561,6 +1580,7 @@ const MOVES: ReadonlySet<Step> = new Set(["left", "right", "up", "down"]);
 const TILE_OPS: Record<string, (fields: Record<string, string>) => EditOp | null> = {
   move: (f) => (isStep(f.dir) && MOVES.has(f.dir) ? { op: "step", step: f.dir } : null),
   size: (f) => (isStep(f.to) && !MOVES.has(f.to) ? { op: "step", step: f.to } : null),
+  board: (f) => (typeof f.board === "string" && /^[0-9a-f]{32}$/.test(f.board) ? { op: "board", board: f.board } : null),
   delete: () => ({ op: "delete" }),
 };
 const PANEL_OPS: Record<string, (fields: Record<string, string>) => EditOp | null> = {
@@ -1569,7 +1589,7 @@ const PANEL_OPS: Record<string, (fields: Record<string, string>) => EditOp | nul
   delete: () => ({ op: "delete" }),
 };
 
-account.post("/dashboard/tiles/:id/:op{move|size|delete}", async (c) => {
+account.post("/dashboard/tiles/:id/:op{move|size|board|delete}", async (c) => {
   const post = await signedInPost(c);
   if (post instanceof Response) return post;
   const op = TILE_OPS[c.req.param("op") ?? ""]?.(post.fields) ?? null;
@@ -1583,6 +1603,29 @@ account.post("/dashboard/panels/:id/:op{move|width|delete}", async (c) => {
   const op = PANEL_OPS[c.req.param("op") ?? ""]?.(post.fields) ?? null;
   if (!op) return c.text(t(c.get("lang"), "form.rejected"), 400);
   return guarded(c, () => editPanelPost(c, post.account, c.req.param("id") ?? "", op));
+});
+
+// The dashboards: a new one, and a dashboard's name, its place among the
+// account's and its deletion, which the post must confirm (confirm=yes, the
+// button inside the question); id is a dashboard's own, or "first".
+const BOARD_OPS: Record<string, (fields: Record<string, string>) => BoardOp | null> = {
+  rename: (f) => ({ op: "rename", name: boardName(f.name) }),
+  move: (f) => (f.dir === "earlier" || f.dir === "later" ? { op: "move", dir: f.dir } : null),
+  delete: (f) => (f.confirm === "yes" ? { op: "delete" } : null),
+};
+
+account.post("/dashboard/boards", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  return guarded(c, () => boardPost(c, post.account, "", { op: "new" }));
+});
+
+account.post("/dashboard/boards/:id/:op{rename|move|delete}", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  const op = BOARD_OPS[c.req.param("op") ?? ""]?.(post.fields) ?? null;
+  if (!op) return c.text(t(c.get("lang"), "form.rejected"), 400);
+  return guarded(c, () => boardPost(c, post.account, c.req.param("id") ?? "", op));
 });
 
 // The page's script saving the layout; its answer is JSON, a database fault
@@ -1627,13 +1670,16 @@ async function viewsPage(c: Context<AppEnv>, who: Account): Promise<Response> {
   if (listed === null) return c.notFound();
   const { views, merged } = await followViewAliases(c.env, who.userId, listed);
   for (const id of merged) await deletePanelsFor(c.env, who.userId, ["view"], id);
-  const runs = views.length ? await lastViewRuns(c.env, who.userId) : new Map();
+  const [runs, boards] = await Promise.all([
+    views.length ? lastViewRuns(c.env, who.userId) : Promise.resolve(new Map()),
+    views.length && holdsDashboard(who.plan) ? boardChoices(c.env, who.userId, lang) : Promise.resolve([]),
+  ]);
   const ultra = await ultraOnSale(c.env).catch(() => false);
   const cards = savedViewCap(who.plan) ? null
     : planCards(lang, { price: checkoutPrice(c.env), ultra: await ultraCheckoutPrice(c.env), reader: "free", place: "tease" });
   const m = c.req.query("m") ?? "";
   return accountPage(c, t(lang, "views.title"), viewsView(lang, who, {
-    views: views.map((v) => ({ ...v, last: runs.get(v.id) ?? null })), notice: VIEW_NOTICE[m] ? t(lang, VIEW_NOTICE[m]) : null, ultra, cards,
+    views: views.map((v) => ({ ...v, last: runs.get(v.id) ?? null })), notice: VIEW_NOTICE[m] ? t(lang, VIEW_NOTICE[m]) : null, ultra, cards, boards,
   }));
 }
 

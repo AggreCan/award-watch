@@ -312,7 +312,7 @@ describe("W4: an emptied dashboard", () => {
     expect(res.meta?.changes).toBe(1);
     expect((await ACCOUNTS.prepare("SELECT pos FROM dashboard_panels WHERE user_id = ? AND kind = 'radar'").bind(r.id).first<{ pos: number }>())?.pos).toBe(0);
     const main = mainOf(await page("/account/dashboard", r.cookie, offSale()));
-    expect(main).toContain("1 of 12 tiles");
+    expect(main).toContain("1 of 24 tiles");
     expect(main.match(/class="panel dash-tile/g)).toHaveLength(1);
     expect(dashboard.LAYOUT_MARKER).toBe("layout");
     expect((dashboard.PANEL_KINDS as readonly string[]).includes(dashboard.LAYOUT_MARKER)).toBe(false);

@@ -512,7 +512,7 @@ describe("the plan cards", () => {
     // No comparative: a line names what its own plan gets.
     const COMPARATIVE = /\b(more|higher|above|unlimited|limits above|plus|davantage|supérieure?s?|au-dessus|illimitée?s?)\b/i;
     for (const card of [free, pro, freeFr, proFr]) expect(card.replace(/<[^>]+>/g, " "), card.slice(0, 60)).not.toMatch(COMPARATIVE);
-    // "au plus" is French for "at most", a plan's own bound (plans.dashboard), not a comparison.
+    // "au plus" is French for "at most", a plan's own bound, not a comparison.
     for (const key of allKeys().filter((k) => k.startsWith("plans."))) {
       expect((rawEntry(key).en + " " + rawEntry(key).fr).replace(/\bau plus\b/g, ""), key).not.toMatch(COMPARATIVE);
     }

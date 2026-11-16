@@ -3559,8 +3559,8 @@ const STRINGS = {
   },
   "propage.ultra_title": { en: "Ultra", fr: "Ultra" },
   "propage.ultra_text": {
-    en: "Ultra includes everything in Pro, with these figures: {searches} saved searches and briefings by email, {watches} watches, {years} fiscal years of analytics, API keys of {day} requests a day each, and a dashboard of up to {panels} panels you choose.",
-    fr: "Ultra comprend tout ce que comprend Pro, avec ces chiffres : {searches} recherches et bulletins par courriel, {watches} suivis, {years} exercices d'analyses, des clés d'API de {day} requêtes par jour chacune, et un tableau de bord d'au plus {panels} panneaux que vous choisissez.",
+    en: "Ultra includes everything in Pro, with these figures: {searches} saved searches and briefings by email, {watches} watches, {years} fiscal years of analytics, API keys of {day} requests a day each, and {dashboards}.",
+    fr: "Ultra comprend tout ce que comprend Pro, avec ces chiffres : {searches} recherches et bulletins par courriel, {watches} suivis, {years} exercices d'analyses, des clés d'API de {day} requêtes par jour chacune, et {dashboards}.",
   },
   "propage.ultra_who": {
     en: "For people who follow a whole market: many buyers, segments and competitors at once.",

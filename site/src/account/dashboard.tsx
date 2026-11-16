@@ -1,11 +1,14 @@
-// The dashboard (docs/accounts.md, Dashboard): /account/dashboard, a grid of
-// up to dashboardCap(plan) tiles an Ultra account chooses from what the site
-// already shows it, each at its own place and size on 12 columns
-// (public/dash-grid.js holds the grid's rules; dashboard_fit.ts turns a
-// tile's size into the rows it lists and the size of its chart). routes.tsx
-// mounts the page, its posts and its one read; the rail's item is the
-// shell's (src/layout.tsx, dashboard_rule.ts dashboardInRail); "Add to
-// dashboard" is dashboard_add.tsx; the page's script is public/dashboard.js.
+// The dashboard (docs/accounts.md, Dashboard): up to boardCap(plan)
+// dashboards an Ultra account keeps, each a grid of up to tileCap(plan)
+// tiles it chooses from what the site already shows it, each at its own
+// place and size on 12 columns (public/dash-grid.js holds the grid's rules;
+// dashboard_fit.ts turns a tile's size into the rows it lists and the size
+// of its chart). The first dashboard is at /account/dashboard, every one at
+// /account/dashboard/<id> as well, a row of tabs above the grid leading
+// from one to another. routes.tsx mounts the pages, their posts and the one
+// read; the rail's item is the shell's (src/layout.tsx, dashboard_rule.ts
+// dashboardInRail); "Add to dashboard" is dashboard_add.tsx; the page's
+// script is public/dashboard.js.
 //
 // Each kind of tile is a reader the account pages already have, with a LIMIT
 // of the tile's rows where it lists rows, and nothing else: no new statement
@@ -21,16 +24,21 @@
 // The layout lives in the accounts database, in one of three states, and the
 // page works in each:
 // - the tables dashboards and dashboard_tiles absent (accounts_schema.sql not
-//   applied since the grid): the account's dashboard_panels rows, or the
-//   starting layout, laid out on the grid (fromPanels); the page arranges them
-//   but saves no place or size, and says so; adding and removing go to
-//   dashboard_panels as before, while that table is there;
-// - the tables present and the account holding no dashboard: the same layout,
-//   computed and not stored; the first change of any kind writes the whole
-//   layout as the account's (writeFirst), then applies;
-// - a dashboard stored: its tiles, and dashboard_panels is read no more for it.
+//   applied since the grid): one dashboard, the account's dashboard_panels
+//   rows, or the starting layout, laid out on the grid (fromPanels); the page
+//   arranges them but saves no place or size, and says so; adding and
+//   removing go to dashboard_panels as before, while that table is there; no
+//   tabs, since nothing could keep a second dashboard;
+// - the tables present and the account holding no dashboard: the same layout
+//   as its one dashboard, computed and not stored; the first change of any
+//   kind (a new dashboard, a name, a deletion included) writes the whole
+//   layout as the account's first dashboard (writeFirst), then applies;
+// - dashboards stored: each with its tiles, and dashboard_panels is read no
+//   more for the account.
 // Every layout is clamped and compacted by the grid's rules when it is read
-// and before it is written; a stored place is never trusted.
+// and before it is written; a stored place is never trusted. Each dashboard
+// holds its own tiles: the cap, the briefings' cap and the same item once are
+// each a dashboard's, so an item may sit on two dashboards, once on each.
 //
 // More Kinds of Tile (moreKinds) lists the kinds the account cannot add yet,
 // each with the step that gives it what the tile shows, from the rows above
@@ -61,7 +69,7 @@ import { ClientData, Layout, PageHead, Panel, page, todayOf } from "../layout";
 import { contractReference, radarParams, radarRow, readExpiringQuery, sitePath as recordPath } from "../pages/expiring";
 import { money } from "../pages/shared";
 import { filterTenders, readTenderQuery } from "../pages/tenders";
-import { PlanCards, checkoutPrice, planCards, ultraCheckoutPrice } from "../pro";
+import { PlanCards, checkoutPrice, dashboardsWording, planCards, ultraCheckoutPrice } from "../pro";
 import {
   BUYER_QUARTERS_SQL, EARLIEST_FY, MAX_YEARS, ORG_YEARS_SQL, PERIODS, ULTRA_YEARS, SEGMENT_SOURCES, SEGMENT_YEARS_SQL, SOURCE_NUMBER, type Query, type Read,
   type Row, fiscalLabel, fiscalYearOf, num, orgNumber, readRecords, segmentCode, segmentNumber,
@@ -71,8 +79,9 @@ import { type KeyRow, listKeys } from "./api_keys";
 import { keyUsage, nowOf } from "./api_usage";
 import { briefingLabel } from "./briefing_pages";
 import { type Briefing, briefingPath, listBriefings, readBriefing, weekAnchor } from "./briefings";
+import { BOARD_NAME_MAX, boardLabels } from "./dashboard_add";
 import { type ChartFit, ROWS_MAX, tileFit } from "./dashboard_fit";
-import { DASHBOARD_PATH, dashboardCap, holdsDashboard } from "./dashboard_rule";
+import { DASHBOARD_PATH, boardCap, boardPath, holdsDashboard, missingTiles, tileCap } from "./dashboard_rule";
 import { EVENT_KEY, watchEventLines } from "./digests";
 import { allowed, matchCap, type Plan } from "./entitlements";
 import {
@@ -84,7 +93,7 @@ import {
   BUYER_COUNTS_SQL, BUYER_NAME_SQL, KIND_SOURCES, ORG_COUNTS_SQL, ORG_NAME_SQL, type RecordsKind, SEGMENT_COUNTS_SQL, entityOf, isRecordsKind,
   missingTable,
 } from "./records_deliveries";
-import { type SavedView, listViews } from "./saved_views";
+import { type SavedView, cleanName, listViews } from "./saved_views";
 import { type SavedSearch, listSearches } from "./searches";
 import { newId } from "./secrets";
 import { type Account, csrfValid } from "./session";
@@ -260,7 +269,7 @@ export type Spec = { kind: PanelKind; ref: string; wide: boolean };
 export type AddResult = "added" | "exists" | "full" | "briefings_full" | "unsaved";
 
 const addStatement = (db: D1Database, userId: string, plan: Plan, s: Spec, at: string) =>
-  db.prepare(ADD_PANEL_SQL).bind(newId(), userId, s.kind, s.ref, s.wide ? 1 : 0, at, dashboardCap(plan), BRIEFING_PANELS_MAX);
+  db.prepare(ADD_PANEL_SQL).bind(newId(), userId, s.kind, s.ref, s.wide ? 1 : 0, at, tileCap(plan), BRIEFING_PANELS_MAX);
 
 export async function addPanel(env: Env, who: { userId: string; plan: Plan }, s: Spec, now = new Date()): Promise<AddResult> {
   const db = env.ACCOUNTS!;
@@ -272,7 +281,7 @@ export async function addPanel(env: Env, who: { userId: string; plan: Plan }, s:
       "EXISTS (SELECT 1 FROM dashboard_panels WHERE user_id = ?1 AND kind = ?2 AND ref = ?3) AS here",
     ).bind(who.userId, s.kind, s.ref).first<{ n: number; here: number }>();
     if (row?.here === 1) return "exists";
-    return (row?.n ?? 0) >= dashboardCap(who.plan) ? "full" : "briefings_full";
+    return (row?.n ?? 0) >= tileCap(who.plan) ? "full" : "briefings_full";
   } catch (e) {
     if (missingPanels(e)) return "unsaved";
     throw e;
@@ -289,45 +298,99 @@ async function writeStarter(env: Env, who: { userId: string; plan: Plan }, specs
 
 // -- the tiles' tables ---------------------------------------------------------------------------
 
-export type TileRow = { id: string; kind: string; ref: string; opts: string; x: number; y: number; w: number; h: number };
-// The account's dashboard (its first; one an account for now) and its tiles; null while the tables are absent.
-export type Board = { id: string | null; tiles: TileRow[] };
+export type TileRow = { id: string; dashboard_id?: string; kind: string; ref: string; opts: string; x: number; y: number; w: number; h: number };
+// A dashboard of the account: its id, its name ('' goes by the site's label, dashboard_add.tsx boardLabels), its
+// place among the account's, when it was made, and how many tiles it holds.
+export type BoardRow = { id: string; name: string; pos: number; created_at: string; n: number };
+// The account's dashboards in their order, and the one a request shows: its id (null while none is stored, the
+// first then being the computed one) and its tiles. found is false when the request named a dashboard the account
+// does not hold. Null while the tables are absent.
+export type Board = { boards: BoardRow[]; id: string | null; tiles: TileRow[]; found: boolean };
+// Which dashboard a read is for: one named by its id, the one holding a tile, or else the first.
+export type BoardPick = { board?: string | null; tile?: string | null };
 
-export const BOARD_SQL = "SELECT id FROM dashboards WHERE user_id = ? ORDER BY pos, created_at, id LIMIT 1";
-export const TILES_SQL = "SELECT id, kind, ref, opts, x, y, w, h FROM dashboard_tiles WHERE user_id = ? ORDER BY y, x, id LIMIT 50";
+// The account's dashboards with each one's count of tiles (through idx_dashboard_tiles_board), in order. The
+// LIMIT leaves room past the ceiling, so a dashboard a smaller ceiling would leave is still listed and can be deleted.
+export const BOARDS_SQL =
+  "SELECT d.id, d.name, d.pos, d.created_at, (SELECT COUNT(*) FROM dashboard_tiles t WHERE t.dashboard_id = d.id) AS n " +
+  "FROM dashboards d WHERE d.user_id = ? ORDER BY d.pos, d.created_at, d.id LIMIT 20";
+// The account's first dashboard, for the user bound at the place given.
+const firstOf = (user: string) => `(SELECT id FROM dashboards WHERE user_id = ${user} ORDER BY pos, created_at, id LIMIT 1)`;
+const TILE_COLS = "id, dashboard_id, kind, ref, opts, x, y, w, h";
+// One dashboard's tiles, each statement through idx_dashboard_tiles_board: the first's (?1 the user); a named
+// one's (?2 its id); the one holding a tile (?2 the tile's id), else the first's.
+export const TILES_SQL = `SELECT ${TILE_COLS} FROM dashboard_tiles WHERE user_id = ?1 AND dashboard_id = ${firstOf("?1")} ORDER BY y, x, id LIMIT 50`;
+export const BOARD_TILES_SQL = `SELECT ${TILE_COLS} FROM dashboard_tiles WHERE user_id = ?1 AND dashboard_id = ?2 ORDER BY y, x, id LIMIT 50`;
+export const TILE_BOARD_SQL =
+  `SELECT ${TILE_COLS} FROM dashboard_tiles WHERE user_id = ?1 AND dashboard_id = ` +
+  `COALESCE((SELECT dashboard_id FROM dashboard_tiles WHERE id = ?2 AND user_id = ?1), ${firstOf("?1")}) ORDER BY y, x, id LIMIT 50`;
 
-// The dashboard's row, written with the account's first change unless it is
-// there already (two first changes at once write one): ?1 a new id, ?2 the
-// user, ?3 the time. Its name waits for dashboards that can be named.
+// The first dashboard's row, written with the account's first change unless
+// one is there already (two first changes at once write one): ?1 a new id,
+// ?2 the user, ?3 the time. Its name is '' (the site's label) until renamed.
 export const BOARD_INSERT_SQL =
   "INSERT INTO dashboards (id, user_id, name, pos, created_at) SELECT ?1, ?2, '', 0, ?3 WHERE NOT EXISTS (SELECT 1 FROM dashboards WHERE user_id = ?2)";
-const BOARD_OF = "(SELECT id FROM dashboards WHERE user_id = ?2 ORDER BY pos, created_at, id LIMIT 1)";
 
-// One tile into the account's dashboard, held inside the statement to the
-// plan's figure, to BRIEFING_PANELS_MAX briefings and to the same item once,
-// so two posts at once cannot pass any of them. ?1 the id, ?2 the user, ?3
-// the kind, ?4 the ref, ?5 to ?8 its x, y, w and h, ?9 the time, ?10 the
-// plan's figure, ?11 the briefings' cap. The first change writes each tile of
-// the layout through it too. B1 writes no choices (opts '').
+// Another dashboard, after the account's others, held inside the statement to
+// the plan's figure, so two posts at once cannot pass it: ?1 a new id, ?2 the
+// user, ?3 the time, ?4 the plan's figure.
+export const NEW_BOARD_SQL =
+  "INSERT INTO dashboards (id, user_id, name, pos, created_at) " +
+  "SELECT ?1, ?2, '', (SELECT COALESCE(MAX(pos), -1) + 1 FROM dashboards WHERE user_id = ?2), ?3 " +
+  "WHERE (SELECT COUNT(*) FROM dashboards WHERE user_id = ?2) < ?4";
+export const RENAME_BOARD_SQL = "UPDATE dashboards SET name = ?1 WHERE id = ?2 AND user_id = ?3";
+export const BOARD_POS_SQL = "UPDATE dashboards SET pos = ?1 WHERE id = ?2 AND user_id = ?3";
+// A dashboard deleted, in one batch: its tiles, then its row unless it is the
+// account's last (held inside the statement, so two deletions at once leave
+// one), and the last one's name back to the site's label: an emptied first
+// dashboard, as removing the last tile leaves. ?1 the dashboard, ?2 the user.
+export const DELETE_BOARD_SQL = [
+  "DELETE FROM dashboard_tiles WHERE dashboard_id = ?1 AND user_id = ?2",
+  "DELETE FROM dashboards WHERE id = ?1 AND user_id = ?2 AND (SELECT COUNT(*) FROM dashboards WHERE user_id = ?2) > 1",
+  "UPDATE dashboards SET name = '' WHERE id = ?1 AND user_id = ?2",
+] as const;
+
+// One tile into a dashboard of the account's (?12, its id; null for the
+// account's first), held inside the statement to the plan's figure, to
+// BRIEFING_PANELS_MAX briefings and to the same item once on that dashboard,
+// so two posts at once cannot pass any of them. ?1 the id, ?2 the user, ?3 the
+// kind, ?4 the ref, ?5 to ?8 its x, y, w and h, ?9 the time, ?10 the plan's
+// figure, ?11 the briefings' cap. The first change writes each tile of the
+// layout through it too. No choices are written yet (opts '').
 export const ADD_TILE_SQL =
   "INSERT INTO dashboard_tiles (id, dashboard_id, user_id, kind, ref, opts, x, y, w, h, created_at) " +
-  `SELECT ?1, ${BOARD_OF}, ?2, ?3, ?4, '', ?5, ?6, ?7, ?8, ?9 WHERE ${BOARD_OF} IS NOT NULL ` +
-  "AND (SELECT COUNT(*) FROM dashboard_tiles WHERE user_id = ?2) < ?10 " +
-  "AND (?3 <> 'briefing' OR (SELECT COUNT(*) FROM dashboard_tiles WHERE user_id = ?2 AND kind = 'briefing') < ?11) " +
-  "AND NOT EXISTS (SELECT 1 FROM dashboard_tiles WHERE user_id = ?2 AND kind = ?3 AND ref = ?4) ON CONFLICT DO NOTHING";
+  `SELECT ?1, d.id, ?2, ?3, ?4, '', ?5, ?6, ?7, ?8, ?9 FROM dashboards d WHERE d.id = COALESCE(?12, ${firstOf("?2")}) AND d.user_id = ?2 ` +
+  "AND (SELECT COUNT(*) FROM dashboard_tiles WHERE dashboard_id = d.id) < ?10 " +
+  "AND (?3 <> 'briefing' OR (SELECT COUNT(*) FROM dashboard_tiles WHERE dashboard_id = d.id AND kind = 'briefing') < ?11) " +
+  "AND NOT EXISTS (SELECT 1 FROM dashboard_tiles WHERE dashboard_id = d.id AND kind = ?3 AND ref = ?4) ON CONFLICT DO NOTHING";
 export const MOVE_TILE_SQL = "UPDATE dashboard_tiles SET x = ?1, y = ?2, w = ?3, h = ?4 WHERE id = ?5 AND user_id = ?6";
 export const DELETE_TILE_SQL = "DELETE FROM dashboard_tiles WHERE id = ? AND user_id = ?";
+// A tile to another dashboard of the account's, at the place given, held
+// inside the statement to that dashboard's figure, its briefings' cap and the
+// same item once: ?1 the dashboard, ?2 to ?5 the tile's x, y, w and h there,
+// ?6 the tile, ?7 the user, ?8 the plan's figure, ?9 the briefings' cap.
+export const MOVE_TO_SQL =
+  "UPDATE dashboard_tiles SET dashboard_id = ?1, x = ?2, y = ?3, w = ?4, h = ?5 WHERE id = ?6 AND user_id = ?7 AND dashboard_id <> ?1 " +
+  "AND EXISTS (SELECT 1 FROM dashboards WHERE id = ?1 AND user_id = ?7) " +
+  "AND (SELECT COUNT(*) FROM dashboard_tiles WHERE dashboard_id = ?1) < ?8 " +
+  "AND (kind <> 'briefing' OR (SELECT COUNT(*) FROM dashboard_tiles WHERE dashboard_id = ?1 AND kind = 'briefing') < ?9) " +
+  "AND NOT EXISTS (SELECT 1 FROM dashboard_tiles o WHERE o.dashboard_id = ?1 AND o.kind = dashboard_tiles.kind AND o.ref = dashboard_tiles.ref)";
 
-// A fault that names either of the grid's tables missing: the schema not applied since the grid.
-export const missingTiles = (e: unknown): boolean =>
-  /no such table:?\s*(?:main\.)?(?:dashboards|dashboard_tiles)\b/i.test(String((e as { message?: unknown })?.message ?? e));
+export { missingTiles };
 
-export async function readBoard(env: Env, userId: string): Promise<Board | null> {
+// The account's dashboards and the tiles of the one picked, in one batch of
+// two statements; null while the tables are absent.
+export async function readBoard(env: Env, userId: string, pick: BoardPick = {}): Promise<Board | null> {
   const db = env.ACCOUNTS!;
+  const tiles = pick.board ? db.prepare(BOARD_TILES_SQL).bind(userId, pick.board)
+    : pick.tile ? db.prepare(TILE_BOARD_SQL).bind(userId, pick.tile)
+    : db.prepare(TILES_SQL).bind(userId);
   try {
-    const [board, tiles] = await db.batch<Record<string, unknown>>([db.prepare(BOARD_SQL).bind(userId), db.prepare(TILES_SQL).bind(userId)]);
-    const id = board?.results?.[0]?.id;
-    return { id: typeof id === "string" ? id : null, tiles: (tiles?.results ?? []) as TileRow[] };
+    const [listed, read] = await db.batch<Record<string, unknown>>([db.prepare(BOARDS_SQL).bind(userId), tiles]);
+    const boards = ((listed?.results ?? []) as BoardRow[]).map((r) => ({ ...r, n: num(r.n) ?? 0 }));
+    const rows = (read?.results ?? []) as TileRow[];
+    const id = pick.board ? (boards.some((b) => b.id === pick.board) ? pick.board : null) : rows[0]?.dashboard_id ?? boards[0]?.id ?? null;
+    return { boards, id, tiles: id ? rows : [], found: !pick.board || id !== null };
   } catch (e) {
     if (missingTiles(e)) return null;
     throw e;
@@ -373,13 +436,13 @@ export async function deletePanelsFor(env: Env, userId: string, kinds: readonly 
 // -- what the account holds -----------------------------------------------------------------
 
 // The rows the tiles name, read by the readers the account pages use, at
-// once: the dashboard and its tiles, the panels, the saved searches, the
-// briefings, the claim, the watches, the keys and the saved views. A table
-// the database does not hold yet reads as none.
+// once: the account's dashboards and the tiles of the one picked, the panels,
+// the saved searches, the briefings, the claim, the watches, the keys and the
+// saved views. A table the database does not hold yet reads as none.
 export type Holdings = {
   panels: PanelRow[] | null; searches: SavedSearch[]; briefings: Briefing[]; claim: Claim | null; watches: Watch[]; keys: KeyRow[];
   views: SavedView[];
-  // The dashboard and its tiles; null while the grid's tables are absent.
+  // The dashboards and the tiles of the one picked; null while the grid's tables are absent.
   board?: Board | null;
   // The account emptied a layout it wrote in dashboard_panels (LAYOUT_MARKER).
   emptied?: boolean;
@@ -398,10 +461,10 @@ async function absentAs<T>(read: Promise<T>, absent: T, seen?: () => void): Prom
   }
 }
 
-export async function readHoldings(env: Env, userId: string): Promise<Holdings> {
+export async function readHoldings(env: Env, userId: string, pick: BoardPick = {}): Promise<Holdings> {
   let noClaims = false;
   const [board, layout, searches, briefings, claim, watches, keys, views] = await Promise.all([
-    readBoard(env, userId), listLayout(env, userId), listSearches(env, userId), listBriefings(env, userId),
+    readBoard(env, userId, pick), listLayout(env, userId), listSearches(env, userId), listBriefings(env, userId),
     absentAs(readClaim(env, userId), null, () => (noClaims = true)), absentAs(listWatches(env, userId), [] as Watch[]), listKeys(env, userId),
     listViews(env, userId),
   ]);
@@ -411,13 +474,41 @@ export async function readHoldings(env: Env, userId: string): Promise<Holdings> 
   };
 }
 
-// How the layout is kept: "tiles", a dashboard stored; "first", the tables
-// there and nothing stored yet (the first change writes it all); "panels",
-// the grid's tables absent and the panels' there (adding and removing are
-// kept, places and sizes are not); "none", neither table.
+// How the layout is kept: "tiles", the dashboard picked is stored; "first",
+// the tables there and nothing stored yet (the first change writes it all);
+// "panels", the grid's tables absent and the panels' there (adding and
+// removing are kept, places and sizes are not); "none", neither table.
 export type Keeping = "tiles" | "first" | "panels" | "none";
 export const keepingOf = (h: Pick<Holdings, "board" | "panels">): Keeping =>
   h.board ? (h.board.id ? "tiles" : "first") : h.panels ? "panels" : "none";
+
+// The address of the dashboard picked: the bare path while it is the first (or the computed one), its own otherwise.
+export const hereOf = (h: Pick<Holdings, "board">): string => {
+  const b = h.board;
+  return boardPath(b?.id ?? null, !b?.id || b.boards[0]?.id === b.id);
+};
+
+// The dashboards as the tabs show them, in the account's order, each with the
+// name the reader gave it ('' for none), the name it goes by, the site's
+// label it would have without one, its address, its count of tiles and
+// whether it is the one shown; the computed first alone while none is
+// stored; none at all while the tables are absent, since nothing could keep
+// a second dashboard.
+export type Tab = { id: string | null; name: string; label: string; plain: string; href: string; n: number; current: boolean };
+export function tabsOf(lang: Lang, h: Pick<Holdings, "board">, shown: number): Tab[] {
+  const b = h.board;
+  if (!b) return [];
+  if (!b.boards.length) {
+    const one = t(lang, "dash.board_n", { n: 1 });
+    return [{ id: null, name: "", label: one, plain: one, href: DASHBOARD_PATH, n: shown, current: true }];
+  }
+  const labels = boardLabels(lang, b.boards);
+  const plain = boardLabels(lang, b.boards.map((r) => ({ ...r, name: "" })));
+  return b.boards.map((r, i) => ({
+    id: r.id, name: r.name, label: labels.get(r.id) ?? "", plain: plain.get(r.id) ?? "", href: boardPath(r.id, i === 0),
+    n: r.id === b.id ? shown : r.n, current: r.id === b.id,
+  }));
+}
 
 // The starting layout: the watches, the 3-month list, matching notices and the
 // organization's years block when it has claimed one, its first two saved
@@ -1225,14 +1316,16 @@ async function contextOf(c: Context<AppEnv>, who: Account, h: Holdings, list: re
 
 const Csrf: FC<{ account: Account }> = ({ account }) => <input type="hidden" name="csrf" value={account.csrf} />;
 
+// What a post's ?m= says on the page. {name} is the dashboard ?to= names (where a tile was moved, or could not be).
 const NOTICE: Readonly<Record<string, Key>> = {
   added: "dash.added", exists: "dash.added", full: "dash.full", briefings_full: "dash.briefings_full", unsaved: "dash.unsaved",
-  unsaved_layout: "dash.unsaved_layout",
+  unsaved_layout: "dash.unsaved_layout", boards_full: "dash.boards_full", renamed: "dash.board_renamed", board_deleted: "dash.board_deleted",
+  board_emptied: "dash.board_emptied", moved: "dash.moved", move_exists: "dash.move_exists", move_full: "dash.move_full",
 };
 
 // The Add select's choices: what the account holds that is not on the
-// dashboard already, by kind, in PANEL_KINDS order. An analytics view is
-// added from its own page, or here once it is saved.
+// dashboard shown already, by kind, in PANEL_KINDS order. An analytics view
+// is added from its own page, or here once it is saved.
 function addChoices(lang: Lang, h: Holdings, taken: ReadonlySet<string>): { label: string; options: [string, string][] }[] {
   const free = (kind: PanelKind, ref: string) => !taken.has(`${kind}:${ref}`);
   const group = (kind: PanelKind, label: string, options: [string, string][]) => ({ label, options: options.filter(([v]) => free(kind, v.slice(kind.length + 1))) });
@@ -1301,11 +1394,13 @@ const ADD_ANCHOR = "dash-add";
 // Add a Tile: the page's one filled button, a details element, so it opens
 // without the script: the count of tiles, then the select of what the account
 // holds and Add, or why nothing can be added; More Kinds of Tile under it. An
-// emptied dashboard draws it open, as the one thing the page can do.
+// emptied dashboard draws it open, as the one thing the page can do. Its post
+// names the dashboard shown once one is stored (board), so the tile goes there.
 const AddTile: FC<{
   lang: Lang; account: Account; h: Holdings; n: number; cap: number; keeping: Keeping; taken: ReadonlySet<string>; more: readonly MoreLine[]; open: boolean;
 }> = ({ lang, account, h, n, cap, keeping, taken, more, open }) => {
   const choices = addChoices(lang, h, taken);
+  const board = keeping === "tiles" ? h.board?.id ?? null : null;
   return (
     <details class="dash-adder" id={ADD_ANCHOR} open={open || undefined}>
       <summary class="btn btn-primary">{t(lang, "dash.add_tile")}</summary>
@@ -1316,6 +1411,7 @@ const AddTile: FC<{
           : choices.length ? (
             <form method="post" action={`${DASHBOARD_PATH}/panels`} class="stack">
               <Csrf account={account} />
+              {board ? <input type="hidden" name="board" value={board} /> : null}
               <label>
                 {t(lang, "dash.add_label")}
                 <select name="panel">
@@ -1331,7 +1427,78 @@ const AddTile: FC<{
   );
 };
 
+// The word a dashboard's posts use for the account's first one while it is
+// computed and not stored: such a post writes it first (writeFirst).
+export const FIRST = "first";
+export const boardPostPath = (id: string | null) => `${DASHBOARD_PATH}/boards/${id ?? FIRST}`;
+
+// The dashboards' row (tabsOf): a tab a dashboard, the one shown marked; New
+// dashboard while the account holds fewer than its plan's figure; and the
+// shown one's Rename, Order or Delete, a details element that opens without
+// the script, its deletion asked inside it (a second details element with the
+// question and its own button), never in a browser dialog.
+const BoardTabs: FC<{ lang: Lang; account: Account; tabs: readonly Tab[]; cap: number }> = ({ lang, account, tabs, cap }) => {
+  const i = tabs.findIndex((x) => x.current);
+  const at = tabs[i];
+  if (!at) return null;
+  const base = boardPostPath(at.id);
+  const order = (dir: "earlier" | "later", key: Key, can: boolean) => (
+    <form method="post" action={`${base}/move`}>
+      <Csrf account={account} />
+      <input type="hidden" name="dir" value={dir} />
+      <button type="submit" class="btn" disabled={!can || undefined}>{t(lang, key)}</button>
+    </form>
+  );
+  const ask: Key = at.n === 0 ? "dash.board_delete_q_none" : at.n === 1 ? "dash.board_delete_q_one" : "dash.board_delete_q";
+  return (
+    <div class="dash-boards">
+      <nav class="tabs dash-tabs" aria-label={t(lang, "dash.boards_nav")}>
+        {tabs.map((x) => <a href={x.href} aria-current={x.current ? "page" : undefined} title={x.label}>{x.label}</a>)}
+      </nav>
+      <div class="dash-board-tools">
+        {tabs.length < cap ? (
+          <form method="post" action={`${DASHBOARD_PATH}/boards`}>
+            <Csrf account={account} />
+            <button type="submit" class="btn-link">{t(lang, "dash.board_new")}</button>
+          </form>
+        ) : null}
+        <details class="dash-board-edit">
+          <summary class="btn-link">{t(lang, "dash.board_edit")}</summary>
+          <div class="dash-board-body">
+            <form method="post" action={`${base}/rename`} class="stack">
+              <Csrf account={account} />
+              <label>
+                {t(lang, "dash.board_name")}
+                <input type="text" name="name" value={at.name} maxlength={BOARD_NAME_MAX} placeholder={at.plain} autocomplete="off" />
+              </label>
+              <p class="muted small">{t(lang, "dash.board_name_note", { n: fmtInt(BOARD_NAME_MAX, lang), label: at.plain })}</p>
+              <button type="submit" class="btn">{t(lang, "dash.board_rename")}</button>
+            </form>
+            <div class="dash-board-order">
+              {order("earlier", "dash.board_earlier", i > 0)}
+              {order("later", "dash.board_later", i < tabs.length - 1)}
+            </div>
+            <details class="dash-board-delete">
+              <summary class="btn-link">{t(lang, "dash.board_delete")}</summary>
+              <form method="post" action={`${base}/delete`} class="stack">
+                <Csrf account={account} />
+                <p>{t(lang, ask, { name: at.label, n: fmtInt(at.n, lang) })}</p>
+                {tabs.length === 1 ? <p class="muted small">{t(lang, "dash.board_delete_last")}</p> : null}
+                <button type="submit" name="confirm" value="yes" class="btn">{t(lang, "dash.board_delete_yes")}</button>
+              </form>
+            </details>
+          </div>
+        </details>
+      </div>
+    </div>
+  );
+};
+
 type Drawn = { r: Resolved; body: Body | null };
+// Another stored dashboard a tile's menu offers to move it to: its id, its name, and whether it holds its figure.
+export type MoveTarget = { id: string; label: string; full: boolean };
+export const moveTargets = (tabs: readonly Tab[], cap: number): MoveTarget[] =>
+  tabs.filter((x) => !x.current && x.id).map((x) => ({ id: x.id!, label: x.label, full: x.n >= cap }));
 
 // The three-dot mark of a tile's menu and the grip's six dots, drawn in currentColor.
 const DOTS = <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><circle cx="3" cy="8" r="1.5" /><circle cx="8" cy="8" r="1.5" /><circle cx="13" cy="8" r="1.5" /></svg>;
@@ -1357,8 +1524,12 @@ export const tilePath = (id: string) => `${DASHBOARD_PATH}/tiles/${id}`;
 // there are, Open) and its corner. Its place and size ride on custom
 // properties the stylesheet places it by from 1,100 px, and as data the
 // page's script reads; offer says which of the menu's steps would change the
-// layout (dash-grid.js steps).
-export const DashTile: FC<{ lang: Lang; account: Account; d: Drawn; offer: Record<Step, boolean> }> = ({ lang, account, d, offer }) => {
+// layout (dash-grid.js steps). With other dashboards stored, the menu offers
+// Move To with each one's name, a post (a dashboard holding its figure is
+// offered disabled); the page's script leaves those posts alone.
+export const DashTile: FC<{ lang: Lang; account: Account; d: Drawn; offer: Record<Step, boolean>; moves?: readonly MoveTarget[] }> = (
+  { lang, account, d, offer, moves },
+) => {
   const { r, body } = d;
   const s = r.shown;
   const item = body?.item ?? r.item;
@@ -1386,6 +1557,14 @@ export const DashTile: FC<{ lang: Lang; account: Account; d: Drawn; offer: Recor
                 <button type="submit" class="dash-menu-item" data-step={m.step} disabled={!offer[m.step] || undefined}>{t(lang, m.key)}</button>
               </form>
             ))}
+            {moves && moves.length ? <p class="dash-menu-head">{t(lang, "dash.move_to")}</p> : null}
+            {(moves ?? []).map((m) => (
+              <form method="post" action={`${tilePath(s.id)}/board`}>
+                <Csrf account={account} />
+                <input type="hidden" name="board" value={m.id} />
+                <button type="submit" class="dash-menu-item" aria-label={t(lang, "dash.move_to_name", { name: m.label })} disabled={m.full || undefined}>{m.label}</button>
+              </form>
+            ))}
             <form method="post" action={`${tilePath(s.id)}/delete`}>
               <Csrf account={account} />
               <button type="submit" class="dash-menu-item">{t(lang, "dash.remove")}</button>
@@ -1410,11 +1589,14 @@ export const DashTile: FC<{ lang: Lang; account: Account; d: Drawn; offer: Recor
 
 // The words and settings the page's script reads (public/dashboard.js),
 // each template in pieces (public/refresh.js templatePieces) so the page
-// carries no unfilled placeholder.
-export function dashClientData(lang: Lang, account: Account, keeping: Keeping) {
+// carries no unfilled placeholder. The layout's address names the dashboard
+// shown once it is stored (?board=), so the script, which posts to the
+// address it is given, saves to that dashboard and no other.
+export function dashClientData(lang: Lang, account: Account, keeping: Keeping, board: string | null = null) {
   const pieces = (key: Key) => templatePieces(t(lang, key));
+  const at = keeping === "tiles" && board ? `?board=${board}` : "";
   return {
-    csrf: account.csrf, save: keeping === "tiles" || keeping === "first", cols: COLS, layout: `${DASHBOARD_PATH}/layout`, tiles: `${DASHBOARD_PATH}/tiles/`,
+    csrf: account.csrf, save: keeping === "tiles" || keeping === "first", cols: COLS, layout: `${DASHBOARD_PATH}/layout${at}`, tiles: `${DASHBOARD_PATH}/tiles/`,
     words: {
       saving: t(lang, "dash.status_saving"), saved: t(lang, "dash.status_saved"), failed: t(lang, "dash.status_failed"), local: t(lang, "dash.status_local"),
       undone: t(lang, "dash.status_undone"), undo: t(lang, "dash.js_undo"), retry: t(lang, "dash.js_retry"),
@@ -1426,7 +1608,7 @@ export function dashClientData(lang: Lang, account: Account, keeping: Keeping) {
 
 export function dashboardView(
   lang: Lang, account: Account,
-  s: { drawn: Drawn[]; h: Holdings; starter: boolean; keeping: Keeping; notice: string | null; cap: number },
+  s: { drawn: Drawn[]; h: Holdings; starter: boolean; keeping: Keeping; notice: string | null; cap: number; boards: number },
 ) {
   const n = s.drawn.length;
   const emptied = !s.starter && !n;
@@ -1436,39 +1618,47 @@ export function dashboardView(
   const canAdd = s.keeping !== "none" && n < s.cap;
   const more = canAdd ? moreKinds(s.h, account.plan, s.drawn.map((d) => d.r.shown)) : [];
   const tiles = s.drawn.map((d) => asTile(d.r.shown));
+  const tabs = tabsOf(lang, s.h, n);
+  const moves = moveTargets(tabs, s.cap);
   const line = s.keeping === "none" ? t(lang, "dash.unsaved") : s.keeping === "panels" ? t(lang, "dash.unsaved_layout")
     : s.starter ? t(lang, "dash.starter") : emptied ? t(lang, "dash.empty") : "";
   return (
     <>
+      {/* The tabs in the head, under the lead: Add a Tile's choices hang below the head's row, so an emptied
+          dashboard's open Add a Tile never covers them. */}
       <PageHead lang={lang} title={t(lang, "dash.title")} lead={t(lang, "dash.lead")}
-        actions={<AddTile lang={lang} account={account} h={s.h} n={n} cap={s.cap} keeping={s.keeping} taken={taken} more={more} open={emptied} />} />
+        actions={<AddTile lang={lang} account={account} h={s.h} n={n} cap={s.cap} keeping={s.keeping} taken={taken} more={more} open={emptied} />}>
+        {tabs.length ? <BoardTabs lang={lang} account={account} tabs={tabs} cap={s.boards} /> : null}
+      </PageHead>
       {s.notice ? <p class="account-notice" role="status">{s.notice}</p> : null}
       <div class="dash-bar">
         <p class="dash-status muted" id="dash-status" role="status" aria-live="polite">{line}</p>
       </div>
       <div class="dash-grid" id="dash-grid">
-        {s.drawn.map((d) => <DashTile lang={lang} account={account} d={d} offer={stepsOf(tiles, d.r.shown.id)} />)}
+        {s.drawn.map((d) => <DashTile lang={lang} account={account} d={d} offer={stepsOf(tiles, d.r.shown.id)} moves={moves} />)}
       </div>
       {s.starter && more.length ? <MorePanel lang={lang} lines={more} /> : null}
       <p id="dash-keys-move" hidden>{t(lang, "dash.keys_move")}</p>
       <p id="dash-keys-size" hidden>{t(lang, "dash.keys_size")}</p>
       <p id="dash-say" class="visually-hidden" aria-live="polite"></p>
-      <ClientData id="dash-data" data={dashClientData(lang, account, s.keeping)} />
+      <ClientData id="dash-data" data={dashClientData(lang, account, s.keeping, s.h.board?.id ?? null)} />
       <script type="module" src="/dashboard.js"></script>
     </>
   );
 }
 
 // What a Free or Pro account reads at the address while Ultra is on sale:
-// the head, what the dashboard holds, the gate line and the plan cards.
-// Ultra's link is the page's filled button, the dashboard being Ultra's.
+// the head, what the dashboard holds (Ultra's figures, as its plan card
+// states them), the gate line and the plan cards. Ultra's link is the page's
+// filled button, the dashboard being Ultra's.
 export function teaseView(lang: Lang, cards: ReturnType<typeof planCards>) {
   const own = cards.map((c) => ({ ...c, actions: c.actions.map((a) => ({ ...a, primary: c.plan === "ultra" && a === c.actions[0] })) }));
+  const ultra = dashboardsWording("ultra");
   return (
     <>
       <PageHead lang={lang} title={t(lang, "dash.title")} />
       <Panel title={t(lang, "dash.what_title")}>
-        <p>{t(lang, "dash.what_lead", { cap: fmtInt(dashboardCap("ultra"), lang) })}</p>
+        <p>{t(lang, "dash.what_lead", { line: t(lang, ultra.key, ultra.vars?.(lang)) })}</p>
         <ul>{PANEL_KINDS.map((k) => <li>{t(lang, WHAT_KEY[k])}</li>)}</ul>
       </Panel>
       <p class="muted">{t(lang, "dash.gate")} <a href="/account/billing">{t(lang, "billing.link_plans")}</a></p>
@@ -1478,14 +1668,14 @@ export function teaseView(lang: Lang, cards: ReturnType<typeof planCards>) {
 }
 
 // The shell of every dashboard response: an account page with the rail's
-// Dashboard item as the current one.
-async function dashPage(c: Context<AppEnv>, body: unknown, status = 200): Promise<Response> {
+// Dashboard item as the current one, at the dashboard's own address.
+async function dashPage(c: Context<AppEnv>, body: unknown, path = DASHBOARD_PATH, status = 200): Promise<Response> {
   const lang = c.get("lang");
   const stats = await loadStats(c.env).catch(() => null);
   return page(
     c,
     <Layout lang={lang} title={t(lang, "dash.title")} dataAsOf={stats?.data_as_of ?? null} active={DASHBOARD_PATH}
-      seo={{ path: DASHBOARD_PATH, description: t(lang, "account.description"), noindex: true }}>
+      seo={{ path, description: t(lang, "account.description"), noindex: true }}>
       {body as any}
     </Layout>,
     status,
@@ -1500,30 +1690,43 @@ async function drawTiles(c: Context<AppEnv>, who: Account, h: Holdings, list: re
   return resolved.map((r) => ({ r, body: bodies.get(r) ?? null }));
 }
 
-export async function dashboardPage(c: Context<AppEnv>, who: Account): Promise<Response> {
+const inLang = (c: Context<AppEnv>, path: string) => (c.get("lang") === "fr" ? `${path}?lang=fr` : path);
+
+// A dashboard's page: the first one's (board null), or the one an address
+// names; one the account does not hold (deleted, another account's, or any
+// while the tables are absent) sends the reader to the first.
+export async function dashboardPage(c: Context<AppEnv>, who: Account, board: string | null = null): Promise<Response> {
   const lang = c.get("lang");
   if (!holdsDashboard(who.plan)) {
     const [price, ultra] = [checkoutPrice(c.env), await ultraCheckoutPrice(c.env)];
     const cards = planCards(lang, { price, ultra, reader: who.plan === "pro" ? "pro" : "free", place: "tease" });
-    return dashPage(c, teaseView(lang, cards));
+    return dashPage(c, teaseView(lang, cards), board ? boardPath(board) : DASHBOARD_PATH);
   }
-  const h = await readHoldings(c.env, who.userId);
+  const h = await readHoldings(c.env, who.userId, { board });
+  if (board && !h.board?.found) return c.redirect(inLang(c, DASHBOARD_PATH), 303);
   const { list, starter, keeping } = shownTiles(h);
   const drawn = await drawTiles(c, who, h, list);
   const m = c.req.query("m") ?? "";
-  const cap = dashboardCap(who.plan);
-  const notice = NOTICE[m] ? t(lang, NOTICE[m], { cap: fmtInt(cap, lang), n: fmtInt(BRIEFING_PANELS_MAX, lang) }) : null;
-  return dashPage(c, dashboardView(lang, who, { drawn, h, starter, keeping, notice, cap }));
+  const cap = tileCap(who.plan);
+  const boards = boardCap(who.plan);
+  // The dashboard a notice names: the one ?to= names, among the account's.
+  const to = c.req.query("to") ?? "";
+  const named = tabsOf(lang, h, drawn.length).find((x) => x.id === to)?.label ?? "";
+  const notice = NOTICE[m]
+    ? t(lang, NOTICE[m], { cap: fmtInt(cap, lang), n: fmtInt(BRIEFING_PANELS_MAX, lang), boards: fmtInt(boards, lang), name: named })
+    : null;
+  return dashPage(c, dashboardView(lang, who, { drawn, h, starter, keeping, notice, cap, boards }), board ? boardPath(board) : DASHBOARD_PATH);
 }
 
 // One tile at a size, for the page's script after a resize: the tile's
 // section as the page draws it, read alone (its own records batch). The
 // size asked for (w, h) is held to the grid and the kind's least; without
-// one, the tile's own. The id is the account's own, in the layout the page
-// shows (a stored tile's, a panel's or a starter's); anything else is 404.
+// one, the tile's own. The id is the account's own, in the layout of the
+// dashboard that holds it (a stored tile's, a panel's or a starter's);
+// anything else is 404.
 export async function tileFragment(c: Context<AppEnv>, who: Account, id: string): Promise<Response> {
   if (!holdsDashboard(who.plan)) return c.text("", 404);
-  const h = await readHoldings(c.env, who.userId);
+  const h = await readHoldings(c.env, who.userId, { tile: ID_RE.test(id) ? id : null });
   const { list } = shownTiles(h);
   const at = list.find((s) => s.id === id);
   if (!at) return c.text("", 404);
@@ -1534,22 +1737,25 @@ export async function tileFragment(c: Context<AppEnv>, who: Account, id: string)
   const sized = tiles.find((x) => x.id === id)!;
   const shown = { ...at, x: sized.x, y: sized.y, w: sized.w, h: sized.h };
   const [d] = await drawTiles(c, who, h, [shown]);
-  return c.html(<DashTile lang={c.get("lang")} account={who} d={d} offer={stepsOf(tiles, id)} /> as any);
+  const lang = c.get("lang");
+  const moves = moveTargets(tabsOf(lang, h, list.length), tileCap(who.plan));
+  return c.html(<DashTile lang={lang} account={who} d={d} offer={stepsOf(tiles, id)} moves={moves} /> as any);
 }
 
 // -- the posts ------------------------------------------------------------------------------
 
-// Where a post returns: the dashboard, with what happened, in the page's
-// language, at the place the change was made (place: a tile's id, or
-// ADD_ANCHOR), so a reader moving a tile down the page with its menu does
-// not scroll back to it after each press.
-function back(c: Context<AppEnv>, m = "", place: string | null = null): Response {
-  const q = [m ? `m=${m}` : "", c.get("lang") === "fr" ? "lang=fr" : ""].filter(Boolean).join("&");
-  const at = place === null ? "" : place === ADD_ANCHOR ? `#${ADD_ANCHOR}` : `#tile-${place}`;
-  return c.redirect(`${DASHBOARD_PATH}${q ? `?${q}` : ""}${at}`, 303);
+// Where a post returns: a dashboard (at, the first's bare path unless the
+// post was another's), with what happened, in the page's language, at the
+// place the change was made (place: a tile's id, or ADD_ANCHOR), so a reader
+// moving a tile down the page with its menu does not scroll back to it after
+// each press; to names the dashboard a notice is about.
+function back(c: Context<AppEnv>, m = "", place: string | null = null, at = DASHBOARD_PATH, to: string | null = null): Response {
+  const q = [m ? `m=${m}` : "", to ? `to=${to}` : "", c.get("lang") === "fr" ? "lang=fr" : ""].filter(Boolean).join("&");
+  const anchor = place === null ? "" : place === ADD_ANCHOR ? `#${ADD_ANCHOR}` : `#tile-${place}`;
+  return c.redirect(`${at}${q ? `?${q}` : ""}${anchor}`, 303);
 }
 
-// The layout written as the account's own, in one batch with the
+// The layout written as the account's first dashboard, in one batch with the
 // dashboard's row: each tile at its place through ADD_TILE_SQL (a panel's id
 // kept, a starter's a new one). Two first changes at once write one
 // dashboard and each item once. The ids as they then stand, by the ids the
@@ -1560,7 +1766,7 @@ async function writeFirst(env: Env, who: Account, tiles: readonly Shown[], now =
   await db.batch([
     db.prepare(BOARD_INSERT_SQL).bind(newId(), who.userId, at),
     ...tiles.map((s) => db.prepare(ADD_TILE_SQL).bind(ID_RE.test(s.id) ? s.id : newId(), who.userId, s.kind, s.ref, s.x, s.y, s.w, s.h, at,
-      dashboardCap(who.plan), BRIEFING_PANELS_MAX)),
+      tileCap(who.plan), BRIEFING_PANELS_MAX, null)),
   ]);
   const rows = (await readBoard(env, who.userId))?.tiles ?? [];
   const ids = new Map<string, string>();
@@ -1594,18 +1800,26 @@ async function keepLayout(env: Env, who: Account, h: Holdings, keeping: Keeping,
   return writeFirst(env, who, fromTiles(next, by));
 }
 
+// A post's board field: a dashboard's id, or none for the account's first; anything else is no dashboard.
+const boardField = (v: unknown): string | null | false => (v === undefined || v === "" ? null : typeof v === "string" && ID_RE.test(v) ? v : false);
+
 // Add: the tile a page's "Add to dashboard" names (kind and ref) or the Add
 // select's choice (panel, "kind:ref"), checked against what the account
-// holds, placed under the others at the left.
+// holds, placed under the others at the left of the dashboard the post names
+// (board), else of the first.
 export async function addPanelPost(c: Context<AppEnv>, who: Account, fields: Record<string, string>): Promise<Response> {
   const lang = c.get("lang");
   if (!holdsDashboard(who.plan)) return c.redirect(DASHBOARD_PATH, 303);
+  const want = boardField(fields.board);
+  if (want === false) return c.text(t(lang, "form.rejected"), 400);
   const [kind, ref] = typeof fields.panel === "string"
     ? [fields.panel.slice(0, Math.max(0, fields.panel.indexOf(":"))), fields.panel.slice(fields.panel.indexOf(":") + 1)]
     : [fields.kind, fields.ref ?? ""];
-  const h = await readHoldings(c.env, who.userId);
+  const h = await readHoldings(c.env, who.userId, { board: want });
   const spec = specOf(kind, ref, h);
   if (!spec) return c.text(t(lang, "form.rejected"), 400);
+  // A dashboard deleted meanwhile (another tab): the first, with nothing added.
+  if (want && h.board && !h.board.found) return back(c);
   const { list, keeping } = shownTiles(h);
   if (keeping === "none") return back(c, "unsaved");
   if (keeping === "panels") {
@@ -1616,59 +1830,103 @@ export async function addPanelPost(c: Context<AppEnv>, who: Account, fields: Rec
     return back(c, result, place);
   }
   if (keeping === "first") await writeFirst(c.env, who, list);
-  const board = (await readBoard(c.env, who.userId))!;
+  const board = (await readBoard(c.env, who.userId, { board: want }))!;
+  const at = hereOf({ board });
   const here = board.tiles.find((r) => r.kind === spec.kind && r.ref === spec.ref);
-  if (here) return back(c, "exists", here.id);
+  if (here) return back(c, "exists", here.id, at);
   const key = sizeKey(spec.kind, spec.ref, h.views);
   const id = newId();
   const now = shownTiles({ ...h, board }).list.map(asTile);
-  const at = place(now, { id, kind: key, x: 0, y: 0, ...startSize(key, false) }).find((x) => x.id === id)!;
+  const placed = place(now, { id, kind: key, x: 0, y: 0, ...startSize(key, false) }).find((x) => x.id === id)!;
   const db = c.env.ACCOUNTS!;
-  const res = await db.prepare(ADD_TILE_SQL)
-    .bind(id, who.userId, spec.kind, spec.ref, at.x, at.y, at.w, at.h, new Date().toISOString(), dashboardCap(who.plan), BRIEFING_PANELS_MAX).run();
-  if ((res.meta?.changes ?? 0) === 1) return back(c, "added", id);
+  const res = await db.prepare(ADD_TILE_SQL).bind(id, who.userId, spec.kind, spec.ref, placed.x, placed.y, placed.w, placed.h, new Date().toISOString(),
+    tileCap(who.plan), BRIEFING_PANELS_MAX, board.id).run();
+  if ((res.meta?.changes ?? 0) === 1) return back(c, "added", id, at);
   // Refused inside the insert: the same item meanwhile, the plan's figure, or the briefings'.
-  const again = (await readBoard(c.env, who.userId))!.tiles;
+  const again = (await readBoard(c.env, who.userId, { board: board.id }))!.tiles;
   const found = again.find((r) => r.kind === spec.kind && r.ref === spec.ref);
-  if (found) return back(c, "exists", found.id);
-  return back(c, again.length >= dashboardCap(who.plan) ? "full" : "briefings_full");
+  if (found) return back(c, "exists", found.id, at);
+  return back(c, again.length >= tileCap(who.plan) ? "full" : "briefings_full", null, at);
 }
 
-export type EditOp = { op: "step"; step: Step } | { op: "width"; wide: boolean } | { op: "delete" };
+export type EditOp = { op: "step"; step: Step } | { op: "width"; wide: boolean } | { op: "delete" } | { op: "board"; board: string };
 
-// A step, a width (the earlier page's posts: full or half the row) and a
-// removal, on the account's own tile only (a panel's or a starter's in the
-// computed layout). A step or a width the account cannot keep yet (the
+// A step, a width (the earlier page's posts: full or half the row), a
+// removal and a move to another dashboard, on the account's own tile only (a
+// stored one's on the dashboard that holds it; a panel's or a starter's in
+// the computed layout). A step or a width the account cannot keep yet (the
 // grid's tables absent) answers that it cannot be saved; a removal goes to
 // the panels there, as before.
 export async function editPanelPost(c: Context<AppEnv>, who: Account, id: string, op: EditOp): Promise<Response> {
   if (!holdsDashboard(who.plan)) return c.redirect(DASHBOARD_PATH, 303);
   const starter = STARTER_ID_RE.exec(id);
   if (!ID_RE.test(id) && !starter) return c.text(t(c.get("lang"), "form.rejected"), 400);
-  const h = await readHoldings(c.env, who.userId);
+  const h = await readHoldings(c.env, who.userId, { tile: ID_RE.test(id) ? id : null });
   const { list, keeping } = shownTiles(h);
   if (keeping === "none") return back(c, "unsaved");
   if (keeping === "panels") return op.op === "delete" ? deletePanel(c, who, id, h) : back(c, "unsaved_layout");
+  const at = hereOf(h);
   const target = list.find((s) => s.id === id);
-  if (!target) return back(c);
+  if (!target) return back(c, "", null, at);
+  if (op.op === "board") return moveTile(c, who, h, target, op.board);
   const tiles = list.map(asTile);
   if (op.op === "delete") {
     // The tile that takes its place in reading order, else the one before it, else Add a Tile.
-    const order = stack(tiles);
-    const i = order.findIndex((x) => x.id === id);
-    const near = order[i + 1] ?? order[i - 1] ?? null;
+    const near = nearOf(tiles, id);
     const rest = normalize(tiles.filter((x) => x.id !== id));
     if (keeping === "first") {
       const ids = await writeFirst(c.env, who, fromTiles(rest, new Map(list.map((s) => [s.id, s]))));
-      return back(c, "", near ? ids.get(near.id) ?? null : ADD_ANCHOR);
+      return back(c, "", near ? ids.get(near) ?? null : ADD_ANCHOR);
     }
     await c.env.ACCOUNTS!.prepare(DELETE_TILE_SQL).bind(id, who.userId).run();
     await writeMoves(c.env, who, h.board!.tiles, rest);
-    return back(c, "", near ? near.id : ADD_ANCHOR);
+    return back(c, "", near ?? ADD_ANCHOR, at);
   }
   const next = op.op === "step" ? stepTile(tiles, id, op.step) : resize(tiles, id, op.wide ? COLS : COLS / 2, target.h);
   const ids = await keepLayout(c.env, who, h, keeping, list, next);
-  return back(c, "", ids.get(id) ?? null);
+  return back(c, "", ids.get(id) ?? null, at);
+}
+
+// The tile that takes a tile's place in reading order, else the one before it; null when it is the only one.
+function nearOf(tiles: readonly Tile[], id: string): string | null {
+  const order = stack(tiles);
+  const i = order.findIndex((x) => x.id === id);
+  return (order[i + 1] ?? order[i - 1])?.id ?? null;
+}
+
+// A stored tile moved to another of the account's dashboards: it keeps its
+// size and lands at the foot of that dashboard at the left (dash-grid.js
+// place, as an add does), within that dashboard's figure, its briefings' cap
+// and the same item once, each held inside the statement (MOVE_TO_SQL); the
+// dashboard it left closes up. The reader stays on the dashboard it left, at
+// the tile that takes its place, and the notice names where it went. A tile
+// of the computed first dashboard has nowhere to go: no other is stored.
+async function moveTile(c: Context<AppEnv>, who: Account, h: Holdings, src: Shown, target: string): Promise<Response> {
+  const b = h.board!;
+  const at = hereOf(h);
+  const dest = b.boards.find((x) => x.id === target);
+  if (keepingOf(h) !== "tiles" || !dest || dest.id === b.id) return back(c, "", src.id, at);
+  const db = c.env.ACCOUNTS!;
+  const cap = tileCap(who.plan);
+  const read = async () => ((await db.prepare(BOARD_TILES_SQL).bind(who.userId, target).all<TileRow>()).results ?? []);
+  const sameItem = (r: TileRow) => r.kind === src.kind && r.ref === src.ref;
+  const there = await read();
+  if (there.some(sameItem)) return back(c, "move_exists", src.id, at, target);
+  if (there.length >= cap) return back(c, "move_full", src.id, at, target);
+  const laid = normalize(there.filter((r) => isPanelKind(r.kind)).map((r) => ({
+    id: r.id, kind: sizeKey(r.kind as PanelKind, r.ref, h.views), x: r.x, y: r.y, w: r.w, h: r.h,
+  })));
+  const landed = place(laid, { ...asTile(src), x: 0, y: 0 }).find((x) => x.id === src.id)!;
+  const res = await db.prepare(MOVE_TO_SQL).bind(target, landed.x, landed.y, landed.w, landed.h, src.id, who.userId, cap, BRIEFING_PANELS_MAX).run();
+  if ((res.meta?.changes ?? 0) !== 1) {
+    // Refused inside the statement: the same item there meanwhile, its figure, or its briefings'.
+    const again = await read();
+    return back(c, again.some(sameItem) ? "move_exists" : again.length >= cap ? "move_full" : "briefings_full", src.id, at, target);
+  }
+  const tiles = shownTiles(h).list.map(asTile);
+  const near = nearOf(tiles, src.id);
+  await writeMoves(c.env, who, b.tiles.filter((r) => r.id !== src.id), normalize(tiles.filter((x) => x.id !== src.id)));
+  return back(c, "moved", near ?? ADD_ANCHOR, at, target);
 }
 
 // A removal while the grid's tables are absent: the panel, as the earlier
@@ -1692,18 +1950,81 @@ async function deletePanel(c: Context<AppEnv>, who: Account, id: string, h: Hold
   return back(c, "", near ? near.id : ADD_ANCHOR);
 }
 
+// -- the dashboards' posts ------------------------------------------------------------------
+
+export type BoardOp = { op: "new" } | { op: "rename"; name: string } | { op: "move"; dir: "earlier" | "later" } | { op: "delete" };
+
+// A name as a reader types it: plain text, control characters dropped, cut
+// to BOARD_NAME_MAX characters; '' (the site's label) when left empty.
+export const boardName = (raw: unknown): string => cleanName(raw, BOARD_NAME_MAX);
+
+// New dashboard, and a dashboard's Rename, Move earlier or later and Delete
+// (id: its own, or FIRST for the account's first, stored or computed). While
+// the first is computed, the post writes it before it applies, as it shows
+// (or with no tile, for a deletion). New is held to the plan's figure inside
+// its insert and lands on the new dashboard, empty, Add a Tile open. An order
+// is written whole, a place a dashboard. A deletion takes the dashboard's
+// tiles with it; the account's last dashboard is kept, emptied and with the
+// site's label (DELETE_BOARD_SQL), as removing its last tile leaves it. The
+// tables absent, nothing here can be kept, and no tab is offered.
+export async function boardPost(c: Context<AppEnv>, who: Account, id: string, op: BoardOp): Promise<Response> {
+  if (!holdsDashboard(who.plan)) return c.redirect(DASHBOARD_PATH, 303);
+  const named = id === "" || id === FIRST ? null : id;
+  if (named !== null && !ID_RE.test(named)) return c.text(t(c.get("lang"), "form.rejected"), 400);
+  const h = await readHoldings(c.env, who.userId, { board: named });
+  const keeping = keepingOf(h);
+  if (keeping === "none") return back(c, "unsaved");
+  if (keeping === "panels") return back(c, "unsaved_layout");
+  if (!h.board!.found) return back(c);
+  let board = h.board!;
+  if (keeping === "first") {
+    await writeFirst(c.env, who, op.op === "delete" ? [] : shownTiles(h).list);
+    board = (await readBoard(c.env, who.userId))!;
+  }
+  const self = board.id;
+  if (!self) return back(c);
+  const db = c.env.ACCOUNTS!;
+  switch (op.op) {
+    case "new": {
+      const fresh = newId();
+      const res = await db.prepare(NEW_BOARD_SQL).bind(fresh, who.userId, new Date().toISOString(), boardCap(who.plan)).run();
+      // Never the first: the account held one before it.
+      return (res.meta?.changes ?? 0) === 1 ? back(c, "", null, boardPath(fresh)) : back(c, "boards_full", null, hereOf({ board }));
+    }
+    case "rename":
+      await db.prepare(RENAME_BOARD_SQL).bind(op.name, self, who.userId).run();
+      return back(c, "renamed", null, hereOf({ board }));
+    case "move": {
+      const order = board.boards.map((x) => x.id);
+      const i = order.indexOf(self);
+      const j = op.dir === "earlier" ? i - 1 : i + 1;
+      if (i < 0 || j < 0 || j >= order.length) return back(c, "", null, hereOf({ board }));
+      [order[i], order[j]] = [order[j], order[i]];
+      await db.batch(order.map((x, k) => db.prepare(BOARD_POS_SQL).bind(k, x, who.userId)));
+      return back(c, "", null, boardPath(self, j === 0));
+    }
+    case "delete": {
+      const done = await db.batch(DELETE_BOARD_SQL.map((sql) => db.prepare(sql).bind(self, who.userId)));
+      return back(c, (done[1]?.meta?.changes ?? 0) === 1 ? "board_deleted" : "board_emptied");
+    }
+  }
+}
+
 // The most tiles a posted layout may name, and the longest layout read.
 const LAYOUT_TILES_MAX = 50;
 export const LAYOUT_CHARS_MAX = 8000;
 
 // The page's script saving a layout: the layout as JSON ([{id, x, y, w, h}]),
-// in the form field layout. Only the account's own tile ids count; a tile the
+// in the form field layout, for the dashboard the address names (?board=;
+// none, the first). Only that dashboard's own tile ids count; a tile the
 // post leaves out keeps its place; the whole goes through the grid's rules
 // (dash-grid.js normalize) before it is kept, and the answer is the layout as
 // kept, with the ids the first change gave a starter's tiles. While the
-// grid's tables are absent nothing is kept, and the answer says so.
+// grid's tables are absent nothing is kept, and the answer says so; a
+// dashboard the account no longer holds is refused.
 export async function layoutPost(c: Context<AppEnv>, who: Account, fields: Record<string, string>): Promise<Response> {
   if (!holdsDashboard(who.plan)) return c.json({ state: "refused" }, 403);
+  const want = boardField(c.req.query("board") ?? fields.board);
   const raw = typeof fields.layout === "string" && fields.layout.length <= LAYOUT_CHARS_MAX ? fields.layout : "";
   let posted: unknown;
   try {
@@ -1711,10 +2032,11 @@ export async function layoutPost(c: Context<AppEnv>, who: Account, fields: Recor
   } catch {
     posted = null;
   }
-  if (!Array.isArray(posted) || posted.length > LAYOUT_TILES_MAX) return c.json({ state: "refused" }, 400);
-  const h = await readHoldings(c.env, who.userId);
+  if (want === false || !Array.isArray(posted) || posted.length > LAYOUT_TILES_MAX) return c.json({ state: "refused" }, 400);
+  const h = await readHoldings(c.env, who.userId, { board: want });
   const { list, keeping } = shownTiles(h);
   if (keeping === "none" || keeping === "panels") return c.json({ state: "unsaved" });
+  if (!h.board!.found) return c.json({ state: "refused" }, 404);
   const asked = new Map<string, Record<string, unknown>>();
   for (const p of posted) {
     if (p && typeof p === "object" && typeof (p as { id?: unknown }).id === "string") asked.set((p as { id: string }).id, p as Record<string, unknown>);

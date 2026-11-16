@@ -70,7 +70,7 @@ import {
   fiscalLabel, fiscalYearOf, num, orgIdOf, orgNumber, quarterEnd, readRecords, segmentCode, segmentNumber,
 } from "../records_db";
 import { railAccount } from "../account/session";
-import { AddToDashboard, dashboardAccount, viewPanelRef } from "../account/dashboard_add";
+import { AddToDashboard, boardChoices, dashboardAccount, viewPanelRef } from "../account/dashboard_add";
 import { viewLabel } from "../account/saved_views";
 import { SaveViewRow, saveViewControl } from "../account/view_pages";
 import { type Frame, type Link, type View, frameOf, orgMore, rivalsOf, shareSegmentOf, viewQuery } from "../view_address";
@@ -254,9 +254,11 @@ async function shell(c: Context<AppEnv>, s: Shell, read: Read, body: unknown): P
   const title = t(lang, "analytics.title_of", { name: s.name });
   const ok = read.state === "ready";
   if (!ok) c.header("Retry-After", "3600");
-  // An Ultra account adds the view, at its source and period, to its dashboard (account/dashboard.tsx); no one else sees it.
+  // An Ultra account adds the view, at its source and period, to its dashboard (account/dashboard.tsx), or with several to the
+  // one it chooses; no one else sees it.
   const dash = s.pro ? await dashboardAccount(c) : null;
-  const add = dash ? <AddToDashboard lang={lang} account={dash} kind="view" panelRef={viewPanelRef(s.base, frame)} button /> : null;
+  const boards = dash ? await boardChoices(c.env, dash.userId, lang).catch(() => []) : [];
+  const add = dash ? <AddToDashboard lang={lang} account={dash} kind="view" panelRef={viewPanelRef(s.base, frame)} button boards={boards} /> : null;
   // A signed-in reader saves the view as it writes its own address (account/view_pages.tsx); nothing for anyone else.
   const save = await saveViewControl(c, query(s.base, frame, s.more), viewLabel(lang, s.name, frame));
   return page(

@@ -327,7 +327,7 @@ describe("the Ultra message", () => {
     `- Analytics: every view, ${ULTRA_YEARS} fiscal years`,
     `- API: ${KEYS_MAX} keys of ${KEY_PER_DAY_ULTRA.toLocaleString("en-CA")} requests a day`,
     `- ${RULES.ultra.saved_views} saved analytics views`,
-    `- A dashboard of up to ${RULES.ultra.dashboard} panels`,
+    `- ${RULES.ultra.dashboards} dashboards of ${RULES.ultra.dashboard_tiles} tiles each`,
     "- Saved views by email, weekly or monthly",
   ].join("\n");
 

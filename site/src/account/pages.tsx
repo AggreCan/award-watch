@@ -19,7 +19,7 @@ import { KEYS_MAX, KEY_NAME_MAX, type KeyRow } from "./api_keys";
 import type { KeyUsage } from "./api_usage";
 import type { BillingLine } from "./billing";
 import { type Brief, briefValue } from "./briefings";
-import { AddToDashboard } from "./dashboard_add";
+import { AddToDashboard, type BoardChoice } from "./dashboard_add";
 import { holdsDashboard } from "./dashboard_rule";
 import { RULES, allowed, watchCap } from "./entitlements";
 import { FEEDS_MAX, type FeedKind } from "./feeds";
@@ -629,6 +629,8 @@ export function searchesView(
     briefings?: { n: number; panel: unknown } | null;
     // Ultra's figure, for a paid account on a smaller one while Ultra is on sale; null or absent otherwise.
     ultra?: number | null;
+    // The account's dashboards when it holds several, for Add to dashboard's choice (dashboard_add.tsx boardChoices).
+    boards?: readonly BoardChoice[];
   },
 ) {
   const { searches, cap, pending } = state;
@@ -680,7 +682,7 @@ export function searchesView(
                     {dash && DASH_KINDS[s.kind] ? (
                       <td data-label={t(lang, "account.col_search")} data-sort={s.label}>
                         <a href={s.params}>{s.label}</a>
-                        <AddToDashboard lang={lang} account={account} kind={DASH_KINDS[s.kind]!} panelRef={s.id} />
+                        <AddToDashboard lang={lang} account={account} kind={DASH_KINDS[s.kind]!} panelRef={s.id} boards={state.boards} />
                       </td>
                     ) : <td data-label={t(lang, "account.col_search")}><a href={s.params}>{s.label}</a></td>}
                     <td data-label={t(lang, "account.col_delivery")}>

@@ -102,7 +102,7 @@ export type Wording = { key: Key; vars?: (lang: Lang) => Record<string, string> 
 // figure, so test/seo-intent.test.ts and test/radar-gate.test.ts can hold
 // every row to RULES), and each plan's wording, null where the plan has none
 // of it. Ultra has every row, each with Ultra's own figure (at or above
-// Pro's); a row Pro has not is Ultra's alone (the dashboard, the saved views
+// Pro's); a row Pro has not is Ultra's alone (the dashboards, the saved views
 // by email), its feature one Ultra gives a figure or a yes Pro does not. Every card draws every row it is shown
 // with in this order, so the lists line up across the cards; a row only
 // Ultra has is drawn only beside Ultra's card (planRows).
@@ -144,6 +144,17 @@ const paid = (feature: CountedFeature, keyOf: (n: number) => Key) => {
 };
 // The earlier contracts a notice's page shows: one contract, or several.
 const followsKey = (n: number): Key => (n === 1 ? "plans.follows_one" : "plans.follows");
+
+// The dashboards a plan keeps and the tiles each holds, both from RULES, the
+// key chosen by the two figures so a figure of 1 reads in the singular. The
+// plan cards' row, and the lines that name the dashboards beside other
+// figures (the Pro page's Ultra section, the dashboard's own page for a
+// reader without it).
+export function dashboardsWording(plan: Plan): Wording {
+  const { dashboards: n, dashboard_tiles: tiles } = RULES[plan];
+  const key: Key = n === 1 ? (tiles === 1 ? "plans.dashboard_one_tile" : "plans.dashboard_one") : tiles === 1 ? "plans.dashboards_tile" : "plans.dashboards";
+  return { key, vars: (lang) => ({ n: fmtInt(RULES[plan].dashboards, lang), tiles: fmtInt(RULES[plan].dashboard_tiles, lang) }) };
+}
 
 export const PLAN_ROWS: readonly PlanRow[] = [
   { feature: "intraday", free: { key: "plans.free_tenders" }, ...same({ key: "plans.pro_tenders", vars: (lang) => ({ h: sameDayHours(lang) }) }) },
@@ -220,9 +231,9 @@ export const PLAN_ROWS: readonly PlanRow[] = [
     pro: { key: "plans.saved_views", vars: count(() => RULES.pro.saved_views) }, ultra: { key: "plans.saved_views", vars: count(() => RULES.ultra.saved_views) },
   },
   { feature: "bug_reports", free: null, ...same({ key: "plans.pro_bugs" }) },
-  // Ultra's alone: the dashboard's panels (src/account/dashboard.tsx), its figure from RULES, and the saved
-  // views by email (src/account/view_mail.ts).
-  { feature: "dashboard", free: null, pro: null, ultra: { key: "plans.dashboard", vars: count(() => RULES.ultra.dashboard) } },
+  // Ultra's alone: its dashboards and the tiles each holds (src/account/dashboard.tsx), both figures from RULES,
+  // and the saved views by email (src/account/view_mail.ts).
+  { feature: "dashboards", free: null, pro: null, ultra: dashboardsWording("ultra") },
   { feature: "view_mail", free: null, pro: null, ultra: { key: "plans.view_mail" } },
 ];
 

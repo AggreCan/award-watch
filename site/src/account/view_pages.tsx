@@ -23,7 +23,7 @@ import { fmtInt, t, type Key, type Lang } from "../i18n";
 import { PageHead, Panel } from "../layout";
 import { PlanCards, type PlanCard } from "../pro";
 import type { View } from "../view_address";
-import { AddToDashboard } from "./dashboard_add";
+import { AddToDashboard, type BoardChoice } from "./dashboard_add";
 import { holdsDashboard } from "./dashboard_rule";
 import { RULES, allowed, savedViewCap } from "./entitlements";
 import { VIEW_DELIVERY, type SavedView, type ViewDelivery, type ViewRun, NAME_MAX, viewState } from "./saved_views";
@@ -127,6 +127,8 @@ export type ViewsPageState = {
   ultra: boolean;
   // The plan cards for an account whose plan keeps no view; null otherwise.
   cards: PlanCard[] | null;
+  // The account's dashboards when it holds several, for Add to dashboard's choice (dashboard_add.tsx boardChoices).
+  boards?: readonly BoardChoice[];
 };
 
 export function viewsView(lang: Lang, account: Account, s: ViewsPageState) {
@@ -159,7 +161,7 @@ export function viewsView(lang: Lang, account: Account, s: ViewsPageState) {
                         <a href={v.address}>{v.name}</a>
                         <br /><span class="muted small">{t(lang, KIND_KEY[v.kind])}</span>
                         {i >= cap ? <><br /><span class="muted small">{t(lang, "views.past")}</span></> : null}
-                        {dash ? <AddToDashboard lang={lang} account={account} kind="view" panelRef={v.id} /> : null}
+                        {dash ? <AddToDashboard lang={lang} account={account} kind="view" panelRef={v.id} boards={s.boards} /> : null}
                       </td>
                       {s.ultra ? (
                         <td data-label={t(lang, "views.col_email")}>

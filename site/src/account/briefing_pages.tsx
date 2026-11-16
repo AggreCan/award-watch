@@ -24,7 +24,7 @@ import {
   type Briefing, type BriefingData, type BriefingKind, type BriefingOverview, type BriefingRun, type BriefingSubject, WEEK_DAYS, briefValue,
   briefingName, briefingPath, briefingState, readBriefing, sharedCap,
 } from "./briefings";
-import { AddToDashboard } from "./dashboard_add";
+import { AddToDashboard, type BoardChoice } from "./dashboard_add";
 import { holdsDashboard } from "./dashboard_rule";
 import { briefingDigest, briefingParts } from "./digests";
 import { allowed } from "./entitlements";
@@ -168,9 +168,9 @@ const DELIVER_KEY: Record<string, Key> = { weekly: "account.deliver_weekly", off
 
 // Each briefing with its delivery (weekly or off on Pro; off with the Pro
 // chip on Free), its newest run and a remove button.
-export const BriefingsPanel: FC<{ lang: Lang; account: Account; briefings: (Briefing & { last: BriefingRun | null })[] }> = (
-  { lang, account, briefings },
-) => {
+export const BriefingsPanel: FC<{
+  lang: Lang; account: Account; briefings: (Briefing & { last: BriefingRun | null })[]; boards?: readonly BoardChoice[];
+}> = ({ lang, account, briefings, boards }) => {
   const pro = allowed(account, "delivery");
   const dash = holdsDashboard(account.plan);
   return (
@@ -190,7 +190,7 @@ export const BriefingsPanel: FC<{ lang: Lang; account: Account; briefings: (Brie
                   {dash ? (
                     <td data-label={t(lang, "briefing.col")}>
                       <a href={briefingPath(b)}>{briefingLabel(lang, b)}</a>
-                      <AddToDashboard lang={lang} account={account} kind="briefing" panelRef={b.id} />
+                      <AddToDashboard lang={lang} account={account} kind="briefing" panelRef={b.id} boards={boards} />
                     </td>
                   ) : <td data-label={t(lang, "briefing.col")}><a href={briefingPath(b)}>{briefingLabel(lang, b)}</a></td>}
                   <td data-label={t(lang, "account.col_delivery")}>

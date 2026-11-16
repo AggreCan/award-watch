@@ -275,19 +275,19 @@ describe("where the list shows", () => {
       expect(moreOf(html)?.lines, path).toEqual(all(path.includes("fr") ? "fr" : "en"));
       expect(panelOf(html), path).toBeNull();
     }
-    // Twelve tiles: nothing more can be added, so nothing is listed; one removed, the list is back.
+    // The plan's figure of tiles (24): nothing more can be added, so nothing is listed; one removed, the list is back.
     const at = new Date().toISOString();
     const board = (await ACCOUNTS.prepare("SELECT id FROM dashboards WHERE user_id = ?").bind(r.id).first<{ id: string }>())!.id;
-    const fill = ["radar:12m", ...Array.from({ length: 8 }, (_, i) => `tenders:${String(i).padStart(32, "a")}`)];
+    const fill = ["radar:12m", ...Array.from({ length: 20 }, (_, i) => `tenders:${String(i).padStart(32, "a")}`)];
     await ACCOUNTS.batch(fill.map((p, i) => ACCOUNTS.prepare(
       "INSERT INTO dashboard_tiles (id, dashboard_id, user_id, kind, ref, opts, x, y, w, h, created_at) VALUES (?, ?, ?, ?, ?, '', 0, ?, 12, 9, ?)",
     ).bind(crypto.randomUUID().replace(/-/g, ""), board, r.id, p.slice(0, p.indexOf(":")), p.slice(p.indexOf(":") + 1), 100 + 10 * i, at)));
     const rows = (await ACCOUNTS.prepare("SELECT id FROM dashboard_tiles WHERE user_id = ? ORDER BY y").bind(r.id).all<{ id: string }>()).results ?? [];
-    expect(rows).toHaveLength(12);
+    expect(rows).toHaveLength(24);
     const full = await text(await open(r));
-    expect(full).toContain("The dashboard holds its 12 tiles.");
+    expect(full).toContain("The dashboard holds its 24 tiles.");
     expect(moreOf(full)).toBeNull();
-    await send(r, `/account/dashboard/tiles/${rows[11].id}/delete`);
+    await send(r, `/account/dashboard/tiles/${rows[23].id}/delete`);
     expect(moreOf(await text(await open(r)))?.lines).toEqual(all("en"));
     // Without the grid's tables a tile still goes into the panels' table, so the list shows; without that too, none.
     const fresh = await reader("aid-unsaved");

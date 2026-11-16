@@ -16,10 +16,11 @@ import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { LEAST, START_H, least, normalize, steps as gridSteps } from "../public/dash-grid.js";
 import {
-  ADD_PANEL_SQL, ADD_TILE_SQL, BRIEFING_PANELS_MAX, PANEL_KINDS, RADAR_TOP_SQL, specOf, startingLayout, viewAddress, viewRef, viewSpan,
+  ADD_PANEL_SQL, ADD_TILE_SQL, BRIEFING_PANELS_MAX, MOVE_TO_SQL, NEW_BOARD_SQL, PANEL_KINDS, RADAR_TOP_SQL, specOf, startingLayout, viewAddress, viewRef,
+  viewSpan,
 } from "../src/account/dashboard";
 import { tileFit } from "../src/account/dashboard_fit";
-import { DASHBOARD_MAX, dashboardCap } from "../src/account/dashboard_rule";
+import { DASHBOARDS_MAX, TILES_MAX, boardCap, tileCap } from "../src/account/dashboard_rule";
 import { DASHBOARD_STRINGS } from "../src/account/dashboard_strings";
 import { RULES } from "../src/account/entitlements";
 import { claimFrame, endingParams } from "../src/account/org_claim";
@@ -185,6 +186,15 @@ const heads = (html: string) => drawn(html).map((d) => d.head);
 // Each tile's Open, in its foot.
 const opens = (html: string) => [...mainOf(html).matchAll(/<div class="dash-foot">[\s\S]*?<a href="([^"]*)">Open<\/a>/g)].map((m) => m[1]);
 const rowsIn = (s: string) => (s.match(/<tr>/g)?.length ?? 1) - 1;
+// n tiles written straight into a dashboard, under its others: saved tender searches by made-up ids (the page says
+// each was removed), a ref apart for each tag, so a dashboard reaches its figure without as many real searches.
+async function fill(r: Reader, board: string, n: number, tag = "f"): Promise<void> {
+  if (n <= 0) return;
+  const at = new Date().toISOString();
+  await ACCOUNTS.batch(Array.from({ length: n }, (_, i) => ACCOUNTS.prepare(
+    "INSERT INTO dashboard_tiles (id, dashboard_id, user_id, kind, ref, opts, x, y, w, h, created_at) VALUES (?, ?, ?, 'tenders', ?, '', 0, ?, 6, 10, ?)",
+  ).bind(crypto.randomUUID().replace(/-/g, ""), board, r.id, `${tag}${i}`.padStart(32, "0"), 200 + 10 * i, at)));
+}
 const searchId = async (r: Reader, params: string) =>
   (await ACCOUNTS.prepare("SELECT id FROM saved_searches WHERE user_id = ? AND params = ?").bind(r.id, params).first<{ id: string }>())!.id;
 
@@ -256,7 +266,11 @@ describe("a Free or Pro account while Ultra is on sale", () => {
         const main = mainOf(html);
         expect(main).toContain(`<h1>${norm(t(lang, "dash.title"))}</h1>`);
         expect(main).toContain(`<h2>${norm(t(lang, "dash.what_title"))}</h2>`);
-        expect(main).toContain(norm(t(lang, "dash.what_lead", { cap: String(RULES.ultra.dashboard) })));
+        // Ultra's figures, as its plan card states them: 5 dashboards of 24 tiles each.
+        const line = lang === "fr" ? `${RULES.ultra.dashboards} tableaux de bord de ${RULES.ultra.dashboard_tiles} tuiles chacun`
+          : `${RULES.ultra.dashboards} dashboards of ${RULES.ultra.dashboard_tiles} tiles each`;
+        expect(main).toContain(norm(t(lang, "dash.what_lead", { line })));
+        expect(main).not.toMatch(/panels|panneaux/);
         for (const k of PANEL_KINDS) expect(main, k).toContain(`<li>${norm(t(lang, `dash.what_${k}` as Key))}</li>`);
         expect(main).toContain(`<p class="muted">${norm(t(lang, "dash.gate"))} <a href="/account/billing">${norm(t(lang, "billing.link_plans"))}</a></p>`);
         expect(main.match(/<div class="plan-card[ "]/g)).toHaveLength(3);
@@ -402,11 +416,14 @@ describe("an Ultra account", () => {
     expect(main.match(/btn-primary/g)).toHaveLength(1);
     expect(tablesIn(html).length).toBeGreaterThanOrEqual(8);
     expect(misfits(html)).toEqual([]);
-    // Twelve held: a thirteenth is refused inside the insert, and the page says so.
+    // Filled to the plan's figure (TILES_MAX, 24): one more is refused inside the insert, and the page says so.
+    const board = (await boards(r.id))[0].id;
+    await fill(r, board, TILES_MAX - 12);
+    expect((await tileRows(r.id)).length).toBe(TILES_MAX);
     const full = await send(r, "/account/dashboard/panels", { kind: "org", ref: "share" });
     expect(full.headers.get("location")).toBe("/account/dashboard?m=full");
-    expect((await tileRows(r.id)).length).toBe(12);
-    expect(await text(await open(r, "/account/dashboard?m=full"))).toContain(t("en", "dash.full", { cap: "12" }));
+    expect((await tileRows(r.id)).length).toBe(TILES_MAX);
+    expect(await text(await open(r, "/account/dashboard?m=full"))).toContain(t("en", "dash.full", { cap: "24" }));
   });
 
   it("draws the organization's other blocks, side by side on the grid, every table in its tile at every width", async () => {
@@ -457,7 +474,7 @@ describe("an Ultra account", () => {
     expect(after.some((p) => p.ref === second || p.ref === briefing)).toBe(false);
   });
 
-  it("refuses the third briefing and the thirteenth tile inside the insert itself", async () => {
+  it("refuses the third briefing and the tile past the figure inside the insert itself", async () => {
     const r = await reader("dash-caps");
     for (const s of ["81", "43", "72"]) await send(r, "/account/briefings", { kind: "segment", subject: s });
     const ids = ((await ACCOUNTS.prepare("SELECT id FROM briefings WHERE user_id = ? ORDER BY created_at, id").bind(r.id).all<{ id: string }>()).results ?? [])
@@ -471,19 +488,26 @@ describe("an Ultra account", () => {
     expect(await text(await open(r, "/account/dashboard?m=briefings_full"))).toContain(t("en", "dash.briefings_full", { n: "2" }));
     // The statement alone holds all three: two inserts at once cannot pass any of them.
     const insert = (kind: string, ref: string, cap: number) => ACCOUNTS.prepare(ADD_TILE_SQL)
-      .bind(crypto.randomUUID().replace(/-/g, ""), r.id, kind, ref, 0, 99, 6, 9, new Date().toISOString(), cap, BRIEFING_PANELS_MAX).run();
-    expect((await insert("briefing", ids[2], DASHBOARD_MAX)).meta.changes).toBe(0);
+      .bind(crypto.randomUUID().replace(/-/g, ""), r.id, kind, ref, 0, 99, 6, 9, new Date().toISOString(), cap, BRIEFING_PANELS_MAX, null).run();
+    expect((await insert("briefing", ids[2], TILES_MAX)).meta.changes).toBe(0);
     const held = (await tileRows(r.id)).length;
     expect((await insert("watches", "x", held)).meta.changes).toBe(0);
     expect((await insert("watches", "x", held + 1)).meta.changes).toBe(1);
     // The same item once.
-    expect((await insert("watches", "x", DASHBOARD_MAX)).meta.changes).toBe(0);
-    expect(dashboardCap("ultra")).toBe(RULES.ultra.dashboard);
-    expect([dashboardCap("free"), dashboardCap("pro")]).toEqual([0, 0]);
-    // A tile goes in only into the account's own dashboard: with none, nothing is written.
+    expect((await insert("watches", "x", TILES_MAX)).meta.changes).toBe(0);
+    // The figures are RULES' (5 dashboards of 24 tiles on Ultra, none on Free and Pro), the ceilings Ultra's.
+    expect([RULES.free.dashboards, RULES.pro.dashboards, RULES.ultra.dashboards]).toEqual([0, 0, 5]);
+    expect([RULES.free.dashboard_tiles, RULES.pro.dashboard_tiles, RULES.ultra.dashboard_tiles]).toEqual([0, 0, 24]);
+    expect([tileCap("ultra"), boardCap("ultra")]).toEqual([RULES.ultra.dashboard_tiles, RULES.ultra.dashboards]);
+    expect([TILES_MAX, DASHBOARDS_MAX]).toEqual([RULES.ultra.dashboard_tiles, RULES.ultra.dashboards]);
+    expect([tileCap("free"), tileCap("pro"), boardCap("free"), boardCap("pro")]).toEqual([0, 0, 0, 0]);
+    // A tile goes in only into the account's own dashboard: with none, nothing is written; nor into another account's.
     const fresh = await reader("dash-caps-none");
-    const none = await ACCOUNTS.prepare(ADD_TILE_SQL).bind("f".repeat(32), fresh.id, "watches", "", 0, 0, 6, 9, new Date().toISOString(), 12, 2).run();
+    const none = await ACCOUNTS.prepare(ADD_TILE_SQL).bind("f".repeat(32), fresh.id, "watches", "", 0, 0, 6, 9, new Date().toISOString(), 24, 2, null).run();
     expect(none.meta.changes).toBe(0);
+    const theirs = (await boards(r.id))[0].id;
+    const foreign = await ACCOUNTS.prepare(ADD_TILE_SQL).bind("e".repeat(32), fresh.id, "watches", "", 0, 0, 6, 9, new Date().toISOString(), 24, 2, theirs).run();
+    expect(foreign.meta.changes).toBe(0);
   });
 });
 
@@ -537,7 +561,7 @@ describe("without the grid's tables (accounts_schema.sql not applied since the g
       expect(heads(html)).toEqual(["Your watches this week", "Contracts ending | Ending within 3 months"]);
       expect(mainOf(html)).toContain(t("en", "dash.unsaved"));
       // Add a Tile says why it adds nothing.
-      expect(mainOf(html)).toMatch(/<div class="dash-adder-body"><p class="muted small">2 of 12 tiles<\/p><p class="muted">The dashboard cannot be saved yet/);
+      expect(mainOf(html)).toMatch(/<div class="dash-adder-body"><p class="muted small">2 of 24 tiles<\/p><p class="muted">The dashboard cannot be saved yet/);
       expect((await send(r, "/account/dashboard/panels", { kind: "radar", ref: "6m" })).headers.get("location")).toBe("/account/dashboard?m=unsaved");
       expect((await send(r, "/account/dashboard/tiles/s0/move", { dir: "down" })).headers.get("location")).toBe("/account/dashboard?m=unsaved");
       expect((await send(r, "/account/dashboard/tiles/s0/delete")).headers.get("location")).toBe("/account/dashboard?m=unsaved");
@@ -821,7 +845,7 @@ describe("the page", () => {
     expect(edit).toBe(plain);
     expect(plain.match(/btn-primary/g)).toHaveLength(1);
     expect(plain).toContain(`<details class="dash-adder" id="dash-add"><summary class="btn btn-primary">${t("en", "dash.add_tile")}</summary>`);
-    expect(plain).toContain('<p class="muted small">3 of 12 tiles</p>');
+    expect(plain).toContain('<p class="muted small">3 of 24 tiles</p>');
     expect(plain).toContain('<button type="submit" class="btn">Add</button>');
     expect(plain).toContain('<optgroup label="Contracts ending"><option value="radar:6m">Ending within 6 months</option>');
     expect(plain).not.toContain('value="radar:3m"');
@@ -846,11 +870,15 @@ describe("the page", () => {
   it("counts every post and the one read in the edit bucket, the page with the pages", () => {
     const id = "a".repeat(32);
     for (const path of ["/account/dashboard/panels", "/account/dashboard/layout", `/account/dashboard/tiles/${id}/move`, `/account/dashboard/tiles/${id}/size`,
-      `/account/dashboard/tiles/${id}/delete`, `/account/dashboard/panels/${id}/move`, `/account/dashboard/panels/${id}/width`, `/account/dashboard/panels/${id}/delete`]) {
+      `/account/dashboard/tiles/${id}/delete`, `/account/dashboard/tiles/${id}/board`, `/account/dashboard/panels/${id}/move`,
+      `/account/dashboard/panels/${id}/width`, `/account/dashboard/panels/${id}/delete`, "/account/dashboard/boards", `/account/dashboard/boards/${id}/rename`,
+      `/account/dashboard/boards/${id}/move`, `/account/dashboard/boards/${id}/delete`, "/account/dashboard/boards/first/rename"]) {
       expect(bucketFor("POST", path), path).toBe("edit");
     }
     expect(bucketFor("GET", `/account/dashboard/tiles/${id}`)).toBe("edit");
     expect(bucketFor("GET", "/account/dashboard")).toBe("page");
+    expect(bucketFor("GET", `/account/dashboard/${id}`)).toBe("page");
+    expect(bucketFor("POST", `/account/dashboard/boards/${id}/spin`)).toBe("page");
     expect(bucketFor("POST", `/account/dashboard/tiles/${id}/spin`)).toBe("page");
   });
 
@@ -1020,5 +1048,506 @@ describe("deleting the account", () => {
     expect(await tileRows(r.id)).toEqual([]);
     expect(await boards(r.id)).toEqual([]);
     expect(await panelRows(r.id)).toEqual([]);
+  });
+});
+
+// =====================================================================================
+// Several dashboards (B1b): tabs, each at its own address; New, Rename, Order, Delete;
+// tiles a dashboard's own; Move To; Add to dashboard's choice; the figures from RULES
+// =====================================================================================
+
+// The dashboards' tabs as the page draws them: each one's address, whether it is the one shown, its name.
+function tabsIn(html: string): { href: string; current: boolean; label: string }[] {
+  const nav = /<nav class="tabs dash-tabs" aria-label="[^"]*">([\s\S]*?)<\/nav>/.exec(mainOf(html))?.[1] ?? "";
+  return [...nav.matchAll(/<a href="([^"]*)"( aria-current="page")? title="[^"]*">([^<]*)<\/a>/g)].map((m) => ({ href: m[1], current: !!m[2], label: m[3] }));
+}
+// A form of the page by its action, whole.
+const formAt = (html: string, action: string, also = "") => {
+  const at = html.indexOf(`<form method="post" action="${action}"${also}`);
+  return at < 0 ? "" : html.slice(at, html.indexOf("</form>", at) + 7);
+};
+type Ordered = { id: string; name: string; pos: number };
+const ordered = (id: string) => ACCOUNTS.prepare("SELECT id, name, pos FROM dashboards WHERE user_id = ? ORDER BY pos, created_at, id")
+  .bind(id).all<Ordered>().then((r) => r.results ?? []);
+const boardTiles = (board: string) => ACCOUNTS.prepare("SELECT id, kind, ref, opts, x, y, w, h FROM dashboard_tiles WHERE dashboard_id = ? ORDER BY y, x, id")
+  .bind(board).all<TileRow>().then((r) => r.results ?? []);
+// New dashboard pressed: the post lands on the new one's own address; its id.
+async function newBoard(r: Reader, e: object = off()): Promise<string> {
+  const res = await send(r, "/account/dashboard/boards", {}, e);
+  expect(res.status).toBe(303);
+  const at = res.headers.get("location") ?? "";
+  expect(at).toMatch(/^\/account\/dashboard\/[0-9a-f]{32}$/);
+  return at.slice("/account/dashboard/".length);
+}
+
+describe("several dashboards", () => {
+  it("are tabs over the grid, each at its own address; New dashboard writes the computed first and lands on the new one, empty", async () => {
+    const r = await reader("boards-new");
+    // Nothing stored: one tab, the computed first, current, with New dashboard beside it; the view writes nothing.
+    const first = await text(await open(r));
+    expect(tabsIn(first)).toEqual([{ href: "/account/dashboard", current: true, label: "Dashboard 1" }]);
+    expect(formAt(mainOf(first), "/account/dashboard/boards")).toBe(
+      `<form method="post" action="/account/dashboard/boards"><input type="hidden" name="csrf" value="${r.csrf}"/><button type="submit" class="btn-link">New dashboard</button></form>`,
+    );
+    expect(await boards(r.id)).toEqual([]);
+    const id = await newBoard(r);
+    const rows = await ordered(r.id);
+    expect(rows.map((b) => [b.name, b.pos])).toEqual([["", 0], ["", 1]]);
+    expect(rows[1].id).toBe(id);
+    // The first was written as it showed (the starting layout's two tiles); the new one holds none.
+    expect((await boardTiles(rows[0].id)).map((x) => `${x.kind}:${x.ref}`)).toEqual(["watches:", "radar:3m"]);
+    expect(await boardTiles(id)).toEqual([]);
+    // The new one at its own address: its tab current, empty, Add a Tile open, its posts and its saves naming it.
+    const res = await open(r, `/account/dashboard/${id}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("private, no-store");
+    const html = await text(res);
+    expect(tabsIn(html)).toEqual([
+      { href: "/account/dashboard", current: false, label: "Dashboard 1" }, { href: `/account/dashboard/${id}`, current: true, label: "Dashboard 2" },
+    ]);
+    const main = mainOf(html);
+    expect(main).not.toContain("dash-tile");
+    expect(main).toContain('<details class="dash-adder" id="dash-add" open="">');
+    expect(main).toContain(`<input type="hidden" name="board" value="${id}"/>`);
+    expect(main).toContain(t("en", "dash.empty"));
+    expect(main.match(/btn-primary/g)).toHaveLength(1);
+    const data = JSON.parse(/<script type="application\/json" id="dash-data">([\s\S]*?)<\/script>/.exec(main)![1]);
+    expect(data.layout).toBe(`/account/dashboard/layout?board=${id}`);
+    // A reload keeps it; the language switch is the page's own address with the other language, so it keeps it too.
+    expect(tabsIn(await text(await open(r, `/account/dashboard/${id}`))).map((x) => x.current)).toEqual([false, true]);
+    const fr = await text(await open(r, `/account/dashboard/${id}?lang=fr`));
+    expect(tabsIn(fr).map((x) => [x.label, x.current])).toEqual([["Tableau de bord 1", false], ["Tableau de bord 2", true]]);
+    expect(fr).toContain('<a href="?lang=en" class="lang-toggle"');
+    expect(fr).not.toContain(EM_DASH);
+    expect(fr).not.toContain(EN_DASH);
+    // The bare address shows the first, as does the first's own id.
+    const bare = await text(await open(r));
+    expect(tabsIn(bare).map((x) => x.current)).toEqual([true, false]);
+    expect(drawn(bare)).toHaveLength(2);
+    expect(tabsIn(await text(await open(r, `/account/dashboard/${rows[0].id}`))).map((x) => x.current)).toEqual([true, false]);
+    // A dashboard the account does not hold goes to the first, in the page's language; anything else there is the site's 404.
+    const other = await reader("boards-new-other");
+    expect((await open(other, `/account/dashboard/${id}`)).headers.get("location")).toBe("/account/dashboard");
+    expect((await open(other, `/account/dashboard/${id}?lang=fr`)).headers.get("location")).toBe("/account/dashboard?lang=fr");
+    expect((await open(r, `/account/dashboard/${"0".repeat(32)}`)).headers.get("location")).toBe("/account/dashboard");
+    for (const bad of ["abc", "nonsense", `${id}0`]) expect((await open(r, `/account/dashboard/${bad}`)).status, bad).toBe(404);
+    // Signed out while Ultra is on sale: the sign-in page, back to this dashboard; off sale, a Free reader's 404.
+    expect((await open(null, `/account/dashboard/${id}`, sale())).headers.get("location")).toBe(`/account/sign-in?next=${encodeURIComponent(`/account/dashboard/${id}`)}`);
+    const free = await reader("boards-new-free", "free");
+    expect((await open(free, `/account/dashboard/${id}`)).status).toBe(404);
+  });
+
+  it("holds the plan's figure of dashboards inside the insert, and offers New dashboard only below it", async () => {
+    const r = await reader("boards-cap");
+    for (let i = 1; i < RULES.ultra.dashboards; i++) await newBoard(r);
+    expect(await boards(r.id)).toHaveLength(DASHBOARDS_MAX);
+    const html = await text(await open(r));
+    expect(tabsIn(html).map((x) => x.label)).toEqual(["Dashboard 1", "Dashboard 2", "Dashboard 3", "Dashboard 4", "Dashboard 5"]);
+    expect(formAt(mainOf(html), "/account/dashboard/boards")).toBe("");
+    const sixth = await send(r, "/account/dashboard/boards");
+    expect(sixth.headers.get("location")).toBe("/account/dashboard?m=boards_full");
+    expect(await boards(r.id)).toHaveLength(DASHBOARDS_MAX);
+    expect(await text(await open(r, "/account/dashboard?m=boards_full"))).toContain(t("en", "dash.boards_full", { boards: "5" }));
+    // The statement alone holds it, so two posts at once cannot pass it.
+    expect((await ACCOUNTS.prepare(NEW_BOARD_SQL).bind("f".repeat(32), r.id, new Date().toISOString(), DASHBOARDS_MAX).run()).meta.changes).toBe(0);
+    expect((await ACCOUNTS.prepare(NEW_BOARD_SQL).bind("f".repeat(32), r.id, new Date().toISOString(), DASHBOARDS_MAX + 1).run()).meta.changes).toBe(1);
+  });
+
+  it("renames a dashboard as typed: plain text, control characters dropped, 40 characters at most, the site's label when left empty", async () => {
+    const r = await reader("boards-name");
+    const id = await newBoard(r);
+    const rename = (board: string, name: string) => send(r, `/account/dashboard/boards/${board}/rename`, { name });
+    // The form: the name typed so far, the site's label as its placeholder, the note under it.
+    const form = formAt(mainOf(await text(await open(r, `/account/dashboard/${id}`))), `/account/dashboard/boards/${id}/rename`);
+    expect(form).toContain('<input type="text" name="name" value="" maxlength="40" placeholder="Dashboard 2" autocomplete="off"/>');
+    expect(form).toContain("40 characters at most. Left empty, it is named Dashboard 2.");
+    const res = await rename(id, "  Suppliers\u0007 <b>&</b>\u0000 ");
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe(`/account/dashboard/${id}?m=renamed`);
+    expect((await ordered(r.id))[1].name).toBe("Suppliers <b>&</b>");
+    // Shown as text, never as markup.
+    const raw = await (await open(r, `/account/dashboard/${id}`)).text();
+    expect(raw).toContain(`aria-current="page" title="Suppliers &lt;b&gt;&amp;&lt;/b&gt;">Suppliers &lt;b&gt;&amp;&lt;/b&gt;</a>`);
+    expect(raw).not.toContain("<b>&</b>");
+    await rename(id, "x".repeat(60));
+    expect((await ordered(r.id))[1].name).toBe("x".repeat(40));
+    await rename(id, "   ");
+    expect((await ordered(r.id))[1].name).toBe("");
+    expect(tabsIn(await text(await open(r, `/account/dashboard/${id}?lang=fr`))).map((x) => x.label)).toEqual(["Tableau de bord 1", "Tableau de bord 2"]);
+    // The computed first, named: written first, as it showed, with the name.
+    const fresh = await reader("boards-name-first");
+    expect((await send(fresh, "/account/dashboard/boards/first/rename", { name: "Ma vue" })).headers.get("location")).toBe("/account/dashboard?m=renamed");
+    const [only] = await ordered(fresh.id);
+    expect(only.name).toBe("Ma vue");
+    expect((await boardTiles(only.id)).length).toBe(2);
+    expect(await text(await open(fresh, "/account/dashboard?m=renamed"))).toContain(t("en", "dash.board_renamed"));
+    // Another account's dashboard: nothing changes.
+    await send(fresh, `/account/dashboard/boards/${id}/rename`, { name: "Theirs" });
+    expect((await ordered(r.id))[1].name).toBe("");
+  });
+
+  it("moves a dashboard earlier or later, the order written whole, its label kept and the first's address the bare one", async () => {
+    const r = await reader("boards-order");
+    const b2 = await newBoard(r);
+    const b3 = await newBoard(r);
+    const b1 = (await ordered(r.id))[0].id;
+    expect((await send(r, `/account/dashboard/boards/${b3}/move`, { dir: "earlier" })).headers.get("location")).toBe(`/account/dashboard/${b3}`);
+    expect((await ordered(r.id)).map((x) => [x.id, x.pos])).toEqual([[b1, 0], [b3, 1], [b2, 2]]);
+    expect((await send(r, `/account/dashboard/boards/${b3}/move`, { dir: "earlier" })).headers.get("location")).toBe("/account/dashboard");
+    const html = await text(await open(r));
+    // Each keeps the label it was made with (they are numbered in the order the account made them).
+    expect(tabsIn(html)).toEqual([
+      { href: "/account/dashboard", current: true, label: "Dashboard 3" }, { href: `/account/dashboard/${b1}`, current: false, label: "Dashboard 1" },
+      { href: `/account/dashboard/${b2}`, current: false, label: "Dashboard 2" },
+    ]);
+    // The first cannot go earlier: offered disabled, and its post changes nothing; the last cannot go later.
+    const main = mainOf(html);
+    expect(main).toContain(`<form method="post" action="/account/dashboard/boards/${b3}/move"><input type="hidden" name="csrf" value="${r.csrf}"/>` +
+      '<input type="hidden" name="dir" value="earlier"/><button type="submit" class="btn" disabled="">Move earlier</button></form>');
+    expect(main).toContain('<input type="hidden" name="dir" value="later"/><button type="submit" class="btn">Move later</button>');
+    await send(r, `/account/dashboard/boards/${b3}/move`, { dir: "earlier" });
+    expect((await ordered(r.id)).map((x) => x.id)).toEqual([b3, b1, b2]);
+    expect(mainOf(await text(await open(r, `/account/dashboard/${b2}`)))).toContain('<input type="hidden" name="dir" value="later"/><button type="submit" class="btn" disabled="">Move later</button>');
+    expect((await send(r, `/account/dashboard/boards/${b2}/move`, { dir: "later" })).headers.get("location")).toBe(`/account/dashboard/${b2}`);
+    expect((await ordered(r.id)).map((x) => x.id)).toEqual([b3, b1, b2]);
+    expect((await send(r, `/account/dashboard/boards/${b1}/move`, { dir: "later" })).headers.get("location")).toBe(`/account/dashboard/${b1}`);
+    expect((await ordered(r.id)).map((x) => [x.id, x.pos])).toEqual([[b3, 0], [b2, 1], [b1, 2]]);
+    // A direction the post does not name, and an operation the address does not know: refused, or the site's 404.
+    expect((await send(r, `/account/dashboard/boards/${b2}/move`, { dir: "sideways" })).status).toBe(400);
+    expect((await send(r, `/account/dashboard/boards/${b2}/spin`)).status).toBe(404);
+  });
+
+  it("deletes a dashboard and its tiles on the question inside the page, never a dialog, and empties the last one", async () => {
+    const r = await reader("boards-delete");
+    const b2 = await newBoard(r);
+    const b1 = (await ordered(r.id))[0].id;
+    await send(r, "/account/dashboard/panels", { kind: "radar", ref: "6m", board: b2 });
+    await send(r, "/account/dashboard/panels", { kind: "radar", ref: "12m", board: b2 });
+    // The question is a details element inside Rename, Order or Delete, its button the answer; the page has no dialog.
+    const raw = await (await open(r, `/account/dashboard/${b2}`)).text();
+    expect(norm(decode(raw))).toContain(`<details class="dash-board-delete"><summary class="btn-link">Delete this dashboard</summary>` +
+      `<form method="post" action="/account/dashboard/boards/${b2}/delete" class="stack"><input type="hidden" name="csrf" value="${r.csrf}"/>` +
+      `<p>Delete the dashboard Dashboard 2 and its 2 tiles?</p><button type="submit" name="confirm" value="yes" class="btn">Delete</button></form></details>`);
+    expect(raw).not.toMatch(/confirm\(|onclick|onsubmit/);
+    // Without the answer, nothing.
+    expect((await send(r, `/account/dashboard/boards/${b2}/delete`)).status).toBe(400);
+    expect(await boards(r.id)).toHaveLength(2);
+    const res = await send(r, `/account/dashboard/boards/${b2}/delete`, { confirm: "yes" });
+    expect(res.headers.get("location")).toBe("/account/dashboard?m=board_deleted");
+    expect((await ordered(r.id)).map((x) => x.id)).toEqual([b1]);
+    expect(await boardTiles(b2)).toEqual([]);
+    expect((await boardTiles(b1)).map((x) => x.ref)).toEqual(["", "3m"]);
+    expect(await text(await open(r, "/account/dashboard?m=board_deleted"))).toContain(t("en", "dash.board_deleted"));
+    expect((await open(r, `/account/dashboard/${b2}`)).headers.get("location")).toBe("/account/dashboard");
+    // The last one: its tiles go, and it stays, emptied, with the site's label, as removing its last tile leaves it.
+    await send(r, `/account/dashboard/boards/${b1}/rename`, { name: "Main" });
+    const one = mainOf(await text(await open(r)));
+    expect(one).toContain("<p>Delete the dashboard Main and its 2 tiles?</p>");
+    expect(one).toContain(t("en", "dash.board_delete_last"));
+    expect((await send(r, `/account/dashboard/boards/${b1}/delete`, { confirm: "yes" })).headers.get("location")).toBe("/account/dashboard?m=board_emptied");
+    expect(await ordered(r.id)).toEqual([{ id: b1, name: "", pos: 0 }]);
+    expect(await boardTiles(b1)).toEqual([]);
+    const emptied = mainOf(await text(await open(r, "/account/dashboard?m=board_emptied")));
+    expect(emptied).toContain(t("en", "dash.board_emptied"));
+    expect(emptied).not.toContain("dash-tile");
+    expect(emptied).not.toContain(t("en", "dash.starter"));
+    expect(emptied).toContain('<details class="dash-adder" id="dash-add" open="">');
+    // The computed first, deleted: written with no tile, so the account keeps an emptied first dashboard.
+    const fresh = await reader("boards-delete-first");
+    expect(mainOf(await text(await open(fresh)))).toContain("<p>Delete the dashboard Dashboard 1 and its 2 tiles?</p>");
+    expect((await send(fresh, "/account/dashboard/boards/first/delete", { confirm: "yes" })).headers.get("location")).toBe("/account/dashboard?m=board_emptied");
+    expect(await ordered(fresh.id)).toHaveLength(1);
+    expect(await tileRows(fresh.id)).toEqual([]);
+    expect(mainOf(await text(await open(fresh)))).not.toContain(t("en", "dash.starter"));
+  });
+
+  it("keeps each dashboard's tiles its own: the same item once on each, the figure and the briefings' cap a dashboard's", async () => {
+    const r = await reader("boards-tiles");
+    const b2 = await newBoard(r);
+    const b1 = (await ordered(r.id))[0].id;
+    expect((await send(r, "/account/dashboard/panels", { kind: "radar", ref: "6m" })).headers.get("location")).toMatch(/^\/account\/dashboard\?m=added#tile-[0-9a-f]{32}$/);
+    const two = await send(r, "/account/dashboard/panels", { kind: "radar", ref: "6m", board: b2 });
+    expect(two.headers.get("location")).toMatch(new RegExp(`^/account/dashboard/${b2}\\?m=added#tile-[0-9a-f]{32}$`));
+    const again = await send(r, "/account/dashboard/panels", { panel: "radar:6m", board: b2 });
+    expect(again.headers.get("location")).toMatch(new RegExp(`^/account/dashboard/${b2}\\?m=exists#tile-[0-9a-f]{32}$`));
+    expect((await boardTiles(b1)).filter((x) => x.ref === "6m")).toHaveLength(1);
+    expect((await boardTiles(b2)).filter((x) => x.ref === "6m")).toHaveLength(1);
+    // Add a Tile on the second offers what the second does not show, the first's own tiles included.
+    const second = mainOf(await text(await open(r, `/account/dashboard/${b2}`)));
+    expect(second).not.toContain('value="radar:6m"');
+    expect(second).toContain('value="radar:3m"');
+    // The figure is a dashboard's: the second full at 24, the first still takes one.
+    await fill(r, b2, TILES_MAX - 1);
+    const full = await send(r, "/account/dashboard/panels", { kind: "radar", ref: "12m", board: b2 });
+    expect(full.headers.get("location")).toBe(`/account/dashboard/${b2}?m=full`);
+    expect((await boardTiles(b2)).length).toBe(TILES_MAX);
+    expect(await text(await open(r, `/account/dashboard/${b2}?m=full`))).toContain(t("en", "dash.full", { cap: "24" }));
+    expect((await send(r, "/account/dashboard/panels", { kind: "radar", ref: "12m" })).headers.get("location")).toMatch(/\?m=added#/);
+    // The briefings' cap is a dashboard's too: two on the first, two on a third, the third briefing on neither.
+    for (const s of ["81", "43", "72"]) await send(r, "/account/briefings", { kind: "segment", subject: s });
+    const ids = ((await ACCOUNTS.prepare("SELECT id FROM briefings WHERE user_id = ? ORDER BY created_at, id").bind(r.id).all<{ id: string }>()).results ?? [])
+      .map((x) => x.id);
+    const b3 = await newBoard(r);
+    for (const board of ["", b3]) {
+      for (const id of ids.slice(0, BRIEFING_PANELS_MAX)) {
+        expect((await send(r, "/account/dashboard/panels", { kind: "briefing", ref: id, board })).headers.get("location"), board).toMatch(/\?m=added#/);
+      }
+      expect((await send(r, "/account/dashboard/panels", { kind: "briefing", ref: ids[2], board })).headers.get("location"), board).toMatch(/\?m=briefings_full$/);
+    }
+  });
+
+  it("moves a tile to another dashboard from its menu: it keeps its size, lands at that dashboard's foot, and the one it left closes up", async () => {
+    const r = await reader("boards-move");
+    const b2 = await newBoard(r);
+    const b1 = (await ordered(r.id))[0].id;
+    await send(r, "/account/dashboard/panels", { kind: "radar", ref: "6m", board: b2 });
+    await send(r, `/account/dashboard/boards/${b2}/rename`, { name: "Second" });
+    // Each tile's menu offers the other dashboards by name, each a post; one with no other dashboard offers none.
+    const page = await text(await open(r));
+    const watches = drawn(page).find((d) => d.head === "Your watches this week")!;
+    expect(watches.html).toContain(`<p class="dash-menu-head">Move to</p><form method="post" action="/account/dashboard/tiles/${watches.id}/board">` +
+      `<input type="hidden" name="csrf" value="${r.csrf}"/><input type="hidden" name="board" value="${b2}"/>` +
+      `<button type="submit" class="dash-menu-item" aria-label="Move to Second">Second</button></form>`);
+    expect(watches.html).toMatch(/Second<\/button><\/form><form method="post" action="\/account\/dashboard\/tiles\/[0-9a-f]{32}\/delete">/);
+    const solo = await reader("boards-move-solo");
+    expect(await text(await open(solo))).not.toContain("dash-menu-head");
+    // Moved: on the second, at its foot at the left, its size kept; the first closes up; the reader stays, told where it went.
+    const before = (await boardTiles(b1)).find((x) => x.kind === "watches")!;
+    const three = (await boardTiles(b1)).find((x) => x.ref === "3m")!;
+    const res = await send(r, `/account/dashboard/tiles/${watches.id}/board`, { board: b2 });
+    expect(res.headers.get("location")).toBe(`/account/dashboard?m=moved&to=${b2}#tile-${three.id}`);
+    const there = await boardTiles(b2);
+    const six = there.find((x) => x.ref === "6m")!;
+    expect(there.find((x) => x.id === watches.id)).toMatchObject({ kind: "watches", x: 0, y: six.y + six.h, w: before.w, h: before.h });
+    expect((await boardTiles(b1)).map((x) => [x.ref, x.y])).toEqual([["3m", 0]]);
+    expect(await text(await open(r, `/account/dashboard?m=moved&to=${b2}`))).toContain("The tile was moved to Second.");
+    expect(drawn(await text(await open(r, `/account/dashboard/${b2}`))).map((d) => d.id)).toContain(watches.id);
+    // To a dashboard that shows the same item already: nothing moves, and the page says why.
+    await send(r, "/account/dashboard/panels", { kind: "radar", ref: "6m" });
+    const six1 = (await boardTiles(b1)).find((x) => x.ref === "6m")!;
+    expect((await send(r, `/account/dashboard/tiles/${six1.id}/board`, { board: b2 })).headers.get("location"))
+      .toBe(`/account/dashboard?m=move_exists&to=${b2}#tile-${six1.id}`);
+    expect(await text(await open(r, `/account/dashboard?m=move_exists&to=${b2}`))).toContain("The dashboard Second shows this already.");
+    // To a full one: nothing moves; the menu offers it disabled.
+    await fill(r, b2, TILES_MAX - (await boardTiles(b2)).length);
+    expect((await send(r, `/account/dashboard/tiles/${three.id}/board`, { board: b2 })).headers.get("location"))
+      .toBe(`/account/dashboard?m=move_full&to=${b2}#tile-${three.id}`);
+    expect(drawn(await text(await open(r))).find((d) => d.id === three.id)!.html).toContain('aria-label="Move to Second" disabled="">Second</button>');
+    // The statement alone holds the figure.
+    expect((await ACCOUNTS.prepare(MOVE_TO_SQL).bind(b2, 0, 999, 6, 9, three.id, r.id, TILES_MAX, BRIEFING_PANELS_MAX).run()).meta.changes).toBe(0);
+    // To another account's dashboard, to its own, or to no id: nothing moves.
+    const other = await reader("boards-move-other");
+    const theirs = await newBoard(other);
+    expect((await send(r, `/account/dashboard/tiles/${three.id}/board`, { board: theirs })).status).toBe(303);
+    expect((await send(r, `/account/dashboard/tiles/${three.id}/board`, { board: b1 })).status).toBe(303);
+    expect((await send(r, `/account/dashboard/tiles/${three.id}/board`, { board: "nope" })).status).toBe(400);
+    expect((await boardTiles(b1)).map((x) => x.id)).toContain(three.id);
+    expect(await boardTiles(theirs)).toEqual([]);
+    // Another account's tile: nothing moves.
+    await send(other, `/account/dashboard/tiles/${three.id}/board`, { board: theirs });
+    expect((await boardTiles(b1)).map((x) => x.id)).toContain(three.id);
+  });
+
+  it("adds from the other pages to the first dashboard, or with several to the one chosen, and adds no filled button there", async () => {
+    const r = await reader("boards-add");
+    await send(r, "/account/searches", { url: "/tenders?segment=82" });
+    await send(r, "/account/briefings", { kind: "segment", subject: "81" });
+    await ACCOUNTS.prepare(
+      "INSERT INTO saved_views (id, user_id, kind, address, name, lang, deliver, created_at) VALUES (?, ?, 'buyer', ?, 'Fleet', 'en', 'off', ?)",
+    ).bind("c".repeat(32), r.id, "/buyers/pwgsc-tpsgc/analytics?source=awards&years=5", new Date().toISOString()).run();
+    const search = await searchId(r, "/tenders?segment=82");
+    const pages = async () => Promise.all(["/account/searches", "/account/views", `/organizations/${A1}/analytics?source=awards&years=5`]
+      .map(async (path) => text(await get(path, { cookie: r.cookie, env: off() }))));
+    const filled = (html: string) => (mainOf(html).match(/btn-primary/g) ?? []).length;
+    // One dashboard: the one button, no choice, and the post goes to the first.
+    const one = await pages();
+    for (const html of one) {
+      expect(html).toContain('class="account-inline dash-add"');
+      expect(html).not.toContain("dash-add-menu");
+    }
+    const b2 = await newBoard(r);
+    const b1 = (await ordered(r.id))[0].id;
+    await send(r, `/account/dashboard/boards/${b2}/rename`, { name: "Bids" });
+    // Several: Add to dashboard opens on their names, each a button of one form naming its dashboard.
+    const several = await pages();
+    expect(several[0]).toContain(`<details class="dash-add dash-add-menu"><summary class="btn-link">Add to dashboard</summary>` +
+      `<form method="post" action="/account/dashboard/panels" class="dash-add-list"><input type="hidden" name="csrf" value="${r.csrf}"/>` +
+      `<input type="hidden" name="kind" value="tenders"/><input type="hidden" name="ref" value="${search}"/>` +
+      `<button type="submit" name="board" value="${b1}" class="dash-menu-item">Dashboard 1</button>` +
+      `<button type="submit" name="board" value="${b2}" class="dash-menu-item">Bids</button></form></details>`);
+    expect(several[0]).toMatch(/<details class="dash-add dash-add-menu"><summary class="btn-link">Add to dashboard<\/summary><form [^>]*><input [^>]*\/><input type="hidden" name="kind" value="briefing"\/>/);
+    expect(several[1]).toMatch(/<details class="dash-add dash-add-menu"><summary class="btn-link">Add to dashboard<\/summary><form [^>]*><input [^>]*\/><input type="hidden" name="kind" value="view"\/><input type="hidden" name="ref" value="c{32}"\/>/);
+    expect(several[2]).toContain('<details class="dash-add dash-add-menu"><summary class="btn">Add to dashboard</summary>');
+    several.forEach((html, i) => expect(filled(html), String(i)).toBe(filled(one[i])));
+    const fr = await text(await get("/account/searches?lang=fr", { cookie: r.cookie, env: off() }));
+    expect(fr).toContain(`<button type="submit" name="board" value="${b1}" class="dash-menu-item">Tableau de bord 1</button>`);
+    // The one chosen: the second.
+    const res = await send(r, "/account/dashboard/panels", { kind: "tenders", ref: search, board: b2 });
+    expect(res.headers.get("location")).toMatch(new RegExp(`^/account/dashboard/${b2}\\?m=added#tile-[0-9a-f]{32}$`));
+    expect((await boardTiles(b2)).map((x) => `${x.kind}:${x.ref}`)).toEqual([`tenders:${search}`]);
+    // Another account's dashboard: the first, nothing added; no id: refused.
+    const other = await reader("boards-add-other");
+    const theirs = await newBoard(other);
+    expect((await send(r, "/account/dashboard/panels", { kind: "radar", ref: "6m", board: theirs })).headers.get("location")).toBe("/account/dashboard");
+    expect(await boardTiles(theirs)).toEqual([]);
+    expect((await send(r, "/account/dashboard/panels", { kind: "radar", ref: "6m", board: "x" })).status).toBe(400);
+  });
+
+  it("saves a dashboard's layout at the address its page gives the script, that dashboard's tiles alone, and reads a tile from either", async () => {
+    const r = await reader("boards-layout");
+    const b2 = await newBoard(r);
+    const b1 = (await ordered(r.id))[0].id;
+    await send(r, "/account/dashboard/panels", { kind: "radar", ref: "6m", board: b2 });
+    await send(r, "/account/dashboard/panels", { kind: "radar", ref: "12m", board: b2 });
+    const twelve = (await boardTiles(b2)).find((x) => x.ref === "12m")!;
+    const six = (await boardTiles(b2)).find((x) => x.ref === "6m")!;
+    const firsts = await boardTiles(b1);
+    const at = (board: string) => `/account/dashboard/layout?board=${board}`;
+    // The 12-month list to the top, the whole row wide, the 6-month list under it; and a tile of the first dashboard.
+    const layout = JSON.stringify([
+      { id: twelve.id, x: 0, y: 0, w: 12, h: 9 }, { id: six.id, x: 0, y: 9, w: 6, h: six.h }, { id: firsts[0].id, x: 6, y: 0, w: 6, h: 9 },
+    ]);
+    const res = await post(at(b2), { csrf: r.csrf, layout }, { cookie: r.cookie, env: off() });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ state: "saved" });
+    expect((await boardTiles(b2)).find((x) => x.id === twelve.id)).toMatchObject({ x: 0, y: 0, w: 12 });
+    // The first dashboard's tile named in the second's save is left as it was.
+    expect(await boardTiles(b1)).toEqual(firsts);
+    // A dashboard the account does not hold, or a board that is no id: refused.
+    expect((await post(at("0".repeat(32)), { csrf: r.csrf, layout }, { cookie: r.cookie, env: off() })).status).toBe(404);
+    expect((await post(at("nonsense"), { csrf: r.csrf, layout }, { cookie: r.cookie, env: off() })).status).toBe(400);
+    // One tile read at a size, from the second: its menu offers the first.
+    const tile = await readTile(r, twelve.id, "?w=6&h=12");
+    expect(tile.status).toBe(200);
+    const html = await tile.text();
+    expect(html).toContain('data-w="6" data-h="12"');
+    expect(html).toContain(`<input type="hidden" name="board" value="${b1}"/>`);
+  });
+
+  it("go with the account, every dashboard and tile; a search or a briefing removed takes its tile from every dashboard", async () => {
+    const r = await reader("boards-gone");
+    await send(r, "/account/searches", { url: "/tenders?segment=82" });
+    await send(r, "/account/briefings", { kind: "segment", subject: "81" });
+    const search = await searchId(r, "/tenders?segment=82");
+    const briefing = (await ACCOUNTS.prepare("SELECT id FROM briefings WHERE user_id = ?").bind(r.id).first<{ id: string }>())!.id;
+    const b2 = await newBoard(r);
+    for (const board of ["", b2]) {
+      await send(r, "/account/dashboard/panels", { kind: "tenders", ref: search, board });
+      await send(r, "/account/dashboard/panels", { kind: "briefing", ref: briefing, board });
+    }
+    const held = async (ref: string) => (await tileRows(r.id)).filter((x) => x.ref === ref).length;
+    expect([await held(search), await held(briefing)]).toEqual([2, 2]);
+    await send(r, `/account/searches/${search}/delete`);
+    await send(r, `/account/briefings/${briefing}/delete`);
+    expect([await held(search), await held(briefing)]).toEqual([0, 0]);
+    expect(await boards(r.id)).toHaveLength(2);
+    await send(r, "/account/dashboard/panels", { kind: "radar", ref: "6m", board: b2 });
+    expect((await send(r, "/account/delete", { confirm: "yes" })).status).toBe(200);
+    expect(await boards(r.id)).toEqual([]);
+    expect(await tileRows(r.id)).toEqual([]);
+  });
+
+  it("offers no tab while the grid's tables are absent, where a dashboard's posts answer that nothing can be kept, and nothing answers 500", async () => {
+    const r = await reader("boards-absent");
+    const posts: [string, Record<string, string>][] = [
+      ["/account/dashboard/boards", {}], ["/account/dashboard/boards/first/rename", { name: "x" }], ["/account/dashboard/boards/first/delete", { confirm: "yes" }],
+      ["/account/dashboard/boards/first/move", { dir: "later" }], [`/account/dashboard/tiles/${"a".repeat(32)}/board`, { board: "b".repeat(32) }],
+    ];
+    for (const [which, line] of [["tiles", "unsaved_layout"], ["all", "unsaved"]] as const) {
+      await without(which, async () => {
+        const page = await open(r);
+        expect(page.status, which).toBe(200);
+        expect(mainOf(await text(page)), which).not.toContain("dash-boards");
+        expect((await open(r, `/account/dashboard/${"a".repeat(32)}`)).headers.get("location"), which).toBe("/account/dashboard");
+        for (const [path, fields] of posts) {
+          const res = await send(r, path, fields);
+          expect(res.status, `${which} ${path}`).toBe(303);
+          expect(res.headers.get("location"), `${which} ${path}`).toBe(`/account/dashboard?m=${line}`);
+        }
+        const saved = await post(`/account/dashboard/layout?board=${"a".repeat(32)}`, { csrf: r.csrf, layout: "[]" }, { cookie: r.cookie, env: off() });
+        expect(await saved.json(), which).toEqual({ state: "unsaved" });
+      });
+    }
+  });
+});
+
+describe("a dashboard of 24 tiles", () => {
+  // The records binding watched: each statement's text and binds, in the order prepared, and each batch's size.
+  function watchRecords(): { db: D1Database; prepared: { sql: string; params: unknown[] }[]; batches: number[] } {
+    const prepared: { sql: string; params: unknown[] }[] = [];
+    const batches: number[] = [];
+    const db = new Proxy(RECORDS, {
+      get(target, prop) {
+        if (prop === "prepare") {
+          return (sql: string) => {
+            const s = target.prepare(sql);
+            const seen = { sql, params: [] as unknown[] };
+            prepared.push(seen);
+            const bind = s.bind.bind(s);
+            (s as unknown as { bind: (...p: unknown[]) => D1PreparedStatement }).bind = (...p: unknown[]) => ((seen.params = p), bind(...p));
+            return s;
+          };
+        }
+        if (prop === "batch") return (list: D1PreparedStatement[]) => (batches.push(list.length), target.batch(list));
+        const v = Reflect.get(target, prop);
+        return typeof v === "function" ? v.bind(target) : v;
+      },
+    });
+    return { db, prepared, batches };
+  }
+
+  it("reads every tile's records in one batch of indexed statements, and a tile that cannot be read leaves the other 23", async () => {
+    const r = await reader("boards-24");
+    await send(r, "/account/organization", { org: A1 });
+    for (const url of ["/tenders?segment=82", "/tenders?segment=72", "/tenders?segment=43", "/expiring/12m?buyer=pwgsc-tpsgc", `/organizations/${A1}`,
+      "/buyers/pwgsc-tpsgc", "/segments/81"]) await send(r, "/account/searches", { url });
+    for (const s of ["81", "43"]) await send(r, "/account/briefings", { kind: "segment", subject: s });
+    await send(r, "/account/keys", { name: "Reports" });
+    const id = (url: string) => searchId(r, url);
+    const briefings = ((await ACCOUNTS.prepare("SELECT id FROM briefings WHERE user_id = ? ORDER BY created_at, id").bind(r.id).all<{ id: string }>()).results ?? [])
+      .map((x) => x.id);
+    // The first add writes the starting layout (the watches, the 3-month list, matching notices, the years block, two
+    // tender searches, the API: 7); seventeen more fill the figure.
+    const more: [string, string][] = [
+      ["radar", "6m"], ["radar", "12m"], ["radar", await id("/expiring/12m?buyer=pwgsc-tpsgc")], ["tenders", await id("/tenders?segment=43")],
+      ["records", await id(`/organizations/${A1}`)], ["records", await id("/buyers/pwgsc-tpsgc")], ["records", await id("/segments/81")],
+      ["org", "segments"], ["org", "share"], ["org", "ending"], ["org", "buyers"], ["org", "instruments"],
+      ["view", "/buyers/pwgsc-tpsgc/analytics?source=awards&years=10"], ["view", `/organizations/${A1}/analytics?source=awards&years=10`],
+      ["view", "/segments/81/analytics?source=awards&years=10"], ["briefing", briefings[0]], ["briefing", briefings[1]],
+    ];
+    for (const [kind, ref] of more) expect((await send(r, "/account/dashboard/panels", { kind, ref })).headers.get("location"), `${kind} ${ref}`).toMatch(/\?m=added#/);
+    expect(await tileRows(r.id)).toHaveLength(TILES_MAX);
+    const watch = watchRecords();
+    const html = await text(await open(r, "/account/dashboard", off({ RECORDS: watch.db })));
+    const d = drawn(html);
+    expect(d).toHaveLength(TILES_MAX);
+    for (const x of d) expect(x.html, x.head).not.toContain(t("en", "dash.unavailable"));
+    expect(mainOf(html)).toContain('<p class="muted small">24 of 24 tiles</p>');
+    // One batch holds the state row and every tile's statements: 25 (two each for the four lists of contracts ending,
+    // the share and ending blocks and the buyer's and organization's views; one each for the three records searches,
+    // the segment's view and the other four blocks). The watches and the two briefings send their own, smaller.
+    const start = watch.prepared.findIndex((s) => /FROM rec_meta/.test(s.sql));
+    const main = watch.prepared.slice(start, start + 25);
+    expect(Math.max(...watch.batches), watch.batches.join(" ")).toBe(25);
+    expect(watch.batches.filter((n) => n === 25)).toHaveLength(1);
+    // Each statement bounded and indexed: its plan reads no table whole (a SCAN of a table, or of its alias, without
+    // an index), whatever it then does with what it read. A scan of a subquery's own rows (MATERIALIZE or CO-ROUTINE,
+    // each held by its LIMIT) reads no table.
+    for (const s of main.slice(1)) {
+      const plan = ((await RECORDS.prepare(`EXPLAIN QUERY PLAN ${s.sql}`).bind(...s.params).all()).results ?? []).map((x) => String((x as { detail?: unknown }).detail));
+      const made = new Set(plan.flatMap((p) => /^(?:MATERIALIZE|CO-ROUTINE) (\S+)/.exec(p)?.[1] ?? []));
+      const whole = plan.filter((p) => /^SCAN /.test(p) && !/USING|CONSTANT ROW/i.test(p) && !made.has(/^SCAN (\S+)/.exec(p)![1]));
+      expect(whole, `${s.sql}\n${plan.join("\n")}`).toEqual([]);
+    }
+    // The table one block reads, gone: that tile says so, the other 23 draw.
+    await RECORDS.prepare("DROP TABLE rec_holders").run();
+    try {
+      const gone = drawn(await text(await open(r)));
+      const instruments = gone.find((x) => x.head.includes("Standing Offers and Supply Arrangements"))!;
+      expect(instruments.html).toContain(t("en", "dash.unavailable"));
+      expect(gone.filter((x) => x !== instruments && x.html.includes(t("en", "dash.unavailable")))).toEqual([]);
+    } finally {
+      await seedRecords();
+    }
   });
 });

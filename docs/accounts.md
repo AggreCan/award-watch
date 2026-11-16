@@ -664,7 +664,7 @@ logs name no key.
 ## Deletion
 
 `/account/delete` asks for a ticked box, deletes the account's dashboard
-(its tiles, its dashboard row and its earlier panels), its saved views
+(every dashboard with its tiles, and its earlier panels), its saved views
 (with their runs), its watches, its
 claim of an organization, its briefings, its weekly email row and its
 calendar feeds (statements of their own, so a database without those tables
@@ -2449,6 +2449,7 @@ years in `site/test/analytics.test.ts`.
 | Matching notices mailed a week | 3 | 10 | 25 | `RULES.<plan>.match_mail` |
 | Keyed API | none | 5 keys of 20,000 requests a day | 5 keys of 50,000 a day | `KEYS_MAX`; `KEY_PER_DAY`, `KEY_PER_DAY_ULTRA` through `keyQuota(plan)` |
 | Analytics | first chart, 3 fiscal years | every view, 10 | every view, 20 | `planYears(plan)`: `FREE_YEARS`, `MAX_YEARS`, `ULTRA_YEARS` |
+| Dashboards | none | none | 5, of 24 tiles each | `RULES.<plan>.dashboards` and `.dashboard_tiles`; `DASHBOARDS_MAX` and `TILES_MAX` are the ceilings, Ultra's |
 
 Unchanged on Ultra: the holder's record's windows (3 and 12 months), the
 organizations compared (5, held by the `org_claims` CHECK) and the keyed
@@ -2736,21 +2737,84 @@ Three things the run showed:
 
 ## Dashboard
 
-`/account/dashboard` is Ultra's: a grid of up to 12 tiles an account
-chooses from what the site already shows it, each at its own place and
-size. The figure is the `dashboard` feature of `RULES` (0 on Free and Pro,
-12 on Ultra; `DASHBOARD_MAX` is the ceiling whatever the plan; the plan
-cards still say "panels", as the plan's row has since Ultra was made). The
-code is `site/src/account/dashboard.tsx` (the tables, the tiles, the page,
-its posts and its read), `site/public/dash-grid.js` (the grid's rules,
-shared by the Worker and the page's script), `dashboard_fit.ts` (what a
-tile shows at its size), `site/public/dashboard.js` (the page's script),
-`dashboard_rule.ts` (who has it and the rail's item), `dashboard_add.tsx`
-(Add to dashboard) and `dashboard_strings.ts`; the rail item is in
-`site/src/layout.tsx`. The tests are `site/test/dash-grid.test.ts` (the
-grid), `site/test/dashboard.test.ts` (the page, the three states of
-storage, the posts), `site/test/dashboard-aid.test.ts` (More Kinds of
-Tile) and a 12-tile entry in `site/test/cpu-budget.test.ts`.
+`/account/dashboard` is Ultra's: up to 5 dashboards an account keeps, each
+a grid of up to 24 tiles it chooses from what the site already shows it,
+each tile at its own place and size. The figures are the `dashboards` and
+`dashboard_tiles` features of `RULES` (0 and 0 on Free and Pro, 5 and 24 on
+Ultra; `DASHBOARDS_MAX` and `TILES_MAX` in `dashboard_rule.ts` are the
+ceilings whatever the plan, `boardCap(plan)` and `tileCap(plan)` a plan's
+own). Every line that names them reads `RULES`: Ultra's plan row, "5
+dashboards of 24 tiles each" ("5 tableaux de bord de 24 tuiles chacun";
+`dashboardsWording` in `site/src/pro.tsx` picks the singular forms a
+figure of 1 would need), the Pro page's Ultra section, the landing page's
+Ultra card, the Ultra message and the page a Free or Pro reader gets here.
+The code is `site/src/account/dashboard.tsx` (the tables, the tiles, the
+dashboards, the page, its posts and its read), `site/public/dash-grid.js`
+(the grid's rules, shared by the Worker and the page's script),
+`dashboard_fit.ts` (what a tile shows at its size),
+`site/public/dashboard.js` (the page's script), `dashboard_rule.ts` (who
+has it, the ceilings, a dashboard's address and the rail's item),
+`dashboard_add.tsx` (Add to dashboard, and the dashboards' names) and
+`dashboard_strings.ts`; the rail item is in `site/src/layout.tsx`. The
+tests are `site/test/dash-grid.test.ts` (the grid),
+`site/test/dashboard.test.ts` (the page, the three states of storage, the
+posts, several dashboards, a dashboard of 24 tiles),
+`site/test/dashboard-aid.test.ts` (More Kinds of Tile) and a 12-tile and a
+24-tile entry in `site/test/cpu-budget.test.ts`.
+
+### Several dashboards
+
+- **Addresses**: the first dashboard is at `/account/dashboard`, which
+  always shows whichever is first; every dashboard is also at
+  `/account/dashboard/<id>` (its row's id, 32 hexadecimal characters). A
+  reload, a link and the language switch (the page's own address with
+  `lang` changed) keep the reader on it. An id the account does not hold
+  (deleted, another account's, or any while the tables are absent) answers
+  303 to `/account/dashboard`; anything else under the address is the
+  site's 404. Signed out, the sign-in page returns to the address asked.
+- **Tabs**: a row in the page's head under its lead, one tab a dashboard
+  in the account's order (`pos`), the one shown marked (`aria-current`),
+  each link the dashboard's address (the first's the bare one). The row wraps, so it
+  never widens the page. Beside it: New dashboard while the account holds
+  fewer than its figure, and Rename, Order or Delete for the dashboard
+  shown, a `details` element that opens without the script.
+- **Names**: a typed name, plain text, control characters dropped, 40
+  characters at most (`BOARD_NAME_MAX`); left empty, the site's label,
+  "Dashboard 2" ("Tableau de bord 2"), numbered in the order the account
+  made its dashboards, so moving a tab never changes it. Stored as typed;
+  `''` for the label, which follows the page's language.
+- **New dashboard** is a post: the new one goes after the others, empty,
+  and the page lands on it with Add a Tile open. The plan's figure is held
+  inside the insert (`NEW_BOARD_SQL`); past it the page says the account
+  holds its 5 dashboards.
+- **Order**: Move earlier and Move later, posts, offered disabled at either
+  end; the whole order is written again (`pos` 0 to n-1). A dashboard moved
+  to the front is then at the bare address.
+- **Delete**: inside Rename, Order or Delete, a second `details` element
+  asks "Delete the dashboard Suppliers and its 5 tiles?" with its own
+  button (the post must carry `confirm=yes`); never a browser dialog. The
+  dashboard and its tiles go in one batch (`DELETE_BOARD_SQL`); the
+  account's last dashboard is kept, its tiles removed and its name back to
+  the label, an emptied first dashboard as removing its last tile leaves.
+- **Tiles are a dashboard's own**: the figure of 24, the 2 briefings and
+  the same item once are each a dashboard's, held inside the insert
+  (`ADD_TILE_SQL`, its `?12` the dashboard, null for the first), so an item
+  may sit on two dashboards, once on each.
+- **Move to**: with other dashboards stored, a tile's menu lists them by
+  name under "Move to", each a post (`POST
+  /account/dashboard/tiles/:id/board`, `board`). The tile keeps its size and
+  lands at the foot of that dashboard at the left (`place`, as an add), held
+  inside the update (`MOVE_TO_SQL`) to that dashboard's figure, its
+  briefings and the same item once; a dashboard at its figure is offered
+  disabled. The dashboard it left closes up, and the reader stays there,
+  told where it went (`?m=moved&to=<id>`).
+- **Add to dashboard** on the other pages (each saved search a tile can
+  show, each briefing, each saved view, an analytics view's head): one
+  dashboard (or none stored yet), the one button, and the tile goes on the
+  first; several, the same words open on the dashboards' names, each a
+  submit button of one form naming its dashboard (`boardChoices`, one
+  statement on those pages for an Ultra account). No filled button is
+  added to those pages.
 
 ### The grid
 
@@ -2854,19 +2918,27 @@ before.
 
 | Table | Columns | Rule |
 |---|---|---|
-| `dashboards` | `id`, `user_id`, `name` ('' until dashboards are named), `pos` (0: one an account for now), `created_at` | Written with the account's first change unless it is there (`BOARD_INSERT_SQL`); a row with no tile is a dashboard the reader emptied |
-| `dashboard_tiles` | `id`, `dashboard_id`, `user_id`, `kind`, `ref`, `opts` (the tile's own choices as JSON, 2,000 characters at most; '' in this build), `x`, `y`, `w`, `h`, `created_at` | At most the plan's figure and at most 2 briefings an account, the same item once, all held inside the insert (`ADD_TILE_SQL`), so two posts at once cannot pass any of them; indexes `idx_dashboard_tiles_user` (`user_id`, `kind`, `ref`) and `idx_dashboard_tiles_board` (`dashboard_id`) |
+| `dashboards` | `id`, `user_id`, `name` (the reader's, 40 characters at most, or '' for the site's label), `pos` (the tabs' order), `created_at` | The first written with the account's first change unless one is there (`BOARD_INSERT_SQL`), the others by New dashboard within the plan's figure (`NEW_BOARD_SQL`); a row with no tile is a dashboard the reader emptied; index `idx_dashboards_user` (`user_id`, `pos`) |
+| `dashboard_tiles` | `id`, `dashboard_id`, `user_id`, `kind`, `ref`, `opts` (the tile's own choices as JSON, 2,000 characters at most; '' in this build), `x`, `y`, `w`, `h`, `created_at` | At most the plan's figure and at most 2 briefings a dashboard, the same item once on a dashboard, all held inside the insert (`ADD_TILE_SQL`) and inside a move to another dashboard (`MOVE_TO_SQL`), so two posts at once cannot pass any of them; indexes `idx_dashboard_tiles_user` (`user_id`, `kind`, `ref`) and `idx_dashboard_tiles_board` (`dashboard_id`), through which a page reads one dashboard's tiles |
 | `dashboard_panels` | `id`, `user_id`, `kind`, `ref`, `pos`, `wide`, `created_at`; unique on (`user_id`, `kind`, `ref`) | The earlier page's table: read until the account's first change on the grid, written while the grid's tables are absent (`ADD_PANEL_SQL`), then read no more for that account |
 
 `kind` is checked by the site (`PANEL_KINDS`), not by a CHECK, so a new
-kind needs no rebuild. A tile goes with the account (`deleteAccount`), and
+kind needs no rebuild. Every dashboard and tile goes with the account
+(`deleteAccount`); a tile goes with its dashboard, and from every dashboard
 with the saved search, briefing or view it shows when that is removed on
-its page.
+its page. No table or column was added for several dashboards: `name` and
+`pos` were there from the grid.
 
 ### The three states of storage
 
+Each state holds per dashboard; the page works in each, and nothing answers
+500.
+
 - **The grid's tables absent** (`accounts_schema.sql` not applied since the
-  grid): the account's `dashboard_panels` rows, or the starting layout,
+  grid): one dashboard and no tabs, since nothing could keep a second; a
+  dashboard's address goes to `/account/dashboard`, and New dashboard,
+  Rename, Order, Delete and Move to answer the line below. The account's
+  `dashboard_panels` rows, or the starting layout,
   laid out on the grid (`fromPanels`: a full-width panel takes the row,
   half-width ones go two to a row, each at its kind's starting height). The
   page arranges them, saves no place or size and says so ("Positions and
@@ -2876,15 +2948,17 @@ its page.
   table too, nothing is kept and the page says the dashboard cannot be
   saved yet. Nothing answers 500.
 - **The tables there, nothing stored for the account**: the same layout,
-  computed and not stored. Its first change of any kind (a drop, a menu
-  step or size, an add, a removal) writes the whole layout in one batch
+  computed and not stored, as the account's one dashboard, its one tab
+  "Dashboard 1" with New dashboard beside it. Its first change of any kind
+  (a drop, a menu step or size, an add, a removal, a new dashboard, a name;
+  a deletion writes it with no tile) writes the whole layout in one batch
   (`writeFirst`: the dashboard's row, then each tile through
   `ADD_TILE_SQL`, a panel's id kept and a starter's given a new one), then
   applies the change. The script's save answers the starter's new ids
   (`renamed`), which the page takes on. Two first changes at once write one
   dashboard and each item once.
-- **A dashboard stored**: its tiles; `dashboard_panels` is read no more for
-  that account, and goes with the account as before.
+- **Dashboards stored**: each its tiles; `dashboard_panels` is read no more
+  for that account, and goes with the account as before.
 
 ### The page
 
@@ -2896,9 +2970,11 @@ Move right, Move up, Move down, Wider, Narrower, Taller, Shorter (each a
 post; a step that would change nothing is disabled), then Remove. There is
 no edit mode: `?edit=1` shows the same page. The page's one filled button
 is Add a Tile, at the head's right, a `details` too: the count of tiles,
-the select of what the account holds and is not on the dashboard yet (its
-choices as before), Add, and More Kinds of Tile. An emptied dashboard draws
-it open.
+the select of what the account holds and is not on the dashboard shown yet
+(its choices as before), Add, and More Kinds of Tile; its post names the
+dashboard shown. An emptied dashboard draws it open. The tabs sit in the
+head under the lead, so Add a Tile's choices, which hang below the head's
+row, never cover them (*Several dashboards*).
 
 The script (`dashboard.js`, a module loaded on this page only):
 
@@ -2920,7 +2996,9 @@ The script (`dashboard.js`, a module loaded on this page only):
 - **No script**: the menu's posts and Add a Tile work as forms; the handles
   are not drawn.
 - **Saving**: each change is saved by itself 600 ms after the last
-  (`POST /account/dashboard/layout`), one save at a time; the status line
+  (`POST /account/dashboard/layout?board=<id>`, the address the page's data
+  gives the script, so a save goes to the dashboard shown even from a
+  script cached before the tabs), one save at a time; the status line
   says "Saving the layout.", then "Saved." with Undo, or "The layout could
   not be saved." with Try again and Undo.
 - **Undo**: the status line's link, or Ctrl+Z (Cmd+Z) outside a field: the
@@ -2935,7 +3013,9 @@ The script (`dashboard.js`, a module loaded on this page only):
 ### A page view
 
 The account's rows are read at once by the readers the account pages use
-(the dashboard and its tiles in one batch, the panels, the saved searches,
+(the account's dashboards, with each one's count of tiles, and the shown
+one's tiles in one batch of two statements, as before the tabs; the panels,
+the saved searches,
 the briefings, the claim, the watches, the keys, the saved views). Every
 tile's records statements go in one batch with the state row; when that
 batch fails, each tile is read on its own, so one table the nightly has
@@ -2945,18 +3025,38 @@ their own batches through their own readers (`readEvents`,
 parsed: `tenders/open.json` and, with an organization tile or matching
 notices, the claimed organization's profile shard. More Kinds of Tile
 reads nothing of its own. A Free or Pro reader reads no records. A tile's
-fragment reads the same rows and that tile's statements in their own batch.
+fragment reads the same rows (the dashboard holding the tile) and that
+tile's statements in their own batch.
+
+A dashboard of 24 tiles still sends one records batch: the state row and
+each tile's statements, every one bounded and read through an index. With
+every kind that reads the records, that is 25 statements (two each for the
+3-, 6- and 12-month lists and a saved search of contracts ending, the
+organization's share and ending blocks, and a buyer's or an organization's
+view; one each for a records search, a segment's view and the other
+blocks); the watches and each briefing send their own batch, as on any
+page, and the tender searches, matching notices and the API read no
+records. `site/test/dashboard.test.ts` counts the batch and reads each
+statement's query plan; when the batch fails each tile is read alone, so
+one tile that cannot be read leaves the other 23. The CPU budget's 24-tile
+entry measured 14.62 against the 12 tiles' 8.62 (bound 44).
 
 ### Routes
 
 | Route | What it does |
 |---|---|
-| `GET /account/dashboard` | the tiles on the grid; `?edit=1` is the same page |
-| `POST /account/dashboard/panels` | add a tile: `kind` and `ref` from a page's Add to dashboard, or `panel` (`kind:ref`) from Add a Tile; it goes under the others at the left, half the row wide, at its kind's starting height |
-| `POST /account/dashboard/layout` | the script's save: `layout`, JSON `[{id, x, y, w, h}]` (8,000 characters and 50 tiles at most); only the account's own ids count, a tile the post leaves out keeps its place, the whole goes through `normalize`; answers JSON `{state: "saved", tiles, renamed}`, `{state: "unsaved"}` while the tables are absent, 400 for anything that is not such a list |
-| `GET /account/dashboard/tiles/:id` | one tile's section at `?w=&h=` (held to the grid), or at its own size; the CSRF value in the `X-CSRF-Token` header; 403 without it, 404 for an id the account does not hold |
+| `GET /account/dashboard` | the first dashboard's tiles on the grid; `?edit=1` is the same page |
+| `GET /account/dashboard/:id` | a dashboard by its id, the same page; an id the account does not hold, 303 to `/account/dashboard` |
+| `POST /account/dashboard/panels` | add a tile: `kind` and `ref` from a page's Add to dashboard, or `panel` (`kind:ref`) from Add a Tile, to the dashboard `board` names (none, the first); it goes under the others at the left, half the row wide, at its kind's starting height |
+| `POST /account/dashboard/layout` | the script's save, for the dashboard `?board=` names (none, the first): `layout`, JSON `[{id, x, y, w, h}]` (8,000 characters and 50 tiles at most); only that dashboard's own ids count, a tile the post leaves out keeps its place, the whole goes through `normalize`; answers JSON `{state: "saved", tiles, renamed}`, `{state: "unsaved"}` while the tables are absent, 404 for a dashboard the account does not hold, 400 for anything that is not such a list |
+| `POST /account/dashboard/boards` | New dashboard, within the plan's figure; lands on it |
+| `POST /account/dashboard/boards/:id/rename` | `name`; `:id` a dashboard's id, or `first` for the computed first |
+| `POST /account/dashboard/boards/:id/move` | `dir` earlier or later |
+| `POST /account/dashboard/boards/:id/delete` | `confirm=yes`; the dashboard and its tiles, the last one emptied |
+| `GET /account/dashboard/tiles/:id` | one tile's section at `?w=&h=` (held to the grid), or at its own size, read on the dashboard that holds it; the CSRF value in the `X-CSRF-Token` header; 403 without it, 404 for an id the account does not hold |
 | `POST /account/dashboard/tiles/:id/move` | `dir` left, right, up or down |
 | `POST /account/dashboard/tiles/:id/size` | `to` wider, narrower, taller or shorter |
+| `POST /account/dashboard/tiles/:id/board` | `board`, another of the account's dashboards: Move to |
 | `POST /account/dashboard/tiles/:id/delete` | remove it |
 | `POST /account/dashboard/panels/:id/move`, `/width`, `/delete` | the earlier page's posts, for a page loaded before the grid: up or down, full or half width, remove |
 
@@ -2964,9 +3064,12 @@ Every post is behind the session, the CSRF value and the Origin; the read
 is behind the session and the CSRF value in its header. All of them count
 in the dashboard's own bucket with the saved views' posts (`EDIT_LIMIT`, 60
 a minute per address; `bucketFor` "edit"), so arranging never spends the
-forms' 5. A post from the menu returns to the dashboard with what happened
-(`?m=added`, `exists`, `full`, `briefings_full`, `unsaved`,
-`unsaved_layout`), at the place the change was made: a step or a size at
+forms' 5. A post from the menu returns to the dashboard it changed (the
+bare address while that is the first) with what happened (`?m=added`,
+`exists`, `full`, `briefings_full`, `unsaved`, `unsaved_layout`,
+`boards_full`, `renamed`, `board_deleted`, `board_emptied`, and `moved`,
+`move_exists`, `move_full` with `to=<id>` naming the dashboard), at the
+place the change was made: a step or a size at
 the tile's own anchor (`#tile-<id>`), an add at the tile added (or found
 added), a removal at the tile that takes its place in reading order, else
 the one before it, else Add a Tile (`#dash-add`). The page, the posts and
@@ -3017,31 +3120,37 @@ panels' table).
 ### What each reader sees
 
 - **Ultra**, whether or not Ultra is on sale (a grant by hand included): the
-  tiles, Add a Tile, More Kinds of Tile while a kind needs a step first, and
-  Add to dashboard on each analytics view's head, on each saved search a
-  tile can show, on each briefing of the searches page and on each row of
-  the saved views page.
+  tabs, the tiles, Add a Tile, More Kinds of Tile while a kind needs a step
+  first, and Add to dashboard on each analytics view's head, on each saved
+  search a tile can show, on each briefing of the searches page and on each
+  row of the saved views page.
 - **Free and Pro while Ultra is on sale**: the head, What the Dashboard Holds
-  (the nine kinds, one sentence each; the lists say they show as many rows
-  as a tile's size holds), the gate line with Plans and prices, and the
-  three plan cards, Ultra's link the page's filled button. No records read,
-  no script.
+  ("Pages of tiles you choose from what the site already shows you: 5
+  dashboards of 24 tiles each.", Ultra's figures from `RULES`; then the
+  nine kinds, one sentence each; the lists say they show as many rows as a
+  tile's size holds), the gate line with Plans and prices, and the three
+  plan cards, Ultra's link the page's filled button. No records read, no
+  script. The same at any dashboard's address.
 - **Free and Pro while Ultra is off sale**: the site's 404, as before Ultra.
 - **Signed out**: the sign-in page with `next=/account/dashboard` while
   Ultra is on sale; the site's 404 while it is not.
 - **The rail**: Dashboard, with the Ultra chip, first in Your lists, while
   Ultra is on sale or the account holds it, for every reader the rail shows
   an account to; never with the accounts switch off.
-- **The plan cards**: Ultra's card has a row of its own, "A dashboard of up
-  to 12 panels"; Free's and Pro's show it in the hollow ring, muted. Only
-  beside Ultra's card: the two cards drawn while Ultra is off sale keep their
-  rows.
+- **The plan cards**: Ultra's card has a row of its own, "5 dashboards of 24
+  tiles each" ("5 tableaux de bord de 24 tuiles chacun"); Free's and Pro's
+  show it in the hollow ring, muted. Only beside Ultra's card: the two cards
+  drawn while Ultra is off sale keep their rows. The privacy page (while
+  Ultra is on sale) says a dashboard keeps its name, its place among the
+  account's dashboards, its tiles, their places and sizes and their own
+  choices, all deleted with the account.
 
 ### Operator step
 
 Apply the schema, as for every earlier table (it adds `dashboards`,
 `dashboard_tiles` and their three indexes, and changes nothing else; every
-statement only creates what is missing):
+statement only creates what is missing). Several dashboards needed nothing
+more: the same file, the same command.
 
 ```
 cd site
@@ -3049,9 +3158,9 @@ npx wrangler d1 execute awardwatch-accounts --remote --file=accounts_schema.sql
 ```
 
 Until then an Ultra account sees its panels (or the starting layout) on the
-grid, can arrange them on the page, and is told that positions and sizes
-cannot be saved yet; adding and removing tiles keep working in
-`dashboard_panels`. Nothing needs moving by hand afterwards: each account's
+grid as one dashboard with no tabs, can arrange them on the page, and is
+told that positions and sizes cannot be saved yet; adding and removing
+tiles keep working in `dashboard_panels`. Nothing needs moving by hand afterwards: each account's
 panels become its tiles at its first change.
 
 ### Known limits
@@ -3067,6 +3176,11 @@ panels become its tiles at its first change.
   language.
 - A view's period is checked against `PERIODS`; a period added there later is
   accepted with it.
+- A dashboard left unnamed is numbered in the order the account made its
+  dashboards, so its number can differ from its tab's place ("Dashboard 3"
+  first, after a move or a deletion).
+- After Move to the reader stays on the dashboard the tile left; the notice
+  names the dashboard it went to, whose tab is beside.
 
 ## Saved views
 
@@ -3097,7 +3211,7 @@ source, the period, each year's records and value, the largest records by
 reference and value: public figures only). `secret` is the stop link's 16
 random bytes, made with the first message and kept in clear, as a
 briefing's is. A view goes with the account (`deleteAccount`), and its
-dashboard panel goes with it.
+dashboard tiles go with it, from every dashboard.
 
 ### Saving a view
 
@@ -3191,7 +3305,7 @@ with `List-Unsubscribe` and its one-click partner.
 | `GET /account/views` | the page |
 | `POST /account/views` | save a view: `address` and `name` |
 | `POST /account/views/:id` | its email: `deliver` weekly, monthly or off; on only for Ultra while Ultra is on sale |
-| `POST /account/views/:id/delete` | remove it, and its dashboard panel |
+| `POST /account/views/:id/delete` | remove it, and its tiles on every dashboard |
 | `GET`, `POST /account/stop?v=&t=` | the view's stop page, and turning its email off (one-click too) |
 
 Every post is behind the session, the CSRF value and the Origin, in the

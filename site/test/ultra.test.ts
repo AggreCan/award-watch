@@ -289,7 +289,7 @@ describe("the plan cards while Ultra is on sale", () => {
       `Analytics: every view, ${planYears("ultra")} fiscal years`, `${RULES.ultra.matches} matching notices for your organization`,
       `${RULES.ultra.match_mail} matching notices a week, by email`,
       `API: ${KEYS_MAX} keys of ${keyQuota("ultra")!.perDay.toLocaleString("en-CA")} requests a day`,
-      `${RULES.ultra.saved_views} saved analytics views`, `A dashboard of up to ${RULES.ultra.dashboard} panels`,
+      `${RULES.ultra.saved_views} saved analytics views`, `${RULES.ultra.dashboards} dashboards of ${RULES.ultra.dashboard_tiles} tiles each`,
       "Saved views by email, weekly or monthly",
     ]);
     expect(ULTRA_LINES).toEqual(ULTRA_OWN_ROWS.map((r) => r.ultra.key));
@@ -320,7 +320,7 @@ describe("the Pro page while Ultra is on sale", () => {
     expect(ultra).toBeGreaterThan(who);
     expect(ultra).toBeLessThan(html.indexOf('<h2 id="free">'));
     const days = keyQuota("ultra")!.perDay.toLocaleString("en-CA");
-    expect(html).toContain(`<p>Ultra includes everything in Pro, with these figures: ${RULES.ultra.saved_searches} saved searches and briefings by email, ${RULES.ultra.watchlists} watches, ${planYears("ultra")} fiscal years of analytics, API keys of ${days} requests a day each, and a dashboard of up to ${RULES.ultra.dashboard} panels you choose.</p>`);
+    expect(html).toContain(`<p>Ultra includes everything in Pro, with these figures: ${RULES.ultra.saved_searches} saved searches and briefings by email, ${RULES.ultra.watchlists} watches, ${planYears("ultra")} fiscal years of analytics, API keys of ${days} requests a day each, and ${RULES.ultra.dashboards} dashboards of ${RULES.ultra.dashboard_tiles} tiles each.</p>`);
     expect(html).toContain("<p>For people who follow a whole market: many buyers, segments and competitors at once.</p>");
     expect(html).toContain('<p class="pro-price">Ultra is CA$30 a month or CA$301.50 a year, taxes added at checkout.</p>');
     expect(html).toContain("<h3>Can I move from Pro to Ultra, or back?</h3>");
@@ -430,12 +430,12 @@ describe("the Terms", () => {
   });
 
   it("say on the privacy page what a dashboard keeps, and on the Data page each paid plan's API figure for the day, only while Ultra is on sale", async () => {
-    const kept = "A dashboard keeps the tiles you chose, the position and size of each, and each tile's own choices.";
+    const kept = "A dashboard keeps the name you give it, its place among your dashboards, the tiles you chose, the position and size of each, and each tile's own choices.";
     expect(text((await page("/privacy", payEnv())).body)).not.toContain(kept);
     const privacy = text((await page("/privacy", saleEnv())).body);
     expect(privacy).toContain(kept);
-    expect(privacy).toContain("The tiles are deleted with the account.");
-    expect(text((await page("/privacy?lang=fr", saleEnv())).body)).toContain("Un tableau de bord conserve les tuiles que vous avez choisies, la position et la taille de chacune");
+    expect(privacy).toContain("The dashboards and their tiles are deleted with the account.");
+    expect(text((await page("/privacy?lang=fr", saleEnv())).body)).toContain("Un tableau de bord conserve le nom que vous lui donnez, sa place parmi vos tableaux de bord, les tuiles que vous avez choisies, la position et la taille de chacune");
     const pro = keyQuota("pro")!.perDay.toLocaleString("en-CA");
     const ultra = keyQuota("ultra")!.perDay.toLocaleString("en-CA");
     const before = text((await page("/data", payEnv())).body);
@@ -585,7 +585,7 @@ describe("Ultra's strings", () => {
       }
     }
     const COMPARATIVE = /\b(more|higher|above|unlimited|plus|davantage|supérieure?s?|au-dessus|illimitée?s?)\b/i;
-    // "au plus" is French for "at most", Ultra's own bound on its dashboard (propage.ultra_text, plans.dashboard), not a comparison.
+    // "au plus" is French for "at most", a bound of a plan's own, not a comparison.
     for (const key of KEYS.filter((k) => k.startsWith("plans.") || k.startsWith("propage.ultra"))) {
       expect((rawEntry(key).en + " " + rawEntry(key).fr).replace(/\bau plus\b/g, ""), key).not.toMatch(COMPARATIVE);
     }

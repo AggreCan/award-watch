@@ -544,8 +544,8 @@ CREATE INDEX IF NOT EXISTS idx_weekly_mail_due ON weekly_mail(mail, on_at);
 -- account chose, in its order. kind is checked by the site (dashboard.tsx PANEL_KINDS), not by a
 -- CHECK, so a new kind of panel needs no rebuild of this table. ref names what the panel shows: a
 -- saved search's, saved view's or briefing's id, a window ('3m'), a block ('years'), or ''.
--- wide is 1 for full width. At most DASHBOARD_MAX per account, held inside the insert. Goes with
--- the account, and a panel goes with the search, view or briefing it shows.
+-- wide is 1 for full width. At most the plan's figure of tiles (TILES_MAX at most), held inside the insert.
+-- Goes with the account, and a panel goes with the search, view or briefing it shows.
 CREATE TABLE IF NOT EXISTS dashboard_panels (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id),
@@ -559,11 +559,13 @@ CREATE TABLE IF NOT EXISTS dashboard_panels (
 CREATE INDEX IF NOT EXISTS idx_dashboard_panels_user ON dashboard_panels(user_id, pos);
 
 -- The dashboard as a grid (src/account/dashboard.tsx, public/dash-grid.js; docs/accounts.md,
--- Dashboard): an account's dashboards, then each one's tiles at their places and sizes. An account
--- has one dashboard for now (pos 0), made with its first change to the layout, which writes every
--- tile the page showed (the panels above, or the starting layout); from then on dashboard_panels is
--- read no more for that account. A dashboards row with no tile is a dashboard the reader emptied.
--- name is '' until dashboards can be named. Both go with the account.
+-- Dashboard): an account's dashboards, then each one's tiles at their places and sizes. The first is
+-- made with the account's first change, which writes every tile the page showed (the panels above,
+-- or the starting layout); from then on dashboard_panels is read no more for that account. Others
+-- follow, at most the plan's figure (DASHBOARDS_MAX at most), held inside the insert; pos is the
+-- order of the tabs, written whole when a reader moves one. name is the reader's (40 characters at
+-- most), or '' for the site's label ("Dashboard 2"). A dashboards row with no tile is a dashboard the
+-- reader emptied; the account's last one stays when deleted, emptied. Both go with the account.
 CREATE TABLE IF NOT EXISTS dashboards (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id),
@@ -578,8 +580,9 @@ CREATE INDEX IF NOT EXISTS idx_dashboards_user ON dashboards(user_id, pos);
 -- its place on the grid of 12 columns: x and w in columns, y and h in rows, as the grid's rules hold
 -- them (dash-grid.js). The page never trusts a stored place: every layout is clamped and compacted
 -- when it is read and before it is written. At most the plan's figure per dashboard and at most two
--- briefings, the same item once, all held inside the insert. Goes with the account, and a tile goes
--- with the search, view or briefing it shows.
+-- briefings on a dashboard, the same item once on a dashboard (so an item may sit on two), all held
+-- inside the insert and inside a move to another dashboard. Goes with its dashboard and with the
+-- account, and a tile goes, from every dashboard, with the search, view or briefing it shows.
 CREATE TABLE IF NOT EXISTS dashboard_tiles (
   id TEXT PRIMARY KEY,
   dashboard_id TEXT NOT NULL REFERENCES dashboards(id),
@@ -593,9 +596,9 @@ CREATE TABLE IF NOT EXISTS dashboard_tiles (
   h INTEGER NOT NULL,
   created_at TEXT NOT NULL
 );
--- A page view reads an account's tiles, the deletions go by account, and each insert's checks (the
--- count, the briefings, the same item once) read the account's tiles by kind and ref; a dashboard's own
--- tiles by its id, which deleting a dashboard checks against its key.
+-- A page view reads one dashboard's tiles by its id, as each insert's checks do (the count, the
+-- briefings, the same item once) and a dashboard's deletion; the deletions with a search, view or
+-- briefing go by account, kind and ref.
 CREATE INDEX IF NOT EXISTS idx_dashboard_tiles_user ON dashboard_tiles(user_id, kind, ref);
 CREATE INDEX IF NOT EXISTS idx_dashboard_tiles_board ON dashboard_tiles(dashboard_id);
 

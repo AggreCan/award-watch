@@ -80,10 +80,12 @@ export const ORG_CLAIM_CSV = /^\/account\/organization\/[a-z]+\.csv$/;
 // The billing page's own posts (account/routes.tsx); the webhook has its bucket.
 const BILLING_POSTS = new Set(["/account/billing/checkout", "/account/billing/portal", "/account/billing/refund"]);
 // The dashboard's posts (account/dashboard.tsx): each writes the account's
-// layout, so they count in the "edit" bucket, on the accounts terms; so do
-// the saved views' (account/view_pages.tsx): save one, its email, remove it;
-// and the dashboard's read of one tile (DASHBOARD_TILE, a GET).
-const DASHBOARD_POSTS = /^\/account\/dashboard\/(?:panels(?:\/[^/]+\/(?:move|width|delete))?|layout|tiles\/[^/]+\/(?:move|size|delete))$/;
+// layout or its dashboards (a new one, a name, an order, a deletion), so
+// they count in the "edit" bucket, on the accounts terms; so do the saved
+// views' (account/view_pages.tsx): save one, its email, remove it; and the
+// dashboard's read of one tile (DASHBOARD_TILE, a GET).
+const DASHBOARD_POSTS =
+  /^\/account\/dashboard\/(?:panels(?:\/[^/]+\/(?:move|width|delete))?|layout|boards(?:\/[^/]+\/(?:rename|move|delete))?|tiles\/[^/]+\/(?:move|size|board|delete))$/;
 const DASHBOARD_TILE = /^\/account\/dashboard\/tiles\/[^/]+$/;
 const VIEW_POSTS = /^\/account\/views(?:\/[^/]+(?:\/delete)?)?$/;
 

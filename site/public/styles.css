@@ -726,6 +726,40 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ink); width: 1
 .dash-adder-body ul { font-size: 13px; line-height: 20px; }
 /* Add to dashboard stands on its own line under a row's label. */
 td > .dash-add { margin-top: 4px; }
+/* With several dashboards it opens on their names, each a flat menu item: under a row's label in the row's
+   flow, and in a page head's actions under the head's row at its right, as Add a Tile's choices hang. */
+.dash-add-menu > summary { display: inline-flex; list-style: none; }
+.dash-add-menu > summary::-webkit-details-marker { display: none; }
+.dash-add-list { min-width: 184px; max-width: 100%; margin: 4px 0 0; padding: 4px 0; background: var(--panel); border: 1px solid var(--border-2); }
+.page-head-row:has(> .page-actions > .dash-add-menu) { position: relative; }
+.page-actions > .dash-add-menu > .dash-add-list { position: absolute; right: 0; top: calc(100% + 8px); z-index: 15; width: min(320px, 100%); margin: 0; }
+/* A menu item names a dashboard as its reader typed it: a long word wraps inside the menu. */
+.dash-menu-item { overflow-wrap: anywhere; }
+/* Move To in a tile's menu: its head over the other dashboards' names. */
+.dash-menu-head { margin: 4px 0 0; padding: 8px 12px 2px; border-top: 1px solid var(--border); font-size: 12px; line-height: 16px; color: var(--muted); }
+/* The dashboards, in the page's head under its lead: a tab a dashboard (the site's tabs, each cut to one
+   line), then New dashboard and the shown one's Rename, Order or Delete. The row wraps at any width, so it
+   never widens the page. The choices hang under the row from its left, no wider than the row, over Add a
+   Tile's (which hang under the head's row from its right). */
+.dash-boards { position: relative; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px 24px; margin: 16px 0 0; }
+.dash-tabs { min-width: 0; max-width: 100%; }
+.dash-tabs a { max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.dash-board-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--gutter); padding: 4px 0 6px; font-size: 13px; line-height: 20px; }
+.dash-board-tools form { margin: 0; }
+.dash-board-edit > summary, .dash-board-delete > summary { list-style: none; }
+.dash-board-edit > summary::-webkit-details-marker, .dash-board-delete > summary::-webkit-details-marker { display: none; }
+.dash-board-body {
+  position: absolute; left: 0; top: calc(100% + 8px); z-index: 16; width: min(360px, 100%); padding: 16px;
+  background: var(--panel); border: 1px solid var(--border-2);
+}
+.dash-board-body > * { margin: 0; }
+.dash-board-body > * + * { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+.dash-board-body .stack { gap: 8px; }
+.dash-board-body label { display: flex; flex-direction: column; gap: 4px; }
+.dash-board-body input[type="text"] { width: 100%; }
+.dash-board-order { display: flex; flex-wrap: wrap; gap: 8px; }
+.dash-board-order form { margin: 0; }
+.dash-board-delete form { margin-top: 8px; }
 
 /* -- stat tiles: four to a row, large tabular figures, one line under -------- */
 .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gutter); margin: 0 0 var(--gutter); }
