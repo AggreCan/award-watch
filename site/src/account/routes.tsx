@@ -141,7 +141,7 @@ import {
 import { STEPS, type Step } from "../../public/dash-grid.js";
 import { boardChoices } from "./dashboard_add";
 import { DASHBOARD_PATH, holdsDashboard } from "./dashboard_rule";
-import { type Plan, RULES, allowed, planFor, savedViewCap, watchCap } from "./entitlements";
+import { type PlanState, RULES, allowed, planFor, savedViewCap, watchCap } from "./entitlements";
 import {
   FEEDS_MAX, FEED_SEARCH_KIND, type FeedKind, type FeedRead, type FeedRow, createFeed, deleteFeeds, feedAddress, feedCalendar, feedName,
   feedSize, feedWatches, isFeedKind, listFeeds, readFeed, removeFeed, rotateFeed, searchMatches,
@@ -524,9 +524,10 @@ account.get("/", async (c) => {
       .bind(who.userId).first<{ keys: number }>();
     // The account's live sessions: the Account panel's row counts them, the Signed-In Browsers panel lists them.
     const sessions = await liveSessions(c.env, who.userId);
-    // The saved searches with the briefings, which share the cap: the count every page states (searches.ts heldCount).
-    const held = await heldCount(c.env, who.userId);
-    const watching = await watchCount(c.env, who.userId);
+    // The saved searches with the briefings, which share the cap: the count every page states (searches.ts heldCount),
+    // the subscription's for an account in a group, as the watches' is.
+    const held = await heldCount(c.env, who);
+    const watching = await watchCount(c.env, who);
     const org = await claimSummary(c.env, who.userId);
     const m = c.req.query("m");
     // Stripe's checkout returns with its session's id (billing.tsx bindReturn): the subscription is bound before the page is drawn.
@@ -895,7 +896,7 @@ account.post("/calendar", async (c) => {
   if (!isFeedKind(kind)) return c.text(t(c.get("lang"), "form.rejected"), 400);
   if (!allowed(who, "delivery")) return c.redirect(feedBack(kind, "feed_pro"), 303);
   return guarded(c, async () => {
-    const result = await createFeed(c.env, who.userId, kind, kind === "search" ? clean(fields, "search", 64) : null);
+    const result = await createFeed(c.env, who, kind, kind === "search" ? clean(fields, "search", 64) : null);
     if (result === "added") await audit(c.env, who.userId, "feed_created", kind);
     return c.redirect(feedBack(kind, `feed_${result}`), 303);
   });
@@ -1285,22 +1286,24 @@ async function followAtSignIn(c: Context<AppEnv>, userId: string, follow: Follow
   try {
     const label = await watchLabel(c, follow.kind, follow.target, lang);
     if (!label) return;
-    const plan = await planAtSignIn(c, userId, now);
-    if (!plan) return;
+    const held = await planAtSignIn(c, userId, now);
+    if (!held) return;
     const [stats] = await Promise.all([loadStats(c.env).catch(() => null), alignWatches(c, userId)]);
-    const result = await addWatch(c.env, { userId, plan }, { ...follow, segment: "", label }, stats?.data_as_of?.slice(0, 10) ?? null, now);
+    const who = { userId, plan: held.plan, group: held.group };
+    const result = await addWatch(c.env, who, { ...follow, segment: "", label }, stats?.data_as_of?.slice(0, 10) ?? null, now);
     if (result === "added") await audit(c.env, userId, "watch_added", `${follow.kind} at sign-in`, now);
   } catch {
     console.error("account sign-in: the page named by Follow was not followed");
   }
 }
 
-// The plan of the account the address has just signed in to, as the session
-// would read it; null when the row is not there.
-async function planAtSignIn(c: Context<AppEnv>, userId: string, now: Date): Promise<Plan | null> {
+// The plan of the account the address has just signed in to, and the group
+// its figures are counted over, as the session would read them (planFor's
+// one statement); null when the row is not there.
+async function planAtSignIn(c: Context<AppEnv>, userId: string, now: Date): Promise<PlanState | null> {
   const user = await c.env.ACCOUNTS!.prepare("SELECT plan, plan_until FROM users WHERE id = ?").bind(userId)
     .first<{ plan: string; plan_until: string | null }>();
-  return user ? (await planFor(c.env, { id: userId, ...user }, now)).plan : null;
+  return user ? planFor(c.env, { id: userId, ...user }, now) : null;
 }
 
 // The briefing a segment or buyer page's Save this briefing link named
@@ -1320,9 +1323,9 @@ async function briefAtSignIn(c: Context<AppEnv>, userId: string, brief: Brief, l
     const s: BriefingSubject = { ...brief, segment: "" };
     const label = await briefingLabelOf(c, s, lang);
     if (!label) return;
-    const plan = await planAtSignIn(c, userId, now);
-    if (!plan) return;
-    const result = await addBriefing(c.env, { userId, plan }, { ...s, label }, lang, now);
+    const held = await planAtSignIn(c, userId, now);
+    if (!held) return;
+    const result = await addBriefing(c.env, { userId, plan: held.plan, group: held.group }, { ...s, label }, lang, now);
     if (result === "added") await audit(c.env, userId, "briefing_added", `${brief.kind} at sign-in`, now);
   } catch {
     console.error("account sign-in: the briefing named by Save this briefing was not saved");
@@ -1533,7 +1536,7 @@ account.post("/keys", async (c) => {
     }
     const name = clean(fields, "name", KEY_NAME_MAX);
     if (!name) return keysPage(c, who, { errors: ["account.err_key_name"], status: 400 });
-    const made = await createKey(c.env, who.userId, name);
+    const made = await createKey(c.env, who, name);
     if (made === "limit") return keysPage(c, who, { status: 409 });
     // A key of that name in use: most often this form posted again by a reload, which makes nothing.
     if (made === "exists") return keysPage(c, who, { errors: ["account.err_key_exists"], status: 409 });

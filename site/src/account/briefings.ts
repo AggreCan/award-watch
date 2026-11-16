@@ -50,6 +50,7 @@ import {
 } from "./deliveries";
 import { type DigestMessage, briefingDigest, siteLink } from "./digests";
 import { allowed, planFor, savedSearchCap, SAVED_SEARCH_MAX, type Plan } from "./entitlements";
+import { type InGroup, groupIn, pooled } from "./pool";
 import { type RecordsWait, missingTable } from "./records_deliveries";
 import { newId, randomHex } from "./secrets";
 import { EVENT_NOTABLE_CENTS, EVENT_NOTABLE_SHARE } from "./watch_events";
@@ -559,17 +560,23 @@ export const madeBefore = (r: string, table: "saved_searches" | "briefings") =>
 // One insert, held to the shared cap inside the statement (both tables
 // counted), so two posts at once cannot pass it: delivery weekly on a plan
 // with delivery, off otherwise. "exists" when the same subject (and segment)
-// is subscribed already.
+// is subscribed already. users is the accounts the cap is counted over: the
+// account's own (?2), or for an account in a group the group's ids at ?11 to
+// ?15 (pool.ts); the same subject stays the account's own (the unique key).
+const addBriefingSql = (users: string) =>
+  "INSERT INTO briefings (id, user_id, kind, subject, segment, label, lang, created_at, deliver) " +
+  `SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9 WHERE (SELECT COUNT(*) FROM saved_searches WHERE user_id ${users}) + ` +
+  `(SELECT COUNT(*) FROM briefings WHERE user_id ${users}) < ?10 ON CONFLICT (user_id, kind, subject, segment) DO NOTHING`;
+export const ADD_BRIEFING_SQL = addBriefingSql("= ?2");
+export const ADD_BRIEFING_GROUP_SQL = addBriefingSql(`IN ${groupIn(11)}`);
+
 export async function addBriefing(
-  env: Env, who: { userId: string; plan: Plan }, b: BriefingSubject & { label: string }, lang: Lang, now = new Date(),
+  env: Env, who: { userId: string; plan: Plan } & InGroup, b: BriefingSubject & { label: string }, lang: Lang, now = new Date(),
 ): Promise<"added" | "exists" | "cap"> {
   const db = env.ACCOUNTS!;
-  const res = await db.prepare(
-    "INSERT INTO briefings (id, user_id, kind, subject, segment, label, lang, created_at, deliver) " +
-    "SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9 WHERE (SELECT COUNT(*) FROM saved_searches WHERE user_id = ?2) + " +
-    "(SELECT COUNT(*) FROM briefings WHERE user_id = ?2) < ?10 ON CONFLICT (user_id, kind, subject, segment) DO NOTHING",
-  ).bind(newId(), who.userId, b.kind, b.subject, b.segment, b.label.slice(0, LABEL_MAX), lang, now.toISOString(),
-    allowed(who, "delivery") ? "weekly" : "off", sharedCap(who.plan)).run();
+  const q = pooled(who, ADD_BRIEFING_SQL, ADD_BRIEFING_GROUP_SQL);
+  const res = await db.prepare(q.sql).bind(newId(), who.userId, b.kind, b.subject, b.segment, b.label.slice(0, LABEL_MAX), lang, now.toISOString(),
+    allowed(who, "delivery") ? "weekly" : "off", sharedCap(who.plan), ...q.binds).run();
   if ((res.meta?.changes ?? 0) === 1) return "added";
   const same = await db.prepare("SELECT 1 AS x FROM briefings WHERE user_id = ? AND kind = ? AND subject = ? AND segment = ?")
     .bind(who.userId, b.kind, b.subject, b.segment).first();
@@ -607,19 +614,29 @@ export async function deleteBriefingsOf(env: Env, userId: string): Promise<void>
 
 // A page's briefing for the reader: the id of the account's briefing of it
 // (the whole buyer first), its segment, and how many searches and briefings
-// the account holds; null before the table exists.
+// the account holds; null before the table exists. For an account in a group,
+// n is the group's (?4 to ?8), so the page reads full when the subscription
+// is, and mine the account's own, in the same statement; the briefing read is
+// the account's own either way.
+const BRIEFING_OWN = "FROM briefings WHERE user_id = ?1 AND kind = ?2 AND subject = ?3 ORDER BY segment, created_at LIMIT 1";
+const SHARED_OWN = "(SELECT COUNT(*) FROM briefings WHERE user_id = ?1) + (SELECT COUNT(*) FROM saved_searches WHERE user_id = ?1)";
+const briefingStateSql = (counts: string) =>
+  `SELECT (SELECT id ${BRIEFING_OWN}) AS id, (SELECT segment ${BRIEFING_OWN}) AS segment, (SELECT deliver ${BRIEFING_OWN}) AS deliver, ${counts}`;
+export const BRIEFING_STATE_SQL = briefingStateSql(`${SHARED_OWN} AS n`);
+export const BRIEFING_STATE_GROUP_SQL = briefingStateSql(
+  `(SELECT COUNT(*) FROM briefings WHERE user_id IN ${groupIn(4)}) + (SELECT COUNT(*) FROM saved_searches WHERE user_id IN ${groupIn(4)}) AS n, ` +
+  `${SHARED_OWN} AS mine`,
+);
+
 export async function briefingState(
-  env: Env, userId: string, kind: BriefingKind, subject: string,
-): Promise<{ id: string | null; segment: string; deliver: BriefingDelivery | null; n: number } | null> {
+  env: Env, who: { userId: string } & InGroup, kind: BriefingKind, subject: string,
+): Promise<{ id: string | null; segment: string; deliver: BriefingDelivery | null; n: number; mine?: number } | null> {
   try {
-    const row = await env.ACCOUNTS!.prepare(
-      "SELECT (SELECT id FROM briefings WHERE user_id = ?1 AND kind = ?2 AND subject = ?3 ORDER BY segment, created_at LIMIT 1) AS id, " +
-      "(SELECT segment FROM briefings WHERE user_id = ?1 AND kind = ?2 AND subject = ?3 ORDER BY segment, created_at LIMIT 1) AS segment, " +
-      "(SELECT deliver FROM briefings WHERE user_id = ?1 AND kind = ?2 AND subject = ?3 ORDER BY segment, created_at LIMIT 1) AS deliver, " +
-      "(SELECT COUNT(*) FROM briefings WHERE user_id = ?1) + (SELECT COUNT(*) FROM saved_searches WHERE user_id = ?1) AS n",
-    ).bind(userId, kind, subject).first<{ id: string | null; segment: string | null; deliver: string | null; n: number }>();
+    const q = pooled(who, BRIEFING_STATE_SQL, BRIEFING_STATE_GROUP_SQL);
+    const row = await env.ACCOUNTS!.prepare(q.sql).bind(who.userId, kind, subject, ...q.binds)
+      .first<{ id: string | null; segment: string | null; deliver: string | null; n: number; mine?: number }>();
     const deliver = row?.deliver === "weekly" || row?.deliver === "off" ? row.deliver : null;
-    return { id: row?.id ?? null, segment: row?.segment ?? "", deliver, n: row?.n ?? 0 };
+    return { id: row?.id ?? null, segment: row?.segment ?? "", deliver, n: row?.n ?? 0, ...(who.group ? { mine: row?.mine ?? 0 } : {}) };
   } catch (e) {
     if (missingTable(e)) return null;
     throw e;

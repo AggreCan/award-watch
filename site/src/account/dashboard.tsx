@@ -100,6 +100,7 @@ import {
   type ClaimFrame, checkOrganization, claimFrame, endingParams, isClaimBlock, readClaim, shareBinds, shareSegment,
 } from "./org_claim";
 import { ultraOnSale } from "./payments";
+import { groupIn, pooled } from "./pool";
 import {
   BUYER_COUNTS_SQL, BUYER_NAME_SQL, KIND_SOURCES, ORG_COUNTS_SQL, ORG_NAME_SQL, type RecordsKind, SEGMENT_COUNTS_SQL, entityOf, isRecordsKind,
   missingTable,
@@ -413,16 +414,26 @@ export const TILE_BOARD_SQL =
 // The first dashboard's row, written with the account's first change unless
 // one is there already (two first changes at once write one): ?1 a new id,
 // ?2 the user, ?3 the time. Its name is '' (the site's label) until renamed.
+// An account alone holds the plan's figure of at least one, so its first is
+// never refused for it; in a group the figure is the subscription's, so the
+// group's form also holds the group's dashboards under ?4, the plan's figure,
+// counted over its ids at ?5 to ?9 (pool.ts): a member's first change cannot
+// make a sixth (writeFirst then answers that the dashboards are in use).
 export const BOARD_INSERT_SQL =
   "INSERT INTO dashboards (id, user_id, name, pos, created_at) SELECT ?1, ?2, '', 0, ?3 WHERE NOT EXISTS (SELECT 1 FROM dashboards WHERE user_id = ?2)";
+export const BOARD_INSERT_GROUP_SQL = `${BOARD_INSERT_SQL} AND (SELECT COUNT(*) FROM dashboards WHERE user_id IN ${groupIn(5)}) < ?4`;
 
 // Another dashboard, after the account's others, held inside the statement to
 // the plan's figure, so two posts at once cannot pass it: ?1 a new id, ?2 the
-// user, ?3 the time, ?4 the plan's figure.
-export const NEW_BOARD_SQL =
+// user, ?3 the time, ?4 the plan's figure. For an account in a group the
+// figure is the subscription's, counted over the group's ids at ?5 to ?9; the
+// new one's place (pos) is among the account's own tabs either way.
+const newBoardSql = (users: string) =>
   "INSERT INTO dashboards (id, user_id, name, pos, created_at) " +
   "SELECT ?1, ?2, '', (SELECT COALESCE(MAX(pos), -1) + 1 FROM dashboards WHERE user_id = ?2), ?3 " +
-  "WHERE (SELECT COUNT(*) FROM dashboards WHERE user_id = ?2) < ?4";
+  `WHERE (SELECT COUNT(*) FROM dashboards WHERE user_id ${users}) < ?4`;
+export const NEW_BOARD_SQL = newBoardSql("= ?2");
+export const NEW_BOARD_GROUP_SQL = newBoardSql(`IN ${groupIn(5)}`);
 export const RENAME_BOARD_SQL = "UPDATE dashboards SET name = ?1 WHERE id = ?2 AND user_id = ?3";
 export const BOARD_POS_SQL = "UPDATE dashboards SET pos = ?1 WHERE id = ?2 AND user_id = ?3";
 // A dashboard deleted, in one batch: its tiles, then its row unless it is the
@@ -442,7 +453,8 @@ export const DELETE_BOARD_SQL = [
 // kind, ?4 the ref, ?5 to ?8 its x, y, w and h, ?9 the time, ?10 the plan's
 // figure, ?11 the briefings' cap. The first change writes each tile of the
 // layout through it too. No choices are written here (opts ''); a text tile
-// goes in through ADD_TEXT_SQL, the same insert with its text.
+// goes in through ADD_TEXT_SQL, the same insert with its text. Tiles are a
+// dashboard's own figure, in a group or not, so it has no group's form.
 export const ADD_TILE_SQL =
   "INSERT INTO dashboard_tiles (id, dashboard_id, user_id, kind, ref, opts, x, y, w, h, created_at) " +
   `SELECT ?1, d.id, ?2, ?3, ?4, '', ?5, ?6, ?7, ?8, ?9 FROM dashboards d WHERE d.id = COALESCE(?12, ${firstOf("?2")}) AND d.user_id = ?2 ` +
@@ -1931,15 +1943,21 @@ function back(c: Context<AppEnv>, m = "", place: string | null = null, at = DASH
 // kept, a starter's a new one). Two first changes at once write one
 // dashboard and each item once. The ids as they then stand, by the ids the
 // page gave the tiles (an item written by the other change keeps that one's).
-async function writeFirst(env: Env, who: Account, tiles: readonly Shown[], now = new Date()): Promise<Map<string, string>> {
+// For an account in a group, null when no dashboard of the account's stands
+// after it: the group's form was refused, the subscription's dashboards being
+// in use, and every tile, having no dashboard to go to, with it.
+async function writeFirst(env: Env, who: Account, tiles: readonly Shown[], now = new Date()): Promise<Map<string, string> | null> {
   const db = env.ACCOUNTS!;
   const at = now.toISOString();
+  const first = pooled(who, BOARD_INSERT_SQL, BOARD_INSERT_GROUP_SQL, [boardCap(who.plan)]);
   await db.batch([
-    db.prepare(BOARD_INSERT_SQL).bind(newId(), who.userId, at),
+    db.prepare(first.sql).bind(newId(), who.userId, at, ...first.binds),
     ...tiles.map((s) => db.prepare(ADD_TILE_SQL).bind(ID_RE.test(s.id) ? s.id : newId(), who.userId, s.kind, s.ref, s.x, s.y, s.w, s.h, at,
       tileCap(who.plan), BRIEFING_PANELS_MAX, null)),
   ]);
-  const rows = (await readBoard(env, who.userId))?.tiles ?? [];
+  const board = await readBoard(env, who.userId);
+  if (who.group && board && !board.boards.length) return null;
+  const rows = board?.tiles ?? [];
   const ids = new Map<string, string>();
   for (const s of tiles) {
     const row = rows.find((r) => r.kind === s.kind && r.ref === s.ref);
@@ -1961,8 +1979,11 @@ async function writeMoves(env: Env, who: Account, rows: readonly TileRow[], next
 
 // A layout the reader changed, kept as the account keeps its layout: the
 // tiles' places updated, or the whole layout written with the first change.
-// The layout given is the page's, already through the grid's rules.
-async function keepLayout(env: Env, who: Account, h: Holdings, keeping: Keeping, list: readonly Shown[], next: readonly Tile[]): Promise<Map<string, string>> {
+// The layout given is the page's, already through the grid's rules. null as
+// writeFirst answers it: nothing kept, the subscription's dashboards in use.
+async function keepLayout(
+  env: Env, who: Account, h: Holdings, keeping: Keeping, list: readonly Shown[], next: readonly Tile[],
+): Promise<Map<string, string> | null> {
   if (keeping === "tiles") {
     await writeMoves(env, who, h.board!.tiles, next);
     return new Map(next.map((t) => [t.id, t.id]));
@@ -2005,7 +2026,8 @@ export async function addPanelPost(c: Context<AppEnv>, who: Account, fields: Rec
     const place = result === "added" || result === "exists" ? await panelIdOf(c.env, who.userId, spec) : null;
     return back(c, result, place);
   }
-  if (keeping === "first") await writeFirst(c.env, who, list);
+  // A first change the subscription's dashboards leave no room for (pool.ts) keeps nothing.
+  if (keeping === "first" && !(await writeFirst(c.env, who, list))) return back(c, "boards_full");
   const board = (await readBoard(c.env, who.userId, { board: want }))!;
   const at = hereOf({ board });
   const here = board.tiles.find((r) => r.kind === spec.kind && r.ref === spec.ref);
@@ -2059,6 +2081,7 @@ export async function editPanelPost(c: Context<AppEnv>, who: Account, id: string
     const rest = normalize(tiles.filter((x) => x.id !== id));
     if (keeping === "first") {
       const ids = await writeFirst(c.env, who, fromTiles(rest, new Map(list.map((s) => [s.id, s]))));
+      if (!ids) return back(c, "boards_full");
       return back(c, "", near ? ids.get(near) ?? null : ADD_ANCHOR);
     }
     await c.env.ACCOUNTS!.prepare(DELETE_TILE_SQL).bind(id, who.userId).run();
@@ -2067,6 +2090,7 @@ export async function editPanelPost(c: Context<AppEnv>, who: Account, id: string
   }
   const next = op.op === "step" ? stepTile(tiles, id, op.step) : resize(tiles, id, op.wide ? COLS : COLS / 2, target.h);
   const ids = await keepLayout(c.env, who, h, keeping, list, next);
+  if (!ids) return back(c, "boards_full", null, at);
   return back(c, "", ids.get(id) ?? null, at);
 }
 
@@ -2161,7 +2185,7 @@ export async function boardPost(c: Context<AppEnv>, who: Account, id: string, op
   if (!h.board!.found) return back(c);
   let board = h.board!;
   if (keeping === "first") {
-    await writeFirst(c.env, who, op.op === "delete" ? [] : shownTiles(h).list);
+    if (!(await writeFirst(c.env, who, op.op === "delete" ? [] : shownTiles(h).list))) return back(c, "boards_full");
     board = (await readBoard(c.env, who.userId))!;
   }
   const self = board.id;
@@ -2170,7 +2194,8 @@ export async function boardPost(c: Context<AppEnv>, who: Account, id: string, op
   switch (op.op) {
     case "new": {
       const fresh = newId();
-      const res = await db.prepare(NEW_BOARD_SQL).bind(fresh, who.userId, new Date().toISOString(), boardCap(who.plan)).run();
+      const q = pooled(who, NEW_BOARD_SQL, NEW_BOARD_GROUP_SQL);
+      const res = await db.prepare(q.sql).bind(fresh, who.userId, new Date().toISOString(), boardCap(who.plan), ...q.binds).run();
       // Never the first: the account held one before it.
       return (res.meta?.changes ?? 0) === 1 ? back(c, "", null, boardPath(fresh)) : back(c, "boards_full", null, hereOf({ board }));
     }
@@ -2231,6 +2256,8 @@ export async function layoutPost(c: Context<AppEnv>, who: Account, fields: Recor
     return p ? { ...asTile(s), x: own(p.x, s.x), y: own(p.y, s.y), w: own(p.w, s.w), h: own(p.h, s.h) } : asTile(s);
   }));
   const ids = await keepLayout(c.env, who, h, keeping, list, next);
+  // Nothing kept, the subscription's dashboards in use: the script keeps the layout on the page, as it does while nothing can be kept.
+  if (!ids) return c.json({ state: "unsaved" });
   return c.json({
     state: "saved",
     tiles: next.map((x) => ({ id: ids.get(x.id) ?? x.id, x: x.x, y: x.y, w: x.w, h: x.h })),

@@ -2801,13 +2801,14 @@ covering a seat, the seat stays and gives no plan; what its member keeps
 stays theirs.
 
 What is built is the table, the plan read through a seat, deletion, the
-sweep and the console's read. No page creates a seat yet: there is no
-invitation, no Seats page, no route under `/account/seats` and no line on
-any plan card, the Terms or the privacy page, and with no seat row every
-page, post, feed, API answer and email reads as before. The code is
-`site/src/account/entitlements.ts` (`planFor`, `withSeats`, `seatsReady`)
-and `site/src/account/seats.ts`; the tests are `site/test/seats.test.ts` and
-`site/test/seats-unchanged.test.ts`.
+sweep, the console's read and the pool at the inserts (*The pool*). No page
+creates a seat yet: there is no invitation, no Seats page, no route under
+`/account/seats` and no line on any plan card, the Terms or the privacy
+page, and with no seat row every page, post, feed, API answer and email
+reads as before. The code is `site/src/account/entitlements.ts` (`planFor`,
+`withSeats`, `seatsReady`), `site/src/account/seats.ts` and
+`site/src/account/pool.ts`; the tests are `site/test/seats.test.ts`,
+`site/test/seats-unchanged.test.ts` and `site/test/seats-pool.test.ts`.
 
 ### The table
 
@@ -2871,6 +2872,88 @@ gives no plan now, "You hold a seat on the subscription of (address), which
 gives no plan now. Your account is on Free." (the account's own plan line in
 place of Free). A member reads nothing else of the holder, and a holder
 nothing of a member.
+
+### The pool
+
+Every counted figure of a subscription with seats is the subscription's
+(the operator's ruling of 2026-11-16, "one shared pool"): it is counted over
+the group, the holder and the members its plan covers, inside the insert
+that holds it. The figure is the plan's, as for an account alone; a
+member's plan is the holder's, so the figure is the holder's plan's.
+
+| Figure (Ultra) | Held in | Counted over the group |
+|---|---|---|
+| 100 saved searches and briefings | `addSearch` (and `importInterest`, which adds through it), `addBriefing` | both tables; while `briefings` is not on the database, the searches alone, the fallback having a group's form of its own |
+| 100 watches | `ADD_WATCH_SQL` | every watch but each person's own claimed organization's, the claim read for each row's account; the one place more is still for the adder's own claim |
+| 50 saved views | `ADD_VIEW_SQL` | every view |
+| 5 dashboards | `NEW_BOARD_SQL`, and `BOARD_INSERT_SQL` (the first, written with an account's first change) | every dashboard; a new one's place among the tabs is the account's own |
+| 5 API keys | `createKey` | the live keys; a key's name is each person's own |
+| 5 calendar feeds | `createFeed` | the live feeds; a search's feed still needs the account's own search |
+| 5 bug reports a day | the bug form's insert (`bugs.tsx`) | the day's reports; the same report again is the account's own repeat |
+| 30 downloads a minute | the limiter (`limits.ts`, `PAID_DOWNLOAD_LIMIT`) | one key for the group, `account:<holder id>`, where an account alone has `account:<user id>` |
+
+Not pooled: a dashboard's tiles (each dashboard's own figure, so
+`ADD_TILE_SQL` and the move to another dashboard are unchanged), the keyed
+API's day (per key, `KEY_PER_DAY_ULTRA`), and every figure that is each
+person's (analytics years, organizations compared, earlier contracts,
+matching notices, the radar's windows, signed-in browsers).
+
+`pooled(who, X_SQL, X_GROUP_SQL)` (`pool.ts`) chooses the statement, so no
+caller spells the group. An account in no group sends today's statement,
+word for word, with the same values bound. An account in a group sends the
+statement's group form: the same text with the cap's count read as
+`user_id IN (?n, ?n+1, ?n+2, ?n+3, ?n+4)`, five places (`POOL_SLOTS`, the
+most people a plan's group holds) numbered after the statement's own, the
+group's ids bound there and NULL in the places left over. The first
+dashboard's group form also binds the plan's figure. The ids are the
+request's session read (`Account.group`, from `planFor`'s one statement),
+never a value from the request, so a group adds no statement and no round
+trip, and no statement binds more than 15 values. Each count reads through
+the table's index on `user_id`. D1 runs one statement at a time, so when two
+people of one group add at once, the second counts the first's row and is
+refused at the figure.
+
+The pool is counts only. A group's form counts the group's rows and
+selects, returns or changes nothing of another account; whatever else an
+insert checks (the same filter, subject, page, address, name or report)
+stays the account's own, so a member may save the filter another member
+saved.
+
+A refusal reads as the plan's figure reads today: the searches page's cap,
+the watch button's cap, the views' full line, the keys page at its limit,
+the feeds' cap, the bug form's daily limit. A member with no dashboard whose
+group holds 5 keeps its starting layout: every post that would write its
+first dashboard keeps nothing and answers with the dashboards' full line
+(`dash.boards_full`), and the page's script is told the layout cannot be
+kept.
+
+The counts the pages state are the group's for an account in a group, so a
+control reads full when the subscription is: `searchState`, `heldCount`
+(`heldCounts` gives both), `briefingState`, `watchState` and `watchCount`
+answer the group's count as `n` and the account's own as `mine`, from the
+same statement. No page shows `mine` yet and no line is new. For an account
+in no group each answers exactly what it did, with no `mine`. The lines
+that count from the account's own list still state the account's own count
+until the pool's own lines are built: the searches and watches pages' notices
+at the figure, the overview's count of keys, the views' Save control
+(`viewState`), the keys page, the feeds panel and the dashboard's tabs. Past
+the pool, the add they offer is refused by the insert, with the line above.
+
+The group is read once a request, so a seat ended or taken between that read
+and the insert makes the count read one account too many (refusing early)
+or one too few (letting one item past the figure). Until items past a
+figure are marked and left out of service, that item is served.
+
+Known, left as it is: an account that holds a seat and has an Ultra grant of
+its own is in no group itself (its own plan wins), while the holder's
+`planFor`, which does not read a member's own plan, still lists it in the
+holder's group. Its items count in the holder's pool, and its own adds
+count against its own figures alone. Only the operator's grant to an
+account in a seat makes this happen.
+
+No account is in a group until a seat is given. With no seat row, every
+account sends today's statements, and the limiter keys every download as
+before.
 
 ### Before the table is on the database
 

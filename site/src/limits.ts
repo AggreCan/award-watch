@@ -250,8 +250,9 @@ export async function throttle(c: Context<AppEnv>, next: Next): Promise<Response
   // A download by a session signed in on a paid plan counts against that
   // account's own cap, keyed by its user id, in place of the address's
   // (PAID_DOWNLOAD_LIMIT): one buyer's analytics view alone offers 8 files,
-  // and colleagues behind one office address each have their own. The
-  // account comes from the request's one session read, which the route
+  // and colleagues behind one office address each have their own. An account
+  // in a group counts against the subscription's, keyed by the holder's id.
+  // The account comes from the request's one session read, which the route
   // reuses; without a session cookie nothing is read (paidAccountOf).
   let paid = false;
   if (bucket === "download" && c.env.PAID_DOWNLOAD_LIMIT) {

@@ -8,8 +8,8 @@
 //
 // A report keeps the page (a path on the site), what happened and what was
 // expected, as typed, with the user id and the time. Five per user in any
-// 24 hours, counted inside the insert so posts sent together cannot pass
-// the cap; the same report from the same account within ten minutes is
+// 24 hours (per subscription for an account in a group, pool.ts), counted
+// inside the insert so posts sent together cannot pass the cap; the same report from the same account within ten minutes is
 // stored and sent once (store). Rows go after BUG_REPORT_DAYS (signin.ts,
 // sweep) and with the account (routes.tsx, deleteAccount).
 //
@@ -30,6 +30,7 @@ import { PriceLine, ProTag, type ProPrice, proPrice } from "../pro";
 import { audit } from "./audit";
 import { allowed } from "./entitlements";
 import { accountPage } from "./pages";
+import { type InGroup, groupIn, pooled } from "./pool";
 import { newId } from "./secrets";
 import { errorTag } from "./sender";
 import type { Account } from "./session";
@@ -171,15 +172,23 @@ export type BugReport = { id: string; userId: string; plan: string; lang: Lang; 
 // "repeat" for that one, "limited" when the cap is reached.
 export const BUG_REPEAT_MS = 10 * 60_000;
 
-async function store(env: Env, r: BugReport, now: Date): Promise<"stored" | "repeat" | "limited"> {
+// For an account in a group BUG_REPORTS_PER_DAY is the subscription's, the
+// day's reports counted over the group's ids at ?10 to ?14 (pool.ts); the
+// same report stays the account's own.
+const storeSql = (users: string) =>
+  "INSERT INTO bug_reports (id, user_id, page, text, expected, created_at) " +
+  `SELECT ?1, ?2, ?3, ?4, ?5, ?6 WHERE (SELECT COUNT(*) FROM bug_reports WHERE user_id ${users} AND created_at > ?7) < ?8 ` +
+  "AND NOT EXISTS (SELECT 1 FROM bug_reports WHERE user_id = ?2 AND created_at > ?9 AND page IS ?3 AND text = ?4 AND expected IS ?5)";
+export const BUG_STORE_SQL = storeSql("= ?2");
+export const BUG_STORE_GROUP_SQL = storeSql(`IN ${groupIn(10)}`);
+
+async function store(env: Env, who: InGroup, r: BugReport, now: Date): Promise<"stored" | "repeat" | "limited"> {
   const db = env.ACCOUNTS!;
   const since = new Date(now.getTime() - BUG_REPEAT_MS).toISOString();
-  const res = await db.prepare(
-    "INSERT INTO bug_reports (id, user_id, page, text, expected, created_at) " +
-    "SELECT ?1, ?2, ?3, ?4, ?5, ?6 WHERE (SELECT COUNT(*) FROM bug_reports WHERE user_id = ?2 AND created_at > ?7) < ?8 " +
-    "AND NOT EXISTS (SELECT 1 FROM bug_reports WHERE user_id = ?2 AND created_at > ?9 AND page IS ?3 AND text = ?4 AND expected IS ?5)",
-  ).bind(
+  const q = pooled(who, BUG_STORE_SQL, BUG_STORE_GROUP_SQL);
+  const res = await db.prepare(q.sql).bind(
     r.id, r.userId, r.page, r.text, r.expected, now.toISOString(), new Date(now.getTime() - DAY_MS).toISOString(), BUG_REPORTS_PER_DAY, since,
+    ...q.binds,
   ).run();
   if ((res.meta?.changes ?? 0) === 1) return "stored";
   const repeat = await db.prepare("SELECT 1 AS x FROM bug_reports WHERE user_id = ?1 AND created_at > ?2 AND page IS ?3 AND text = ?4 AND expected IS ?5")
@@ -270,7 +279,7 @@ export async function fileBug(c: Context<AppEnv>, who: Account, fields: Record<s
   const report: BugReport = {
     id: newId(), userId: who.userId, plan: who.plan, lang, page, text: values.text, expected: values.expected || null,
   };
-  const stored = await store(c.env, report, now);
+  const stored = await store(c.env, who, report, now);
   if (stored === "limited") return accountPage(c, t(lang, "bugs.title"), formView(lang, who, values, ["bugs.err_limited"]), 429);
   // The same report again within minutes (a reload of the page below): it was sent, and is not sent twice.
   if (stored === "repeat") return accountPage(c, t(lang, "bugs.sent_title"), sentView(lang));

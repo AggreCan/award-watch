@@ -12,6 +12,7 @@ import type { AppEnv, Env } from "../env";
 import { t } from "../i18n";
 import { isBlocked } from "./admin_ops";
 import { type Feature, type Plan, allowed, lastKnownPlan, planFor } from "./entitlements";
+import { type InGroup, groupIn, pooled } from "./pool";
 import { newId, randomHex, sameHash, sha256Hex } from "./secrets";
 import { OUTAGE_TRUST_MS } from "./session";
 import { accountsEnabled } from "./switch";
@@ -33,20 +34,27 @@ export async function listKeys(env: Env, userId: string): Promise<KeyRow[]> {
 // A new key; "limit" when the user already holds KEYS_MAX live ones; "exists"
 // when one of its live keys has that name already. Both held inside the
 // insert, so the same form posted again (a reload of the page that showed the
-// new key) makes no second key, and two posts at once cannot pass either.
+// new key) makes no second key, and two posts at once cannot pass either. For
+// an account in a group KEYS_MAX is the subscription's, the live keys counted
+// over the group's ids at ?8 to ?12 (pool.ts); a key's name stays each
+// person's own.
+const createKeySql = (users: string) =>
+  "INSERT INTO api_keys (id, user_id, name, key_hash, prefix, created_at) SELECT ?1, ?2, ?3, ?4, ?5, ?6 " +
+  `WHERE (SELECT COUNT(*) FROM api_keys WHERE user_id ${users} AND revoked_at IS NULL) < ?7 ` +
+  "AND NOT EXISTS (SELECT 1 FROM api_keys WHERE user_id = ?2 AND revoked_at IS NULL AND name = ?3)";
+export const CREATE_KEY_SQL = createKeySql("= ?2");
+export const CREATE_KEY_GROUP_SQL = createKeySql(`IN ${groupIn(8)}`);
+
 export async function createKey(
-  env: Env, userId: string, name: string, now = new Date(),
+  env: Env, who: { userId: string } & InGroup, name: string, now = new Date(),
 ): Promise<{ key: string; prefix: string } | "limit" | "exists"> {
   const db = env.ACCOUNTS!;
   const prefix = randomHex(4);
   const key = `aw_${prefix}_${randomHex(32)}`;
-  const res = await db.prepare(
-    "INSERT INTO api_keys (id, user_id, name, key_hash, prefix, created_at) SELECT ?1, ?2, ?3, ?4, ?5, ?6 " +
-    "WHERE (SELECT COUNT(*) FROM api_keys WHERE user_id = ?2 AND revoked_at IS NULL) < ?7 " +
-    "AND NOT EXISTS (SELECT 1 FROM api_keys WHERE user_id = ?2 AND revoked_at IS NULL AND name = ?3)",
-  ).bind(newId(), userId, name, await sha256Hex(key), prefix, now.toISOString(), KEYS_MAX).run();
+  const q = pooled(who, CREATE_KEY_SQL, CREATE_KEY_GROUP_SQL);
+  const res = await db.prepare(q.sql).bind(newId(), who.userId, name, await sha256Hex(key), prefix, now.toISOString(), KEYS_MAX, ...q.binds).run();
   if ((res.meta?.changes ?? 0) === 1) return { key, prefix };
-  const same = await db.prepare("SELECT 1 AS x FROM api_keys WHERE user_id = ? AND revoked_at IS NULL AND name = ?").bind(userId, name).first();
+  const same = await db.prepare("SELECT 1 AS x FROM api_keys WHERE user_id = ? AND revoked_at IS NULL AND name = ?").bind(who.userId, name).first();
   return same ? "exists" : "limit";
 }
 

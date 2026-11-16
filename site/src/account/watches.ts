@@ -27,6 +27,7 @@ import { loadAlias, loadBuyerAlias } from "../data";
 import type { Env } from "../env";
 import { WATCH_MAX, watchCap, type Plan } from "./entitlements";
 import { followClaimedId } from "./org_claim";
+import { type InGroup, groupIn, pooled } from "./pool";
 import { missingTable } from "./records_deliveries";
 import { newId } from "./secrets";
 import { type EventKind, KINDS_FOR, type WatchKind, isEventKind, isWatchKind } from "./watch_events";
@@ -73,6 +74,11 @@ const claimedOf = (u: string) => `(SELECT c.organization_id FROM org_claims c WH
 // watch on the claimed organization (organization watches carry no segment).
 const countedOf = (u: string) =>
   `(SELECT COUNT(*) FROM watches w WHERE w.user_id = ${u} AND NOT (w.kind = 'organization' AND w.target IS ${claimedOf(u)}))`;
+// The same over a group's ids (pool.ts): each person's claimed organization's
+// watch stays beside the pool, so the claim is read per row, the row's own
+// account's, through org_claims' key.
+const countedIn = (ids: string) =>
+  `(SELECT COUNT(*) FROM watches w WHERE w.user_id IN ${ids} AND NOT (w.kind = 'organization' AND w.target IS ${claimedOf("w.user_id")}))`;
 
 // The insert held to the cap: ?2 the account, ?3 and ?4 the kind and target,
 // ?8 the cap. A watch passes while the counted watches are under the cap; the
@@ -81,11 +87,15 @@ const countedOf = (u: string) =>
 // the old watch counted, and the new one waits until the account is back
 // within its plan, so moving the claim cannot pile watches up past the cap
 // and the one free. One statement, so two posts at once cannot both pass.
-export const ADD_WATCH_SQL =
+// For an account in a group the counted watches are the group's (?11 to ?15),
+// and the one place more is still for the adder's own claim.
+const addWatchSql = (counted: string) =>
   "INSERT INTO watches (id, user_id, kind, target, segment, label, events, cadence, created_at, last_sent_day) " +
   "SELECT ?1, ?2, ?3, ?4, ?10, ?5, ?6, 'daily', ?7, ?9 " +
-  `WHERE ${countedOf("?2")} < ?8 + (?3 = 'organization' AND ?4 IS ${claimedOf("?2")}) ` +
+  `WHERE ${counted} < ?8 + (?3 = 'organization' AND ?4 IS ${claimedOf("?2")}) ` +
   "ON CONFLICT (user_id, kind, target, segment) DO NOTHING";
+export const ADD_WATCH_SQL = addWatchSql(countedOf("?2"));
+export const ADD_WATCH_GROUP_SQL = addWatchSql(countedIn(groupIn(11)));
 
 // The organization watch of the claimed organization, when the account holds
 // it, and how many watches count toward the cap. claimed is the claim's id
@@ -130,14 +140,15 @@ export async function listWatches(env: Env, userId: string): Promise<Watch[]> {
 // added: its events are reported from the next one on (last_sent_day starts
 // there).
 export async function addWatch(
-  env: Env, who: { userId: string; plan: Plan }, w: { kind: WatchKind; target: string; segment: string; label: string },
+  env: Env, who: { userId: string; plan: Plan } & InGroup, w: { kind: WatchKind; target: string; segment: string; label: string },
   since: string | null, now = new Date(),
 ): Promise<"added" | "exists" | "cap"> {
   const db = env.ACCOUNTS!;
   const at = now.toISOString();
+  const q = pooled(who, ADD_WATCH_SQL, ADD_WATCH_GROUP_SQL);
   const [res] = await db.batch([
-    db.prepare(ADD_WATCH_SQL).bind(newId(), who.userId, w.kind, w.target, w.label.slice(0, LABEL_MAX), KINDS_FOR[w.kind].join(","), at, watchCap(who.plan), since,
-      w.segment),
+    db.prepare(q.sql).bind(newId(), who.userId, w.kind, w.target, w.label.slice(0, LABEL_MAX), KINDS_FOR[w.kind].join(","), at, watchCap(who.plan), since,
+      w.segment, ...q.binds),
     db.prepare("INSERT INTO watch_mail (user_id, mail, created_at) VALUES (?, 'on', ?) ON CONFLICT (user_id) DO NOTHING").bind(who.userId, at),
   ]);
   if ((res.meta?.changes ?? 0) === 1) return "added";
@@ -168,19 +179,28 @@ export async function setWatch(env: Env, userId: string, id: string, events: rea
 // toward the cap, whether this page is the claimed organization's (free,
 // so the button stays at the cap), and whether the account claims an
 // organization at all (claimed: a profile then asks it nothing, fit_panels.tsx
-// ClaimAsk). One statement, as before.
+// ClaimAsk). One statement, as before. For an account in a group, n is the
+// group's counted watches (?4 to ?8), so the button reads at the cap when the
+// subscription is, and mine the account's own, in the same statement; the
+// rest is the account's own either way.
+const watchStateSql = (counts: string) =>
+  "SELECT (SELECT id FROM watches WHERE user_id = ?1 AND kind = ?2 AND target = ?3 ORDER BY segment, created_at LIMIT 1) AS id, " +
+  "(SELECT segment FROM watches WHERE user_id = ?1 AND kind = ?2 AND target = ?3 ORDER BY segment, created_at LIMIT 1) AS segment, " +
+  `${counts}, (?2 = 'organization' AND ?3 IS ${claimedOf("?1")}) AS free, ${claimedOf("?1")} IS NOT NULL AS claimed, ` +
+  // The account's own watch mail: off once it turned it off; no row yet is on, as the first watch writes it (addWatch).
+  "(SELECT mail FROM watch_mail WHERE user_id = ?1) AS mail";
+export const WATCH_STATE_SQL = watchStateSql(`${countedOf("?1")} AS n`);
+export const WATCH_STATE_GROUP_SQL = watchStateSql(`${countedIn(groupIn(4))} AS n, ${countedOf("?1")} AS mine`);
+
 export async function watchState(
-  env: Env, userId: string, kind: WatchKind, target: string,
-): Promise<{ id: string | null; segment: string; n: number; free: boolean; claimed: boolean; mailOff: boolean }> {
-  const row = await env.ACCOUNTS!.prepare(
-    "SELECT (SELECT id FROM watches WHERE user_id = ?1 AND kind = ?2 AND target = ?3 ORDER BY segment, created_at LIMIT 1) AS id, " +
-    "(SELECT segment FROM watches WHERE user_id = ?1 AND kind = ?2 AND target = ?3 ORDER BY segment, created_at LIMIT 1) AS segment, " +
-    `${countedOf("?1")} AS n, (?2 = 'organization' AND ?3 IS ${claimedOf("?1")}) AS free, ${claimedOf("?1")} IS NOT NULL AS claimed, ` +
-    // The account's own watch mail: off once it turned it off; no row yet is on, as the first watch writes it (addWatch).
-    "(SELECT mail FROM watch_mail WHERE user_id = ?1) AS mail",
-  ).bind(userId, kind, target).first<{ id: string | null; segment: string | null; n: number; free: number | null; claimed: number | null; mail: string | null }>();
+  env: Env, who: { userId: string } & InGroup, kind: WatchKind, target: string,
+): Promise<{ id: string | null; segment: string; n: number; free: boolean; claimed: boolean; mailOff: boolean; mine?: number }> {
+  const q = pooled(who, WATCH_STATE_SQL, WATCH_STATE_GROUP_SQL);
+  const row = await env.ACCOUNTS!.prepare(q.sql).bind(who.userId, kind, target, ...q.binds)
+    .first<{ id: string | null; segment: string | null; n: number; free: number | null; claimed: number | null; mail: string | null; mine?: number }>();
   return {
     id: row?.id ?? null, segment: row?.segment ?? "", n: row?.n ?? 0, free: row?.free === 1, claimed: row?.claimed === 1, mailOff: row?.mail === "off",
+    ...(who.group ? { mine: row?.mine ?? 0 } : {}),
   };
 }
 
@@ -266,14 +286,22 @@ export async function deleteWatchesOf(env: Env, userId: string): Promise<void> {
 
 // How many of an account's watches count toward the cap, whether it holds
 // the claimed organization's watch beside them, and whether its mail is on,
-// for the overview; null when the tables are not there yet.
-export async function watchCount(env: Env, userId: string): Promise<{ n: number; own: boolean; mail: string | null } | null> {
+// for the overview; null when the tables are not there yet. For an account in
+// a group, n is the group's counted watches (?2 to ?6) and mine the account's
+// own, in the same statement.
+const watchCountSql = (counts: string) =>
+  `SELECT ${counts}, (SELECT mail FROM watch_mail WHERE user_id = ?1) AS mail, ` +
+  `EXISTS (SELECT 1 FROM watches w WHERE w.user_id = ?1 AND w.kind = 'organization' AND w.target IS ${claimedOf("?1")}) AS own`;
+export const WATCH_COUNT_SQL = watchCountSql(`${countedOf("?1")} AS n`);
+export const WATCH_COUNT_GROUP_SQL = watchCountSql(`${countedIn(groupIn(2))} AS n, ${countedOf("?1")} AS mine`);
+
+export async function watchCount(
+  env: Env, who: { userId: string } & InGroup,
+): Promise<{ n: number; own: boolean; mail: string | null; mine?: number } | null> {
   try {
-    const row = await env.ACCOUNTS!.prepare(
-      `SELECT ${countedOf("?1")} AS n, (SELECT mail FROM watch_mail WHERE user_id = ?1) AS mail, ` +
-      `EXISTS (SELECT 1 FROM watches w WHERE w.user_id = ?1 AND w.kind = 'organization' AND w.target IS ${claimedOf("?1")}) AS own`,
-    ).bind(userId).first<{ n: number; own: number; mail: string | null }>();
-    return { n: row?.n ?? 0, own: row?.own === 1, mail: row?.mail ?? null };
+    const q = pooled(who, WATCH_COUNT_SQL, WATCH_COUNT_GROUP_SQL);
+    const row = await env.ACCOUNTS!.prepare(q.sql).bind(who.userId, ...q.binds).first<{ n: number; own: number; mail: string | null; mine?: number }>();
+    return { n: row?.n ?? 0, own: row?.own === 1, mail: row?.mail ?? null, ...(who.group ? { mine: row?.mine ?? 0 } : {}) };
   } catch (e) {
     if (missingTable(e)) return null;
     throw e;

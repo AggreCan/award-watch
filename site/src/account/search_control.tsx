@@ -64,7 +64,7 @@ export async function saveControl(c: Context<AppEnv>, filter: InterestFilter | n
   const read = await readSession(c).catch(() => ({ state: "unavailable" }) as const);
   if (read.state !== "ok") return null;
   try {
-    const s = await searchState(c.env, read.account.userId, filter);
+    const s = await searchState(c.env, read.account, filter);
     const here = new URL(c.req.url);
     const cap = capFor(read.account);
     const pro = allowed(read.account, "delivery");

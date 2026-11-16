@@ -57,7 +57,7 @@ export async function briefingControl(c: Context<AppEnv>, kind: BriefingKind, su
   if (read.state === "unavailable") return null;
   if (read.state !== "ok") return { at: "out", next: briefingPath({ kind, subject }) };
   try {
-    const s = await briefingState(c.env, read.account.userId, kind, subject);
+    const s = await briefingState(c.env, read.account, kind, subject);
     if (!s) return null;
     return {
       at: "in", account: read.account, id: s.id, segment: s.segment, n: s.n, cap: sharedCap(read.account.plan),

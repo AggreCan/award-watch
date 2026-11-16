@@ -325,9 +325,11 @@ export async function railAccount(c: Context<AppEnv>): Promise<RailAccount | und
 
 // The user id of the request's session when the database has just answered
 // for it and its plan is paid (Pro or Ultra): the key of that account's own
-// download cap (limits.ts throttle, PAID_DOWNLOAD_LIMIT). This is the
-// request's one read (readSession above), which the route then reuses, so a
-// download that reads the plan anyway costs nothing more. null, and nothing
+// download cap (limits.ts throttle, PAID_DOWNLOAD_LIMIT). For an account in a
+// group the cap is the subscription's (docs/accounts.md, Seats), so the key is
+// the group's holder's id, the same for the holder and every member. This is
+// the request's one read (readSession above), which the route then reuses, so
+// a download that reads the plan anyway costs nothing more. null, and nothing
 // read, while the switch is off or without a session cookie; null for a
 // session that does not stand, a free plan, a database that cannot answer,
 // and a session answered from this isolate's memory through an outage
@@ -337,7 +339,8 @@ export async function paidAccountOf(c: Context<AppEnv>): Promise<string | null> 
   if (!getCookie(c, SESSION_COOKIE)) return null;
   try {
     const read = await readSession(c);
-    return read.state === "ok" && !read.account.stale && isPaidPlan(read.account.plan) ? read.account.userId : null;
+    if (read.state !== "ok" || read.account.stale || !isPaidPlan(read.account.plan)) return null;
+    return read.account.group?.holderId ?? read.account.userId;
   } catch {
     return null;
   }

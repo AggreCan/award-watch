@@ -61,7 +61,7 @@ export async function watchControl(c: Context<AppEnv>, kind: WatchKind, target: 
   if (read.state === "unavailable") return null;
   if (read.state !== "ok") return { at: "out", next: watchPath(kind, target) };
   try {
-    const s = await watchState(c.env, read.account.userId, kind, target);
+    const s = await watchState(c.env, read.account, kind, target);
     const cap = watchCap(read.account.plan);
     const mail = allowed(read.account, "watch_mail");
     const atCap = s.free ? s.n > cap : s.n >= cap;

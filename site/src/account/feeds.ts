@@ -59,6 +59,7 @@ import { type Query, type Row, num, orgNumber, readRecords } from "../records_db
 import { PUBLISHED_CONTRACT_SQL } from "../records_tables";
 import { isBlocked } from "./admin_ops";
 import { type Plan, allowed, lastKnownPlan, planFor } from "./entitlements";
+import { type InGroup, groupIn, pooled } from "./pool";
 import { newId, randomHex, sameHash } from "./secrets";
 import { OUTAGE_TRUST_MS } from "./session";
 import { TARGET_CHUNK, TARGET_SLOTS, chunked } from "./watch_events";
@@ -101,20 +102,29 @@ export async function listFeeds(env: Env, userId: string): Promise<FeedRow[] | n
 
 // One insert, held to the cap and to the account's own tender search inside
 // the statement, so two posts at once pass neither; the partial unique index
-// keeps one live feed per search and one of each other kind.
+// keeps one live feed per search and one of each other kind. For an account
+// in a group FEEDS_MAX is the subscription's, the live feeds counted over the
+// group's ids at ?9 to ?13 (pool.ts); a search's feed still needs the
+// account's own search.
+const createFeedSql = (users: string) =>
+  "INSERT INTO feeds (id, user_id, kind, search_id, secret, created_at) SELECT ?1, ?2, ?3, ?4, ?5, ?6 " +
+  `WHERE (SELECT COUNT(*) FROM feeds WHERE user_id ${users} AND revoked_at IS NULL) < ?7 ` +
+  "AND (?3 <> 'search' OR EXISTS (SELECT 1 FROM saved_searches WHERE id = ?4 AND user_id = ?2 AND kind = ?8)) " +
+  "ON CONFLICT DO NOTHING";
+export const CREATE_FEED_SQL = createFeedSql("= ?2");
+export const CREATE_FEED_GROUP_SQL = createFeedSql(`IN ${groupIn(9)}`);
+
 export async function createFeed(
-  env: Env, userId: string, kind: FeedKind, searchId: string | null, now = new Date(),
+  env: Env, who: { userId: string } & InGroup, kind: FeedKind, searchId: string | null, now = new Date(),
 ): Promise<"added" | "exists" | "cap" | "missing"> {
   if (!isFeedKind(kind)) return "missing";
   const search = kind === "search" ? searchId : null;
   if (kind === "search" && !(search && FEED_ID_RE.test(search))) return "missing";
   const db = env.ACCOUNTS!;
-  const res = await db.prepare(
-    "INSERT INTO feeds (id, user_id, kind, search_id, secret, created_at) SELECT ?1, ?2, ?3, ?4, ?5, ?6 " +
-    "WHERE (SELECT COUNT(*) FROM feeds WHERE user_id = ?2 AND revoked_at IS NULL) < ?7 " +
-    "AND (?3 <> 'search' OR EXISTS (SELECT 1 FROM saved_searches WHERE id = ?4 AND user_id = ?2 AND kind = ?8)) " +
-    "ON CONFLICT DO NOTHING",
-  ).bind(newId(), userId, kind, search, randomHex(16), now.toISOString(), FEEDS_MAX, FEED_SEARCH_KIND).run();
+  const userId = who.userId;
+  const q = pooled(who, CREATE_FEED_SQL, CREATE_FEED_GROUP_SQL);
+  const res = await db.prepare(q.sql)
+    .bind(newId(), userId, kind, search, randomHex(16), now.toISOString(), FEEDS_MAX, FEED_SEARCH_KIND, ...q.binds).run();
   if ((res.meta?.changes ?? 0) === 1) return "added";
   const same = await db.prepare(
     "SELECT 1 AS x FROM feeds WHERE user_id = ? AND kind = ? AND COALESCE(search_id, '') = ? AND revoked_at IS NULL",

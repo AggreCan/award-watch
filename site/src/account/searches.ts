@@ -15,6 +15,7 @@ import { fmtInt, t, type Lang } from "../i18n";
 import { INTEREST_KINDS, type InterestFilter, type InterestKind, ULTRA_KIND, kindOfPath } from "../pages/interest";
 import { SAVED_SEARCH_MAX, savedSearchCap } from "./entitlements";
 import { deleteFeeds } from "./feeds";
+import { groupIn, pooled } from "./pool";
 import { missingTable } from "./records_deliveries";
 import { newId } from "./secrets";
 import type { Account } from "./session";
@@ -51,23 +52,35 @@ export const capFor = (account: Pick<Account, "plan">): number => Math.min(saved
 // cannot pass it; the weekly briefings share the cap (briefings.ts), so the
 // count reads both tables (the searches alone while the briefings table is
 // not on the database yet). "exists" when the same filter is saved already.
+// For an account in a group the cap is the subscription's, both tables
+// counted over the group's ids at ?9 to ?13 (pool.ts); the same filter stays
+// the account's own (the table's unique key).
 const ADD_SEARCH = (count: string) =>
   "INSERT INTO saved_searches (id, user_id, kind, params, label, lang, created_at, deliver) " +
   `SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, 'off' WHERE ${count} < ?8 ON CONFLICT (user_id, kind, params) DO NOTHING`;
 const SEARCHES_COUNT = "(SELECT COUNT(*) FROM saved_searches WHERE user_id = ?2)";
+// The two counts over a group's places from first on.
+const searchesIn = (first: number) => `(SELECT COUNT(*) FROM saved_searches WHERE user_id IN ${groupIn(first)})`;
+const briefingsIn = (first: number) => `(SELECT COUNT(*) FROM briefings WHERE user_id IN ${groupIn(first)})`;
+export const ADD_SEARCH_SQL = ADD_SEARCH(`${SEARCHES_COUNT} + (SELECT COUNT(*) FROM briefings WHERE user_id = ?2)`);
+export const ADD_SEARCH_GROUP_SQL = ADD_SEARCH(`${searchesIn(9)} + ${briefingsIn(9)}`);
+export const ADD_SEARCH_NO_BRIEFINGS_SQL = ADD_SEARCH(SEARCHES_COUNT);
+export const ADD_SEARCH_NO_BRIEFINGS_GROUP_SQL = ADD_SEARCH(searchesIn(9));
 
 export async function addSearch(
-  env: Env, account: Pick<Account, "userId" | "plan">, filter: InterestFilter, lang: Lang, now = new Date(),
+  env: Env, account: Pick<Account, "userId" | "plan" | "group">, filter: InterestFilter, lang: Lang, now = new Date(),
 ): Promise<"added" | "exists" | "cap"> {
   const db = env.ACCOUNTS!;
   const binds = [
     newId(), account.userId, filter.kind, filter.params.slice(0, PARAMS_MAX), filter.label.slice(0, LABEL_MAX), lang, now.toISOString(),
     capFor(account),
   ];
-  const res = await db.prepare(ADD_SEARCH(`${SEARCHES_COUNT} + (SELECT COUNT(*) FROM briefings WHERE user_id = ?2)`)).bind(...binds).run()
+  const q = pooled(account, ADD_SEARCH_SQL, ADD_SEARCH_GROUP_SQL);
+  const res = await db.prepare(q.sql).bind(...binds, ...q.binds).run()
     .catch((e) => {
       if (!missingTable(e)) throw e;
-      return db.prepare(ADD_SEARCH(SEARCHES_COUNT)).bind(...binds).run();
+      const alone = pooled(account, ADD_SEARCH_NO_BRIEFINGS_SQL, ADD_SEARCH_NO_BRIEFINGS_GROUP_SQL);
+      return db.prepare(alone.sql).bind(...binds, ...alone.binds).run();
     });
   if ((res.meta?.changes ?? 0) === 1) return "added";
   const same = await db.prepare("SELECT 1 AS x FROM saved_searches WHERE user_id = ? AND kind = ? AND params = ?")
@@ -79,39 +92,67 @@ export async function addSearch(
 // the page's filter is saved on the account (its id and its delivery, for the
 // line that turns its email on), and how many the account holds against the
 // cap, the briefings counted as addSearch counts them. One statement, on the
-// table's unique key and the account's rows.
+// table's unique key and the account's rows. For an account in a group, n is
+// the group's (?4 to ?8), so the control reads full when the subscription is,
+// and mine, beside it in the same statement, the account's own; the saved
+// filter is the account's own either way.
 const SAVED_ROW = "FROM saved_searches WHERE user_id = ?1 AND kind = ?2 AND params = ?3";
 const SEARCH_STATE = (count: string) =>
   `SELECT EXISTS (SELECT 1 ${SAVED_ROW}) AS saved, (SELECT id ${SAVED_ROW}) AS id, (SELECT deliver ${SAVED_ROW}) AS deliver, ${count} AS n`;
 const STATE_COUNT = "(SELECT COUNT(*) FROM saved_searches WHERE user_id = ?1)";
+const STATE_BOTH = `${STATE_COUNT} + (SELECT COUNT(*) FROM briefings WHERE user_id = ?1)`;
+export const SEARCH_STATE_SQL = SEARCH_STATE(STATE_BOTH);
+export const SEARCH_STATE_GROUP_SQL = `${SEARCH_STATE(`${searchesIn(4)} + ${briefingsIn(4)}`)}, ${STATE_BOTH} AS mine`;
+export const SEARCH_STATE_NO_BRIEFINGS_SQL = SEARCH_STATE(STATE_COUNT);
+export const SEARCH_STATE_NO_BRIEFINGS_GROUP_SQL = `${SEARCH_STATE(searchesIn(4))}, ${STATE_COUNT} AS mine`;
 
 export async function searchState(
-  env: Env, userId: string, filter: Pick<InterestFilter, "kind" | "params">,
-): Promise<{ saved: boolean; id: string | null; deliver: Delivery | null; n: number }> {
+  env: Env, who: Pick<Account, "userId" | "group">, filter: Pick<InterestFilter, "kind" | "params">,
+): Promise<{ saved: boolean; id: string | null; deliver: Delivery | null; n: number; mine?: number }> {
   const db = env.ACCOUNTS!;
-  const binds = [userId, filter.kind, filter.params];
-  type Row = { saved: number; id: string | null; deliver: string | null; n: number };
-  const row = await db.prepare(SEARCH_STATE(`${STATE_COUNT} + (SELECT COUNT(*) FROM briefings WHERE user_id = ?1)`)).bind(...binds)
+  const binds = [who.userId, filter.kind, filter.params];
+  type Row = { saved: number; id: string | null; deliver: string | null; n: number; mine?: number };
+  const q = pooled(who, SEARCH_STATE_SQL, SEARCH_STATE_GROUP_SQL);
+  const row = await db.prepare(q.sql).bind(...binds, ...q.binds)
     .first<Row>()
     .catch((e) => {
       if (!missingTable(e)) throw e;
-      return db.prepare(SEARCH_STATE(STATE_COUNT)).bind(...binds).first<Row>();
+      const alone = pooled(who, SEARCH_STATE_NO_BRIEFINGS_SQL, SEARCH_STATE_NO_BRIEFINGS_GROUP_SQL);
+      return db.prepare(alone.sql).bind(...binds, ...alone.binds).first<Row>();
     });
   const saved = row?.saved === 1;
-  return { saved, id: saved ? row?.id ?? null : null, deliver: saved && isDelivery(row?.deliver) ? (row!.deliver as Delivery) : null, n: row?.n ?? 0 };
+  return {
+    saved, id: saved ? row?.id ?? null : null, deliver: saved && isDelivery(row?.deliver) ? (row!.deliver as Delivery) : null, n: row?.n ?? 0,
+    ...(who.group ? { mine: row?.mine ?? 0 } : {}),
+  };
 }
 
 // What the account holds against the cap the saved searches and the briefings
 // share: both tables, as addSearch counts them (the searches alone while the
 // briefings table is not on the database). The one count every page states.
-export async function heldCount(env: Env, userId: string): Promise<number> {
+// For an account in a group, n is the group's (?2 to ?6) and mine the
+// account's own, in the same statement; heldCount is n alone, as every page
+// states it.
+export const HELD_SQL = `SELECT ${STATE_BOTH} AS n`;
+export const HELD_GROUP_SQL = `SELECT ${searchesIn(2)} + ${briefingsIn(2)} AS n, ${STATE_BOTH} AS mine`;
+export const HELD_NO_BRIEFINGS_SQL = `SELECT ${STATE_COUNT} AS n`;
+export const HELD_NO_BRIEFINGS_GROUP_SQL = `SELECT ${searchesIn(2)} AS n, ${STATE_COUNT} AS mine`;
+
+export async function heldCounts(env: Env, who: Pick<Account, "userId" | "group">): Promise<{ n: number; mine?: number }> {
   const db = env.ACCOUNTS!;
-  const row = await db.prepare(`SELECT ${STATE_COUNT} + (SELECT COUNT(*) FROM briefings WHERE user_id = ?1) AS n`).bind(userId).first<{ n: number }>()
+  type Row = { n: number; mine?: number };
+  const q = pooled(who, HELD_SQL, HELD_GROUP_SQL);
+  const row = await db.prepare(q.sql).bind(who.userId, ...q.binds).first<Row>()
     .catch((e) => {
       if (!missingTable(e)) throw e;
-      return db.prepare(`SELECT ${STATE_COUNT} AS n`).bind(userId).first<{ n: number }>();
+      const alone = pooled(who, HELD_NO_BRIEFINGS_SQL, HELD_NO_BRIEFINGS_GROUP_SQL);
+      return db.prepare(alone.sql).bind(who.userId, ...alone.binds).first<Row>();
     });
-  return row?.n ?? 0;
+  return { n: row?.n ?? 0, ...(who.group ? { mine: row?.mine ?? 0 } : {}) };
+}
+
+export async function heldCount(env: Env, who: Pick<Account, "userId" | "group">): Promise<number> {
+  return (await heldCounts(env, who)).n;
 }
 
 // The line a paid account at its figure reads (Save this search, the searches
@@ -196,9 +237,10 @@ export async function pendingInterest(env: Env, email: string, userId: string): 
 }
 
 // Saves the pending rows up to the plan's cap and marks the ones saved as
-// confirmed. left is how many did not fit.
+// confirmed. left is how many did not fit. Each row goes through addSearch,
+// so for an account in a group the cap is the subscription's.
 export async function importInterest(
-  env: Env, account: Pick<Account, "userId" | "email" | "plan">, now = new Date(),
+  env: Env, account: Pick<Account, "userId" | "email" | "plan" | "group">, now = new Date(),
 ): Promise<{ imported: number; left: number }> {
   const rows = await pendingInterest(env, account.email, account.userId);
   const done: number[] = [];

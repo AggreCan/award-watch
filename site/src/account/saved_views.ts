@@ -29,6 +29,7 @@ import { pick, segmentShort, sourceLabel, t, type Lang } from "../i18n";
 import { fiscalLabel } from "../records_db";
 import { type Frame, type View, viewBase, viewOf } from "../view_address";
 import { SAVED_VIEW_MAX, savedViewCap, type Plan } from "./entitlements";
+import { type InGroup, groupIn, pooled } from "./pool";
 import { newId } from "./secrets";
 import { survivorOf } from "./watches";
 
@@ -153,21 +154,26 @@ export async function subjectName(env: Env, lang: Lang, kind: View, id: string):
 // One insert, held to the plan's figure inside the statement, so two posts at
 // once cannot pass it; the same address once (the table's unique key).
 // ?1 the id, ?2 the account, ?3 the kind, ?4 the address, ?5 the name, ?6 the
-// language, ?7 the time, ?8 the plan's figure.
-export const ADD_VIEW_SQL =
+// language, ?7 the time, ?8 the plan's figure. For an account in a group the
+// figure is the subscription's, counted over the group's ids at ?9 to ?13
+// (pool.ts); the same address stays the account's own.
+const addViewSql = (users: string) =>
   "INSERT INTO saved_views (id, user_id, kind, address, name, lang, deliver, created_at) " +
-  "SELECT ?1, ?2, ?3, ?4, ?5, ?6, 'off', ?7 WHERE (SELECT COUNT(*) FROM saved_views WHERE user_id = ?2) < ?8 " +
+  `SELECT ?1, ?2, ?3, ?4, ?5, ?6, 'off', ?7 WHERE (SELECT COUNT(*) FROM saved_views WHERE user_id ${users}) < ?8 ` +
   "ON CONFLICT (user_id, address) DO NOTHING";
+export const ADD_VIEW_SQL = addViewSql("= ?2");
+export const ADD_VIEW_GROUP_SQL = addViewSql(`IN ${groupIn(9)}`);
 
 export type AddViewResult = "added" | "exists" | "full" | "missing";
 
 export async function addView(
-  env: Env, who: { userId: string; plan: Plan }, v: { kind: View; address: string; name: string }, lang: Lang, now = new Date(),
+  env: Env, who: { userId: string; plan: Plan } & InGroup, v: { kind: View; address: string; name: string }, lang: Lang, now = new Date(),
 ): Promise<AddViewResult> {
   const db = env.ACCOUNTS!;
   try {
-    const res = await db.prepare(ADD_VIEW_SQL)
-      .bind(newId(), who.userId, v.kind, v.address, cleanName(v.name, LABEL_MAX), lang, now.toISOString(), savedViewCap(who.plan)).run();
+    const q = pooled(who, ADD_VIEW_SQL, ADD_VIEW_GROUP_SQL);
+    const res = await db.prepare(q.sql)
+      .bind(newId(), who.userId, v.kind, v.address, cleanName(v.name, LABEL_MAX), lang, now.toISOString(), savedViewCap(who.plan), ...q.binds).run();
     if ((res.meta?.changes ?? 0) === 1) return "added";
     const same = await db.prepare("SELECT 1 AS x FROM saved_views WHERE user_id = ? AND address = ?").bind(who.userId, v.address).first();
     return same ? "exists" : "full";
