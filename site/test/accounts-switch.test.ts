@@ -6,9 +6,12 @@
 // any use prove it). On:
 // the routes answer and the rail gains one item.
 import { describe, expect, it } from "vitest";
+import nightly from "../../.github/workflows/nightly.yml?raw";
+import { BACKUP_WEEKS, HISTORY_DAYS } from "../src/account/privacy";
+import { t } from "../src/i18n";
 import { app } from "../src/index";
 import { makeFakeAssets, testEnv } from "./assets";
-import { get, grantPro, newEmail, nextIp, onEnv, post, signIn, useAccountsDb } from "./accounts-helpers";
+import { decode, get, grantPro, nbsp, newEmail, nextIp, onEnv, post, signIn, useAccountsDb } from "./accounts-helpers";
 import { LANDING_SWITCH_PIECES, homeRequest, landingCore } from "./home";
 
 useAccountsDb();
@@ -272,6 +275,31 @@ describe("with the switch on", () => {
     expect(privacy).toContain('<h2 id="accounts">Accounts</h2>');
     expect(privacy).toContain("There are no passwords.");
     expect(privacy).not.toContain("The site has no accounts and no sign-in.");
+  });
+
+  it("says on the privacy page, after the deletion, how long the copies of the accounts database keep a deleted account", async () => {
+    const en = nbsp(decode((await render("/privacy", onEnv())).body));
+    const sentence =
+      "The accounts database is backed up once a week and each backup is kept 8 weeks, in private storage; the database's host also keeps 30 days of its history. A deleted account's rows remain in those copies until they are replaced.";
+    expect(en).toContain(sentence);
+    expect(en).toContain(t("en", "account.privacy_backup", { weeks: String(BACKUP_WEEKS), days: String(HISTORY_DAYS) }));
+    expect(en.indexOf(sentence)).toBeGreaterThan(en.indexOf("Deleting the account from its own page removes"));
+    const fr = nbsp(decode((await render("/privacy?lang=fr", onEnv())).body));
+    expect(fr).toContain(nbsp(t("fr", "account.privacy_backup", { weeks: String(BACKUP_WEEKS), days: String(HISTORY_DAYS) })));
+    expect(fr).toContain("La base de données des comptes est sauvegardée une fois par semaine et chaque sauvegarde est conservée 8 semaines, dans un stockage privé");
+    expect(fr).toContain("conserve aussi 30 jours de son historique.");
+    // While accounts are closed the page says nothing of it.
+    expect(nbsp(decode((await render("/privacy", testEnv())).body))).not.toContain("backed up once a week");
+  });
+
+  it("states the weeks the nightly keeps: both weekly steps count their slot modulo BACKUP_WEEKS", () => {
+    expect([BACKUP_WEEKS, HISTORY_DAYS]).toEqual([8, 30]);
+    const steps = nightly.split("\n      - name: ");
+    for (const title of ["Weekly snapshot (Sundays UTC, kept eight weeks)", "Weekly export of the accounts database (Sundays UTC, kept eight weeks)"]) {
+      const step = steps.find((s) => s.startsWith(title));
+      expect(step, title).toBeDefined();
+      expect(/slot=\$\(\( \$\(date -u \+%s\) \/ 604800 % (\d+) \)\)/.exec(step ?? "")?.[1], title).toBe(String(BACKUP_WEEKS));
+    }
   });
 
   it("answers an account route the switch does not know with the site's 404", async () => {

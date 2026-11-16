@@ -61,12 +61,23 @@ import { faultSummary } from "./search_db";
 // operator reads the figures each day without asking for them. A line too
 // old to be the last night's, or of another shape, is left out; it is never
 // an alert.
+//
+// The accounts database's weekly export (the nightly's Sunday step, kept
+// eight weeks under backups/weekly/): the check heads its newest copy, and a
+// copy older than ACCOUNTS_BACKUP_STALE_DAYS is a line of the email. No copy
+// at all says nothing (the first Sunday has not come), and neither does a
+// fault reading it, which is a log line: the head of the database backup
+// above already says when the bucket cannot be read.
 
 export const DATA_STALE_HOURS = 36;
 // The backup is uploaded in parts of at most 250 MiB (the nightly pack); the
 // first part goes up first, so its upload time is the backup's.
 export const BACKUP_KEY = "awardwatch.sqlite.gz.000";
 export const BACKUP_STALE_HOURS = 36;
+// A week between exports and two days for a Sunday whose run went late:
+// past it, a Sunday went by without an export.
+export const ACCOUNTS_BACKUP_KEY = "backups/weekly/accounts-latest.sql.gz";
+export const ACCOUNTS_BACKUP_STALE_DAYS = 9;
 const HOUR = 60 * 60 * 1000;
 
 // The same-day refresh's last run of the day is at 03:45 UTC, 2 h 15 before
@@ -213,6 +224,9 @@ export type Inputs = {
   now: Date;
   dataAsOf: string | null; // YYYY-MM-DD from stats.json, or null when missing
   backupUploaded: Date | null; // upload time of the backup's first part in R2
+  // Upload time of the accounts database's newest weekly export, or null
+  // when there is none or it was not read (neither is a line of the email).
+  accountsBackupUploaded?: Date | null;
   status: RunStatus | null; // status.json from R2
   statusProblem?: string | null; // why status.json could not be read in full
   // The same-day refresh's runs, or null when they were not read
@@ -340,6 +354,13 @@ export function collectAlerts(i: Inputs): string[] {
     out.push(`No database backup (${BACKUP_KEY}) is in R2.`);
   } else if ((i.now.getTime() - i.backupUploaded.getTime()) / HOUR > BACKUP_STALE_HOURS) {
     out.push(`The database backup in R2 was last saved ${i.backupUploaded.toISOString().slice(0, 16)} UTC, more than ${BACKUP_STALE_HOURS} hours ago.`);
+  }
+  const accounts = i.accountsBackupUploaded;
+  if (accounts && (i.now.getTime() - accounts.getTime()) / HOUR > ACCOUNTS_BACKUP_STALE_DAYS * 24) {
+    out.push(
+      `The accounts database's weekly backup in R2 (${ACCOUNTS_BACKUP_KEY}) was last saved ${accounts.toISOString().slice(0, 16)} UTC, ` +
+      `more than ${ACCOUNTS_BACKUP_STALE_DAYS} days ago. Check the nightly's Sunday export of it in the run log.`,
+    );
   }
   if (!i.status) {
     out.push("No run status (status.json) is in R2: the nightly workflow has not completed a run with the current version.");
@@ -716,6 +737,7 @@ async function readMoney(env: Env, now: Date): Promise<MoneyItems | null> {
 export async function gatherInputs(env: Env, now: Date): Promise<Inputs> {
   const stats = await loadStats(env).catch(() => null);
   let backupUploaded: Date | null = null;
+  let accountsBackupUploaded: Date | null = null;
   let status: RunStatus | null = null;
   let figures: string | null = null;
   const problems: string[] = [];
@@ -726,6 +748,13 @@ export async function gatherInputs(env: Env, now: Date): Promise<Inputs> {
     } catch (e) {
       backupUploaded = null;
       problems.push(`The data bucket (R2) could not be read: ${String(e).slice(0, 120)}`);
+    }
+    // No line for a fault here: the head above already names a bucket that cannot be read.
+    try {
+      const head = await env.DATA.head(ACCOUNTS_BACKUP_KEY);
+      accountsBackupUploaded = head ? head.uploaded : null;
+    } catch (e) {
+      console.log(`watchdog: the accounts database's backup not read (${String(e).slice(0, 120)})`);
     }
     try {
       const obj = await env.DATA.get("status.json");
@@ -754,8 +783,8 @@ export async function gatherInputs(env: Env, now: Date): Promise<Inputs> {
   const money = await readMoney(env, now);
   const deliveryDay = await readDeliveryRuns(env, now);
   return {
-    now, dataAsOf, backupUploaded, status, statusProblem: problems.join(" ") || null, intraday, intradayProblem, livePro,
-    figures, refundsToCancel, money, deliveryDay, mailCeiling: mailCeiling(env),
+    now, dataAsOf, backupUploaded, accountsBackupUploaded, status, statusProblem: problems.join(" ") || null, intraday,
+    intradayProblem, livePro, figures, refundsToCancel, money, deliveryDay, mailCeiling: mailCeiling(env),
   };
 }
 

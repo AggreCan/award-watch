@@ -1,7 +1,17 @@
 """The site-only deploy: the bundle check that proves the static bundle in R2
 (static.tar.gz, saved in parts) is what the site serves, and the guard on
 .github/workflows/deploy-site.yml that keeps that workflow from ever writing
-data.
+data and from deploying a commit that fails its checks.
+
+The guard allows these commands and no others: Wrangler's gets of the
+bundle's manifest and parts, deployments status, deploy (with the
+arguments ARGUMENT_LINES set: the two --var and the commit's --tag and
+--message) and rollback; the nightly helpers live-version, smoke,
+site-bundle-check and join; npm ci and the site's three checks (npm run
+typecheck, npm test, npm run test:mail, each a step of its own after npm ci
+and before the bundle download, never allowed to fail); git rev-parse HEAD
+for the commit the deploy names. It also plants each forbidden change in a
+copy of the file and checks that the guard catches it.
 
 The workflow checks are textual: PyYAML is not a dependency of the pipeline
 (pyproject.toml), so the file is read line by line. Comment lines are left
@@ -235,15 +245,21 @@ PART_LOOP = r"""for part in $(awk '{print $2}' "$WORK/static.tar.gz.parts" | gre
 PART_BINDING = re.compile(r"\bfor\s+part\b|(?<![\w$])part=|\bread\s+(?:-\w+\s+)*part\b")
 # The only lines that set the deploy's arguments ("$@"): none, the landing
 # page's Brandfetch client id as a Worker variable (docs/landing.md), read from
-# the repository variable through the step's environment, and the live mail
+# the repository variable through the step's environment, the live mail
 # check's test inbox (docs/mail.md), read from the repository secret, so the
-# address is masked in the public log.
+# address is masked in the public log, and the commit shipped, read from the
+# checked-out tree and never from the dispatcher, as the version's tag (its
+# first 12 characters) and message, which the nightly's tests job reads back.
 ARGUMENT_LINES = [
     "set --",
     'if [ -n "$BRANDFETCH_CLIENT_ID" ]; then set -- --var "BRANDFETCH_CLIENT_ID:$BRANDFETCH_CLIENT_ID"; fi',
     'if [ -n "$MAIL_TEST_TO" ]; then set -- "$@" --var "MAIL_TEST_TO:$MAIL_TEST_TO"; fi',
+    "commit=$(git rev-parse HEAD)",
+    'set -- "$@" --tag "${commit:0:12}" --message "commit $commit"',
 ]
-ARGUMENT_BINDING = re.compile(r"\bset\s+--|\bshift\b|\bBRANDFETCH_CLIENT_ID\s*[:=]|\bMAIL_TEST_TO\s*[:=]")
+ARGUMENT_BINDING = re.compile(r"\bset\s+--|\bshift\b|\bBRANDFETCH_CLIENT_ID\s*[:=]|\bMAIL_TEST_TO\s*[:=]|\bcommit\s*=")
+# The site's three checks, each a single-line run of its own (package.json's scripts).
+SUITE_RUNS = ["npm run typecheck", "npm test", "npm run test:mail"]
 BRANDFETCH_ENV = "BRANDFETCH_CLIENT_ID: ${{ vars.BRANDFETCH_CLIENT_ID }}"
 MAIL_TEST_TO_ENV = "MAIL_TEST_TO: ${{ secrets.MAIL_TEST_TO }}"
 FORBIDDEN = [
@@ -255,13 +271,15 @@ FORBIDDEN = [
     ("a nightly command that writes state", re.compile(r"awardwatch_pipeline\.nightly\s+(pack|status|attention|gate|restore|verify|checks)\b")),
     ("git push", re.compile(r"git\s+push")),
     ("git commit", re.compile(r"git\s+commit")),
-    ("any git command", re.compile(r"(?<![\w/-])git\s")),
+    # The one git command reads the commit the deploy names (ARGUMENT_LINES).
+    ("any git command but the commit's read", re.compile(r"(?<![\w/-])git\s(?!rev-parse HEAD\)$)")),
     ("the nightly's token", re.compile(r"secrets\.CLOUDFLARE_API_TOKEN|CF_API_TOKEN")),
     ("the GitHub token", re.compile(r"github\.token|GITHUB_TOKEN|GH_TOKEN")),
     ("the Cloudflare API called directly", re.compile(r"api\.cloudflare\.com")),
     ("curl or wget", re.compile(r"(?<![\w-])(curl|wget)\s")),
     ("npx", re.compile(r"(?<![\w-])npx\s")),
-    ("an npm command other than npm ci", re.compile(r"(?<![\w-])npm\s+(?!ci\s*$)")),
+    ("an npm command other than npm ci and the three checks",
+     re.compile(r"(?<![\w-])npm\s+(?!(?:ci|run typecheck|test|run test:mail)\s*$)")),
     ("a pip command other than the pipeline install", re.compile(r"(?<![\w-])pip3?\s+(?!install -e \./pipeline\s*$)")),
     ("python other than the allowed nightly commands",
      re.compile(r"(?<![\w-])python3?\s+(?!-m awardwatch_pipeline\.nightly (?:live-version|smoke|site-bundle-check|join)\s)")),
@@ -305,8 +323,54 @@ def wrangler_calls(line):
     return [part.strip() + " " for part in re.split(r'"\$WRANGLER"|\$\{WRANGLER\}|\$WRANGLER\b', line)[1:]]
 
 
-def workflow_problems(text, nightly_text=None):
+def job_steps(text):
+    """The deploy job's steps in order, each as its code lines stripped (the
+    first is "- name: ..." or "- uses: ...")."""
+    lines = code_lines(text)
+    if "    steps:" not in lines:
+        return []
+    steps = []
+    for line in lines[lines.index("    steps:") + 1:]:
+        if not line.startswith("      "):
+            break
+        if line.startswith("      - "):
+            steps.append([])
+        if steps:
+            steps[-1].append(line.strip())
+    return steps
+
+
+def suite_problems(text):
+    """Each of the three checks: one step, run alone on a single line in site/,
+    never allowed to fail and never behind a condition, after npm ci and
+    before the bundle download (so before the version record and the deploy)."""
     problems = []
+    steps = job_steps(text)
+
+    def where(pred):
+        return [i for i, s in enumerate(steps) if pred(s)]
+
+    install = where(lambda s: "run: npm ci" in s)
+    download = where(lambda s: "- name: Download the static bundle from R2" in s)
+    for run in SUITE_RUNS:
+        at = where(lambda s, run=run: f"run: {run}" in s)
+        if len(at) != 1:
+            problems.append(f"the step that runs {run} must be there once, its command alone on its run line (found {len(at)})")
+            continue
+        step = steps[at[0]]
+        if "working-directory: site" not in step:
+            problems.append(f"{run} must run in site/")
+        if any(line.startswith(("continue-on-error", "- continue-on-error")) for line in step):
+            problems.append(f"{run} may not be allowed to fail")
+        if any(line.startswith(("if:", "- if:")) for line in step):
+            problems.append(f"{run} may not run behind a condition")
+        if not (len(install) == 1 and len(download) == 1 and install[0] < at[0] < download[0]):
+            problems.append(f"{run} must run after npm ci and before the bundle download")
+    return problems
+
+
+def workflow_problems(text, nightly_text=None):
+    problems = suite_problems(text)
     lines = code_lines(text)
 
     header, block = top_block(text, "on")
@@ -437,6 +501,17 @@ PLANTED = [
      "          curl -X PUT https://api.cloudflare.com/client/v4/accounts/x/r2/buckets/awardwatch-data/objects/x"),
     ("another secret", "REASON: ${{ inputs.reason }}", "REASON: ${{ secrets.GSC_SERVICE_ACCOUNT_JSON }}"),
     ("another action", "      - uses: actions/checkout@v4", "      - uses: ./.github/workflows/nightly.yml"),
+    ("a check removed", "      - name: The mail suite\n        id: mail_suite\n        working-directory: site\n"
+                        "        run: npm run test:mail\n", ""),
+    ("a check allowed to fail", "        id: worker_suite\n", "        id: worker_suite\n        continue-on-error: true\n"),
+    ("a check behind a condition", "        id: typecheck\n", "        id: typecheck\n        if: ${{ always() }}\n"),
+    ("a check whose failure is swallowed", "        run: npm test\n", "        run: npm test || true\n"),
+    ("a check on a run block", "        run: npm run typecheck\n", "        run: |\n          npm run typecheck\n"),
+    ("another npm script", "        run: npm run test:mail\n", "        run: npm run deploy\n"),
+    ("the tag dropped", 'set -- "$@" --tag "${commit:0:12}" --message "commit $commit"',
+     'set -- "$@" --message "commit $commit"'),
+    ("the commit from the dispatcher", "commit=$(git rev-parse HEAD)", 'commit="$REASON"'),
+    ("another git command", "commit=$(git rev-parse HEAD)", "commit=$(git rev-parse HEAD); git fetch origin"),
 ]
 
 
@@ -445,3 +520,46 @@ def test_the_guard_catches_a_planted_change(label, old, new):
     text = WORKFLOW.read_text(encoding="utf-8")
     assert old in text, f"the anchor for {label} is gone from the workflow"
     assert workflow_problems(text.replace(old, new, 1)) != []
+
+
+def test_the_checks_run_before_the_bundle_and_never_after_the_deploy():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    steps = job_steps(text)
+    names = [s[0] for s in steps]
+    runs = [next((line for line in s if line.startswith("run: ")), "") for s in steps]
+    at = [runs.index(f"run: {run}") for run in SUITE_RUNS]
+    assert runs.index("run: npm ci") < at[0] < at[1] < at[2] < names.index("- name: Download the static bundle from R2")
+    assert names.index("- name: Download the static bundle from R2") < names.index("- name: Record the live Worker version") \
+        < names.index("- name: Deploy the Worker")
+    # The three checks moved after the deploy, whole: the guard sees it.
+    block = text.split("      # The site's checks, as package.json names them", 1)[1].split("\n\n", 1)[0]
+    block = "      # The site's checks, as package.json names them" + block + "\n"
+    assert block.count("        run: npm") == 3
+    moved = text.replace(block, "", 1).replace("      # The nightly's smoke test:", block + "      # The nightly's smoke test:", 1)
+    assert moved != text
+    assert [p for p in workflow_problems(moved) if "must run after npm ci and before the bundle download" in p] != []
+
+
+def test_the_summary_says_why_the_deploy_did_not_run():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    summary = text.split("- name: Summary and verdict", 1)[1]
+    # The three outcomes reach the summary through its environment, and its Tests row names the checks that failed.
+    for env, step_id in (("TYPECHECK", "typecheck"), ("WORKER_SUITE", "worker_suite"), ("MAIL_SUITE", "mail_suite")):
+        assert f"{env}: ${{{{ steps.{step_id}.outcome }}}}" in summary
+        assert f"id: {step_id}\n" in text
+    assert 'echo "| Tests | $tests |"' in summary
+    assert 'deploy="not run (the tests failed: $failed_checks)"' in summary
+    # A run stopped by a check never records a version, so neither the rollback nor the last read runs.
+    rollback = text.split("- name: Roll the Worker back when the deploy did not hold", 1)[1].split("\n      - ", 1)[0]
+    after = text.split("- name: Read the version now live", 1)[1].split("\n      - ", 1)[0]
+    assert "steps.version.outputs.version_id != ''" in rollback and "steps.version.outputs.version_id != ''" in after
+    assert "steps.deploy.outcome != 'skipped'" in after
+
+
+def test_the_deploy_names_the_commit_it_ships_in_both_workflows():
+    for path in (WORKFLOW, NIGHTLY):
+        deploy = [line.strip() for line in code_lines(path.read_text(encoding="utf-8"))]
+        at = deploy.index("commit=$(git rev-parse HEAD)")
+        assert deploy[at + 1] == ARGUMENT_LINES[-1], path.name
+        # Added to the arguments after the two --var lines and before the three tries, which reuse them.
+        assert deploy[at - 1] == ARGUMENT_LINES[2] and deploy[at + 2] == "for attempt in 1 2 3; do", path.name

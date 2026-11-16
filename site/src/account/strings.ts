@@ -672,6 +672,11 @@ export const ACCOUNT_STRINGS = {
     en: "Deleting the account from its own page removes its saved searches, keys and sessions and replaces the email address with a hash that cannot be matched to it.",
     fr: "La suppression du compte, depuis sa propre page, retire ses recherches enregistrées, ses clés et ses sessions et remplace l'adresse courriel par un hachage qui ne peut pas lui être rapproché.",
   },
+  // {weeks} is BACKUP_WEEKS, {days} HISTORY_DAYS (privacy.tsx): the nightly's weekly export and D1's own history.
+  "account.privacy_backup": {
+    en: "The accounts database is backed up once a week and each backup is kept {weeks} weeks, in private storage; the database's host also keeps {days} days of its history. A deleted account's rows remain in those copies until they are replaced.",
+    fr: "La base de données des comptes est sauvegardée une fois par semaine et chaque sauvegarde est conservée {weeks} semaines, dans un stockage privé; l'hébergeur de la base de données conserve aussi {days} jours de son historique. Les lignes d'un compte supprimé demeurent dans ces copies jusqu'à leur remplacement.",
+  },
 
   // -- deliveries (phase 2: src/account/deliveries.ts, digests.ts, the stop page) --------
   "account.searches_lead_deliver": {

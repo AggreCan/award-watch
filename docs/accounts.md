@@ -742,6 +742,11 @@ link to it: "Refund now, on the Plan and Billing page, still returns your
 first payment in full. Deleting the account refunds nothing." Deleting the
 account inside the 14 days refunds nothing by itself.
 
+A deleted account's rows, its address among them, stay in the copies of
+the database until those copies are replaced: the weekly exports for up to
+eight weeks and the database's own history for 30 days (*Backups*). The
+privacy page says so.
+
 **A payment that lands after the deletion.** A paid notice
 (`checkout.session.completed` paid, or `invoice.paid`) can reach an account
 no longer active: the reader deleted it with Stripe's checkout open in
@@ -806,6 +811,64 @@ refunded. The delete page's lines are unchanged: a late `invoice.paid` for
 the subscription the deletion cancelled changes nothing, as before, so a
 period paid while the account was open is not refunded by the deletion. The
 one exception is under *Payments*, *Known limits*.
+
+## Backups
+
+Two copies of `awardwatch-accounts` exist outside the database itself.
+
+- **D1 Time Travel**, Cloudflare's own history of the database: always on,
+  30 days on the paid plan, restorable to any minute in that window. It is
+  the first resort for anything noticed within 30 days, and it needs no
+  file.
+- **The weekly export.** The nightly's step "Weekly export of the accounts
+  database" runs on Sundays (UTC) and exports the whole database with
+  `wrangler d1 export awardwatch-accounts --remote`, gzipped, to the R2
+  bucket `awardwatch-data` under `backups/weekly/accounts-slot-<n>.sql.gz`
+  (the slot is the count of whole weeks since 1970-01-01 modulo 8, as the
+  database snapshot beside it counts it, so each export replaces the one
+  from eight weeks before) and `backups/weekly/accounts-latest.sql.gz`. It
+  is the one copy outside the database's 30 days of history. The prefix is
+  private: no route on the site reads it, and the files hold the accounts'
+  email addresses, so nothing prints them and the runner's copies are
+  removed when the step ends. A running export blocks the database's other
+  requests, which is why it runs once a week and not every night. An export
+  that fails is an item needing attention in the run (`accounts_backup:
+  failed` in the run status), and the daily check's email says when the
+  newest copy is more than 9 days old (`ACCOUNTS_BACKUP_STALE_DAYS` in
+  `site/src/watchdog.ts`). Before the first Sunday after the step landed,
+  there is no copy and the check says nothing of it.
+
+Deleting an account removes its rows from the database at once; the copies
+keep them until they are replaced (eight weeks for the exports, 30 days for
+the history). The privacy page states both figures from `BACKUP_WEEKS` and
+`HISTORY_DAYS` in `site/src/account/privacy.tsx`;
+`site/test/accounts-switch.test.ts` holds `BACKUP_WEEKS` to the workflow's
+`% 8`.
+
+### Restoring by hand
+
+The operator's step, from `site/` with a token that can edit D1 and read R2.
+
+1. **Time Travel first**, for a fault within 30 days: find the moment before
+   it (`npx wrangler d1 time-travel info awardwatch-accounts --timestamp
+   <ISO time>` gives its bookmark), then `npx wrangler d1 time-travel
+   restore awardwatch-accounts --bookmark <bookmark>`. The restore takes the
+   whole database back to that moment; the command prints a bookmark to undo
+   it.
+2. **The weekly export**, for anything older, or a database that is gone:
+   download a copy (`npx wrangler r2 object get --remote
+   awardwatch-data/backups/weekly/accounts-latest.sql.gz --file
+   accounts.sql.gz`, or a slot's key for an older week), `gunzip` it, and
+   apply it to an empty database: a new one made with `npx wrangler d1
+   create`, its id put in `site/wrangler.jsonc` in place of the old one
+   (and in `intraday.yml`'s `ACCOUNTS_DATABASE_ID`), then `npx wrangler d1
+   execute <name> --remote --file=accounts.sql`. The export holds the schema
+   and the rows, so `accounts_schema.sql` is applied after it only for what
+   the schema gained since. Everything written after the export (sign-ins,
+   saved searches, payment notices) is lost; Stripe's dashboard holds the
+   payments of that time.
+3. Keep the downloaded file off any shared folder and delete it once the
+   restore is checked: it holds every account's address.
 
 ## Bug reports
 

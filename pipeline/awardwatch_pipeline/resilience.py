@@ -6,6 +6,9 @@ nightly.py calls these from its command line; the workflow calls nightly.py.
                 anything to do, from the status.json the last run left in R2.
   live_version  the Worker version serving traffic, from Wrangler's JSON, so
                 a deploy that breaks the site can be rolled back to it.
+  live_commit   the commit a Worker version was deployed from, from the
+                annotations every deploy writes (--tag, --message), so a
+                night whose tests fail on main can run the commit that is live.
   smoke         fetch a few pages of the live site after a deploy and judge
                 it ok, broken (the Worker answers 5xx) or unverifiable (the
                 edge refused the runner, or the answer proves nothing).
@@ -180,6 +183,47 @@ def live_version(text: str) -> str | None:
         if isinstance(vid, str) and UUID_RE.match(vid) and when is not None:
             dated.append((when, vid))
     return max(dated)[1] if dated else None
+
+
+# -- the commit a version was deployed from -----------------------------------
+
+COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
+# What the deploys write (deploy-site.yml and the nightly's deploy step): the
+# version's message is "commit <the full commit>" and its tag the commit's
+# first 12 characters.
+COMMIT_MESSAGE_RE = re.compile(r"^commit ([0-9a-f]{40})$")
+COMMIT_TAG_LEN = 12
+
+
+def live_commit(text: str) -> str | None:
+    """The 40-character commit a Worker version was deployed from, or None.
+
+    Reads `wrangler versions view <id> --json`: the version's annotations,
+    workers/message "commit <commit>" first, else a workers/tag that is a
+    whole commit. A tag beside the message must be the commit's start; a
+    message or tag of any other form, a tag too short to name a commit, and
+    the output of `deployments status` (whose annotations describe the
+    deployment, which a rollback also makes, never the code) give None, so
+    a commit is returned only when the version itself names it."""
+    try:
+        data = _first_json(text or "")
+    except ValueError:
+        return None
+    if not isinstance(data, dict) or "versions" in data:
+        return None
+    annotations = data.get("annotations")
+    if not isinstance(annotations, dict):
+        return None
+    message, tag = annotations.get("workers/message"), annotations.get("workers/tag")
+    commit = None
+    if isinstance(message, str):
+        found = COMMIT_MESSAGE_RE.fullmatch(message)
+        commit = found.group(1) if found else None
+    if commit is None and isinstance(tag, str) and COMMIT_RE.fullmatch(tag):
+        commit = tag
+    if commit is not None and tag is not None and not (isinstance(tag, str) and tag and commit.startswith(tag)):
+        return None
+    return commit
 
 
 # -- smoke test ---------------------------------------------------------------
@@ -763,6 +807,36 @@ def link_item(broken: Any) -> str | None:
             f"404 or 410 at the source (the site keeps its links, since a page may come back): {named}{more}")
 
 
+# The four checks the nightly's tests job runs on main, by the names its
+# outputs give them, as the item names them.
+TEST_CHECKS = {
+    "typecheck": "the typecheck",
+    "worker": "the Worker suite",
+    "mail": "the mail suite",
+    "pipeline": "the pipeline suite",
+}
+
+
+def tests_item(tests: Any) -> str | None:
+    """The item for a night whose tests failed on main (status.json tests,
+    verdict "fallback"): which checks failed, at which commit, and which
+    commit the refresh ran instead. None for any other verdict."""
+    if not isinstance(tests, dict) or tests.get("verdict") != "fallback":
+        return None
+    failed = tests.get("failed") if isinstance(tests.get("failed"), list) else []
+    names = ", ".join(TEST_CHECKS[n] for n in failed if n in TEST_CHECKS) or "a check"
+
+    def short(value: Any) -> str | None:
+        return value[:COMMIT_TAG_LEN] if isinstance(value, str) and COMMIT_RE.fullmatch(value) else None
+
+    main, ran = short(tests.get("main")), short(tests.get("ran"))
+    if main is not None and main == ran:
+        return (f"The tests failed on main ({names}) at {main}, which is also the commit that was live, "
+                f"so tonight's refresh ran from main with its tests failing")
+    return (f"The tests failed on main ({names}) at {main or 'an unknown commit'}; tonight's refresh ran from "
+            f"{ran or 'an unknown commit'}, the commit that was live")
+
+
 def attention_items(status: Any) -> list[str]:
     """What the run's last step lists. An empty list means a clean run."""
     if not isinstance(status, dict):
@@ -788,6 +862,13 @@ def attention_items(status: Any) -> list[str]:
     links = link_item(status.get("link_sample_broken"))
     if links:
         items.append(links)
+    # "saved" and "not due" say nothing; only an export or upload that failed.
+    if status.get("accounts_backup") == "failed":
+        items.append("Accounts database backup: the weekly export failed, so the newest copy in R2 "
+                     "(backups/weekly/accounts-latest.sql.gz) is an earlier week's, or there is none")
+    tests = tests_item(status.get("tests"))
+    if tests:
+        items.append(tests)
     if status.get("smoke") == "broken":
         detail = status.get("smoke_detail") or "server errors"
         if status.get("deploy_rolled_back") is True:

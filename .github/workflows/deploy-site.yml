@@ -8,7 +8,10 @@
 # 1. Manual only (the Actions tab or the REST API, repository writers only),
 #    and only from main. It shares the nightly's concurrency group, so it
 #    waits for a running refresh and never deploys over one.
-# 2. Check out main, install the pipeline and the site's pinned Wrangler.
+# 2. Check out main, install the pipeline and the site's pinned Wrangler,
+#    then run the site's typecheck, Worker suite and mail suite, before the
+#    bundle is downloaded. A check that fails stops the run there: nothing
+#    is recorded, deployed or rolled back, and the summary names the check.
 # 3. Download the static bundle from R2 (reads only): the archive
 #    static.tar.gz that the nightly saves after a deploy that passed its live
 #    check, in parts of at most 250 MiB (static.tar.gz.000, .001, ...) with
@@ -19,7 +22,8 @@
 #    parsed JSON) before it is copied to site/public/data. Any difference
 #    stops the run there.
 # 4. Record the Worker version serving traffic, check the two files again
-#    and keep the live stats.json, deploy, then run the nightly's smoke test
+#    and keep the live stats.json, deploy (the version's tag and message
+#    name the commit shipped), then run the nightly's smoke test
 #    and the bundle check against the live site and the kept stats.json. A
 #    failed deploy, a smoke test that finds server errors, or any difference
 #    rolls the Worker back to the recorded version and fails the run.
@@ -35,9 +39,12 @@
 # - Code: the only Wrangler commands are gets of the bundle's manifest and
 #   of the parts it lists from R2, deployments status, deploy and rollback;
 #   the only pipeline commands are live-version, smoke, site-bundle-check and
-#   join. pipeline/tests/test_site_deploy.py fails when this file gains
-#   another trigger, a wider permission, another secret, a command outside
-#   those lists or a part name that skips the pattern check.
+#   join; the only npm commands are npm ci and the site's three checks; the
+#   only git command reads the commit the deploy names (git rev-parse HEAD).
+#   pipeline/tests/test_site_deploy.py fails when this file gains another
+#   trigger, a wider permission, another secret, a command outside those
+#   lists, a part name that skips the pattern check, or loses a check, lets
+#   one fail, or moves one after the bundle download or the deploy.
 # - After the fact: the checks after the deploy, the automatic rollback, and
 #   a run that fails whenever anything could not be confirmed.
 #
@@ -77,7 +84,9 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The three checks take about four minutes on the runner; the deploy and
+    # its checks the rest.
+    timeout-minutes: 40
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       AWARDWATCH_SITE_URL: ${{ vars.SITE_URL }}
@@ -134,6 +143,25 @@ jobs:
       - name: Install the site's tools
         working-directory: site
         run: npm ci
+
+      # The site's checks, as package.json names them: nothing ships that
+      # fails its typecheck, the Worker suite or the mail suite. They run
+      # before the bundle is downloaded, so the suites never see
+      # site/public/data, and none may fail without stopping the run: the
+      # steps after them are then skipped (no version is recorded, so there
+      # is nothing to roll back), and the summary's Tests row names the check.
+      - name: Typecheck
+        id: typecheck
+        working-directory: site
+        run: npm run typecheck
+      - name: The Worker suite
+        id: worker_suite
+        working-directory: site
+        run: npm test
+      - name: The mail suite
+        id: mail_suite
+        working-directory: site
+        run: npm run test:mail
 
       # Object reads only. The nightly saves the bundle as parts
       # (static.tar.gz.000, .001, ...) and then, once every part is in, the
@@ -241,7 +269,10 @@ jobs:
       # test inbox (docs/mail.md) goes the same way from the repository secret
       # MAIL_TEST_TO, a secret so the address Wrangler prints among the
       # bindings is masked in the log; unset, nothing is passed and the check
-      # answers 400.
+      # answers 400. The version names the commit it ships, read from the
+      # checked-out tree: its tag is the commit's first 12 characters and its
+      # message "commit <the full commit>", which the nightly's tests job
+      # reads back on a night whose checks fail on main.
       - name: Deploy the Worker
         id: deploy
         working-directory: site
@@ -253,6 +284,8 @@ jobs:
           set --
           if [ -n "$BRANDFETCH_CLIENT_ID" ]; then set -- --var "BRANDFETCH_CLIENT_ID:$BRANDFETCH_CLIENT_ID"; fi
           if [ -n "$MAIL_TEST_TO" ]; then set -- "$@" --var "MAIL_TEST_TO:$MAIL_TEST_TO"; fi
+          commit=$(git rev-parse HEAD)
+          set -- "$@" --tag "${commit:0:12}" --message "commit $commit"
           for attempt in 1 2 3; do
             if "$WRANGLER" deploy "$@"; then exit 0; fi
             echo "deploy attempt $attempt failed; trying again in one minute"
@@ -324,11 +357,16 @@ jobs:
       # out. A smoke verdict of "unverifiable" (an edge refusal, a page
       # without the data date) fails the run without a rollback, as the
       # nightly never rolls back on it; the operator looks at the pages.
+      # The Tests row reads the three checks' outcomes: passed, the checks
+      # that failed, or not run when an earlier step stopped the run.
       - name: Summary and verdict
         if: ${{ always() }}
         env:
           VERSION_BEFORE: ${{ steps.version.outputs.version_id }}
           VERSION_AFTER: ${{ steps.after.outputs.version_id }}
+          TYPECHECK: ${{ steps.typecheck.outcome }}
+          WORKER_SUITE: ${{ steps.worker_suite.outcome }}
+          MAIL_SUITE: ${{ steps.mail_suite.outcome }}
           DEPLOY: ${{ steps.deploy.outcome }}
           SMOKE: ${{ steps.smoke.outputs.verdict }}
           CHECK_AFTER: ${{ steps.check_after.outcome }}
@@ -338,8 +376,26 @@ jobs:
           if [ -f "$WORK/smoke.json" ]; then
             detail=$(jq -r '.detail // ""' "$WORK/smoke.json" 2> /dev/null | tr '|' '/' | cut -c1-300 || true)
           fi
+          failed_checks=""
+          if [ "$TYPECHECK" = "failure" ]; then failed_checks="$failed_checks, the typecheck"; fi
+          if [ "$WORKER_SUITE" = "failure" ]; then failed_checks="$failed_checks, the Worker suite"; fi
+          if [ "$MAIL_SUITE" = "failure" ]; then failed_checks="$failed_checks, the mail suite"; fi
+          failed_checks="${failed_checks#, }"
+          if [ -n "$failed_checks" ]; then
+            tests="FAILED: $failed_checks"
+          elif [ "$TYPECHECK" = "success" ] && [ "$WORKER_SUITE" = "success" ] && [ "$MAIL_SUITE" = "success" ]; then
+            tests="passed"
+          else
+            tests="not run (an earlier step stopped the run)"
+          fi
           case "$DEPLOY" in
-            ""|skipped) deploy="not run (an earlier step stopped the run)" ;;
+            ""|skipped)
+              if [ -n "$failed_checks" ]; then
+                deploy="not run (the tests failed: $failed_checks)"
+              else
+                deploy="not run (an earlier step stopped the run)"
+              fi
+              ;;
             *) deploy="$DEPLOY" ;;
           esac
           case "$ROLLBACK" in
@@ -352,6 +408,7 @@ jobs:
             echo ""
             echo "| Step | Result |"
             echo "|---|---|"
+            echo "| Tests | $tests |"
             echo "| Version live before | \`${VERSION_BEFORE:-not recorded}\` |"
             echo "| Deploy | $deploy |"
             echo "| Smoke test | ${SMOKE:-not run}${detail:+: $detail} |"

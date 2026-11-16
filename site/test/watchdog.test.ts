@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import accountsSchema from "../accounts_schema.sql?raw";
 import { LIVE_PRO_SQL, planFromRows, type EntitlementRow } from "../src/account/entitlements";
 import {
-  BACKUP_KEY, FIGURES_KEY, INTRADAY_RUNS_SQL, INTRADAY_STEP_NOTICES, LOOKUP_MAX_BYTES, MONEY_ITEMS_SQL, REFUNDS_TO_CANCEL_SQL, buildEmail, collectAlerts,
-  collectNotices, gatherInputs, readFigures, readIntradayRuns, readStatus, runWatchdog,
+  ACCOUNTS_BACKUP_KEY, ACCOUNTS_BACKUP_STALE_DAYS, BACKUP_KEY, FIGURES_KEY, INTRADAY_RUNS_SQL, INTRADAY_STEP_NOTICES, LOOKUP_MAX_BYTES, MONEY_ITEMS_SQL,
+  REFUNDS_TO_CANCEL_SQL, buildEmail, collectAlerts, collectNotices, gatherInputs, readFigures, readIntradayRuns, readStatus, runWatchdog,
 } from "../src/watchdog";
 import { testEnv } from "./assets";
 import { applySql } from "./setup";
@@ -200,8 +200,8 @@ describe("daily check: notices", () => {
     expect(result.notices).toHaveLength(2);
     // No address configured in the test: the email is composed but not sent.
     expect(result.sent).toBe(false);
-    // The backup is in parts; the first part's upload time is the backup's.
-    expect(asked).toEqual(["awardwatch.sqlite.gz.000"]);
+    // The backup is in parts; the first part's upload time is the backup's. Then the accounts database's export.
+    expect(asked).toEqual(["awardwatch.sqlite.gz.000", "backups/weekly/accounts-latest.sql.gz"]);
   });
 });
 
@@ -261,6 +261,75 @@ describe("daily check against a status file of unexpected shape", () => {
     const shapes = await runWatchdog({ ...base, DATA: bucket('{"stages":{"a":1}}') }, now);
     expect(shapes.sent).toBe(false);
     expect(shapes.alerts.join(" ")).toContain("unreadable fields (run_at, stages)");
+  });
+});
+
+describe("daily check: the accounts database's weekly backup", () => {
+  const line = (saved: string) =>
+    `The accounts database's weekly backup in R2 (backups/weekly/accounts-latest.sql.gz) was last saved ${saved} UTC, ` +
+    `more than 9 days ago. Check the nightly's Sunday export of it in the run log.`;
+
+  it("names a copy older than nine days, and says nothing of a newer one or of none", () => {
+    expect(ACCOUNTS_BACKUP_KEY).toBe("backups/weekly/accounts-latest.sql.gz");
+    expect(ACCOUNTS_BACKUP_STALE_DAYS).toBe(9);
+    // now is 2026-10-20T06:00Z: a Sunday export of 2026-10-11 13:50 is 8 days and 16 hours old.
+    expect(collectAlerts({ ...healthy, accountsBackupUploaded: new Date("2026-10-11T13:50:00Z") })).toEqual([]);
+    // Exactly nine days is not more than nine.
+    expect(collectAlerts({ ...healthy, accountsBackupUploaded: new Date("2026-10-11T06:00:00Z") })).toEqual([]);
+    expect(collectAlerts({ ...healthy, accountsBackupUploaded: new Date("2026-10-11T05:59:00Z") })).toEqual([line("2026-10-11T05:59")]);
+    // A Sunday went by without an export.
+    expect(collectAlerts({ ...healthy, accountsBackupUploaded: new Date("2026-10-04T13:50:00Z") })).toEqual([line("2026-10-04T13:50")]);
+    // No copy yet, or one that was not read: nothing.
+    for (const none of [null, undefined]) expect(collectAlerts({ ...healthy, accountsBackupUploaded: none })).toEqual([]);
+    // After the database backup's own lines.
+    const both = collectAlerts({ ...healthy, backupUploaded: null, accountsBackupUploaded: new Date("2026-10-04T13:50:00Z") });
+    expect(both[0]).toContain(BACKUP_KEY);
+    expect(both[1]).toBe(line("2026-10-04T13:50"));
+  });
+
+  // A bucket that answers a head by key: a Date, null for no object, or an Error to throw.
+  function bucketOf(heads: Record<string, Date | null | Error>) {
+    const asked: string[] = [];
+    const bucket = {
+      head: async (key: string) => {
+        asked.push(key);
+        const answer = heads[key] ?? null;
+        if (answer instanceof Error) throw answer;
+        return answer ? { uploaded: answer } : null;
+      },
+      get: async (key: string) => (key === "status.json" ? { text: async () => JSON.stringify(healthy.status) } : null),
+    } as unknown as R2Bucket;
+    return { bucket, asked };
+  }
+
+  it("heads the newest copy, and takes an absent one or a fault reading it as nothing to say", async () => {
+    const env = (bucket: R2Bucket) => ({ ...testEnv(), DATA: bucket, SEARCH: fakeD1(cleanRuns).db, ACCOUNTS: undefined });
+    const old = new Date("2026-10-04T13:50:00Z");
+    const stale = bucketOf({ [BACKUP_KEY]: healthy.backupUploaded, [ACCOUNTS_BACKUP_KEY]: old });
+    const inputs = await gatherInputs(env(stale.bucket), now);
+    expect(stale.asked).toEqual([BACKUP_KEY, ACCOUNTS_BACKUP_KEY]);
+    expect(inputs.accountsBackupUploaded).toEqual(old);
+    expect(collectAlerts(inputs)).toEqual([line("2026-10-04T13:50")]);
+    // The first Sunday has not come: no object, no line.
+    const absent = await gatherInputs(env(bucketOf({ [BACKUP_KEY]: healthy.backupUploaded }).bucket), now);
+    expect(absent.accountsBackupUploaded).toBeNull();
+    expect(collectAlerts(absent)).toEqual([]);
+    // A fault reading it is a log line; the rest of the check goes on.
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const fault = await gatherInputs(env(bucketOf({ [BACKUP_KEY]: healthy.backupUploaded, [ACCOUNTS_BACKUP_KEY]: new Error("R2 down") }).bucket), now);
+      expect(fault.accountsBackupUploaded).toBeNull();
+      expect(fault.backupUploaded).toEqual(healthy.backupUploaded);
+      expect(fault.statusProblem).toBeNull();
+      expect(collectAlerts(fault)).toEqual([]);
+      expect(log.mock.calls.flat().join(" ")).toContain("watchdog: the accounts database's backup not read (Error: R2 down)");
+    } finally {
+      log.mockRestore();
+    }
+    // No bucket bound at all: nothing read and nothing said of it.
+    const unbound = await gatherInputs({ ...testEnv(), DATA: undefined, SEARCH: fakeD1(cleanRuns).db, ACCOUNTS: undefined }, now);
+    expect(unbound.accountsBackupUploaded).toBeNull();
+    expect(collectAlerts(unbound).filter((a) => a.includes("accounts database"))).toEqual([]);
   });
 });
 

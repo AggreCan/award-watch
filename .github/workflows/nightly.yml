@@ -4,8 +4,9 @@
 # commit. Every source is a bulk file fetched with a conditional request, so
 # neither a retry nor a manual run downloads a file that has not changed.
 # There is no push trigger, and nothing on the site can start a run. Code on
-# main ships with the next run, because this job deploys the Worker from the
-# checked-out tree after the data stage.
+# main ships with the next run that passes its tests (the tests rule below),
+# because the refresh deploys the Worker from the checked-out tree after the
+# data stage.
 #
 # The retry rule (job "gate"): the 12:30 schedule and a manual run always
 # go on to the refresh. At 16:30 and 20:30 the gate downloads status.json from
@@ -14,6 +15,27 @@
 # it cannot download or read included, runs the refresh again. So a GitHub
 # delay, a runner fault or a Cloudflare API error is retried the same day with
 # no one involved, and a clean day costs two gate jobs of a minute each.
+#
+# The tests rule (job "tests"): the night runs the commit that passes its
+# tests. Before the refresh, main's typecheck, Worker suite, mail suite and
+# pipeline suite run, the four checks tests.yml runs by hand. When all four
+# pass, the night runs main's commit. When one fails, it runs the commit the
+# live Worker version was deployed from, which passed the same checks when
+# it was deployed: pipeline, export and Worker from that one tree, so the
+# data and the code that reads it match, and an item needing attention
+# names the checks that failed and both commits. When the live commit is
+# main's own, the night runs main all the same, so a test that fails by the
+# clock never stops the data. When the live commit is not known (a version
+# deployed without the annotations below) or cannot be fetched, the refresh
+# does not run and the run fails: the site keeps the data it has, and the
+# retries at 16:30 and 20:30 try again. Every deploy, here and in
+# deploy-site.yml (which runs the site's three checks before it deploys),
+# names its commit in the version's annotations: the tag is the commit's
+# first 12 characters and the message "commit <the full commit>"
+# (`wrangler versions view <version id> --json`, workers/tag and
+# workers/message; the dashboard shows both on the version). Until one
+# deploy has gone out that way, a night whose tests fail has no commit to
+# fall back to.
 #
 # Steps: restore the SQLite file from R2 (saved in parts), fetch the
 # operator's seed copies (read only while a source's host refuses), run every
@@ -32,14 +54,16 @@
 # (docs/link-sampling.md), save the database (in parts), the public files
 # (the static bundle, also in parts, and the CSV downloads) and the review
 # files back to R2 (the organization merges list on the 1st and the 16th
-# only, under its data date), keep the audience counts of the finished days
+# only, under its data date), export the accounts database to R2 on Sundays,
+# keep the audience counts of the finished days
 # in R2 when the analytics token exists, count the alert sign-ups in the forms database,
 # count the account funnel's day and keep it in R2's private views/ prefix for the
 # operator's email, append Search Console's daily figures when its key exists, write the
 # monthly audience report on the first run of a month (its figures join the
 # operator's line, never LAST_RUN.md), run the monthly expiry
-# checks on the first of a month, write the run status, and report the items
-# needing attention (failed run, one GitHub issue).
+# checks on the first of a month, write the run status, record the run in
+# LAST_RUN.md on top of main, and report the items needing attention (failed
+# run, one GitHub issue).
 #
 # Audience and account figures (visitors, page views, search clicks, sign-ups
 # and the like) stay in R2's private views/ prefix and the operator's
@@ -111,9 +135,18 @@
 #   attention: it goes to status.json's notices, LAST_RUN.md and the daily
 #   check's email, never fails the last step or opens the issue, and leaves
 #   the run ok, so no retry follows: a retry would read the same files again.
+# - A night whose tests fail on main runs the live commit (the tests rule)
+#   and lists an item needing attention (tests in the run status). It leaves
+#   ok and the deploy's outcome as they are, so a night that deployed is a
+#   finished night and the retries skip it. A night with no tested commit to
+#   run writes no status at all, so the retries run it again.
+# - A weekly export of the accounts database that fails is an item needing
+#   attention (accounts_backup: failed) and stops nothing; R2 keeps the
+#   earlier weeks' copies, and the next Sunday exports again.
 #
 # Secrets on the project account: CLOUDFLARE_API_TOKEN (Workers + R2 + D1),
-# CLOUDFLARE_ACCOUNT_ID. Optional: CLOUDFLARE_ANALYTICS_TOKEN (Account
+# CLOUDFLARE_ACCOUNT_ID; the tests job hands them only to the step that
+# reads the live version. Optional: CLOUDFLARE_ANALYTICS_TOKEN (Account
 # Analytics Read only, the audience roll-up, docs/search-engines.md section 6;
 # without it the step does nothing); GSC_SERVICE_ACCOUNT_JSON (a Google
 # service account's JSON key, added as a user of the Search Console property;
@@ -223,12 +256,151 @@ jobs:
           fi
           python -m awardwatch_pipeline.nightly gate --status data/gate/status.json --today "$(date -u +%Y-%m-%d)"
 
-  refresh:
+  # Decides which commit tonight runs (the tests rule in the header). Main's
+  # four checks run one after another, each allowed to fail and each with a
+  # time limit inside the job's, so the decision always comes after them.
+  # Then: all four passed, ref is main's commit and the verdict "passed";
+  # one failed, ref is the commit the live Worker version was deployed from
+  # (deployments status names the version, versions view its annotations,
+  # live-commit the commit, and a fetch proves the repository has it) and
+  # the verdict "fallback", even when that commit is main's own; neither,
+  # the verdict "blocked" and the last step fails the job. A job that ran
+  # and wrote no verdict counts as blocked; a job that never ran leaves
+  # every output empty, and the refresh runs the triggering commit. Skipped
+  # with the refresh when the gate skips the night. The Cloudflare token
+  # reaches only the step that reads the live version, never a suite.
+  tests:
     needs: gate
-    # Runs unless the gate found today's run already clean. !cancelled()
-    # rather than the implied success(), so a gate job that failed outright
-    # skips nothing.
     if: ${{ !cancelled() && needs.gate.outputs.skip != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      ref: ${{ steps.decide.outputs.ref }}
+      verdict: ${{ steps.decide.outputs.verdict || 'blocked' }}
+      failed: ${{ steps.decide.outputs.failed }}
+      main: ${{ steps.decide.outputs.main }}
+    env:
+      WRANGLER: ${{ github.workspace }}/site/node_modules/.bin/wrangler
+    steps:
+      # No credentials are left in the checkout: the installs and the suites
+      # run other people's packages, and the one fetch below reads a public
+      # repository.
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install the site's tools for the checks
+        working-directory: site
+        run: npm ci
+      # Editable, as in the refresh; the dev extra brings pytest.
+      - name: Install the pipeline for its suite
+        run: pip install -e "./pipeline[dev]"
+      - name: Typecheck the site
+        id: typecheck
+        continue-on-error: true
+        timeout-minutes: 4
+        working-directory: site
+        run: npm run typecheck
+      - name: Run the Worker suite
+        id: worker_suite
+        continue-on-error: true
+        timeout-minutes: 10
+        working-directory: site
+        run: npm test
+      - name: Run the mail suite
+        id: mail_suite
+        continue-on-error: true
+        timeout-minutes: 3
+        working-directory: site
+        run: npm run test:mail
+      - name: Run the pipeline suite
+        id: pipeline_suite
+        continue-on-error: true
+        timeout-minutes: 6
+        working-directory: pipeline
+        run: pytest
+      # A check that did not pass (failed, timed out, or skipped after an
+      # install failed) counts as failed. The live version's id and commit
+      # each pass a format check before they reach a command line, and
+      # live-commit prints only a well-formed commit. PYTHONPATH lets the
+      # helpers run even if the pipeline install failed. Outputs are written
+      # with the verdict last, so a verdict always comes with its ref.
+      - name: Decide which commit tonight runs
+        id: decide
+        if: ${{ !cancelled() }}
+        working-directory: site
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PYTHONPATH: ${{ github.workspace }}/pipeline
+          TYPECHECK: ${{ steps.typecheck.outcome }}
+          WORKER_SUITE: ${{ steps.worker_suite.outcome }}
+          MAIL_SUITE: ${{ steps.mail_suite.outcome }}
+          PIPELINE_SUITE: ${{ steps.pipeline_suite.outcome }}
+        run: |
+          out=../data/tests
+          mkdir -p "$out"
+          main=$(git rev-parse HEAD 2> /dev/null || true)
+          failed=""
+          if [ "$TYPECHECK" != "success" ]; then failed="$failed,typecheck"; fi
+          if [ "$WORKER_SUITE" != "success" ]; then failed="$failed,worker"; fi
+          if [ "$MAIL_SUITE" != "success" ]; then failed="$failed,mail"; fi
+          if [ "$PIPELINE_SUITE" != "success" ]; then failed="$failed,pipeline"; fi
+          failed="${failed#,}"
+          echo "main=$main" >> "$GITHUB_OUTPUT"
+          echo "failed=$failed" >> "$GITHUB_OUTPUT"
+          if [ -z "$failed" ] && [ -n "$main" ]; then
+            echo "Every check passed at $main; tonight runs it."
+            echo "ref=$main" >> "$GITHUB_OUTPUT"
+            echo "verdict=passed" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "::warning::Checks that did not pass on main at ${main:-an unknown commit}: $failed. Tonight runs the commit the live Worker version was deployed from, when it is known."
+          live=""
+          if "$WRANGLER" deployments status --json > "$out/deployment.json" 2> "$out/deployment.log" \
+            && python -m awardwatch_pipeline.nightly live-version --file "$out/deployment.json" --out "$out/version.txt" \
+            && "$WRANGLER" versions view "$(cat "$out/version.txt")" --json > "$out/version.json" 2> "$out/version.log"; then
+            live=$(python -m awardwatch_pipeline.nightly live-commit --file "$out/version.json" || true)
+          else
+            cat "$out/deployment.log" "$out/version.log" 2> /dev/null || true
+          fi
+          if [ -n "$live" ] && git fetch --quiet --depth=1 origin "$live"; then
+            echo "The live Worker version was deployed from $live; tonight runs it."
+            echo "ref=$live" >> "$GITHUB_OUTPUT"
+            echo "verdict=fallback" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -z "$live" ]; then
+            echo "the commit the live Worker version was deployed from is not known" > "$out/blocked.txt"
+          else
+            echo "the commit the live Worker version was deployed from ($live) could not be fetched" > "$out/blocked.txt"
+          fi
+          echo "verdict=blocked" >> "$GITHUB_OUTPUT"
+      - name: Stop the night when no tested commit can run
+        if: ${{ !cancelled() && steps.decide.outputs.verdict != 'passed' && steps.decide.outputs.verdict != 'fallback' }}
+        run: |
+          if [ -s data/tests/blocked.txt ]; then
+            why="the checks did not pass on main and $(cat data/tests/blocked.txt)"
+          else
+            why="the step that decides which commit runs wrote no verdict"
+          fi
+          echo "::error::Tonight's refresh does not run: $why. The site keeps the data it has, and the retries at 16:30 and 20:30 UTC try again."
+          exit 1
+
+  refresh:
+    needs: [gate, tests]
+    # Runs unless the gate found today's run already clean or the tests job
+    # found no tested commit to run. !cancelled() rather than the implied
+    # success(), so a gate job that failed outright skips nothing, and a
+    # tests job that never ran (no verdict) leaves the night as it was.
+    if: ${{ !cancelled() && needs.gate.outputs.skip != 'true' && needs.tests.outputs.verdict != 'blocked' }}
     runs-on: ubuntu-latest
     # GitHub ends a hosted job at six hours whatever this says, and a job
     # ended that way skips the deploy, the backup and the status file.
@@ -251,7 +423,13 @@ jobs:
             echo "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are not set; nothing to do."
             exit 1
           fi
+      # The commit the tests job chose (main's when it passed its tests, else
+      # the commit the live Worker version was deployed from), or the commit
+      # that triggered the run when the tests job did not run. The pipeline,
+      # the export and the Worker all come from this one tree.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.tests.outputs.ref || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -265,6 +443,27 @@ jobs:
       - name: Install the site's tools
         working-directory: site
         run: npm ci
+
+      # What the tests job decided, for the run status (tests) and, on a night
+      # that ran the live commit, the item needing attention: the verdict,
+      # the checks that failed, main's commit and the commit tonight runs.
+      # The job's outputs come through the environment. Nothing is written
+      # when the tests job left no verdict.
+      - name: Record which commit tonight runs
+        continue-on-error: true
+        env:
+          VERDICT: ${{ needs.tests.outputs.verdict }}
+          FAILED: ${{ needs.tests.outputs.failed }}
+          MAIN_COMMIT: ${{ needs.tests.outputs.main }}
+          RAN_COMMIT: ${{ needs.tests.outputs.ref }}
+        run: |
+          mkdir -p data/out/tests
+          if [ -z "$VERDICT" ]; then
+            echo "The tests job left no verdict; tonight runs $(git rev-parse HEAD)."
+            exit 0
+          fi
+          python -c 'import json, os; print(json.dumps({k: os.environ[v] for k, v in (("verdict", "VERDICT"), ("failed", "FAILED"), ("main", "MAIN_COMMIT"), ("ran", "RAN_COMMIT"))}))' > data/out/tests/outcome.json
+          echo "Tests: $VERDICT; tonight runs $(git rev-parse HEAD)."
 
       # The download cache (the CanadaBuys files' validators, the CKAN
       # organization answers, the federal corporations extract) persists
@@ -484,7 +683,11 @@ jobs:
       # without it would drop it, since wrangler.jsonc does not hold it. An
       # empty repository variable passes nothing. The live mail check's test
       # inbox (docs/mail.md) goes the same way from the repository secret
-      # MAIL_TEST_TO, masked in the log; unset, nothing is passed.
+      # MAIL_TEST_TO, masked in the log; unset, nothing is passed. The
+      # version names the commit it ships, read from the tree it deploys: its
+      # tag is the commit's first 12 characters and its message "commit
+      # <the full commit>", which the tests job reads back on a night whose
+      # checks fail on main.
       - name: Deploy the Worker with the new data as assets
         id: deploy
         if: ${{ !cancelled() && steps.bundle.outcome == 'success' }}
@@ -496,6 +699,8 @@ jobs:
           set --
           if [ -n "$BRANDFETCH_CLIENT_ID" ]; then set -- --var "BRANDFETCH_CLIENT_ID:$BRANDFETCH_CLIENT_ID"; fi
           if [ -n "$MAIL_TEST_TO" ]; then set -- "$@" --var "MAIL_TEST_TO:$MAIL_TEST_TO"; fi
+          commit=$(git rev-parse HEAD)
+          set -- "$@" --tag "${commit:0:12}" --message "commit $commit"
           for attempt in 1 2 3; do
             if npx wrangler deploy "$@"; then exit 0; fi
             echo "deploy attempt $attempt failed; trying again in two minutes"
@@ -754,6 +959,59 @@ jobs:
           date -u +"%Y-%m-%d" > ../data/out/slot.txt
           "$WRANGLER" r2 object put --remote "$BUCKET/backups/weekly/slot-$slot.txt" --file ../data/out/slot.txt
           echo "Snapshot saved to slot $slot."
+
+      # The accounts database (awardwatch-accounts: the accounts' addresses,
+      # sessions, saved searches, follows and payment records), exported
+      # whole once a week to backups/weekly/accounts-slot-<n>.sql.gz and
+      # accounts-latest.sql.gz, the slot counted as the snapshot above counts
+      # it, so each export replaces the one from eight weeks before. It is the
+      # one copy outside the database's own 30 days of history (D1 Time
+      # Travel), so a fault noticed later than that still has a way back
+      # (docs/accounts.md, Backups). Once a week, on Sundays (UTC), because a
+      # running export blocks the database's other requests (Cloudflare's D1
+      # documentation), the sign-ins, the plan read of a signed-in page and
+      # the delivery runs among them, for as long as it runs. The file holds
+      # the accounts' email addresses, so it goes only to the bucket's
+      # private backups/ prefix, which no route on the site
+      # reads; nothing here prints it, and both local files are removed when
+      # the step ends, whatever happened. A step of its own: it reads nothing
+      # the pipeline made, so a night whose database was not saved still
+      # exports it. "failed" is written first, "saved" once both copies are
+      # in R2, "not due" on the other six days. A failure is an item needing
+      # attention (accounts_backup in the run status) and stops nothing.
+      - name: Weekly export of the accounts database (Sundays UTC, kept eight weeks)
+        id: accounts_snapshot
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 10
+        working-directory: site
+        run: |
+          out=../data/out/accounts_backup
+          mkdir -p "$out"
+          echo "failed" > "$out/last_outcome.txt"
+          if [ "$(date -u +%u)" != "7" ]; then
+            echo "Not Sunday (UTC); no export of the accounts database tonight."
+            echo "not due" > "$out/last_outcome.txt"
+            exit 0
+          fi
+          trap 'rm -f "$out/accounts.sql" "$out/accounts.sql.gz"' EXIT
+          put() {
+            local attempt
+            for attempt in 1 2 3; do
+              if "$WRANGLER" r2 object put --remote "$1" --file "$2"; then return 0; fi
+              echo "::warning::upload of $1 failed (attempt $attempt of 3)"
+              sleep $((20 * attempt))
+            done
+            return 1
+          }
+          slot=$(( $(date -u +%s) / 604800 % 8 ))
+          "$WRANGLER" d1 export awardwatch-accounts --remote --output "$out/accounts.sql"
+          gzip -c "$out/accounts.sql" > "$out/accounts.sql.gz"
+          rm -f "$out/accounts.sql"
+          put "$BUCKET/backups/weekly/accounts-slot-$slot.sql.gz" "$out/accounts.sql.gz"
+          put "$BUCKET/backups/weekly/accounts-latest.sql.gz" "$out/accounts.sql.gz"
+          echo "saved" > "$out/last_outcome.txt"
+          echo "The accounts database was exported to slot $slot."
 
       # The downloads and the bundle match what was deployed, so they are saved
       # only after a deploy that worked and was not found broken. The bundle
@@ -1203,10 +1461,17 @@ jobs:
       # are a notice. funnel is the account funnel save's outcome word
       # ("saved", "failed" or "not run"; a failed one is a notice) and never
       # a figure, since this step prints the status in its public log.
+      # accounts_backup is the weekly export of the accounts database's
+      # outcome ("saved", "not due", "failed" or "not run"; a failed one is
+      # an item needing attention), a word and never a row. tests is what the
+      # tests job decided (the verdict, the checks that failed, main's commit
+      # and the commit the night ran; a fallback is an item needing
+      # attention). Neither changes ok, which the retry gate reads.
       # Written whatever happened above. The roll-up,
       # Search Console, report, IndexNow, rollback, the two same-day steps,
-      # the link sample and the funnel save write "failed" before they start,
-      # so a step stopped by its time limit still reads as failed.
+      # the link sample, the funnel save and the accounts export write
+      # "failed" before they start, so a step stopped by its time limit still
+      # reads as failed.
       - name: Write the run status
         if: ${{ always() }}
         run: |
@@ -1224,6 +1489,7 @@ jobs:
             --views-report-outcome data/out/report/last_outcome.txt \
             --interest data/out/interest/count.json \
             --funnel-outcome data/out/funnel/last_outcome.txt \
+            --accounts-backup-outcome data/out/accounts_backup/last_outcome.txt --tests data/out/tests/outcome.json \
             --restore data/out/restore.json --smoke data/out/deploy/smoke.json \
             --rollback-outcome data/out/deploy/rollback.txt --version-before data/out/deploy/version_before.txt \
             --checks data/out/checks.json \
@@ -1240,11 +1506,17 @@ jobs:
             "$WRANGLER" r2 object put --remote "$BUCKET/status.json" --file data/out/status.json
           fi
 
-      # main may have moved while the job ran (a code change pushed during the
-      # night), so the record is put on top of it before the push. A deploy
-      # the smoke test found broken is not a successful refresh. The commit
-      # carries the project's own identity and a UTC timestamp, never the
-      # runner's or a person's.
+      # The record goes on top of main as main is now, whichever commit the
+      # night ran: main may have moved while the job ran (a code change pushed
+      # during the night), and a night that ran the live commit has an older
+      # commit checked out. The fetch brings main's newest commit, the index
+      # takes its files, and LAST_RUN.md alone is laid over them, so the
+      # record changes LAST_RUN.md and nothing else, and the files on the
+      # runner stay tonight's (the last step runs from them). A push refused
+      # because main moved again fetches and builds the record once more. A
+      # deploy the smoke test found broken is not a successful refresh. The
+      # commit carries the project's own identity and a UTC timestamp, never
+      # the runner's or a person's.
       - name: Record the run so the schedule stays enabled
         if: ${{ !cancelled() && steps.deploy.outcome == 'success' && steps.smoke.outputs.verdict != 'broken' }}
         continue-on-error: true
@@ -1289,11 +1561,15 @@ jobs:
           fi
           git config user.name "Award Watch"
           git config user.email "ops@awardwatch.invalid"
-          git add LAST_RUN.md
-          if git diff --cached --quiet; then exit 0; fi
-          TZ=UTC git commit -m "refresh: $(date -u +%Y-%m-%d)"
           for attempt in 1 2 3; do
-            if git pull --rebase --quiet origin main && git push origin HEAD:main; then exit 0; fi
+            if git fetch --quiet origin main; then
+              git reset --quiet --soft FETCH_HEAD
+              git read-tree FETCH_HEAD
+              git add LAST_RUN.md
+              if git diff --cached --quiet; then exit 0; fi
+              TZ=UTC git commit -m "refresh: $(date -u +%Y-%m-%d)"
+              if git push origin HEAD:main; then exit 0; fi
+            fi
             sleep 15
           done
           exit 1

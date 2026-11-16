@@ -1,0 +1,23 @@
+{
+  "id": "0a1b2c3d-1111-4222-8333-444455556666",
+  "number": 412,
+  "annotations": {
+    "workers/message": "commit 5d41402abc4b2a76b9719d911017c592ae0c1e2f",
+    "workers/tag": "5d41402abc4b",
+    "workers/triggered_by": "deployment"
+  },
+  "metadata": {
+    "created_on": "2026-11-16T13:52:10.123456Z",
+    "modified_on": "2026-11-16T13:52:10.123456Z",
+    "source": "wrangler",
+    "has_preview": false
+  },
+  "resources": {
+    "bindings": [
+      { "type": "d1", "name": "ACCOUNTS", "id": "00000000-0000-0000-0000-000000000001" },
+      { "type": "r2_bucket", "name": "DATA", "bucket_name": "awardwatch-data" }
+    ],
+    "script": { "etag": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "handlers": ["fetch", "scheduled"] },
+    "script_runtime": { "compatibility_date": "2026-10-01", "usage_model": "standard" }
+  }
+}

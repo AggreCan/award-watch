@@ -5,7 +5,10 @@ import hashlib
 import json
 import logging
 import os
+import re
 import sqlite3
+import subprocess
+import sys
 import time
 from pathlib import Path
 from datetime import date, datetime, timezone
@@ -395,9 +398,9 @@ def test_status_has_exactly_the_fields_the_site_and_the_gate_read(tmp_path):
     status = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, {"deploy": "success"})
     assert set(status) == {"run_at", "stages", "steps", "search_sync", "records_sync", "intraday_lookup", "intraday_prune",
                            "intraday_lookup_bytes", "link_sample", "link_sample_broken", "organization_review",
-                           "views_rollup", "search_console", "views_report", "indexnow", "funnel", "interest", "restore",
-                           "smoke", "smoke_detail", "version_before", "rollback", "deploy_rolled_back", "checks",
-                           "notices", "ok"}
+                           "views_rollup", "search_console", "views_report", "indexnow", "funnel", "accounts_backup",
+                           "tests", "interest", "restore", "smoke", "smoke_detail", "version_before", "rollback",
+                           "deploy_rolled_back", "checks", "notices", "ok"}
     # No outcome file: the search database step did not run. The site's check reads the field.
     assert status["search_sync"] == "not run" and status["ok"] is True
 
@@ -1222,3 +1225,215 @@ def test_the_workflow_fetches_the_seed_copy_before_the_stages_and_never_uploads_
     rest = text.replace(fetch, "")
     assert [line for line in rest.splitlines() if "seeds" in line and not line.lstrip().startswith("#")] == []
     assert text.count("path: data/raw/cache") == 2
+
+
+# -- the tests rule: the night runs the commit that passes its tests ----------------------------
+
+
+def jobs_of(text: str) -> dict[str, str]:
+    """Each job's block under jobs:, by its key, in the file's order."""
+    out: dict[str, list[str]] = {}
+    name = None
+    for line in text.split("\njobs:\n", 1)[1].splitlines():
+        found = re.match(r"^  ([a-z_]+):$", line)
+        if found:
+            name = found.group(1)
+            out[name] = []
+        elif name:
+            out[name].append(line)
+    return {k: "\n".join(v) for k, v in out.items()}
+
+
+def steps_of(job: str) -> list[str]:
+    """A job's steps in order, each from the text after its "- "."""
+    return job.split("\n    steps:\n", 1)[1].split("\n      - ")
+
+
+def step_id(block: str) -> str | None:
+    found = re.search(r"^        id: (\S+)$", block, re.M)
+    return found.group(1) if found else None
+
+
+def code(block: str) -> str:
+    return "\n".join(line for line in block.splitlines() if not line.lstrip().startswith("#"))
+
+
+# The four checks: the step's id, its folder and its command.
+CHECKS = [("typecheck", "site", "npm run typecheck"), ("worker_suite", "site", "npm test"),
+          ("mail_suite", "site", "npm run test:mail"), ("pipeline_suite", "pipeline", "pytest")]
+MAIN = "a" * 40
+LIVE = "b" * 40
+
+
+def test_the_tests_job_runs_the_four_checks_then_decides():
+    jobs = jobs_of(WORKFLOW.read_text(encoding="utf-8"))
+    assert list(jobs) == ["gate", "tests", "refresh"]
+    tests = jobs["tests"]
+    head = tests.split("\n    steps:\n", 1)[0]
+    for line in ("    needs: gate", "    if: ${{ !cancelled() && needs.gate.outputs.skip != 'true' }}",
+                 "    timeout-minutes: 30", "    permissions:\n      contents: read"):
+        assert f"\n{line}\n" in f"\n{head}\n", line
+    # The workflow's group holds it: no group of its own, no wider permission.
+    assert "concurrency" not in head and "write" not in head
+    outputs = head.split("    outputs:\n", 1)[1].split("\n    env:\n", 1)[0].splitlines()
+    assert outputs == ["      ref: ${{ steps.decide.outputs.ref }}",
+                       "      verdict: ${{ steps.decide.outputs.verdict || 'blocked' }}",
+                       "      failed: ${{ steps.decide.outputs.failed }}",
+                       "      main: ${{ steps.decide.outputs.main }}"]
+    steps = steps_of(tests)
+    ids = [step_id(s) for s in steps]
+    assert [i for i in ids if i] == [c[0] for c in CHECKS] + ["decide"]
+    limits = 0
+    for check, folder, run in CHECKS:
+        lines = [line.strip() for line in steps[ids.index(check)].splitlines()]
+        # Allowed to fail, so the decision always follows; one command on one line.
+        assert "continue-on-error: true" in lines and f"working-directory: {folder}" in lines, check
+        assert f"run: {run}" in lines and not any(line.startswith("if:") for line in lines), check
+        limits += int(next(line for line in lines if line.startswith("timeout-minutes:")).split(":")[1])
+    # Each check stops inside the job's limit, with room left for the installs and the decision.
+    assert limits + 5 <= 30
+    assert ids.index("decide") > max(ids.index(c[0]) for c in CHECKS)
+    decide = steps[ids.index("decide")]
+    assert "if: ${{ !cancelled() }}" in decide and "continue-on-error" not in decide
+    for check, _, _ in CHECKS:
+        assert f"${{{{ steps.{check}.outcome }}}}" in decide, check
+    # The last step fails the job unless the verdict is one the refresh runs.
+    stop = steps[-1]
+    assert stop.startswith("name: Stop the night when no tested commit can run")
+    assert ("if: ${{ !cancelled() && steps.decide.outputs.verdict != 'passed' "
+            "&& steps.decide.outputs.verdict != 'fallback' }}") in stop
+    assert '::error::' in stop and stop.rstrip().endswith("exit 1")
+
+
+def test_the_cloudflare_token_reaches_only_the_step_that_reads_the_live_version():
+    tests = jobs_of(WORKFLOW.read_text(encoding="utf-8"))["tests"]
+    assert "secrets." not in tests.split("\n    steps:\n", 1)[0]
+    holders = []
+    for block in steps_of(tests):
+        calls = '"$WRANGLER"' in block
+        assert ("CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}" in block) == calls, block.splitlines()[0]
+        if calls:
+            holders.append(step_id(block))
+        else:
+            assert "secrets." not in block, block.splitlines()[0]
+    assert holders == ["decide"]
+    # Two reads and nothing else: the version carrying the traffic, then its annotations.
+    calls = re.findall(r'"\$WRANGLER" (\S+ \S+)', code(steps_of(tests)[-2]))
+    assert calls == ["deployments status", "versions view"]
+
+
+def test_the_decision_runs_main_when_it_passed_else_the_live_commit_else_nothing():
+    decide = code(steps_of(jobs_of(WORKFLOW.read_text(encoding="utf-8"))["tests"])[-2])
+    order = [
+        "main=$(git rev-parse HEAD 2> /dev/null || true)",
+        'if [ "$TYPECHECK" != "success" ]; then failed="$failed,typecheck"; fi',
+        'if [ "$PIPELINE_SUITE" != "success" ]; then failed="$failed,pipeline"; fi',
+        'if [ -z "$failed" ] && [ -n "$main" ]; then',
+        'echo "ref=$main" >> "$GITHUB_OUTPUT"',
+        'echo "verdict=passed" >> "$GITHUB_OUTPUT"',
+        '"$WRANGLER" deployments status --json > "$out/deployment.json"',
+        'python -m awardwatch_pipeline.nightly live-version --file "$out/deployment.json" --out "$out/version.txt"',
+        '"$WRANGLER" versions view "$(cat "$out/version.txt")" --json > "$out/version.json"',
+        'live=$(python -m awardwatch_pipeline.nightly live-commit --file "$out/version.json" || true)',
+        'if [ -n "$live" ] && git fetch --quiet --depth=1 origin "$live"; then',
+        'echo "ref=$live" >> "$GITHUB_OUTPUT"',
+        'echo "verdict=fallback" >> "$GITHUB_OUTPUT"',
+        'echo "verdict=blocked" >> "$GITHUB_OUTPUT"',
+    ]
+    places = [decide.index(line) for line in order]
+    assert places == sorted(places)
+    # The names it writes are the ones the item needing attention names.
+    assert re.findall(r'failed="\$failed,(\w+)"', decide) == list(resilience.TEST_CHECKS)
+    # A ref is never written without its verdict after it, and no dispatcher or event text is read.
+    assert decide.count('>> "$GITHUB_OUTPUT"') == 7
+    assert "github.event" not in decide and "inputs." not in decide
+
+
+def test_the_refresh_runs_the_chosen_commit_and_records_the_decision():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    refresh = jobs_of(text)["refresh"]
+    head = "\n" + refresh.split("\n    steps:\n", 1)[0] + "\n"
+    assert "\n    needs: [gate, tests]\n" in head
+    assert ("\n    if: ${{ !cancelled() && needs.gate.outputs.skip != 'true' "
+            "&& needs.tests.outputs.verdict != 'blocked' }}\n") in head
+    [checkout] = [s for s in steps_of(refresh) if "actions/checkout@v4" in s]
+    assert "with:\n          ref: ${{ needs.tests.outputs.ref || github.sha }}" in checkout
+    # The decision reaches the refresh in three places only: its condition, its checkout and the record below.
+    assert refresh.count("needs.tests.outputs.") == 6 and "steps.decide" not in refresh
+    names = [line.strip()[len("- name: "):] for line in refresh.splitlines() if line.strip().startswith("- name: ")]
+    at = names.index("Record which commit tonight runs")
+    assert names[at - 1] == "Install the site's tools" and names[at + 1] == "Restore the download cache"
+    record = step(text, "Record which commit tonight runs")
+    for env in ("VERDICT: ${{ needs.tests.outputs.verdict }}", "FAILED: ${{ needs.tests.outputs.failed }}",
+                "MAIN_COMMIT: ${{ needs.tests.outputs.main }}", "RAN_COMMIT: ${{ needs.tests.outputs.ref }}"):
+        assert env in record, env
+    assert "continue-on-error: true" in record
+    script = record.split("run: |", 1)[1]
+    assert "${{" not in script
+    assert "--tests data/out/tests/outcome.json" in step(text, "Write the run status")
+    # What the step writes is what the status reads.
+    one_liner = re.search(r"python -c '([^']*)' > data/out/tests/outcome.json", script).group(1)
+    env = {**os.environ, "VERDICT": "fallback", "FAILED": "worker,mail", "MAIN_COMMIT": MAIN, "RAN_COMMIT": LIVE}
+    written = subprocess.run([sys.executable, "-c", one_liner], env=env, capture_output=True, text=True, check=True)
+    assert nightly.tests_outcome(json.loads(written.stdout)) == {
+        "verdict": "fallback", "failed": ["worker", "mail"], "main": MAIN, "ran": LIVE}
+
+
+def test_the_record_goes_on_top_of_main_whichever_commit_the_night_ran():
+    record = code(step(WORKFLOW.read_text(encoding="utf-8"), "Record the run so the schedule stays enabled"))
+    order = [
+        "for attempt in 1 2 3; do",
+        "if git fetch --quiet origin main; then",
+        "git reset --quiet --soft FETCH_HEAD",
+        "git read-tree FETCH_HEAD",
+        "git add LAST_RUN.md",
+        "if git diff --cached --quiet; then exit 0; fi",
+        'TZ=UTC git commit -m "refresh: $(date -u +%Y-%m-%d)"',
+        "if git push origin HEAD:main; then exit 0; fi",
+    ]
+    places = [record.index(line) for line in order]
+    assert places == sorted(places)
+    # Never a rebase or a checkout: the files on the runner stay the night's own.
+    for gone in ("git pull", "rebase", "git checkout", "--hard"):
+        assert gone not in record, gone
+
+
+def test_the_accounts_database_is_exported_on_sundays_into_slots_of_its_own():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    names = [line.strip()[len("- name: "):] for line in text.splitlines() if line.strip().startswith("- name: ")]
+    title = "Weekly export of the accounts database (Sundays UTC, kept eight weeks)"
+    at = names.index(title)
+    assert names[at - 1] == "Weekly snapshot (Sundays UTC, kept eight weeks)" and at < names.index("Write the run status")
+    export = step(text, title)
+    assert "id: accounts_snapshot" in export and "if: ${{ !cancelled() }}" in export
+    assert "continue-on-error: true" in export and "steps." not in code(export)
+    slot = "slot=$(( $(date -u +%s) / 604800 % 8 ))"
+    assert slot in export and slot in step(text, "Weekly snapshot (Sundays UTC, kept eight weeks)")
+    order = [
+        'echo "failed" > "$out/last_outcome.txt"',
+        'if [ "$(date -u +%u)" != "7" ]; then',
+        'echo "not due" > "$out/last_outcome.txt"',
+        """trap 'rm -f "$out/accounts.sql" "$out/accounts.sql.gz"' EXIT""",
+        slot,
+        '"$WRANGLER" d1 export awardwatch-accounts --remote --output "$out/accounts.sql"',
+        # The plain export goes as soon as it is gzipped; the trap removes whatever is left.
+        'gzip -c "$out/accounts.sql" > "$out/accounts.sql.gz"\n          rm -f "$out/accounts.sql"\n',
+        'put "$BUCKET/backups/weekly/accounts-slot-$slot.sql.gz" "$out/accounts.sql.gz"',
+        'put "$BUCKET/backups/weekly/accounts-latest.sql.gz" "$out/accounts.sql.gz"',
+        'echo "saved" > "$out/last_outcome.txt"',
+    ]
+    places = [export.index(line) for line in order]
+    assert places == sorted(places)
+    # The file holds addresses: nothing prints it, and the only uploads are the two copies.
+    assert "cat " not in code(export) and code(export).count("r2 object put") == 1
+    # The restore never takes it for a database snapshot.
+    for key in ("backups/weekly/accounts-latest.sql.gz", "backups/weekly/accounts-slot-3.sql.gz"):
+        assert not resilience.WEEKLY_RE.match(key), key
+    assert "--accounts-backup-outcome data/out/accounts_backup/last_outcome.txt" in step(text, "Write the run status")
+
+
+def test_every_r2_and_d1_call_in_both_deploying_workflows_carries_remote():
+    for path in (WORKFLOW, WORKFLOW.parent / "deploy-site.yml"):
+        for line in code(path.read_text(encoding="utf-8")).splitlines():
+            for call in re.findall(r'"\$WRANGLER" ((?:r2|d1) .*)', line):
+                assert "--remote" in call, f"{path.name}: {line.strip()}"

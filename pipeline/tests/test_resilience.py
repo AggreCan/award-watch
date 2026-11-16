@@ -172,6 +172,74 @@ def test_live_version_command(tmp_path, monkeypatch):
     assert gh.read_text() == f"version_id={VERSION_A}\n"
 
 
+# -- the commit a version was deployed from (the nightly's tests job) ---------
+
+FIXTURES = Path(__file__).parent / "fixtures"
+# `wrangler versions view <id> --json` of a version both deploys annotate, and
+# `wrangler deployments status --json` of the deployment carrying it.
+VERSION_VIEW = json.loads((FIXTURES / "wrangler_versions_view.json").read_text(encoding="utf-8"))
+DEPLOYMENT_STATUS = (FIXTURES / "wrangler_deployments_status.json").read_text(encoding="utf-8")
+SHIPPED = "5d41402abc4b2a76b9719d911017c592ae0c1e2f"
+
+
+def annotated(**annotations):
+    """The fixture's version with these annotations alone (message= is workers/message, and so on)."""
+    return json.dumps({**VERSION_VIEW, "annotations": {f"workers/{k}": v for k, v in annotations.items()}})
+
+
+def test_the_live_commit_is_the_one_the_version_names():
+    assert resilience.live_commit(json.dumps(VERSION_VIEW)) == SHIPPED
+    # The message alone, or a tag that is a whole commit, names it too.
+    assert resilience.live_commit(annotated(message=f"commit {SHIPPED}")) == SHIPPED
+    assert resilience.live_commit(annotated(tag=SHIPPED)) == SHIPPED
+    # A notice Wrangler prints before its JSON does not hide it.
+    assert resilience.live_commit("Proxy environment variables detected.\n" + json.dumps(VERSION_VIEW, indent=2)) == SHIPPED
+    # The deployment that carries the version reads as the version it carries.
+    assert resilience.live_version(DEPLOYMENT_STATUS) == VERSION_VIEW["id"]
+
+
+@pytest.mark.parametrize("text", [
+    # Today's live version: deployed before the deploys wrote a tag or a message.
+    annotated(triggered_by="deployment"),
+    # A tag alone cannot give 40 characters.
+    annotated(tag=SHIPPED[:12], triggered_by="deployment"),
+    # A message of any other form.
+    annotated(message=SHIPPED),
+    annotated(message=f"commit {SHIPPED[:12]}"),
+    annotated(message=f"commit {SHIPPED.upper()}"),
+    annotated(message=f"Commit {SHIPPED}"),
+    annotated(message=f"commit {SHIPPED} and more"),
+    annotated(message=f"commit {SHIPPED}\n"),
+    annotated(message=f"commit {SHIPPED}; rm -rf /"),
+    annotated(message="Nightly smoke test failed after the deploy"),
+    # A tag that disagrees with the message, or is not text.
+    annotated(message=f"commit {SHIPPED}", tag="0123456789ab"),
+    annotated(message=f"commit {SHIPPED}", tag=""),
+    annotated(message=f"commit {SHIPPED}", tag=12),
+    # No annotations, or not an object of them.
+    json.dumps({k: v for k, v in VERSION_VIEW.items() if k != "annotations"}),
+    json.dumps({**VERSION_VIEW, "annotations": [f"commit {SHIPPED}"]}),
+    # The deployment's own annotations describe the deployment, never the code.
+    DEPLOYMENT_STATUS,
+    "", "not json", "[]", "X [ERROR] Authentication error [code: 10000]",
+])
+def test_no_live_commit_unless_the_version_names_one_well_formed(text):
+    assert resilience.live_commit(text) is None
+
+
+def test_live_commit_command_prints_the_commit_alone(tmp_path, capsys):
+    src = tmp_path / "version.json"
+    src.write_text(json.dumps(VERSION_VIEW), encoding="utf-8")
+    assert nightly.main(["live-commit", "--file", str(src)]) == 0
+    assert capsys.readouterr().out == f"{SHIPPED}\n"
+    for body in (annotated(triggered_by="deployment"), DEPLOYMENT_STATUS, "{not json"):
+        src.write_text(body, encoding="utf-8")
+        assert nightly.main(["live-commit", "--file", str(src)]) == 1
+        assert capsys.readouterr().out == ""
+    assert nightly.main(["live-commit", "--file", str(tmp_path / "missing.json")]) == 1
+    assert capsys.readouterr().out == ""
+
+
 # -- smoke test ---------------------------------------------------------------
 
 BASE = "https://awardwatch.example"
@@ -707,6 +775,98 @@ def test_only_an_indexnow_rejection_is_an_item():
         assert resilience.attention_items({"stages": [], "indexnow": outcome}) == []
     # A status from before the field existed.
     assert resilience.attention_items({"stages": []}) == []
+
+
+# -- the weekly export of the accounts database and the tests job's decision ---
+
+MAIN = "a" * 40
+LIVE = "b" * 40
+BACKUP_ITEM = ("Accounts database backup: the weekly export failed, so the newest copy in R2 "
+               "(backups/weekly/accounts-latest.sql.gz) is an earlier week's, or there is none")
+
+
+def test_only_a_failed_export_of_the_accounts_database_is_an_item():
+    assert resilience.attention_items({"stages": [], "accounts_backup": "failed"}) == [BACKUP_ITEM]
+    for outcome in ("saved", "not due", "not run", None, 0):
+        assert resilience.attention_items({"stages": [], "accounts_backup": outcome}) == [], outcome
+    assert resilience.attention_items({"stages": []}) == []
+
+
+def test_a_night_that_ran_the_live_commit_is_an_item_naming_the_checks_and_both_commits():
+    fallback = {"verdict": "fallback", "failed": ["worker", "pipeline"], "main": MAIN, "ran": LIVE}
+    assert resilience.attention_items({"stages": [], "tests": fallback}) == [
+        f"The tests failed on main (the Worker suite, the pipeline suite) at {MAIN[:12]}; tonight's refresh ran "
+        f"from {LIVE[:12]}, the commit that was live"]
+    # The live commit was main's own: the night ran main, and the item says so.
+    same = {**fallback, "failed": ["mail"], "ran": MAIN}
+    assert resilience.attention_items({"stages": [], "tests": same}) == [
+        f"The tests failed on main (the mail suite) at {MAIN[:12]}, which is also the commit that was live, so "
+        f"tonight's refresh ran from main with its tests failing"]
+    # Odd fields are read as unknown, never trusted onto the item.
+    odd = {"verdict": "fallback", "failed": ["$(id)", "typecheck"], "main": "not a commit", "ran": None}
+    assert resilience.attention_items({"stages": [], "tests": odd}) == [
+        "The tests failed on main (the typecheck) at an unknown commit; tonight's refresh ran from an unknown "
+        "commit, the commit that was live"]
+    # Passed, not run, an absent field or one of another shape: nothing.
+    for tests in ({"verdict": "passed", "failed": [], "main": MAIN, "ran": MAIN}, {"verdict": "not run"}, None,
+                  "fallback", ["fallback"]):
+        assert resilience.attention_items({"stages": [], "tests": tests}) == [], tests
+
+
+def test_the_status_carries_the_two_fields_and_neither_changes_ok(tmp_path):
+    db = tmp_path / "awardwatch.sqlite"
+    make_db(db)
+    steps = {"restore": "success", "pipeline": "success", "deploy": "success"}
+    status = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, steps, now=NOW,
+                                smoke={"verdict": "ok", "detail": "5 pages answered 200"}, accounts_backup="failed",
+                                tests={"verdict": "fallback", "failed": "worker,pipeline", "main": MAIN, "ran": LIVE})
+    assert status["accounts_backup"] == "failed"
+    assert status["tests"] == {"verdict": "fallback", "failed": ["worker", "pipeline"], "main": MAIN, "ran": LIVE}
+    assert len(resilience.attention_items(status)) == 2
+    # A fallback night that deployed is a finished night: the retries skip it.
+    assert status["ok"] is True and resilience.gate(status, TODAY)[0] is True
+    bare = nightly.run_status(db, None, None, {})
+    assert bare["accounts_backup"] == "not run"
+    assert bare["tests"] == {"verdict": "not run", "failed": [], "main": None, "ran": None}
+
+
+@pytest.mark.parametrize("raw, read", [
+    ({"verdict": "passed", "failed": "", "main": MAIN, "ran": MAIN},
+     {"verdict": "passed", "failed": [], "main": MAIN, "ran": MAIN}),
+    # The checks in their own order, unknown names dropped.
+    ({"verdict": "fallback", "failed": "pipeline,rm -rf,typecheck", "main": MAIN, "ran": LIVE},
+     {"verdict": "fallback", "failed": ["typecheck", "pipeline"], "main": MAIN, "ran": LIVE}),
+    ({"verdict": "fallback", "failed": ["worker"], "main": MAIN.upper(), "ran": LIVE[:12]},
+     {"verdict": "fallback", "failed": [], "main": None, "ran": None}),
+    # A blocked night runs no refresh; a verdict from no job or of another word reads as not run.
+    ({"verdict": "blocked", "failed": "worker", "main": MAIN, "ran": ""}, {"verdict": "not run", "failed": [], "main": None, "ran": None}),
+    ({"verdict": "", "failed": "", "main": "", "ran": ""}, {"verdict": "not run", "failed": [], "main": None, "ran": None}),
+    (None, {"verdict": "not run", "failed": [], "main": None, "ran": None}),
+    ([1, 2], {"verdict": "not run", "failed": [], "main": None, "ran": None}),
+])
+def test_the_tests_outcome_reads_only_its_own_shape(raw, read):
+    assert nightly.tests_outcome(raw) == read
+
+
+def test_status_command_reads_the_export_outcome_and_the_tests_file(tmp_path):
+    db = tmp_path / "awardwatch.sqlite"
+    make_db(db)
+    backup, tests = tmp_path / "last_outcome.txt", tmp_path / "outcome.json"
+    backup.write_text("saved\n", encoding="utf-8")
+    tests.write_text(json.dumps({"verdict": "fallback", "failed": "mail", "main": MAIN, "ran": LIVE}), encoding="utf-8")
+    out = tmp_path / "status.json"
+    assert nightly.main(["status", "--db", str(db), "--accounts-backup-outcome", str(backup), "--tests", str(tests),
+                         "--step", "deploy=success", "--out", str(out)]) == 0
+    written = json.loads(out.read_text(encoding="utf-8"))
+    assert written["accounts_backup"] == "saved"
+    assert written["tests"] == {"verdict": "fallback", "failed": ["mail"], "main": MAIN, "ran": LIVE}
+    # Files the steps did not write: the status says so and nothing needs attention for them.
+    assert nightly.main(["status", "--db", str(db), "--accounts-backup-outcome", str(tmp_path / "none.txt"),
+                         "--tests", str(tmp_path / "none.json"), "--step", "deploy=success", "--out", str(out)]) == 0
+    written = json.loads(out.read_text(encoding="utf-8"))
+    assert written["accounts_backup"] == "not run" and written["tests"]["verdict"] == "not run"
+    # Without a started file the status has a stage of its own; the two fields add nothing.
+    assert resilience.attention_items({**written, "stages": []}) == []
 
 
 

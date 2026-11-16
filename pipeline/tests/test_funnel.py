@@ -404,7 +404,12 @@ def test_the_workflow_counts_the_funnel_in_d1_and_keeps_it_in_the_private_prefix
     # The funnel's files are read and written in these two steps and, for the
     # month's figures, the report step (the next test), and in no other.
     report = step(text, "Write the monthly audience report (the first run of a month)")
-    others = code(text.replace(count, "").replace(save, "").replace(report, ""))
+    # The accounts database is read by the count above and, once a week, exported whole to the private
+    # backups/weekly/ prefix by a step of its own, which touches none of the funnel's files.
+    export = step(text, "Weekly export of the accounts database (Sundays UTC, kept eight weeks)")
+    assert code(export).count("awardwatch-accounts") == 1
+    assert "funnel" not in code(export) and "views/" not in code(export)
+    others = code(text.replace(count, "").replace(save, "").replace(report, "").replace(export, ""))
     assert "data/out/funnel/" not in others.replace("--funnel-outcome data/out/funnel/last_outcome.txt", "")
     assert "funnel_line" not in others and "funnel.csv" not in others and "awardwatch-accounts" not in others
 

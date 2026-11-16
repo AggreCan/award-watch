@@ -23,8 +23,56 @@ for that refresh: put it on `main` with the pipeline change and the next
 night ships both. Worker secrets and the forms database's schema are set by
 hand and are never part of a deploy.
 
-The next nightly run deploys `main` anyway. This workflow only ships a site
-change sooner.
+The next nightly run deploys `main` anyway, once `main` passes its tests
+(*The tests before every deploy*). This workflow only ships a site change
+sooner.
+
+## The tests before every deploy
+
+Nothing ships without passing its tests, in either workflow.
+
+- **This workflow** runs the site's three checks right after `npm ci`, each
+  a step of its own in `site/`: `npm run typecheck`, `npm test` (the Worker
+  suite) and `npm run test:mail` (the mail suite). They run before the
+  bundle is downloaded, so the suites never see `site/public/data`. A check
+  that fails stops the run there: no version is recorded, nothing is
+  deployed or rolled back, and the summary's Tests row names the check that
+  failed and its Deploy row says the deploy was not run because of it. On
+  GitHub's runner the three take about four minutes.
+- **The nightly** runs the same three and the pipeline suite in a job of its
+  own, `tests`, before the refresh. When all four pass, the night runs
+  `main`. When one fails, the night runs the commit the live Worker version
+  was deployed from, which passed its tests when it was deployed: the
+  pipeline, the export and the Worker all from that one commit, so the data
+  and the code that reads it match. The run's items needing attention (the
+  `run-attention` issue and the failed-workflow email) say which checks
+  failed on `main`, at which commit, and which commit the night ran. When
+  that commit is `main`'s own (a deploy of `main` that went out before a test
+  began to fail by the clock), the night runs `main` all the same. When the
+  live commit is not known, or the repository no longer has it, the refresh
+  does not run and the run fails: the site keeps the data it has, and the
+  retries at 16:30 and 20:30 UTC try again. Fix `main` (or revert the
+  change) and dispatch this workflow or `nightly.yml`.
+
+Every deploy names its commit on the Worker version it makes: the version's
+tag is the commit's first 12 characters and its message is `commit <the
+full commit>`, both read with `git rev-parse HEAD` from the tree the deploy
+uploads. The nightly's `tests` job reads them back. To read them yourself,
+from `site/` with a token in the environment:
+
+```
+npx wrangler deployments status --json
+npx wrangler versions view <version id> --json
+```
+
+The first names the version carrying the traffic; the second shows its
+annotations, `workers/tag` and `workers/message`. The dashboard shows both
+on the version (Workers & Pages, `award-watch`, Deployments). A version
+deployed before the deploys named their commit has neither, so until one
+deploy has gone out with the tag, a night whose tests fail on `main` has no
+commit to fall back to and does not run. Dispatch this workflow once after
+the change that brought the tags lands, so the live version names its
+commit.
 
 ## The five steps
 
@@ -34,7 +82,9 @@ change sooner.
    runs, the site deploy waits, and a refresh that starts during a site
    deploy waits for it.
 2. It checks out `main` and installs the pipeline (for its helper commands)
-   and the site's pinned Wrangler (`npm ci` in `site/`).
+   and the site's pinned Wrangler (`npm ci` in `site/`), then runs the site's
+   typecheck, Worker suite and mail suite. A check that fails stops the run
+   before anything is downloaded (*The tests before every deploy*).
 3. It downloads the static bundle from R2, reads only. The nightly saves
    the archive `static.tar.gz` in parts of at most 250 MiB (Wrangler refuses
    a single upload above 300 MiB): `static.tar.gz.000`, `static.tar.gz.001`
@@ -53,7 +103,8 @@ change sooner.
 4. It records the Worker version serving traffic (`wrangler deployments
    status`), compares the two files once more (now from
    `site/public/data`) and keeps the live stats.json byte for byte, then
-   runs `wrangler deploy` from `site/`. After the deploy it runs the
+   runs `wrangler deploy` from `site/`, with the commit as the version's tag
+   and message. After the deploy it runs the
    nightly's smoke test (home, open tenders, data and one profile) and the
    bundle check again: the two files from the live site, and the archive's
    stats.json against the copy kept before the deploy. The run rolls the
@@ -92,20 +143,25 @@ site's pinned Wrangler:
 | `wrangler r2 object get --remote awardwatch-data/static.tar.gz.parts` | reads the bundle's manifest |
 | `wrangler r2 object get --remote awardwatch-data/static.tar.gz.NNN` | reads each part the manifest lists |
 | `wrangler deployments status --json` | reads the version serving traffic, before the deploy and at the end |
-| `wrangler deploy` | uploads the Worker and its assets from `site/` |
+| `wrangler deploy --tag <commit, 12 characters> --message "commit <commit>"` | uploads the Worker and its assets from `site/`, naming the commit |
 | `wrangler rollback <recorded version> --yes` | puts the recorded version back on all traffic |
 
 The pipeline commands are `live-version`, `smoke`, `site-bundle-check` and
 `join` from `awardwatch_pipeline.nightly`. They read files and fetch public
-pages; `join` also writes the joined archive on the runner.
+pages; `join` also writes the joined archive on the runner. The npm commands
+are `npm ci` and the three checks; the one git command is `git rev-parse
+HEAD`, which reads the commit the deploy names.
 
 `pipeline/tests/test_site_deploy.py` reads the workflow file and fails when:
 the trigger is anything but `workflow_dispatch`; `permissions` is anything
 but `contents: read`; the concurrency group is not `nightly` in both
 workflows; a line runs `r2 object put`, `r2 object delete`, `r2 bucket`, a
 `d1` command, the pipeline's main command line, a nightly command that
-writes state (`pack`, `status`, `attention`, `gate` and the others), `git`,
-`curl`, `npx` or the Cloudflare API directly; a Wrangler call is anything but
+writes state (`pack`, `status`, `attention`, `gate` and the others), `git`
+other than `git rev-parse HEAD`, an npm script other than the three checks,
+`curl`, `npx` or the Cloudflare API directly; a check is missing, allowed to
+fail, put behind a condition, or moved after the bundle download or the
+deploy; a Wrangler call is anything but
 the five forms above through the pinned binary; a part name reaches a key or
 a path without being checked against `static.tar.gz.NNN`; any secret other
 than the three above is read; `CLOUDFLARE_API_TOKEN` (the variable Wrangler
@@ -115,8 +171,9 @@ from the repository variable `BRANDFETCH_CLIENT_ID` and passed as
 `--var BRANDFETCH_CLIENT_ID:<id>` only while the variable is set
 (`docs/landing.md`), and the live mail check's test inbox, read from the
 repository secret `MAIL_TEST_TO` and passed as `--var MAIL_TEST_TO:<address>`
-only while the secret is set (`docs/mail.md`); the nightly's deploy passes
-both the same way. It also plants each
+only while the secret is set (`docs/mail.md`), and the commit as the
+version's tag and message; the nightly's deploy passes all three the same
+way. It also plants each
 of those changes in a copy of the file and checks that the guard catches it.
 The checks are textual: PyYAML is not a dependency of the pipeline.
 
@@ -200,11 +257,13 @@ finish clean).
 A failed site deploy never leaves the data changed, and a rollback leaves
 the previous version, with the same data, live. The nightly is unaffected:
 it reads nothing this run writes. Remember that the change is still on
-`main`, and the next nightly deploys it; fix or revert it there first.
+`main`, and the next nightly deploys it if it passes its tests; fix or
+revert it there first.
 
 | Where it stopped | What it means | What to do |
 |---|---|---|
 | Check the deploy token and the branch | The secret is missing, or the run was started from another branch | Add the secret (above), or start it from `main` |
+| Typecheck, The Worker suite or The mail suite | `main` fails that check. Nothing was downloaded or deployed | Read the step's log, fix `main`, then start a new run. The nightly runs the live commit until `main` passes |
 | Download the static bundle from R2 | `static.tar.gz.parts` is not in R2, a part it lists is missing or does not match its hash, or R2 refused the token | A permission error: add Workers R2 Storage Read. A missing or damaged bundle: wait for a nightly run |
 | Unpack the bundle and check it | The archive is not what the site serves: the last nightly deployed but its save to R2 failed, or something was deployed since | Nothing was deployed. Wait for the next nightly run, which deploys `main` with fresh data |
 | Record the live Worker version | Wrangler could not read the deployments | Nothing was deployed. Check the token's Workers Scripts permission |

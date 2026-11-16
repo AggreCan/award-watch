@@ -34,6 +34,10 @@ one, and always leaves a status file the site's daily check can read.
   live-version
             the Worker version serving traffic, from Wrangler's JSON, kept
             for a rollback.
+  live-commit
+            for the tests job: the commit a Worker version was deployed
+            from (resilience.live_commit), printed alone on stdout; exits 1
+            with nothing printed when the version does not name one.
   smoke     fetch the live site after a deploy: verdict ok, broken or
             unverifiable (resilience.smoke).
   checks    the monthly expiry checks of the tokens and the domain.
@@ -194,6 +198,13 @@ ORG_REVIEW_DAYS = (1, 16)
 ORG_REVIEW_FILE = "organization-merges.txt"
 ORG_REVIEW_SUMMARY = "organization-merges.json"
 ORG_REVIEW_OBJECT = "review/organization-merges-{date}.txt"
+
+# What the tests job decided (nightly.yml, job "tests"), as the refresh's
+# first steps write it to data/out/tests/outcome.json: "passed" (main passed
+# its four checks and the night runs it) or "fallback" (a check failed and
+# the night runs the commit that was live). A blocked night runs no refresh,
+# so it writes no status.
+TESTS_VERDICTS = ("passed", "fallback")
 
 STEP_DETAIL = {
     "restore": "the database could not be restored, so nothing else ran",
@@ -629,7 +640,7 @@ def run_status(
     intraday_lookup_bytes: int | None = None,
     link_sample: str | None = None, link_sample_broken: list[dict[str, Any]] | None = None,
     org_review: str | None = None, org_review_record: dict[str, Any] | None = None,
-    funnel: str | None = None,
+    funnel: str | None = None, accounts_backup: str | None = None, tests: Any = None,
 ) -> dict[str, Any]:
     """status.json for the site's daily check. Every input may be missing: the
     status then says what is missing rather than failing to be written.
@@ -699,7 +710,20 @@ def run_status(
     "saved", "failed", or "not run"). Only the word: the figures stay in the
     private views/ prefix, because this file is printed in the public run
     log and its notices go to LAST_RUN.md. A failed save is a notice
-    (FUNNEL_NOTICE), never an item needing attention."""
+    (FUNNEL_NOTICE), never an item needing attention.
+
+    accounts_backup is the weekly export of the accounts database's outcome
+    ("saved", "not due" on the six days that are not Sunday, "failed"; "not
+    run" when the step did not run). A word, never a figure or a row. A
+    failed one is an item needing attention (resilience.attention_items):
+    the newest copy in R2 is then an earlier week's. It never marks the run
+    not ok, so the retries never run a night again for it.
+
+    tests is what the tests job decided (outcome.json, tests_outcome): the
+    verdict, the checks that failed, main's commit and the commit the night
+    ran. A "fallback" night is an item needing attention; "passed" and a
+    night without the file say nothing. Like accounts_backup it never marks
+    the run not ok: a fallback night that deployed is a finished night."""
     stages: list[dict[str, Any]] = []
     notices: list[dict[str, str]] = []
     for name, result in steps.items():
@@ -775,6 +799,10 @@ def run_status(
         "views_report": views_report or "not run",
         "indexnow": indexnow_outcome or "not run",
         "funnel": funnel or "not run",
+        # The weekly export of the accounts database: an outcome word only.
+        "accounts_backup": accounts_backup or "not run",
+        # Which commit the night ran, and why (the tests job).
+        "tests": tests_outcome(tests),
         # Whether the alert sign-ups were counted, never the counts: the
         # monthly report in R2 carries them.
         "interest": "counted" if interest else "failed" if interest_tried else "not run",
@@ -969,6 +997,28 @@ def read_broken_links(path: str | None) -> list[dict[str, Any]]:
     return out[:BROKEN_KEPT]
 
 
+def tests_outcome(data: Any) -> dict[str, Any]:
+    """status.json's tests from the outcome.json the refresh writes: the
+    verdict (TESTS_VERDICTS, else "not run"), the failed checks by their
+    names in resilience.TEST_CHECKS (outcome.json carries them comma-joined),
+    and main's commit and the commit the night ran, each a 40-character
+    commit or null. Anything else in the file is left out."""
+    if not isinstance(data, dict) or data.get("verdict") not in TESTS_VERDICTS:
+        return {"verdict": "not run", "failed": [], "main": None, "ran": None}
+
+    def commit(value: Any) -> str | None:
+        return value if isinstance(value, str) and resilience.COMMIT_RE.fullmatch(value) else None
+
+    failed = data.get("failed")
+    names = failed.split(",") if isinstance(failed, str) else []
+    return {
+        "verdict": data["verdict"],
+        "failed": [n for n in resilience.TEST_CHECKS if n in names],
+        "main": commit(data.get("main")),
+        "ran": commit(data.get("ran")),
+    }
+
+
 def read_byte_count(path: str | None) -> int | None:
     """The size the lookup step wrote after its upload (`wc -c`: digits, maybe
     padded), or None when the file is missing or holds anything else."""
@@ -1159,6 +1209,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--interest", default=None,
                    help="Wrangler's JSON answer to the count of alert sign-ups (the status keeps whether it read)")
     s.add_argument("--funnel-outcome", default=None, help="the account funnel save's outcome file (a word, no figure)")
+    s.add_argument("--accounts-backup-outcome", default=None,
+                   help="the weekly export of the accounts database's outcome file (a word)")
+    s.add_argument("--tests", default=None, help="the outcome.json of the tests job's decision")
     s.add_argument("--restore", default=None, help="the restore record")
     s.add_argument("--smoke", default=None, help="the smoke test's result file")
     s.add_argument("--rollback-outcome", default=None, help="the rollback step's outcome file")
@@ -1190,6 +1243,8 @@ def build_parser() -> argparse.ArgumentParser:
     lv = sub.add_parser("live-version", help="the Worker version serving traffic, from Wrangler's JSON")
     lv.add_argument("--file", required=True, help="the output of `wrangler deployments status --json`")
     lv.add_argument("--out", default=None, help="write the version id here as well")
+    lc = sub.add_parser("live-commit", help="the commit a Worker version was deployed from, from Wrangler's JSON")
+    lc.add_argument("--file", required=True, help="the output of `wrangler versions view <version id> --json`")
     sm = sub.add_parser("smoke", help="check the live site after a deploy")
     sm.add_argument("--base-url", required=True)
     sm.add_argument("--data-date", default=None, help="the data date the home and data pages must show")
@@ -1288,7 +1343,8 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     handlers = {
         "pack": _pack, "prev-set": _prev_set, "split": _split, "join": _join, "restore": _restore, "verify": _verify,
-        "status": _status, "gate": _gate, "live-version": _live_version, "smoke": _smoke, "checks": _checks,
+        "status": _status, "gate": _gate, "live-version": _live_version, "live-commit": _live_commit, "smoke": _smoke,
+        "checks": _checks,
         "attention": _attention, "notices": _notice_section, "site-bundle-check": _site_bundle_check,
         "indexnow": _indexnow, "rollup-views": _rollup_views, "import-search-console": _import_search_console,
         "views-report": _views_report, "org-review": _org_review, "funnel-sql": _funnel_sql, "funnel": _funnel,
@@ -1405,7 +1461,8 @@ def _status(args: argparse.Namespace) -> int:
                         link_sample=_read(args.link_sample_outcome),
                         link_sample_broken=read_broken_links(args.link_sample_broken),
                         org_review=_read(args.org_review_outcome), org_review_record=_read_json(args.org_review_summary),
-                        funnel=_read(args.funnel_outcome))
+                        funnel=_read(args.funnel_outcome), accounts_backup=_read(args.accounts_backup_outcome),
+                        tests=_read_json(args.tests))
     _write_json(Path(args.out), status)
     print(json.dumps(status, indent=1))
     return 0
@@ -1433,6 +1490,20 @@ def _live_version(args: argparse.Namespace) -> int:
         Path(args.out).write_text(version + "\n", encoding="utf-8")
     _output(version_id=version)
     log.info("live-version: %s", version)
+    return 0
+
+
+def _live_commit(args: argparse.Namespace) -> int:
+    """Prints the commit alone on stdout (the workflow reads it); logs go to stderr."""
+    try:
+        commit = resilience.live_commit(_read(args.file) or "")
+    except (OSError, UnicodeDecodeError):
+        commit = None
+    if commit is None:
+        log.warning("live-commit: the version in %s names no commit it was deployed from", args.file)
+        return 1
+    log.info("live-commit: %s", commit)
+    print(commit)
     return 0
 
 
