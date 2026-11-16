@@ -18,6 +18,7 @@ import { app } from "../src/index";
 import { FILES, TEST_NOW, testEnv } from "./assets";
 import { PA_BUYER_PAYEES, PA_BUYER_WORKS, PA_FREE_YEARS, PA_PROFILE_ROWS } from "../src/public_accounts";
 import { homeApp } from "./home";
+import DND from "./fixtures/buyer-dnd-mdn.json";
 
 // -- the scaled-up files ------------------------------------------------------------
 
@@ -100,6 +101,32 @@ const landingAssets = assetsOf({ ...BODIES, "expiring/3m/1.json": JSON.stringify
 // local database's round trips.
 const env = { ...testEnv(assets), DB: undefined, SEARCH: undefined, RECORDS: undefined, ACCOUNTS: undefined };
 const landingEnv = { ...env, ASSETS: landingAssets };
+
+// The landing page with the accounts switch on (the matching notices' band and the plan cards; an accounts database
+// that answers nothing, which the page never asks, having no session and no payment service), and the same with
+// the builder's band (BUILDER_DEMO; src/pages/landing.tsx
+// BuildBand), which reads National Defence's buyer file. The file at its production size where loadBuyer checks it
+// on every read: the fixture's yearly rows and 26 earlier ones (72, as on 2026-11-15), 50 recent awards, 25
+// organizations a source and the 25 contracts ending soonest, copied from the PSPC fixture's rows.
+function bigBuyerFile(): string {
+  const pspc = FILES["buyers/pwgsc-tpsgc.json"] as Record<string, any>;
+  const years = DND.years as Record<string, unknown>[];
+  const oldest = years.find((y) => y.source === "contracts" && y.year === 2016);
+  const holder = pspc.top_organizations.awards[0];
+  return JSON.stringify({
+    ...DND,
+    years: [...years, ...Array.from({ length: 26 }, (_, i) => ({ ...oldest, year: 1990 + i }))],
+    recent_awards: Array.from({ length: 50 }, (_, i) => ({ ...pspc.recent_awards[0], reference: `cb-${800 + i}-${80000000 + i}` })),
+    top_organizations: Object.fromEntries(["awards", "contracts", "grants", "history"].map((s) => [s, Array.from({ length: 25 }, () => holder)])),
+    expiring: { n: 8150, total: 13_680_359_770.34, rows: Array.from({ length: 25 }, (_, i) => ({ ...pspc.expiring.rows[0], reference: `cb-${900 + i}-${90000000 + i}` })) },
+  });
+}
+const BIG_BUYER = bigBuyerFile();
+const landingOnEnv = { ...landingEnv, ACCOUNTS_ENABLED: "true", ACCOUNTS: stubDb(() => []) };
+const builderEnv = {
+  ...landingOnEnv, BUILDER_DEMO: "on",
+  ASSETS: assetsOf({ ...BODIES, "expiring/3m/1.json": JSON.stringify(bigExpiringPage(500)), "buyers/dnd-mdn.json": BIG_BUYER }, "v1-builder"),
+};
 
 // -- a signed-in reader's window page, with the holders' records ----------------------------
 
@@ -335,9 +362,10 @@ let address = 0;
 let signedInEnv: object | null = null;
 // payments: the files carry the largest Public Accounts blocks (paEnv), and with works their works parts too
 // (paWorksEnv); target: the buyer file carries the largest Indigenous procurement target block (iptEnv);
-// records: the records database answers from memory (recordsEnv).
+// records: the records database answers from memory (recordsEnv). landing: the landing page's environment in
+// place of landingEnv (landingOnEnv, builderEnv).
 async function render(
-  path: string, home = false, signedIn = false, payments = false, target = false, works = false, records = false,
+  path: string, home = false, signedIn = false, payments = false, target = false, works = false, records = false, landing?: object,
 ): Promise<number> {
   const res = await (home ? homeApp : app).request(path, {
     headers: {
@@ -345,7 +373,7 @@ async function render(
       ...(signedIn ? { cookie: SIGNED_IN } : {}),
     },
   }, signedIn ? signedInEnv! : works ? paWorksEnv : payments ? paEnv : target ? iptEnv : records ? recordsEnv
-    : path === "/" && !home ? landingEnv : env);
+    : path === "/" && !home ? (landing ?? landingEnv) : env);
   await res.arrayBuffer();
   return res.status;
 }
@@ -365,14 +393,14 @@ const yardstick = () => JSON.parse(JSON.stringify(ROWS));
 // A route's time over the yardstick's, batches of each taken in turn so a
 // change in the machine's load falls on both.
 async function ratio(
-  path: string, per: number, home = false, signedIn = false, payments = false, target = false, works = false, records = false,
+  path: string, per: number, home = false, signedIn = false, payments = false, target = false, works = false, records = false, landing?: object,
 ): Promise<number> {
-  for (let i = 0; i < 3; i++) await render(path, home, signedIn, payments, target, works, records);
+  for (let i = 0; i < 3; i++) await render(path, home, signedIn, payments, target, works, records, landing);
   const route: number[] = [];
   const yard: number[] = [];
   for (let b = 0; b < 5; b++) {
     yard.push(await batch(yardstick, 16));
-    route.push(await batch(() => render(path, home, signedIn, payments, target, works, records), per));
+    route.push(await batch(() => render(path, home, signedIn, payments, target, works, records, landing), per));
   }
   return median(route) / median(yard);
 }
@@ -388,6 +416,11 @@ const BUDGET: [path: string, bound: number, per: number][] = [
   ["/about", 4.5, 16], // [1.4]
   ["/ (app home)", 10, 16], // [3.2]
   ["/", 9, 16], // [2.8]
+  // The landing page with the accounts switch on, and with the builder's band too, which reads National Defence's
+  // buyer file at its production size and draws its picture (src/pages/landing.tsx BuildBand; measured 2026-11-15
+  // in one run: 2.79 and 3.39, "/" 2.50). Both are held to the bound "/" has, which the band stays well inside.
+  ["/ (accounts on)", 9, 16], // [2.79]
+  ["/ (accounts on, builder demo on)", 9, 16], // [3.39]
   ["/tenders", 9, 16], // [2.8]
   ["/organizations/org-a000000002", 11, 16], // [3.4]
   ["/organizations/org-a000000001", 22, 8], // [7.2]
@@ -683,6 +716,15 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
       const line = /<p class="page-foot-note">Guides: ([\s\S]*?)<\/p>/.exec(await res.text())?.[1] ?? "";
       expect(line.match(/<a href="\/guides\//g), path).toHaveLength(guides);
     }
+    // What the two landing entries time: the plan cards with the accounts switch on, and the builder's band
+    // beside them, its table of the buyer file's eight years and its tile, the file being 30 KB and more.
+    const landingOn = await (await app.request("/", { headers: { "sec-fetch-mode": "navigate" } }, landingOnEnv)).text();
+    expect(landingOn).toContain('<section class="lp-pricing"');
+    expect(landingOn).not.toContain("lp-build");
+    const builder = await (await app.request("/", { headers: { "sec-fetch-mode": "navigate" } }, builderEnv)).text();
+    expect(builder.match(/<section class="lp-feat lp-build"/g)).toHaveLength(1);
+    expect(builder.match(/<div class="tr"><span>20\d\d<\/span>/g)).toHaveLength(12);
+    expect(BIG_BUYER.length).toBeGreaterThan(30_000);
     for (const [name, bound, per] of BUDGET) {
       const home = name === "/ (app home)";
       const signedIn = name.includes("(signed in");
@@ -690,10 +732,11 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
       const target = name.includes("(with the target");
       const works = name.includes("and works");
       const records = name.includes("(records in memory");
+      const landing = name.includes("builder demo on") ? builderEnv : name.includes("(accounts on") ? landingOnEnv : undefined;
       const path = home ? "/" : name.split(" ")[0];
       // The search page answers 503 without its database, after rendering in full.
-      expect([200, 503], name).toContain(await render(path, home, signedIn, payments, target, works, records));
-      const r = await ratio(path, per, home, signedIn, payments, target, works, records);
+      expect([200, 503], name).toContain(await render(path, home, signedIn, payments, target, works, records, landing));
+      const r = await ratio(path, per, home, signedIn, payments, target, works, records, landing);
       seen.push(`${name} ${r.toFixed(2)}`);
       if (r > bound) over.push(`${name}: ${r.toFixed(2)} over ${bound}`);
     }

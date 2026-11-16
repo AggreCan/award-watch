@@ -4602,6 +4602,57 @@ const STRINGS = {
   },
   // The landing page's nav: a short word for the overview, so the French bar stays on one line.
   "landing.nav_overview": { en: "Overview", fr: "Aperçu" },
+  // The builder's band, with BUILDER_DEMO and the accounts switch on only (src/pages/landing.tsx BuildBand): the
+  // words at left, then the picture's, which assistive technology skips for landing.build_aria. {line} is the plan
+  // cards' own dashboard line for Ultra (src/pro.tsx PLAN_ROWS); {buyer} is the buyer file's name, {source} the
+  // source's label, {year}, {first} and {last} the years the picture draws, all read when the page is drawn.
+  "landing.build_eyebrow": { en: "Analytics builder", fr: "Générateur d'analyses" },
+  "landing.build_heading": { en: "Build the view you need.", fr: "Composez la vue qu'il vous faut." },
+  "landing.build_text": {
+    en: "Choose a buyer, what to count and how to group it. The chart draws as you choose. Put it on your dashboard, drag it where you want it and size it.",
+    fr: "Choisissez un acheteur, ce qu'il faut compter et comment le regrouper. Le graphique se dessine à mesure. Placez-le sur votre tableau de bord, déplacez-le et donnez-lui sa taille.",
+  },
+  "landing.build_any": {
+    en: "Any buyer, organization or category, by year, quarter, province or method",
+    fr: "Tout acheteur, toute organisation ou catégorie, par année, trimestre, province ou méthode",
+  },
+  "landing.build_figures": {
+    en: "Counts, values, medians and non-competitive shares, each from one named source",
+    fr: "Nombres, valeurs, médianes et parts non concurrentielles, chacun tiré d'une seule source nommée",
+  },
+  "landing.build_plan": { en: "{line} on Ultra", fr: "{line} avec Ultra" },
+  "landing.build_more": { en: "See what Ultra holds", fr: "Voir ce que comprend Ultra" },
+  "landing.build_new": { en: "New view", fr: "Nouvelle vue" },
+  "landing.build_about": { en: "About", fr: "Sujet" },
+  "landing.build_choose_buyer": { en: "Choose a buyer", fr: "Choisir un acheteur" },
+  "landing.build_choose": { en: "Choose", fr: "Choisir" },
+  "landing.build_figure": { en: "Figure", fr: "Chiffre" },
+  "landing.build_value": { en: "Value", fr: "Valeur" },
+  "landing.build_rows": { en: "Rows", fr: "Lignes" },
+  // The rows are calendar years: a published contract counts in the year of its contract date (pipeline indicators.py).
+  "landing.build_year": { en: "Calendar year", fr: "Année civile" },
+  "landing.build_show": { en: "Show as", fr: "Afficher" },
+  "landing.build_bars": { en: "Bars", fr: "Barres" },
+  "landing.build_line": { en: "Line", fr: "Courbe" },
+  "landing.build_table": { en: "Table", fr: "Tableau" },
+  "landing.build_add": { en: "Add to dashboard", fr: "Ajouter au tableau de bord" },
+  "landing.build_empty": { en: "Your view appears here", fr: "Votre vue s'affiche ici" },
+  "landing.build_title": { en: "{buyer}, value by year", fr: "{buyer}, valeur par année" },
+  "landing.build_col_year": { en: "Year", fr: "Année" },
+  "landing.build_col_contracts": { en: "Contracts", fr: "Contrats" },
+  // Under the chart when its newest year is the data date's.
+  "landing.build_caption": { en: "{source}. {year} is the year to date.", fr: "{source}. {year} : année en cours." },
+  "landing.build_dashboard": { en: "Dashboard", fr: "Tableau de bord" },
+  "landing.build_saved": { en: "Saved", fr: "Enregistré" },
+  // The dashboard's two other tiles, drawn as placeholders with no figure.
+  "landing.build_open": { en: "Open notices", fr: "Avis ouverts" },
+  "landing.build_ending": { en: "Contracts ending", fr: "Contrats prenant fin" },
+  // The table tile's foot: the rows it shows of the table's rows, as the dashboard's tiles write it (dash.shown).
+  "landing.build_shown": { en: "{n} of {total}", fr: "{n} sur {total}" },
+  "landing.build_aria": {
+    en: "An animation. A reader chooses {buyer}, the figure Value and rows by calendar year; a bar chart of the published contracts' value from {first} to {last} draws, changes to a line, then to a table of each year's contracts and value. The reader adds the table to a dashboard, drags it to the top and widens it to the full width.",
+    fr: "Une animation. Une personne choisit {buyer}, le chiffre Valeur et des lignes par année civile; un graphique à barres de la valeur des contrats publiés de {first} à {last} se dessine, devient une courbe, puis un tableau des contrats et de la valeur de chaque année. Elle ajoute ce tableau à un tableau de bord, le fait glisser en haut et l'élargit sur toute la largeur.",
+  },
 
   // -- the guides' frame (src/pages/guides.tsx): the rail's and footer's word, the index's lead and the
   // lines around each guide. The guides' own text is src/guides.ts's, English and French side by side.

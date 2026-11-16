@@ -213,7 +213,12 @@
   // codes, which go through the same MAIL binding: the job stops for the UTC
   // day once its sends reach the quota less the reserve (src/env.ts
   // mailCeiling, src/account/deliveries.ts). Raise MAIL_DAILY_QUOTA when
-  // Cloudflare raises the quota; empty, there is no ceiling.
+  // Cloudflare raises the quota; empty, there is no ceiling. BUILDER_DEMO is
+  // the landing page's band on the analytics builder (src/pages/landing.tsx,
+  // docs/landing.md "The builder's band"): "on", with ACCOUNTS_ENABLED
+  // "true", shows it, drawn from National Defence's buyer file; anything else
+  // keeps the landing page as it was. It stays "off" until the builder and
+  // the new dashboard it shows are live.
   "vars": {
     "ALERT_FROM": "alerts@awardwatch.ca",
     "RUN_LOG_URL": "https://github.com/AggreCan/award-watch/actions/workflows/nightly.yml",
@@ -231,7 +236,8 @@
     "STRIPE_PRICE_ULTRA_YEARLY": "price_1UaqmoIP2lpoGRa54JFX2voW",
     "PRICE_ULTRA_MONTHLY_CAD": "38.99",
     "PRICE_ULTRA_YEARLY_CAD": "389.99",
-    "FOLLOWS_PANEL": "on"
+    "FOLLOWS_PANEL": "on",
+    "BUILDER_DEMO": "off"
   },
   // Workers Logs keeps the console lines (which name events and counts, never
   // an address, a code or a token) and not the per-request invocation log,

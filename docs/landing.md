@@ -34,8 +34,9 @@ and with the switch on Analytics and Pro; the language and theme switches;
 Sign in; "Track tenders free"), the hero (the claim, the search box, the Canada map
 of open tenders), the scrolling band of forty organizations, four figures,
 three feature bands each with a product shot, with the switch on a fourth on
-matching notices, the three steps, the plan cards, the closing band and the
-site's footer links.
+matching notices, with `BUILDER_DEMO` on too a band on the analytics builder
+(below, *The builder's band*), the three steps, the plan cards, the closing
+band and the site's footer links.
 
 | Part | Source |
 |---|---|
@@ -47,11 +48,13 @@ site's footer links.
 | Profile shot | the profile of `stats.json` `top_organizations_year[0]`, the organization with the largest award value this year, cut from its shard (`loadProfile`) |
 | Band | `site/src/landing_orgs.ts`: forty ids, names and domains |
 | Matching notices' example | fixed sample values in `landing.tsx` (`SAMPLE_BLOCK`, `SAMPLE_NOTICE`), scored by `public/fit.js` at render; no file |
+| Builder's band (`BUILDER_DEMO` on) | `buyers/dnd-mdn.json` (`loadBuyer`): its `years` rows whose source is `contracts`, the newest eight up to the data date's year |
 
 A missing `stats.json` gives the no-data page (503), as on the app home. Any
-other missing file leaves its part out (the map card, a shot, the profile)
-and the page answers 200. The page reads no database and neither deep
-window of the radar (`test/landing.test.ts`, `test/radar-gate.test.ts`).
+other missing file leaves its part out (the map card, a shot, the profile,
+the builder's band) and the page answers 200. The page reads no database and
+neither deep window of the radar (`test/landing.test.ts`,
+`test/radar-gate.test.ts`).
 
 The figures' note ("Counted on <data date>.") is on every form of the page:
 the nightly's and the site-only deploy's smoke test fetches `/` without a
@@ -97,6 +100,82 @@ addresses it kept stay for the Ultra message. The chips sit on the plan
 cards only. Every piece the switch changes is
 listed in `LANDING_SWITCH_PIECES` (`site/test/home.ts`); the switch guards
 strip them and hold the rest of the page equal in both states.
+
+## The builder's band
+
+A band that shows the analytics builder at work, behind its own switch:
+`BUILDER_DEMO` in `site/wrangler.jsonc`, read by `builderDemoOn` in
+`landing.tsx`. It ships "off", and the band shows only with "on" and the
+accounts switch on (it names Ultra and leads to its card). With anything
+else the page is byte for byte as it is without the band, reads no buyer
+file and names no builder. It shows the builder and the new dashboard, so
+it goes live with them (operator, 2026-11-15).
+
+It sits after the band on matching notices and before the three steps: the
+feature bands run from what a reader gets free to what a free account gets
+to what Ultra adds, in the plans' order, and its link ("See what Ultra
+holds", "Voir ce que comprend Ultra") leads to Ultra's card in the plan
+cards below (`#ultra`). Left, as every feature band: the eyebrow "Analytics
+builder" in Ultra's sapphire as plain words (no chip; chips stay on the
+rail, the tabs and the plan cards), the heading "Build the view you need."
+("Composez la vue qu'il vous faut."), a paragraph and three points. The
+third point is the plan cards' own dashboard line for Ultra
+(`PLAN_ROWS`, the row with `feature: "dashboards"`, written by `planLine`)
+followed by "on Ultra" ("avec Ultra"), so it states what Ultra holds
+whatever that line becomes. The band adds no filled button.
+
+Right, a picture of the builder (`BuildStage`), hidden from assistive
+technology and followed by a visually hidden description in the page's
+language. One timeline of 24 seconds, pure CSS (`public/landing.css`, the
+block "the builder's band"), no script: three menus are filled (the buyer,
+Value, Calendar year), the bars draw, the reader shows the same figures as a
+line and then as a table, presses "Add to dashboard", and the table arrives
+on a dashboard as a tile showing its first four rows ("4 of 8"), is dragged
+to the top while the other tiles move down, and is widened from its corner;
+"Saved". The two other tiles are placeholders with no figure. `--scrub`
+(seconds) on `.bd` holds the timeline at a moment and `.is-paused` stops
+it, for a test or a capture; a reader who asks for reduced motion sees the
+finished dashboard as a still (`--scrub: 23`). Every rule is scoped to the
+band and coloured with the page's tokens, so both themes read as the rest of
+the page does.
+
+Every figure is National Defence's buyer file's (`BUILD_BUYER`): its yearly
+rows whose source is the published contracts, the newest eight
+(`BUILD_YEARS`) up to the data date's year. Those years are calendar years:
+the pipeline counts a published contract in the year of its contract date
+(`indicators.py`), so the rows menu reads "Calendar year" ("Année civile").
+When the newest year is the data date's, the caption says it is the year to
+date. A year after the data date's, as a source can date one, stays out, and
+so does a year with no total in dollars. The amounts and counts are written
+by the site's own formatters (`fmtMoneyShort`, `fmtInt`) in each language.
+The chart's geometry is `site/src/landing_chart.ts` (`buildChart`): one
+scale for the bars, the line and the three gridlines, whose step is the
+smallest round figure that lets them reach the largest bar, and the largest
+bar labelled. A file that does not read, that holds fewer than four such
+years (`BUILD_MIN_YEARS`), or none above zero leaves the band out, and the
+page is then as it is with the switch off.
+
+The page reads one more file with the band on (about 90 KB in production on
+2026-11-15, parsed once per isolate and kept by its ETag, as every file is).
+The CPU budget (`test/cpu-budget.test.ts`) times the landing page with the
+accounts switch on and with the band, the buyer file at its production size:
+2.79 and 3.39 over the yardstick in one run (2026-11-15, "/" 2.50), both
+held to the bound "/" has (9).
+
+The band's rules joined `landing.css` while the band is behind its switch,
+so the page without it still names `landing.css?v=LANDING_VERSION` and a copy
+cached from before stays correct for it; a page with the band adds
+`&builder=1` (`BUILDER_STYLES`) to the address, so a browser fetches the file
+with the band's rules. When the band is on for good, fold the mark into a
+new `LANDING_VERSION`.
+
+**Switching it on (the operator's step).** Once the builder and the new
+dashboard are live: in `site/wrangler.jsonc` set `"BUILDER_DEMO": "on"`, and
+in `site/test/landing-builder.test.ts` change the test "ships \"off\"" to
+expect "on" (the other tests set the switch themselves); then deploy the
+site as usual (the deploy-site workflow, or the next nightly). With
+`ACCOUNTS_ENABLED` "true", as it is, the band shows at once. To take it off,
+set it back to "off".
 
 ## The Ultra card's form
 
@@ -169,7 +248,9 @@ since `wrangler.jsonc` does not hold it.
 ## The stylesheet and the fonts
 
 `site/public/landing.css`, linked with `?v=LANDING_VERSION` (bump the
-constant in `landing.tsx` with every change to the file). It keys light and
+constant in `landing.tsx` with every change to the file; the builder's
+band's rules are keyed by their own mark while the band is behind its
+switch, above). It keys light and
 dark as `styles.css` does: `data-theme` on the root, set by `public/theme.js`
 from the choice saved in the browser (shared with the app pages), else the
 system setting. The hero and the closing band stay navy in both modes.
@@ -200,8 +281,15 @@ languages and both switch states, the band's links and wording, the logo
 addresses, the policy header, the map labels, the figures, the plan rows,
 the search form, the head the app home carries, the no-data page, the
 shipped files and the Ultra card's form markup. `test/interest-ultra.test.ts`
-holds the form's post and every reader of its row. `test/cpu-budget.test.ts` times the page with the 3-month
-window's page at its production size. The tests of the app home's content
+holds the form's post and every reader of its row. `test/landing-builder.test.ts`
+holds the builder's band: the switch shipping "off" and the page byte for
+byte the same with it off in both languages and both accounts states, the
+band once in each language with every string, its figures the buyer
+fixture's (`test/fixtures/buyer-dnd-mdn.json`, National Defence's yearly
+rows as the site served them on 2026-11-15), the geometry, the fallbacks,
+the writing and the stylesheet's rules. `test/cpu-budget.test.ts` times the page with the 3-month
+window's page at its production size, and with the accounts switch on with
+and without the builder's band. The tests of the app home's content
 reach it through `test/home.ts`. `test/overview.test.ts` holds `/overview`:
 every reader in both languages and both switch states, its body equal to
 the app home's for the same reader, its caching, its head, the nav and

@@ -3,8 +3,10 @@
 // hero with the Canada map of open tenders, the scrolling band of the largest
 // award holders, four figures, three feature bands with product shots built
 // from the live rows, a band on matching notices with one example match drawn
-// from sample values (switch on only), the three steps, the plan cards and a
-// closing band, then the site's footer. A signed-in reader gets the app home
+// from sample values (switch on only), a band on the analytics builder with
+// an animated picture drawn from a buyer file (BUILDER_DEMO and the switch
+// on only), the three steps, the plan cards and a closing band, then the
+// site's footer. A signed-in reader gets the app home
 // (pages/home.tsx) at the same address, so both answers carry Vary: Cookie
 // while the accounts switch is on. Every reader finds the app home at
 // /overview too, the nav's first link and the footer's.
@@ -14,6 +16,8 @@
 // window the radar page reads too), and one profile entry: the organization
 // with the largest award value this year. Any of the last three missing
 // leaves its section without its rows; nothing here answers 500 for one.
+// With the builder's band on it reads one buyer file too (BUILD_BUYER), and
+// a file that does not read leaves the band out.
 //
 // While the switch is off nothing is Pro: no plan cards, chip, price or Pro
 // line, no link to /pro or /analytics outside the footer (where the footer
@@ -49,20 +53,21 @@ import { recordsText } from "../chart";
 import { type Clock, clockOf, tenderState } from "../closing";
 import { CLOSING_SOON_DAYS, PROVINCES } from "../constants";
 import {
-  type AwardRow, type ExpiringRow, type Profile, type ProvinceCounts, type Stats, type TenderRow, EXPIRING_WINDOWS, competitiveOf,
-  loadExpiringIndex, loadExpiringPage, loadProfile, loadStats, sourceLoaded,
+  type AwardRow, type Buyer, type ExpiringRow, type Profile, type ProvinceCounts, type Stats, type TenderRow, EXPIRING_WINDOWS, competitiveOf,
+  loadBuyer, loadExpiringIndex, loadExpiringPage, loadProfile, loadStats, sourceLoaded,
 } from "../data";
-import type { AppEnv } from "../env";
+import type { AppEnv, Env } from "../env";
 import {
   competitiveLabel, decimal, fmtInt, fmtMoney, fmtMoneyShort, fmtPct, pick, provinceName, sourceLabel, t, tj, tn,
   type Key, type Lang,
 } from "../i18n";
 import { FitDisclaimer, type ReasonContext, bandText, reasonText } from "../fit";
 import { BrandMark, BrandWordmark, FooterRow, ICONS_VERSION, MetaTags, langToggle, noDataPage, todayOf, varyOnCookie } from "../layout";
+import { CHART_HEIGHT, CHART_WIDTH, PLOT_BASE, PLOT_LEFT, PLOT_RIGHT, buildChart } from "../landing_chart";
 import { LANDING_ORGS_A, LANDING_ORGS_B, type LandingOrg, brandfetchLogoUrl } from "../landing_orgs";
 import {
-  type ProPrice, ProTag, SUBSCRIBE_PATH, ULTRA_SUBSCRIBE_PATH, UltraTag, checkoutPrice, planLine, planRows, rowFor, sameDayHours, ultraCheckoutPrice,
-  ultraLines,
+  PLAN_ROWS, type ProPrice, ProTag, SUBSCRIBE_PATH, ULTRA_SUBSCRIBE_PATH, UltraTag, checkoutPrice, planLine, planRows, rowFor, sameDayHours,
+  ultraCheckoutPrice, ultraLines,
 } from "../pro";
 import { MAX_YEARS } from "../records_db";
 import { DAILY_RUNS_UTC } from "../refresh";
@@ -80,6 +85,16 @@ import { money, provincesText } from "./shared";
 // The stylesheet's version: bump it with any change to public/landing.css so
 // a cached copy is never paired with new markup.
 export const LANDING_VERSION = 6;
+
+// The stylesheet's address. The builder's band (below) brought rules that the
+// page without it never uses, so that page names the stylesheet as it always
+// did and stays byte for byte the same; a page with the band adds
+// BUILDER_STYLES, so a browser holding a copy from before those rules fetches
+// the file again. When the band is on for good, fold the mark into a new
+// LANDING_VERSION.
+export const BUILDER_STYLES = "builder=1";
+export const landingStylesheet = (builder: boolean): string =>
+  `/landing.css?v=${LANDING_VERSION}${builder ? `&${BUILDER_STYLES}` : ""}`;
 
 // The display face, self-hosted beside Inter (public/fonts, SIL Open Font
 // License in BricolageGrotesque-OFL.txt), preloaded by this page alone.
@@ -377,6 +392,173 @@ const MatchShot: FC<{ lang: Lang }> = ({ lang }) => {
   );
 };
 
+// -- the builder's band ------------------------------------------------------------------------
+
+// A band that shows the analytics builder at work, behind a switch of its own
+// (operator, 2026-11-15: it shows the builder and the new dashboard, so it
+// goes live with them): BUILDER_DEMO "on" in wrangler.jsonc, with the accounts
+// switch on too, since it names Ultra and leads to its card. Anything else
+// leaves the page byte for byte as it was, reads no buyer file and names no
+// builder.
+export const builderDemoOn = (env: Pick<Env, "BUILDER_DEMO">): boolean => env.BUILDER_DEMO === "on";
+
+// The buyer the picture is drawn from and how many of its years: the
+// published contracts' value and count by calendar year (each contract's
+// date, as pipeline indicators.py counts them) from its buyer file, the
+// newest BUILD_YEARS up to the data date's year, which is then the year to
+// date. A file that does not read, or holds fewer than BUILD_MIN_YEARS such
+// years, leaves the band out. The dashboard's tile shows the first
+// BUILD_TILE_ROWS rows of the same table.
+export const BUILD_BUYER = "dnd-mdn";
+export const BUILD_YEARS = 8;
+export const BUILD_MIN_YEARS = 4;
+export const BUILD_TILE_ROWS = 4;
+
+export type BuildYear = { year: number; n: number; total: number };
+export type BuildFigures = { name_en: string; name_fr: string | null; years: BuildYear[]; toDate: boolean };
+
+// A year after the data date's is as the source dates it (a buyer file can
+// hold one) and is never the year to date, so it stays out; a year whose
+// total is not published in dollars has no bar to draw and stays out too.
+export function buildFigures(buyer: Buyer, dataYear: number): BuildFigures | null {
+  const years = buyer.years
+    .filter((y) => y.source === "contracts" && y.year <= dataYear && typeof y.total === "number" && Number.isFinite(y.total) && y.total >= 0)
+    .sort((a, b) => a.year - b.year)
+    .slice(-BUILD_YEARS)
+    .map((y) => ({ year: y.year, n: y.n, total: y.total as number }));
+  if (years.length < BUILD_MIN_YEARS || !years.some((y) => y.total > 0)) return null;
+  return { name_en: buyer.buyer.name_en, name_fr: buyer.buyer.name_fr, years, toDate: years[years.length - 1].year === dataYear };
+}
+
+// The band's third point: the plan cards' own dashboard line for Ultra
+// (src/pro.tsx PLAN_ROWS, written by planLine), so it states what Ultra holds
+// whatever that line becomes.
+const DASHBOARD_ROW = PLAN_ROWS.find((r) => r.feature === "dashboards");
+export const dashboardLine = (lang: Lang): string | null => (DASHBOARD_ROW ? planLine(lang, DASHBOARD_ROW.ultra) : null);
+
+// The pointer in the picture, on a 24-unit box.
+const POINTER_PATH = "M3 2l15.5 9.2-6.9 1.5 3.9 7.4-2.9 1.5-3.9-7.4L4.3 19.5z";
+// The two other tiles of the dashboard are placeholders: bars of these widths, no figure.
+const SKELETONS: readonly (readonly number[])[] = [[86, 64, 78, 52, 70], [72, 90, 58, 80, 46]];
+
+// The picture (public/landing.css, "the builder's band"): one timeline of 24
+// seconds, pure CSS, that --scrub holds at a moment and .is-paused stops.
+// Three menus are filled, the bars draw, the reader shows the same figures as
+// a line and then as a table, adds the table to a dashboard, drags its tile
+// to the top and widens it. Every figure is the buyer file's, written by the
+// site's own formatters; the bars, the line and the gridlines share one scale
+// (src/landing_chart.ts). Hidden from assistive technology, which reads the
+// description after it.
+const BuildStage: FC<{ lang: Lang; build: BuildFigures }> = ({ lang, build }) => {
+  const { years, toDate } = build;
+  const name = pick(lang, build.name_en, build.name_fr) ?? build.name_en;
+  const money = (v: number) => fmtMoneyShort(v, lang);
+  const chart = buildChart(years.map((y) => ({ label: String(y.year), value: y.total })), money);
+  const first = String(years[0].year);
+  const last = String(years[years.length - 1].year);
+  const source = sourceLabel(lang, "contracts");
+  const title = t(lang, "landing.build_title", { buyer: name });
+  const value = t(lang, "landing.build_value");
+  const choose = t(lang, "landing.build_choose");
+  const head = (
+    <div class="tr th"><span>{t(lang, "landing.build_col_year")}</span><span>{t(lang, "landing.build_col_contracts")}</span><span>{value}</span></div>
+  );
+  const row = (y: BuildYear) => <div class="tr"><span>{String(y.year)}</span><span>{fmtInt(y.n, lang)}</span><span>{money(y.total)}</span></div>;
+  const tileRows = years.slice(0, BUILD_TILE_ROWS);
+  const skeleton = (widths: readonly number[]) => <div class="tile-bd">{widths.map((w) => <div class="sk" style={`width:${w}%`}></div>)}</div>;
+  return (
+    <div class="lp-stage">
+      <div class="bd" aria-hidden="true">
+        <div class="sc sc-a">
+          <p class="sc-h">{t(lang, "landing.build_new")}</p>
+          <div class="fld f1"><span class="fld-l">{t(lang, "landing.build_about")}</span>
+            <div class="fld-b"><span class="ph">{t(lang, "landing.build_choose_buyer")}</span><span class="val">{name}</span><span class="caret"></span></div></div>
+          <div class="fld f2"><span class="fld-l">{t(lang, "landing.build_figure")}</span>
+            <div class="fld-b"><span class="ph">{choose}</span><span class="val">{value}</span><span class="caret"></span></div></div>
+          <div class="fld f3"><span class="fld-l">{t(lang, "landing.build_rows")}</span>
+            <div class="fld-b"><span class="ph">{choose}</span><span class="val">{t(lang, "landing.build_year")}</span><span class="caret"></span></div></div>
+          <div class="fld f4"><span class="fld-l">{t(lang, "landing.build_show")}</span>
+            <div class="fld-b seg"><i></i><span>{t(lang, "landing.build_bars")}</span><span>{t(lang, "landing.build_line")}</span><span>{t(lang, "landing.build_table")}</span></div></div>
+          <div class="add">{t(lang, "landing.build_add")}</div>
+          <div class="pv">
+            <div class="pv-empty">{t(lang, "landing.build_empty")}</div>
+            <div class="pv-chart">
+              <p class="pv-t">{title}</p>
+              <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} role="presentation">
+                {chart.ticks.map((k) => <line class="gr" x1={String(PLOT_LEFT)} x2={String(PLOT_RIGHT)} y1={String(k.y)} y2={String(k.y)} />)}
+                {chart.ticks.map((k) => <text class="tk" x={String(k.labelX)} y={String(k.labelY)} text-anchor="end">{k.text}</text>)}
+                <g class="bars">
+                  {chart.bars.map((b, i) => <rect class="bar" style={`--i:${i}`} x={String(b.x)} y={String(b.y)} width={String(b.w)} height={String(b.h)} rx="3" />)}
+                </g>
+                <text class="dl" x={String(chart.peak.x)} y={String(chart.peak.y)} text-anchor="middle">{chart.peak.text}</text>
+                <path class="ln" pathLength="1" d={chart.line} />
+                {chart.points.map((p) => <circle class="pt" cx={String(p.x)} cy={String(p.y)} r="3.2" />)}
+                <line class="base" x1={String(PLOT_LEFT)} x2={String(PLOT_RIGHT)} y1={String(PLOT_BASE)} y2={String(PLOT_BASE)} />
+                {chart.xLabels.map((l) => <text class="tk" x={String(l.x)} y={String(l.y)} text-anchor="middle">{l.text}</text>)}
+              </svg>
+              <div class="pv-table">{head}{years.map(row)}</div>
+              <p class="pv-c">{toDate ? t(lang, "landing.build_caption", { source, year: last }) : source}</p>
+            </div>
+          </div>
+        </div>
+        <div class="sc sc-b">
+          <p class="sc-h">{t(lang, "landing.build_dashboard")}</p>
+          <span class="saved">{t(lang, "landing.build_saved")}</span>
+          <div class="mark"></div>
+          <div class="tile t1"><div class="tile-in">
+            <div class="tile-hd"><i class="grip"></i><span>{t(lang, "landing.build_open")}</span></div>
+            {skeleton(SKELETONS[0])}
+          </div></div>
+          <div class="tile t2"><div class="tile-in">
+            <div class="tile-hd"><i class="grip"></i><span>{t(lang, "landing.build_ending")}</span></div>
+            {skeleton(SKELETONS[1])}
+          </div></div>
+          <div class="tile tn"><div class="tile-in">
+            <div class="tile-hd"><i class="grip"></i><span>{title}</span></div>
+            <div class="tile-bd">{head}{tileRows.map(row)}</div>
+            <div class="tile-ft">
+              <span>{source}</span>
+              <span>{t(lang, "landing.build_shown", { n: fmtInt(tileRows.length, lang), total: fmtInt(years.length, lang) })}</span>
+            </div>
+            <i class="corner"></i>
+          </div></div>
+        </div>
+        <div class="cur"><svg viewBox="0 0 24 24"><path d={POINTER_PATH} /></svg></div>
+      </div>
+      <p class="visually-hidden">{t(lang, "landing.build_aria", { buyer: name, first, last })}</p>
+    </div>
+  );
+};
+
+// The band: the eyebrow in Ultra's sapphire as plain words (the chip stays on
+// the plan cards), the claim, three points (the third the plan cards' own
+// dashboard line) and a link to Ultra's card on this page; the picture beside
+// it. It adds no filled button: the picture's "Add to dashboard" is part of a
+// picture hidden from assistive technology.
+const BuildBand: FC<{ lang: Lang; build: BuildFigures }> = ({ lang, build }) => {
+  const line = dashboardLine(lang);
+  return (
+    <section class="lp-feat lp-build" aria-labelledby="lp-build-h">
+      <div class="lp-wrap">
+        <div class="lp-copy">
+          <p class="lp-eyebrow">{t(lang, "landing.build_eyebrow")}</p>
+          <h2 id="lp-build-h">{t(lang, "landing.build_heading")}</h2>
+          <p class="lp-t">{t(lang, "landing.build_text")}</p>
+          <ul class="lp-points">
+            <li><Check /><span>{t(lang, "landing.build_any")}</span></li>
+            <li><Check /><span>{t(lang, "landing.build_figures")}</span></li>
+            {line ? <li><Check /><span>{t(lang, "landing.build_plan", { line })}</span></li> : null}
+          </ul>
+          <div class="lp-acts">
+            <a class="lp-link" href={`#${ULTRA_ANCHOR}`}>{t(lang, "landing.build_more")}{ARROW}</a>
+          </div>
+        </div>
+        <BuildStage lang={lang} build={build} />
+      </div>
+    </section>
+  );
+};
+
 // -- the plans -------------------------------------------------------------------------
 
 // A plan's rows, as the cards on /pro draw them (src/pro.tsx planRows and
@@ -540,10 +722,13 @@ export async function landingPage(c: Context<AppEnv>, ultra: UltraState | null, 
   if (!stats) return noDataPage(c, "site.name");
   const clock = clockOf(c.env);
   const top = stats.top_organizations_year[0];
-  const [index, profile] = await Promise.all([
+  const builder = accountsEnabled(c.env) && builderDemoOn(c.env);
+  const [index, profile, buyer] = await Promise.all([
     loadExpiringIndex(c.env).catch(() => null),
     top ? loadProfile(c.env, top.id).catch(() => null) : Promise.resolve(null),
+    builder ? loadBuyer(c.env, BUILD_BUYER).catch(() => null) : Promise.resolve(null),
   ]);
+  const build = buyer ? buildFigures(buyer, Number(todayOf(stats.data_as_of).slice(0, 4))) : null;
   const three = index?.windows.find((w) => w.window === "3m");
   // The 3-month window's first page, as the radar's overview reads it: none
   // to read when the window is empty, null when the file is missing.
@@ -554,7 +739,7 @@ export async function landingPage(c: Context<AppEnv>, ultra: UltraState | null, 
   return c.html(html`<!doctype html>${(
     <LandingDoc lang={lang} on={accountsEnabled(c.env)} stats={stats} clock={clock} endingN={three?.n} ending={firstEnding ?? []}
       profile={profile} price={checkoutPrice(c.env)} logo={c.env.BRANDFETCH_CLIENT_ID?.trim() || null} ultra={ultra} ultraPrice={ultraPrice} ultraPlanned={ultraFigures(c.env)}
-      search={new URL(c.req.url).search} />
+      search={new URL(c.req.url).search} build={build} />
   ) as any}`, status);
 }
 
@@ -601,15 +786,20 @@ export async function ultraSubmit(c: Context<AppEnv>, post: InterestPost): Promi
 // ultraCheckoutPrice), which turn its card from the waitlist to the price.
 // ultraPlanned: the same two figures before it is on sale (account/stripe.ts
 // ultraFigures), which the waitlist card shows beside "Coming soon".
+// build: the builder's band's figures (buildFigures) while BUILDER_DEMO and
+// the accounts switch are on and the buyer file reads, else null (no band).
 type DocProps = {
   lang: Lang; on: boolean; stats: Stats; clock: Clock; endingN: number | undefined; ending: readonly ExpiringRow[];
   profile: Profile | null; price: ProPrice | null; logo: string | null; ultra?: UltraState | null; ultraPrice?: ProPrice | null;
   // The request's query string, which the language toggle keeps (layout.tsx langToggle).
   search?: string;
   ultraPlanned?: ProPrice | null;
+  build?: BuildFigures | null;
 };
 
-export const LandingDoc: FC<DocProps> = ({ lang, on, stats, clock, endingN, ending, profile, price, logo, ultra = null, ultraPrice = null, ultraPlanned = null, search = "" }) => {
+export const LandingDoc: FC<DocProps> = ({
+  lang, on, stats, clock, endingN, ending, profile, price, logo, ultra = null, ultraPrice = null, ultraPlanned = null, search = "", build = null,
+}) => {
   const counts = stats.counts;
   const seo = pageSeo("home", lang, { jsonLd: [homeJsonLd(lang)] });
   const lobbying = sourceLoaded("lobbying", null, stats) === true;
@@ -651,7 +841,7 @@ export const LandingDoc: FC<DocProps> = ({ lang, on, stats, clock, endingN, endi
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>{seo.title}</title>
-        <link rel="stylesheet" href={`/landing.css?v=${LANDING_VERSION}`} />
+        <link rel="stylesheet" href={landingStylesheet(build !== null)} />
         <script src="/theme.js"></script>
         <link rel="preload" href={DISPLAY_FONT} as="font" type="font/woff2" crossorigin="anonymous" />
         <link rel="preload" href="/fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
@@ -819,6 +1009,9 @@ export const LandingDoc: FC<DocProps> = ({ lang, on, stats, clock, endingN, endi
               </div>
             </section>
           ) : null}
+
+          {/* With BUILDER_DEMO and the accounts switch on only, after the bands on what Free gives and before the plans its link leads to. */}
+          {build ? <BuildBand lang={lang} build={build} /> : null}
 
           <section class="lp-steps" aria-labelledby="lp-how-h">
             <div class="lp-wrap">

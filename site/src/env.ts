@@ -148,6 +148,13 @@ export interface Env {
   // repository variable of the same name (`wrangler deploy --var`). Unset,
   // the band shows the names alone.
   BRANDFETCH_CLIENT_ID?: string;
+  // The landing page's band on the analytics builder (src/pages/landing.tsx
+  // builderDemoOn): "on", with the accounts switch on too, shows it, its
+  // picture drawn from National Defence's buyer file. Anything else ("off" in
+  // wrangler.jsonc until the builder and the new dashboard are live): the
+  // landing page byte for byte as before, no buyer file read and no word of
+  // the builder.
+  BUILDER_DEMO?: string;
 
   // -- the live mail check (src/account/mail_check.ts, docs/mail.md) ----------
   // The operator's test inbox: the one address POST /admin/mail-check sends

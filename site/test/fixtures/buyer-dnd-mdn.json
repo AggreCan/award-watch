@@ -1,0 +1,489 @@
+{
+  "buyer": {
+    "acronym_en": "DND",
+    "acronym_fr": "MDN",
+    "ckan_org": "dnd-mdn",
+    "department_number": "32",
+    "id": "dnd-mdn",
+    "kind": null,
+    "n_awards": 6219,
+    "n_contracts": 371744,
+    "n_grants": 1153,
+    "n_history": 73780,
+    "n_open_tenders": 144,
+    "n_tenders": 4672,
+    "name_en": "National Defence",
+    "name_fr": "Défense nationale",
+    "total_awards": 1225924004.12,
+    "total_contracts": 241184264977.92,
+    "total_grants": 2540759430.73,
+    "total_history": 109361673672.76,
+    "n_lobbying": 5189
+  },
+  "years": [
+    {
+      "n": 1,
+      "n_no_value": 0,
+      "n_non_competitive": 0,
+      "n_organizations": 1,
+      "source": "awards",
+      "total": 1151700.0,
+      "total_non_competitive": null,
+      "year": 2029
+    },
+    {
+      "n": 2,
+      "n_no_value": 0,
+      "n_non_competitive": 0,
+      "n_organizations": 2,
+      "source": "awards",
+      "total": 2118605.02,
+      "total_non_competitive": null,
+      "year": 2027
+    },
+    {
+      "n": 789,
+      "n_no_value": 273,
+      "n_non_competitive": 29,
+      "n_organizations": 343,
+      "source": "awards",
+      "total": 277789347.22,
+      "total_non_competitive": 8771721.51,
+      "year": 2026
+    },
+    {
+      "n": 22473,
+      "n_no_value": 0,
+      "n_non_competitive": 2628,
+      "n_organizations": 5566,
+      "source": "contracts",
+      "total": 11308566511.35,
+      "total_non_competitive": 5404813561.04,
+      "year": 2026
+    },
+    {
+      "n": 233,
+      "n_no_value": 0,
+      "n_non_competitive": null,
+      "n_organizations": 196,
+      "source": "grants",
+      "total": 1491636478.21,
+      "total_non_competitive": null,
+      "year": 2026
+    },
+    {
+      "n": 964,
+      "n_no_value": 81,
+      "n_non_competitive": 166,
+      "n_organizations": 796,
+      "source": "history",
+      "total": 1853190997.16,
+      "total_non_competitive": 988705767.29,
+      "year": 2026
+    },
+    {
+      "n": 762,
+      "n_no_value": 205,
+      "n_non_competitive": 20,
+      "n_organizations": 275,
+      "source": "awards",
+      "total": 216152322.36,
+      "total_non_competitive": 5899561.2,
+      "year": 2025
+    },
+    {
+      "n": 26118,
+      "n_no_value": 0,
+      "n_non_competitive": 2302,
+      "n_organizations": 6124,
+      "source": "contracts",
+      "total": 16878081769.19,
+      "total_non_competitive": 2148291224.41,
+      "year": 2025
+    },
+    {
+      "n": 196,
+      "n_no_value": 0,
+      "n_non_competitive": null,
+      "n_organizations": 156,
+      "source": "grants",
+      "total": 85769055.29,
+      "total_non_competitive": null,
+      "year": 2025
+    },
+    {
+      "n": 764,
+      "n_no_value": 178,
+      "n_non_competitive": 200,
+      "n_organizations": 559,
+      "source": "history",
+      "total": 4072690648.0,
+      "total_non_competitive": 1681438061.49,
+      "year": 2025
+    },
+    {
+      "n": 480,
+      "n_no_value": 107,
+      "n_non_competitive": 15,
+      "n_organizations": 234,
+      "source": "awards",
+      "total": 167994762.3,
+      "total_non_competitive": 3578461.72,
+      "year": 2024
+    },
+    {
+      "n": 18519,
+      "n_no_value": 0,
+      "n_non_competitive": 1334,
+      "n_organizations": 4717,
+      "source": "contracts",
+      "total": 22238551248.07,
+      "total_non_competitive": 3869647983.07,
+      "year": 2024
+    },
+    {
+      "n": 181,
+      "n_no_value": 0,
+      "n_non_competitive": null,
+      "n_organizations": 122,
+      "source": "grants",
+      "total": 167780939.58,
+      "total_non_competitive": null,
+      "year": 2024
+    },
+    {
+      "n": 774,
+      "n_no_value": 137,
+      "n_non_competitive": 255,
+      "n_organizations": 515,
+      "source": "history",
+      "total": 2842659460.84,
+      "total_non_competitive": 1767707578.77,
+      "year": 2024
+    },
+    {
+      "n": 441,
+      "n_no_value": 131,
+      "n_non_competitive": 13,
+      "n_organizations": 198,
+      "source": "awards",
+      "total": 102970059.71,
+      "total_non_competitive": 4148727.93,
+      "year": 2023
+    },
+    {
+      "n": 20399,
+      "n_no_value": 0,
+      "n_non_competitive": 1436,
+      "n_organizations": 5084,
+      "source": "contracts",
+      "total": 15758705387.07,
+      "total_non_competitive": 3187712418.94,
+      "year": 2023
+    },
+    {
+      "n": 104,
+      "n_no_value": 0,
+      "n_non_competitive": null,
+      "n_organizations": 87,
+      "source": "grants",
+      "total": 90672529.8,
+      "total_non_competitive": null,
+      "year": 2023
+    },
+    {
+      "n": 852,
+      "n_no_value": 69,
+      "n_non_competitive": 279,
+      "n_organizations": 586,
+      "source": "history",
+      "total": 5879972102.98,
+      "total_non_competitive": 3294294395.09,
+      "year": 2023
+    },
+    {
+      "n": 571,
+      "n_no_value": 213,
+      "n_non_competitive": 0,
+      "n_organizations": 268,
+      "source": "awards",
+      "total": 108207330.58,
+      "total_non_competitive": null,
+      "year": 2022
+    },
+    {
+      "n": 19138,
+      "n_no_value": 0,
+      "n_non_competitive": 1245,
+      "n_organizations": 4793,
+      "source": "contracts",
+      "total": 13678630421.81,
+      "total_non_competitive": 7441721565.07,
+      "year": 2022
+    },
+    {
+      "n": 103,
+      "n_no_value": 0,
+      "n_non_competitive": null,
+      "n_organizations": 47,
+      "source": "grants",
+      "total": 42606173.0,
+      "total_non_competitive": null,
+      "year": 2022
+    },
+    {
+      "n": 1126,
+      "n_no_value": 61,
+      "n_non_competitive": 325,
+      "n_organizations": 741,
+      "source": "history",
+      "total": 5280767291.84,
+      "total_non_competitive": 2420102887.26,
+      "year": 2022
+    },
+    {
+      "n": 515,
+      "n_no_value": 191,
+      "n_non_competitive": 0,
+      "n_organizations": 251,
+      "source": "awards",
+      "total": 111764279.27,
+      "total_non_competitive": null,
+      "year": 2021
+    },
+    {
+      "n": 17890,
+      "n_no_value": 0,
+      "n_non_competitive": 1303,
+      "n_organizations": 4511,
+      "source": "contracts",
+      "total": 3884725706.9,
+      "total_non_competitive": 995761904.67,
+      "year": 2021
+    },
+    {
+      "n": 114,
+      "n_no_value": 0,
+      "n_non_competitive": null,
+      "n_organizations": 72,
+      "source": "grants",
+      "total": 551926968.05,
+      "total_non_competitive": null,
+      "year": 2021
+    },
+    {
+      "n": 1334,
+      "n_no_value": 93,
+      "n_non_competitive": 370,
+      "n_organizations": 878,
+      "source": "history",
+      "total": 3497222002.16,
+      "total_non_competitive": 1493070913.78,
+      "year": 2021
+    },
+    {
+      "n": 675,
+      "n_no_value": 250,
+      "n_non_competitive": 0,
+      "n_organizations": 259,
+      "source": "awards",
+      "total": 57725809.48,
+      "total_non_competitive": null,
+      "year": 2020
+    },
+    {
+      "n": 15628,
+      "n_no_value": 0,
+      "n_non_competitive": 1318,
+      "n_organizations": 4322,
+      "source": "contracts",
+      "total": 7088157893.93,
+      "total_non_competitive": 898463842.49,
+      "year": 2020
+    },
+    {
+      "n": 129,
+      "n_no_value": 0,
+      "n_non_competitive": null,
+      "n_organizations": 72,
+      "source": "grants",
+      "total": 35938430.67,
+      "total_non_competitive": null,
+      "year": 2020
+    },
+    {
+      "n": 1427,
+      "n_no_value": 101,
+      "n_non_competitive": 415,
+      "n_organizations": 919,
+      "source": "history",
+      "total": 6836639529.53,
+      "total_non_competitive": 1327578050.34,
+      "year": 2020
+    },
+    {
+      "n": 611,
+      "n_no_value": 150,
+      "n_non_competitive": 0,
+      "n_organizations": 209,
+      "source": "awards",
+      "total": 44728985.81,
+      "total_non_competitive": null,
+      "year": 2019
+    },
+    {
+      "n": 17642,
+      "n_no_value": 0,
+      "n_non_competitive": 1361,
+      "n_organizations": 4626,
+      "source": "contracts",
+      "total": 11562852318.22,
+      "total_non_competitive": 8676997345.24,
+      "year": 2019
+    },
+    {
+      "n": 69,
+      "n_no_value": 0,
+      "n_non_competitive": null,
+      "n_organizations": 25,
+      "source": "grants",
+      "total": 53453300.13,
+      "total_non_competitive": null,
+      "year": 2019
+    },
+    {
+      "n": 1663,
+      "n_no_value": 61,
+      "n_non_competitive": 421,
+      "n_organizations": 1006,
+      "source": "history",
+      "total": 9888689928.07,
+      "total_non_competitive": 2297958060.84,
+      "year": 2019
+    },
+    {
+      "n": 727,
+      "n_no_value": 244,
+      "n_non_competitive": 0,
+      "n_organizations": 265,
+      "source": "awards",
+      "total": 52211391.65,
+      "total_non_competitive": null,
+      "year": 2018
+    },
+    {
+      "n": 20231,
+      "n_no_value": 0,
+      "n_non_competitive": 1554,
+      "n_organizations": 5171,
+      "source": "contracts",
+      "total": 4926507025.63,
+      "total_non_competitive": 935745032.7,
+      "year": 2018
+    },
+    {
+      "n": 18,
+      "n_no_value": 0,
+      "n_non_competitive": null,
+      "n_organizations": 13,
+      "source": "grants",
+      "total": 7564534.0,
+      "total_non_competitive": null,
+      "year": 2018
+    },
+    {
+      "n": 1992,
+      "n_no_value": 78,
+      "n_non_competitive": 539,
+      "n_organizations": 1187,
+      "source": "history",
+      "total": 3027499636.29,
+      "total_non_competitive": 1430293805.0,
+      "year": 2018
+    },
+    {
+      "n": 366,
+      "n_no_value": 191,
+      "n_non_competitive": 0,
+      "n_organizations": 155,
+      "source": "awards",
+      "total": 21796968.18,
+      "total_non_competitive": null,
+      "year": 2017
+    },
+    {
+      "n": 15622,
+      "n_no_value": 0,
+      "n_non_competitive": 1406,
+      "n_organizations": 4318,
+      "source": "contracts",
+      "total": 10335238481.25,
+      "total_non_competitive": 1188052255.36,
+      "year": 2017
+    },
+    {
+      "n": 2,
+      "n_no_value": 0,
+      "n_non_competitive": null,
+      "n_organizations": 1,
+      "source": "grants",
+      "total": 4122518.0,
+      "total_non_competitive": null,
+      "year": 2017
+    },
+    {
+      "n": 1689,
+      "n_no_value": 55,
+      "n_non_competitive": 547,
+      "n_organizations": 1008,
+      "source": "history",
+      "total": 4692890855.12,
+      "total_non_competitive": 1322227128.0,
+      "year": 2017
+    },
+    {
+      "n": 106,
+      "n_no_value": 6,
+      "n_non_competitive": 0,
+      "n_organizations": 64,
+      "source": "awards",
+      "total": 21793826.07,
+      "total_non_competitive": null,
+      "year": 2016
+    },
+    {
+      "n": 16087,
+      "n_no_value": 0,
+      "n_non_competitive": 337,
+      "n_organizations": 5144,
+      "source": "contracts",
+      "total": 9127947541.29,
+      "total_non_competitive": 158689388.16,
+      "year": 2016
+    },
+    {
+      "n": 4,
+      "n_no_value": 0,
+      "n_non_competitive": null,
+      "n_organizations": 2,
+      "source": "grants",
+      "total": 9288504.0,
+      "total_non_competitive": null,
+      "year": 2016
+    },
+    {
+      "n": 2538,
+      "n_no_value": 18,
+      "n_non_competitive": 635,
+      "n_organizations": 1304,
+      "source": "history",
+      "total": 6214970409.88,
+      "total_non_competitive": 1080429037.0,
+      "year": 2016
+    }
+  ],
+  "top_organizations": {},
+  "open_tenders": 144,
+  "recent_awards": [],
+  "aliases": []
+}
