@@ -107,6 +107,7 @@ Every datetime is ISO in UTC.
 | `feeds` | one row per calendar feed: kind (`search`, `watchlist`, `all`), the saved search it follows, the address's secret, created and revocation times, the UTC day a calendar last read it | a time of reading, an address, a user agent |
 | `org_claims` | one row per account that named its organization: the organization id, up to five organization ids to compare it with, the share block's segment, when it was chosen and last changed (*Your organization*) | anything typed, a name, any sign of which other accounts chose the same organization |
 | `saved_views`, `view_deliveries` | the analytics views an account saved: the view's address as the site writes it, the name the reader gave it, its language and email cadence, a hash of the figures its last message carried, its stop link's secret; and each view's runs (*Saved views*) | anything typed but the name, a copy of a message |
+| `seats` | one row per invitation to a seat and, once taken, the seat it became: the holder's and the member's ids, the invited address and SHA-256 of the link's secret while it is an invitation, the language, when it was sent, expires, was taken and ended, and why it ended (*Seats*) | the link's secret, a plan, a price, a count, a member's address |
 
 Limits: at most 25 saved searches per account on Pro, 100 on Ultra (Free
 keeps 3), at most 5 live API keys, at most 5 sign-in requests per address per
@@ -119,7 +120,8 @@ Retention: sign-in requests and wrong tries are deleted after a day (and
 with the account); sessions 90 days after they end; audit rows after 90
 days; bug reports after 180 days (and with the account); the keyed API's
 daily counts after 60 days (and with the account's keys, by the table's
-cascade). The sweep runs with each sign-in request.
+cascade); a seat 30 days after it ends, and an invitation never taken 30
+days after it was sent. The sweep runs with each sign-in request.
 
 ## Sign-in flow
 
@@ -712,12 +714,16 @@ logs name no key.
 
 ## Deletion
 
-`/account/delete` asks for a ticked box, deletes the account's dashboard
+`/account/delete` asks for a ticked box, ends the account's seats on both
+sides (*Seats*: the seats it gives and its open invitations end `closed`
+with their addresses cleared, the seat it holds ends `deleted`, and every
+invitation to its address that was never taken is deleted), deletes the
+account's dashboard
 (every dashboard with its tiles, and its earlier panels), its saved views
 (with their runs), its watches, its
 claim of an organization, its briefings, its weekly email row and its
-calendar feeds (statements of their own, so a database without those tables
-still deletes the rest), then in one batch: revokes every
+calendar feeds (statements of their own, so a database without those tables,
+`seats` among them, still deletes the rest), then in one batch: revokes every
 session; deletes the saved searches (with their delivery rows, stop links
 and records marks), the API keys (their daily counts go with them, by the
 cascade on `api_usage`), the bug reports, the watches and the watch mail row, and the address's sign-in requests; and marks the user row deleted with its
@@ -2784,6 +2790,151 @@ Three things the run showed:
 - The portal's return addresses are built from `SITE_URL`, so a local run
   returns to the address that variable names.
 
+## Seats
+
+A seat is one named person with an account and a sign-in of their own, who
+takes the plan of the account that subscribes while the seat is live and
+that plan holds it (the operator's rulings of 2026-11-16). Pro has 1 seat,
+the subscriber's; Ultra has 5, the subscriber's (the holder's) and 4 the
+holder gives by invitation (`PLAN_SEATS`). When the holder's plan stops
+covering a seat, the seat stays and gives no plan; what its member keeps
+stays theirs.
+
+What is built is the table, the plan read through a seat, deletion, the
+sweep and the console's read. No page creates a seat yet: there is no
+invitation, no Seats page, no route under `/account/seats` and no line on
+any plan card, the Terms or the privacy page, and with no seat row every
+page, post, feed, API answer and email reads as before. The code is
+`site/src/account/entitlements.ts` (`planFor`, `withSeats`, `seatsReady`)
+and `site/src/account/seats.ts`; the tests are `site/test/seats.test.ts` and
+`site/test/seats-unchanged.test.ts`.
+
+### The table
+
+| Table | Columns | Rule |
+|---|---|---|
+| `seats` | `id`, `holder_id`, `email` and `token_hash` (an invitation's address and SHA-256 of its link's secret), `lang`, `invited_at`, `expires_at`, `member_id`, `joined_at`, `ended_at`, `ended_why` (`declined`, `cancelled`, `left`, `removed`, `deleted`, `closed`, `operator`), `told` and `told_at` (what the seat notices last said) | One row is an invitation and, once taken, the seat it became: taking it writes the member and clears the address and the hash. The holder's own seat has no row. One live seat a person (`idx_seats_member_live`); a member always has a join date (a CHECK) |
+
+Its three indexes: `idx_seats_member_live` (`member_id`, live seats only),
+which every plan read probes; `idx_seats_holder` (`holder_id`, `ended_at`,
+`joined_at`), a holder's seats; `idx_seats_email` (`email`, `invited_at`,
+invitations only), an address's invitations. A row names no plan, price,
+subscription or count: the plan is read from the holder's own entitlements.
+
+### The plan through a seat
+
+`planFor` keeps its signature and still sends one statement
+(`PLAN_ROWS_SQL`, the account's id bound once), now in three halves:
+
+- the account's own entitlements, as before;
+- the holder's own entitlements when the account holds a live seat, with the
+  holder's id and address, whether the holder is active and not blocked,
+  and the seat's id (a holder with no entitlement still gives one row, with
+  no plan);
+- the group's live seats: the holder's when the account holds one, else the
+  account's own as a holder.
+
+From those rows:
+
+- A **member** takes the plan the holder's own rows give, with the holder's
+  end, while its seat is covered: the holder is active and not blocked, and
+  the seat is among the first `PLAN_SEATS[plan] - 1` of the holder's live
+  seats by join date, then id. A fifth live member on Ultra is not covered.
+  Its own plan wins when it is as high (an Ultra the operator granted by
+  hand: no plan is above Ultra, the one plan with member seats), and the
+  account is then in no group. An uncovered member reads its own plan.
+- A **holder** whose plan covers at least one seat leads a group.
+- `PlanState.seat` (the seat's id, the holder's id and address, covered or
+  not) is present for an account holding a live seat; `PlanState.group`
+  (the holder's id, the ids of the holder then the covered members by join
+  order, the account's place) for an account in a group. `Account` (the
+  session read) carries both, remembered with the rest for an outage; a
+  plan that has ended through the outage takes its group with it.
+- The cache on `users` is written as before: a covered member's says `pro`
+  with the holder's end, so through an outage a member is served as an Ultra
+  holder is.
+- For every other account the answer is the three fields it always was,
+  from the same rows: the statement's first half is today's statement, and
+  the other two are one probe of `idx_seats_member_live` and two more
+  (that index, then `idx_seats_holder`) that find nothing. The session read,
+  the keyed API, the calendar feeds, the delivery run's parts, the console
+  and the webhook's cache refresh all call `planFor` as before, so none of
+  them sends a statement more.
+- `LIVE_PRO_SQL` (the same-day gate and the daily check) counts entitlement
+  rows; a member has none, so a subscription with seats counts once, its
+  holder.
+
+The one place a member sees this is the overview's plan line: "Ultra, a
+seat on the subscription of (the holder's address)" in place of "Ultra,
+until (date)", the end date being the holder's billing; and for a seat that
+gives no plan now, "You hold a seat on the subscription of (address), which
+gives no plan now. Your account is on Free." (the account's own plan line in
+place of Free). A member reads nothing else of the holder, and a holder
+nothing of a member.
+
+### Before the table is on the database
+
+`withSeats`, beside `withTiers`, sends `PLAN_ROWS_SQL`; when the answer is
+"no such table: seats" it sends today's statement instead
+(`ENTITLEMENTS_SQL`, or its form without `entitlement_tiers`), logs one line
+an isolate ("account plan: seats missing, every account read without a seat
+until accounts_schema.sql is applied", naming no account), and sends only
+today's statement for the next 10 minutes (`SEATS_RECHECK_MS`), so the
+delivery run does not spend two queries an account against its budget while
+the schema waits. Any other fault passes on, a missing `entitlement_tiers`
+included, so the tier table's own fallback works as before whichever of the
+two tables is missing. `seatsReady(env)` says whether the table is there: a
+true answer is kept for the isolate's life, and a missing table is
+remembered as `withSeats` remembers it. Deletion, the sweep and the console
+pass over a missing table without a line. Nothing answers 500, and every
+page reads as it does with the table present and empty.
+
+### Deletion and the sweep
+
+An account's deletion (`endSeatsOf`, one batch of its own before the rest,
+so a database without the table still deletes everything else):
+
+```sql
+UPDATE seats SET ended_at = ?1, ended_why = 'closed', email = NULL, token_hash = NULL WHERE holder_id = ?2 AND ended_at IS NULL;
+UPDATE seats SET ended_at = ?1, ended_why = 'deleted', told = 0 WHERE member_id = ?2 AND ended_at IS NULL;
+DELETE FROM seats WHERE email = ?1 AND member_id IS NULL;
+```
+
+The seats the account gives and its open invitations end `closed`, their
+addresses cleared; the seat it holds ends `deleted`, with `told` at 0 so no
+notice follows; every invitation to its address that was never taken goes.
+Each member of a deleted holder reads its own plan from the next request.
+
+The sweep (`signin.ts sweep`, in a try block of its own) deletes a row 30
+days after it ends, and an invitation never taken 30 days after it was sent
+(`SEAT_KEEP_DAYS`); a live seat stays whatever its age.
+
+### The console
+
+An account's page (`/admin/users/<id>`) shows a Seats panel when a seat row
+names the account, and nothing otherwise. For a holder: "5 of 5 seats: this
+account, 2 members, 2 invitations open", then its rows (the member's address
+leading to that account's page, or the invited address; whether the seat
+gives the plan now, waits as an invitation, has expired or has ended; when
+it was sent, taken and ended, and why), the ended rows of the last 30 days
+muted. For a member: "A seat on (the holder's address) since (date); it
+gives Ultra now", or "it gives no plan now". The panel has no button. It
+reads nothing while the table is not on the database.
+
+### Operator step
+
+After this lands, from `site/`:
+
+```
+npx wrangler d1 execute awardwatch-accounts --remote --file=accounts_schema.sql
+```
+
+The new statements are `CREATE TABLE IF NOT EXISTS seats`, `CREATE UNIQUE
+INDEX IF NOT EXISTS idx_seats_member_live`, `CREATE INDEX IF NOT EXISTS
+idx_seats_holder` and `CREATE INDEX IF NOT EXISTS idx_seats_email`; every
+other statement is `IF NOT EXISTS` and changes nothing. Nothing on the site
+changes when it is run.
+
 ## Dashboard
 
 `/account/dashboard` is Ultra's: up to 5 dashboards an account keeps, each
@@ -3630,7 +3781,8 @@ delete the operator's own account.
   revoked or ended, the grant form with its Plan select, the
   `payment_customers` row and, with the Stripe keys set, the
   subscription's status, period end and pending cancellation as Stripe
-  holds them now; sessions (signed in now, the newest use, device
+  holds them now; the account's seats, when a seat row names it (*Seats*,
+  *The console*); sessions (signed in now, the newest use, device
   classes); saved searches with their delivery and last delivery; API keys
   (prefix, created, last used, revoked); calendar feeds (kind, created,
   revoked, last read, never the secret); the last 20 deliveries; the

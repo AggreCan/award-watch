@@ -14,6 +14,8 @@ import type { Lang } from "../i18n";
 import { isBlocked } from "./admin_ops";
 import { USAGE_KEEP_DAYS, USAGE_SWEEP_SQL, dayPlus, utcDay } from "./api_usage";
 import { AUDIT_DAYS, audit } from "./audit";
+import { missingSeats } from "./entitlements";
+import { SEATS_SWEEP_SQL, SEAT_KEEP_DAYS } from "./seats";
 import { newCode, newId, plusDays, plusMinutes, randomHex, sameHash, sha256Hex } from "./secrets";
 
 export const CODE_MINUTES = 15;
@@ -226,9 +228,10 @@ export async function findOrCreateUser(env: Env, email: string, lang: Lang, now 
 
 // Rows past their keeping: sign-in requests and wrong tries after a day, sessions 90 days
 // after they ended, the audit trail after 90 days, bug reports after
-// BUG_REPORT_DAYS, the keyed API's daily counts after USAGE_KEEP_DAYS. Run
-// with each sign-in request, so the tables stay small without a schedule of
-// their own.
+// BUG_REPORT_DAYS, the keyed API's daily counts after USAGE_KEEP_DAYS, seats
+// SEAT_KEEP_DAYS after they end and invitations never taken SEAT_KEEP_DAYS
+// after they were sent. Run with each sign-in request, so the tables stay
+// small without a schedule of their own.
 export async function sweep(env: Env, now = new Date()): Promise<void> {
   const db = env.ACCOUNTS!;
   const day = plusDays(now, -1);
@@ -255,5 +258,12 @@ export async function sweep(env: Env, now = new Date()): Promise<void> {
     await db.prepare(USAGE_SWEEP_SQL).bind(dayPlus(utcDay(now), -USAGE_KEEP_DAYS)).run();
   } catch {
     console.error("account sweep: api usage not swept");
+  }
+  // Apart again: seats arrived after the rest. A missing table is the planFor
+  // log's to say, once, and is passed over here without a line.
+  try {
+    await db.prepare(SEATS_SWEEP_SQL).bind(plusDays(now, -SEAT_KEEP_DAYS)).run();
+  } catch (e) {
+    if (!missingSeats(e)) console.error("account sweep: seats not swept");
   }
 }

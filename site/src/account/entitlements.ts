@@ -17,6 +17,13 @@
 // asks whether a paid plan is live (LIVE_PRO_SQL) counts it unchanged, and
 // planFor reads the tier beside the row. Until entitlement_tiers is on the
 // database an Ultra row reads as Pro (docs/accounts.md, Ultra).
+//
+// A seat (docs/accounts.md, Seats) gives an account the plan of the account
+// that holds the subscription, read here in the same statement as the
+// account's own rows: planFor answers the plan, the seat and the group. An
+// account with no seat and no member reads exactly as before, from the one
+// statement it always sent. Until the seats table is on the database that
+// statement is sent without it (withSeats).
 
 import type { Env } from "../env";
 
@@ -128,7 +135,29 @@ export type EntitlementRow = {
   id: string; plan: string; starts_at: string; ends_at: string | null; created_at: string; revoked_at: string | null;
 };
 
-export type PlanState = { plan: Plan; until: string | null; source: "entitlements" | "last_known" };
+// The seats each plan holds, the subscriber's own included (the operator's
+// ruling of 2026-11-16): a plan with 1 has no member seats. Read by planFor
+// for the group; kept apart from RULES while no card, page or Terms states it.
+export const PLAN_SEATS: Readonly<Record<Plan, number>> = { free: 1, pro: 1, ultra: 5 };
+export const memberSeats = (plan: Plan): number => Math.max(0, PLAN_SEATS[plan] - 1);
+
+// An account's live seat on another account's subscription: the seat's id, the
+// holder's id and address, and whether the seat gives this account its plan
+// now (the holder active and not blocked, the seat among the first
+// memberSeats(plan) the holder's own plan holds by join order, and the
+// account's own plan below the one it gives). Nothing else of the holder is read.
+export type SeatState = { id: string; holderId: string; holderEmail: string; covered: boolean };
+// The holder and the members whose seats its plan covers, the holder first,
+// then the members by join order; position is this account's place in ids
+// (0 for the holder). An account in no group has none.
+export type Group = { holderId: string; ids: string[]; position: number };
+
+// seat and group are present only for an account that holds a seat or whose
+// plan covers one, so every other account's answer is the three fields it
+// always was.
+export type PlanState = {
+  plan: Plan; until: string | null; source: "entitlements" | "last_known"; seat?: SeatState; group?: Group;
+};
 
 // The plan the rows give at a moment: of the rows not revoked whose window
 // holds it (starts_at at or before, ends_at after or none), the latest
@@ -155,7 +184,8 @@ export function planFromRows(rows: readonly EntitlementRow[], now: Date): { plan
 // counted, and the refresh then runs for a user the site serves as free (a
 // minute of runner time; the opposite mistake would skip a paying user). An
 // Ultra entitlement is a pro row with its tier beside it, so it counts here
-// unchanged.
+// unchanged. A seat writes no entitlement row (its member's plan is read
+// through the holder's), so a subscription with seats counts once, its holder.
 export const LIVE_PRO_SQL =
   "SELECT COUNT(*) AS n FROM entitlements WHERE plan = 'pro' AND revoked_at IS NULL AND starts_at <= ?1 AND (ends_at IS NULL OR ends_at > ?1)";
 
@@ -230,6 +260,80 @@ export async function tiersReady(env: Pick<Env, "ACCOUNTS">): Promise<boolean> {
   }
 }
 
+// -- the seats table -----------------------------------------------------------------
+
+// A fault that names the seats table missing: the database the schema has not
+// been applied to again since seats. Any other fault is not this.
+export const missingSeats = (e: unknown): boolean =>
+  /no such table:?\s*seats\b/i.test(String((e as { message?: unknown })?.message ?? e));
+
+// How long a missing seats table is taken as missing before it is asked about
+// again. Without it every planFor would send a failed statement before today's,
+// and the delivery run, which reads one plan an account inside a query budget,
+// would spend two queries an account while the schema waits.
+export const SEATS_RECHECK_MS = 10 * 60 * 1000;
+
+// Per database binding: when the table was last found missing (ms), and
+// whether it has been seen (kept for the isolate's life, as tiersSeen is: the
+// table is never dropped once applied).
+let seatsMissingAt = new WeakMap<D1Database, number>();
+let seatsSeen = new WeakSet<D1Database>();
+let seatsMissingSaid = false;
+
+function saySeatsMissing(): void {
+  if (seatsMissingSaid) return;
+  seatsMissingSaid = true;
+  console.error("account plan: seats missing, every account read without a seat until accounts_schema.sql is applied");
+}
+
+const seatsRecentlyMissing = (db: D1Database, now: Date): boolean => {
+  const at = seatsMissingAt.get(db);
+  return at !== undefined && now.getTime() - at < SEATS_RECHECK_MS;
+};
+
+// For the tests, which drop the table: forgets the table seen or missing and the log line said.
+export function forgetSeats(): void {
+  seatsMissingAt = new WeakMap<D1Database, number>();
+  seatsSeen = new WeakSet<D1Database>();
+  seatsMissingSaid = false;
+}
+
+// run(true) reads with the seats table; when the table is missing, run(false)
+// reads without it, and for SEATS_RECHECK_MS after that run(false) is all that
+// is sent. Any other fault is passed on, a missing entitlement_tiers among
+// them, so withTiers outside it answers that one as before.
+export async function withSeats<T>(db: D1Database, run: (seats: boolean) => Promise<T>, now: Date = new Date()): Promise<T> {
+  if (seatsRecentlyMissing(db, now)) return run(false);
+  try {
+    const out = await run(true);
+    seatsSeen.add(db);
+    return out;
+  } catch (e) {
+    if (!missingSeats(e)) throw e;
+    seatsMissingAt.set(db, now.getTime());
+    saySeatsMissing();
+    return run(false);
+  }
+}
+
+// Whether the seats table is on the database. A true answer is kept for the
+// isolate's life; a missing table is remembered as withSeats remembers it, so
+// a page that has just read a plan asks nothing more either way.
+export async function seatsReady(env: Pick<Env, "ACCOUNTS">, now: Date = new Date()): Promise<boolean> {
+  const db = env.ACCOUNTS;
+  if (!db) return false;
+  if (seatsSeen.has(db)) return true;
+  if (seatsRecentlyMissing(db, now)) return false;
+  try {
+    await db.prepare("SELECT 1 AS x FROM seats LIMIT 1").first();
+    seatsSeen.add(db);
+    return true;
+  } catch (e) {
+    if (missingSeats(e)) seatsMissingAt.set(db, now.getTime());
+    return false;
+  }
+}
+
 // An entitlement as the statements of one batch (a D1 batch is one
 // transaction): the entitlements row, which says pro for Ultra, and for Ultra
 // its tier row. So a tier row never exists without its entitlement, and an
@@ -249,24 +353,101 @@ export function entitlementWrites(db: D1Database, r: EntitlementWrite): D1Prepar
     : [row];
 }
 
+// The plan and the group in one statement (PLAN_ROWS_SQL, ?1 the account's id,
+// one bound value), three halves told apart by via:
+// - own: the account's own entitlements, as ENTITLEMENTS_SQL reads them;
+// - held: the holder's own entitlements when this account holds a live seat,
+//   with the holder's id and address, whether the holder is active and not
+//   blocked (holder_ok, 1 or 0), and the seat's id. The LEFT JOIN keeps one row
+//   for a holder with no entitlement, whose plan is NULL and so no plan;
+// - seat: the group's live seats, the holder's when this account holds one,
+//   else this account's own as a holder.
+// For an account with no seat and no member the second half is one probe of
+// idx_seats_member_live and the third two (that index, then idx_seats_holder),
+// and neither returns a row.
+const planRowsSql = (tiers: boolean): string => {
+  const plan = tiers ? "COALESCE(t.tier, e.plan)" : "e.plan";
+  const tier = tiers ? " LEFT JOIN entitlement_tiers t ON t.entitlement_id = e.id" : "";
+  return (
+    `SELECT 'own' AS via, e.id, ${plan} AS plan, e.starts_at, e.ends_at, e.created_at, e.revoked_at, ` +
+    "NULL AS holder_id, NULL AS holder_email, NULL AS holder_ok, NULL AS member_id, NULL AS joined_at, NULL AS seat_id " +
+    `FROM entitlements e${tier} WHERE e.user_id = ?1 ` +
+    "UNION ALL " +
+    `SELECT 'held', e.id, ${plan}, e.starts_at, e.ends_at, e.created_at, e.revoked_at, ` +
+    "s.holder_id, h.email, h.status = 'active' AND NOT EXISTS (SELECT 1 FROM account_blocks b WHERE b.user_id = s.holder_id), " +
+    "NULL, NULL, s.id " +
+    `FROM seats s JOIN users h ON h.id = s.holder_id LEFT JOIN entitlements e ON e.user_id = s.holder_id${tier} ` +
+    "WHERE s.member_id = ?1 AND s.ended_at IS NULL " +
+    "UNION ALL " +
+    "SELECT 'seat', NULL, NULL, NULL, NULL, NULL, NULL, g.holder_id, NULL, NULL, g.member_id, g.joined_at, g.id " +
+    "FROM seats g " +
+    "WHERE g.holder_id = COALESCE((SELECT holder_id FROM seats WHERE member_id = ?1 AND ended_at IS NULL), ?1) " +
+    "AND g.member_id IS NOT NULL AND g.ended_at IS NULL"
+  );
+};
+export const PLAN_ROWS_SQL = planRowsSql(true);
+export const PLAN_ROWS_SQL_NO_TIERS = planRowsSql(false);
+
+type PlanRow = EntitlementRow & {
+  via?: "own" | "held" | "seat"; holder_id?: string | null; holder_email?: string | null; holder_ok?: number | null;
+  member_id?: string | null; joined_at?: string | null; seat_id?: string | null;
+};
+
+// The holder's live seats in the order they were joined, then by id: the
+// order the plan covers them in.
+const byJoinThenId = (a: PlanRow, b: PlanRow): number =>
+  (a.joined_at ?? "") === (b.joined_at ?? "") ? ((a.seat_id ?? "") < (b.seat_id ?? "") ? -1 : 1) : (a.joined_at ?? "") < (b.joined_at ?? "") ? -1 : 1;
+
+// The plan, the seat and the group from the rows of PLAN_ROWS_SQL. A member
+// takes the plan the holder's own rows give while the seat is covered; its own
+// plan wins when it is as high (the operator's grant: no plan is above Ultra,
+// the one plan with member seats), and the account is then in no group. A
+// holder whose plan covers at least one seat leads a group.
+type SeatPlan = { state: { plan: Plan; until: string | null }; seat?: SeatState; group?: Group };
+
+function seatPlan(userId: string, rows: readonly PlanRow[], now: Date): SeatPlan {
+  const own = planFromRows(rows.filter((r) => r.via === "own"), now);
+  const held = rows.filter((r) => r.via === "held");
+  const live = rows.filter((r) => r.via === "seat" && r.member_id).sort(byJoinThenId);
+  if (held.length) {
+    const h = held[0];
+    const given = planFromRows(held, now);
+    const covered = live.slice(0, memberSeats(given.plan)).map((r) => r.member_id as string);
+    const ok = !!h.holder_ok && covered.includes(userId) && planRank(given.plan) > planRank(own.plan);
+    const seat: SeatState = { id: h.seat_id as string, holderId: h.holder_id as string, holderEmail: h.holder_email ?? "", covered: ok };
+    if (!ok) return { state: own, seat };
+    const holderId = h.holder_id as string;
+    return { state: given, seat, group: { holderId, ids: [holderId, ...covered], position: 1 + covered.indexOf(userId) } };
+  }
+  const covered = live.slice(0, memberSeats(own.plan)).map((r) => r.member_id as string);
+  return covered.length ? { state: own, group: { holderId: userId, ids: [userId, ...covered], position: 0 } } : { state: own };
+}
+
 // planFor(user, now): the plan from the entitlements rows, with the cache on
 // users brought up to date when it differs. The cache holds Ultra as pro
 // (cachedPlanOf), and is compared the same way, so an Ultra account's cache
 // is not rewritten on every request. A read that fails answers the last
 // known plan instead; through such an outage an Ultra account is served as
 // Pro, and nothing is granted that was not paid for.
+//
+// One statement whatever the account: PLAN_ROWS_SQL, or today's
+// ENTITLEMENTS_SQL while the seats table is missing. A covered member's cache
+// says pro with the holder's end, as an Ultra holder's does.
 export async function planFor(env: Env, user: PlanHolder, now: Date = new Date()): Promise<PlanState> {
   const db = env.ACCOUNTS;
   if (!db) return { ...lastKnownPlan(user, now), source: "last_known" };
-  let rows: EntitlementRow[];
+  let read: { rows: PlanRow[]; seats: boolean };
   try {
-    rows = await withTiers(async (tiers) =>
-      (await db.prepare(tiers ? ENTITLEMENTS_SQL : ENTITLEMENTS_SQL_NO_TIERS).bind(user.id).all<EntitlementRow>()).results ?? []);
+    read = await withTiers((tiers) => withSeats(db, async (seats) => {
+      const sql = seats ? (tiers ? PLAN_ROWS_SQL : PLAN_ROWS_SQL_NO_TIERS) : tiers ? ENTITLEMENTS_SQL : ENTITLEMENTS_SQL_NO_TIERS;
+      return { seats, rows: (await db.prepare(sql).bind(user.id).all<PlanRow>()).results ?? [] };
+    }, now));
   } catch {
     console.error("account plan: entitlements unreadable, last known plan used");
     return { ...lastKnownPlan(user, now), source: "last_known" };
   }
-  const state = planFromRows(rows, now);
+  // Without the seats table every row is the account's own.
+  const { state, seat, group }: SeatPlan = read.seats ? seatPlan(user.id, read.rows, now) : { state: planFromRows(read.rows, now) };
   const cached = cachedPlanOf(state.plan);
   if (cached !== user.plan || state.until !== user.plan_until) {
     try {
@@ -275,7 +456,7 @@ export async function planFor(env: Env, user: PlanHolder, now: Date = new Date()
       // The cache is behind for now; the rows still decided this answer.
     }
   }
-  return { ...state, source: "entitlements" };
+  return { ...state, source: "entitlements", ...(seat ? { seat } : {}), ...(group ? { group } : {}) };
 }
 
 // allowed(user, feature): whether the user's plan allows a feature. For a

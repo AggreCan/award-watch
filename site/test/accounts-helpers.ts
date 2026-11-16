@@ -7,7 +7,7 @@ import { env } from "cloudflare:test";
 import { beforeAll } from "vitest";
 import accountsSchema from "../accounts_schema.sql?raw";
 import accountsDev from "../seed/accounts_dev.sql?raw";
-import { forgetTiers } from "../src/account/entitlements";
+import { forgetSeats, forgetTiers } from "../src/account/entitlements";
 import { app } from "../src/index";
 import { testEnv } from "./assets";
 import { homeRequest } from "./home";
@@ -167,6 +167,27 @@ export async function withoutTiers<T>(fn: () => Promise<T>): Promise<T> {
       await ACCOUNTS.batch(kept.map((r) => ACCOUNTS.prepare("INSERT OR IGNORE INTO entitlement_tiers (entitlement_id, tier) VALUES (?, ?)").bind(r.entitlement_id, r.tier)));
     }
     forgetTiers();
+  }
+}
+
+// The seats table taken off the database for the length of fn, then made
+// again from accounts_schema.sql with its rows put back: the database before
+// the operator applies the schema. The isolate's memory of the table, seen or
+// missing, goes with it.
+export const SEATS_SCHEMA = statements(accountsSchema).filter((s) => /\bseats\b/.test(s));
+export async function withoutSeats<T>(fn: () => Promise<T>): Promise<T> {
+  const kept = (await ACCOUNTS.prepare("SELECT * FROM seats").all<Record<string, unknown>>()).results ?? [];
+  await ACCOUNTS.prepare("DROP TABLE IF EXISTS seats").run();
+  forgetSeats();
+  try {
+    return await fn();
+  } finally {
+    await ACCOUNTS.batch(SEATS_SCHEMA.map((s) => ACCOUNTS.prepare(s)));
+    for (const row of kept) {
+      const cols = Object.keys(row);
+      await ACCOUNTS.prepare(`INSERT INTO seats (${cols.join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`).bind(...cols.map((c) => row[c])).run();
+    }
+    forgetSeats();
   }
 }
 

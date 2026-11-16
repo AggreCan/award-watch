@@ -643,3 +643,44 @@ CREATE TABLE IF NOT EXISTS view_deliveries (
 CREATE INDEX IF NOT EXISTS idx_view_deliveries_view ON view_deliveries(view_id, id);
 -- The run's sweep of the rows past 90 days.
 CREATE INDEX IF NOT EXISTS idx_view_deliveries_sent ON view_deliveries(sent_at);
+
+-- Seats (src/account/seats.ts; docs/accounts.md, Seats): the people a paid plan with more than one
+-- seat is given to, one row an invitation and, once taken, the seat it became. holder_id is the
+-- account whose own entitlements give the plan, the only one that invites; its own seat has no row.
+-- While the row is an invitation (member_id NULL, ended_at NULL, expires_at ahead) it keeps the
+-- invited address (email, trimmed and lower-cased) and SHA-256 of its link's secret (token_hash);
+-- the secret itself is never stored. Taking it writes member_id and joined_at and clears email and
+-- token_hash in the same statement. A decline or a cancellation sets ended_at and ended_why and
+-- clears token_hash; an invitation that ran out needs no write. A seat ends with ended_at and
+-- ended_why: left, removed, deleted (the member's account), closed (the holder's account) or
+-- operator. One live seat a person, held by idx_seats_member_live, which a second join made at the
+-- same moment cannot pass. Nothing here names a plan, a price, a subscription or a count: planFor
+-- (entitlements.ts) reads the holder's own entitlements and the group's seats beside the member's
+-- rows, and every pooled figure is counted from the tables that hold the items. told is what the
+-- seat notices last told the member (1: the seat gives the plan, which taking it says; 0: it gives
+-- none, or it ended), told_at when. Rows go 30 days after they end, and an invitation never taken
+-- 30 days after it was sent (signin.ts sweep); either account's deletion ends its rows and clears
+-- any address on them.
+CREATE TABLE IF NOT EXISTS seats (
+  id TEXT PRIMARY KEY,
+  holder_id TEXT NOT NULL REFERENCES users(id),
+  email TEXT,                                    -- the invited address while an invitation; NULL once taken or closed
+  token_hash TEXT,                               -- SHA-256 of the link's secret while the link can be used
+  lang TEXT NOT NULL CHECK (lang IN ('en', 'fr')),  -- the invitation's language, chosen by the holder
+  invited_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,                      -- invited_at plus SEAT_INVITE_DAYS
+  member_id TEXT REFERENCES users(id),
+  joined_at TEXT,
+  ended_at TEXT,
+  ended_why TEXT CHECK (ended_why IS NULL OR ended_why IN ('declined', 'cancelled', 'left', 'removed', 'deleted', 'closed', 'operator')),
+  told INTEGER NOT NULL DEFAULT 1 CHECK (told IN (0, 1)),
+  told_at TEXT,
+  CHECK ((member_id IS NULL) = (joined_at IS NULL))
+);
+-- One live seat a person; planFor's read of an account's seat goes through it.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_seats_member_live ON seats(member_id) WHERE member_id IS NOT NULL AND ended_at IS NULL;
+-- A holder's seats: the group (planFor), the Seats page, the seats in use and the joins counted inside
+-- each insert, all by the holder.
+CREATE INDEX IF NOT EXISTS idx_seats_holder ON seats(holder_id, ended_at, joined_at);
+-- The invitations an address has had from a holder in 30 days, and the deletion of an address's rows.
+CREATE INDEX IF NOT EXISTS idx_seats_email ON seats(email, invited_at) WHERE email IS NOT NULL;

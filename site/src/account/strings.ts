@@ -153,6 +153,14 @@ export const ACCOUNT_STRINGS = {
   "account.plan_pro_until": { en: "Pro, until {date}", fr: "Pro, jusqu'au {date}" },
   "account.plan_ultra_open": { en: "Ultra, no end date", fr: "Ultra, sans date de fin" },
   "account.plan_ultra_until": { en: "Ultra, until {date}", fr: "Ultra, jusqu'au {date}" },
+  // The overview's plan line for an account holding a seat (pages.tsx overviewPlanLine; docs/accounts.md,
+  // Seats): a seat that gives the plan names its holder in place of the end date, which is the holder's
+  // billing; one that gives no plan says so, with the account's own plan line as {plan}.
+  "account.plan_seat": { en: "{plan}, a seat on the subscription of {holder}", fr: "{plan}, siège de l'abonnement de {holder}" },
+  "seat.uncovered": {
+    en: "You hold a seat on the subscription of {holder}, which gives no plan now. Your account is on {plan}.",
+    fr: "Vous occupez un siège de l'abonnement de {holder}, qui ne donne aucun forfait pour le moment. Votre compte est au forfait {plan}.",
+  },
   // The overview's row: the saved searches and the briefings share the plan's figure, so it counts both.
   "account.searches": { en: "Saved searches and briefings", fr: "Recherches enregistrées et bulletins" },
   "account.searches_n": { en: "{n} of {cap}", fr: "{n} sur {cap}" },
@@ -1252,6 +1260,34 @@ export const ACCOUNT_STRINGS = {
   "admin.device_tablet": { en: "tablet", fr: "tablette" },
   "admin.device_unknown": { en: "unknown", fr: "inconnu" },
   "admin.sign_out_all": { en: "Sign out everywhere", fr: "Déconnecter partout" },
+  // The user page's Seats panel (admin.tsx SeatsPanel; docs/accounts.md, Seats), read only: the rows the
+  // account gives as a holder and the seat it holds as a member, shown only when either exists.
+  "admin.panel_seats": { en: "Seats", fr: "Sièges" },
+  "admin.seats_holder": {
+    en: "{n} of {cap} seats: this account, {members} members, {open} invitations open",
+    fr: "{n} sièges sur {cap} : ce compte, {members} membres, {open} invitations ouvertes",
+  },
+  "admin.seats_member": { en: "A seat on {holder} since {date}; it gives {plan} now", fr: "Un siège de {holder} depuis le {date}; il donne {plan} maintenant" },
+  "admin.seats_member_none": {
+    en: "A seat on {holder} since {date}; it gives no plan now",
+    fr: "Un siège de {holder} depuis le {date}; il ne donne aucun forfait maintenant",
+  },
+  "admin.seat_col_invited": { en: "Invited", fr: "Invitation" },
+  "admin.seat_col_joined": { en: "Joined", fr: "Arrivée" },
+  "admin.seat_col_ended": { en: "Ended", fr: "Fin" },
+  "admin.seat_col_why": { en: "Why it ended", fr: "Motif de fin" },
+  "admin.seat_covered": { en: "Taken, gives the plan", fr: "Occupé, donne le forfait" },
+  "admin.seat_uncovered": { en: "Taken, without the plan for now", fr: "Occupé, sans le forfait pour le moment" },
+  "admin.seat_invited": { en: "Invited, link works until {date}", fr: "Invitation, lien valable jusqu'au {date}" },
+  "admin.seat_expired": { en: "Invitation expired", fr: "Invitation expirée" },
+  "admin.seat_ended": { en: "Ended", fr: "Terminé" },
+  "admin.seat_why_declined": { en: "declined", fr: "refusée" },
+  "admin.seat_why_cancelled": { en: "cancelled by the holder", fr: "annulée par l'abonné" },
+  "admin.seat_why_left": { en: "left", fr: "quitté" },
+  "admin.seat_why_removed": { en: "removed by the holder", fr: "retiré par l'abonné" },
+  "admin.seat_why_deleted": { en: "member deleted", fr: "membre supprimé" },
+  "admin.seat_why_closed": { en: "holder deleted", fr: "abonné supprimé" },
+  "admin.seat_why_operator": { en: "ended by the operator", fr: "terminé par l'exploitant" },
   "admin.panel_searches": { en: "Saved Searches", fr: "Recherches enregistrées" },
   "admin.searches_none": { en: "No saved searches.", fr: "Aucune recherche enregistrée." },
   "admin.d_sent": { en: "sent ({n} records)", fr: "envoyé ({n} fiches)" },

@@ -72,11 +72,12 @@ import { type LiveSubscription, type PaidCharge, operatorStripe } from "./admin_
 import { endForDeletion } from "./billing";
 import { BriefingsOverviewPanel, BriefingsUserPanels } from "./briefing_pages";
 import { type BriefingOverview, briefingOverview, userBriefings } from "./briefings";
-import { type PlanState, isPlan, planFor } from "./entitlements";
+import { PLAN_SEATS, type PlanState, isPlan, planFor } from "./entitlements";
 import { type FeedCounts, type FeedView, feedCounts, userFeeds } from "./feeds";
 import { CLAIM_TOP_N, type Claim, type ClaimOverview, claimDetail, claimOverview } from "./org_claim";
 import { planLabel } from "./pages";
 import { deleteAccount } from "./routes";
+import { type AccountSeats, type HeldSeat, seatsOfAccount } from "./seats";
 import {
   MAIL_CHECK_TEMPLATES, type MailCheckOutcome, type MailCheckTemplate, mailCheckTo, mailCheckTokenAdmits, runMailCheck,
 } from "./mail_check";
@@ -683,6 +684,8 @@ type UserState = {
   claim?: Claim | false | null;
   // The account's weekly briefings and their runs (briefings.ts), never the stop secret; null without the tables.
   briefings?: Awaited<ReturnType<typeof userBriefings>>;
+  // The account's seats as a holder and as a member (seats.ts); null without the table.
+  seats?: AccountSeats | null;
 };
 
 function blockLine(lang: Lang, block: BlockRow | null): string {
@@ -722,6 +725,62 @@ function subscriptionPanel(lang: Lang, d: UserDetail, s: UserState) {
         </div>
       ) : null}
       <p class="muted small">{t(lang, "admin.card_note")}</p>
+    </Panel>
+  );
+}
+
+const SEAT_WHY: Record<string, Key> = {
+  declined: "admin.seat_why_declined", cancelled: "admin.seat_why_cancelled", left: "admin.seat_why_left", removed: "admin.seat_why_removed",
+  deleted: "admin.seat_why_deleted", closed: "admin.seat_why_closed", operator: "admin.seat_why_operator",
+};
+
+// The account's seats (seats.ts seatsOfAccount; docs/accounts.md, Seats), read
+// only: the rows it gives as a holder, each member's address leading to that
+// account's page, the ended ones of the last 30 days muted; and the seat it
+// holds as a member, its holder's address leading to the holder's page. Left
+// out for an account with neither and while the table is not on the database,
+// so the page reads as before for every account no seat row names.
+function seatsPanel(lang: Lang, d: UserDetail, s: UserState, now: Date) {
+  const seats = s.seats;
+  if (!seats || (!seats.held.length && !seats.member)) return null;
+  const at = now.toISOString();
+  const plan = s.plan;
+  // The members this account's plan covers now, as planFor read them; none while
+  // the account is blocked or deleted, as each member's own read finds it.
+  const covered = new Set(plan.group?.position === 0 && !d.block && d.user.status === "active" ? plan.group.ids.slice(1) : []);
+  const live = seats.held.filter((r) => r.member_id && !r.ended_at);
+  const open = seats.held.filter((r) => !r.member_id && !r.ended_at && r.expires_at > at);
+  const state = (r: HeldSeat): string =>
+    r.ended_at ? t(lang, "admin.seat_ended")
+      : r.member_id ? t(lang, covered.has(r.member_id) ? "admin.seat_covered" : "admin.seat_uncovered")
+      : r.expires_at > at ? t(lang, "admin.seat_invited", { date: day(r.expires_at) }) : t(lang, "admin.seat_expired");
+  const cells = (r: HeldSeat): unknown[] => {
+    const row = [
+      r.member_id ? <a href={`/admin/users/${r.member_id}`}>{r.member_email}</a> : r.email ?? <span class="muted">-</span>,
+      state(r), <span class="mono">{day(r.invited_at)}</span>, <span class="mono">{day(r.joined_at)}</span>,
+      <span class="mono">{day(r.ended_at)}</span>, r.ended_why && SEAT_WHY[r.ended_why] ? t(lang, SEAT_WHY[r.ended_why]) : "",
+    ];
+    return r.ended_at ? row.map((cell) => <span class="muted">{cell as any}</span>) : row;
+  };
+  const m = seats.member;
+  const name = plan.plan === "ultra" ? t(lang, "ultra.tag") : plan.plan === "pro" ? t(lang, "pro.tag") : t(lang, "account.plan_free");
+  return (
+    <Panel title={t(lang, "admin.panel_seats")} count={fmtInt(seats.held.length + (m ? 1 : 0), lang)}>
+      {seats.held.length ? (
+        <>
+          <p>{t(lang, "admin.seats_holder", {
+            n: fmtInt(1 + live.length + open.length, lang), cap: fmtInt(PLAN_SEATS[plan.plan], lang),
+            members: fmtInt(live.length, lang), open: fmtInt(open.length, lang),
+          })}</p>
+          <Table heads={[t(lang, "admin.col_address"), t(lang, "admin.col_state"), t(lang, "admin.seat_col_invited"), t(lang, "admin.seat_col_joined"),
+            t(lang, "admin.seat_col_ended"), t(lang, "admin.seat_col_why")]} rows={seats.held.map(cells)} />
+        </>
+      ) : null}
+      {m ? (
+        <p>{tj(lang, plan.seat?.covered ? "admin.seats_member" : "admin.seats_member_none", {
+          holder: <a href={`/admin/users/${m.holder_id}`}>{m.holder_email}</a>, date: <span class="mono">{day(m.joined_at)}</span>, plan: name,
+        })}</p>
+      ) : null}
     </Panel>
   );
 }
@@ -802,6 +861,7 @@ function userView(lang: Lang, op: Account, d: UserDetail, s: UserState, now: Dat
         )}
       </Panel>
       {subscriptionPanel(lang, d, s)}
+      {seatsPanel(lang, d, s, now)}
       <Panel title={t(lang, "admin.panel_sessions")}>
         <dl class="wide">
           <dt>{t(lang, "account.field_sessions")}</dt><dd>{fmtInt(d.sessions.live, lang)}</dd>
@@ -917,13 +977,14 @@ async function userPage(c: Context<AppEnv>, id: string, extra: Partial<UserState
   const claim = await claimDetail(c.env, id);
   const briefings = await userBriefings(c.env, id);
   const plan = await planFor(c.env, d.user, now);
+  const seats = await seatsOfAccount(c.env, id, now);
   const stripe = operatorStripe(c.env);
   const live = stripe && d.payment?.subscription_id ? await stripe.subscription(d.payment.subscription_id) : undefined;
   const m = c.req.query("m") ?? "";
   const notice = extra.notice !== undefined ? extra.notice
     : NOTICE[m] ? t(lang, NOTICE[m], { n: fmtInt(Number(c.req.query("n") ?? "0") || 0, lang) }) : null;
   const title = d.user.status === "active" ? d.user.email : t(lang, "admin.deleted_title");
-  return adminPage(c, title, userView(lang, operatorOf(c), d, { ...extra, plan, stripeOn: !!stripe, live, notice, feeds, claim, briefings }, now), extra.status ?? 200);
+  return adminPage(c, title, userView(lang, operatorOf(c), d, { ...extra, plan, stripeOn: !!stripe, live, notice, feeds, claim, briefings, seats }, now), extra.status ?? 200);
 }
 
 admin.get("/users/:id", (c) => {

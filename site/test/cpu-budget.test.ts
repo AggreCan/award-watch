@@ -160,7 +160,8 @@ async function accountsStub(): Promise<D1Database> {
     id: SESSION_ID, token_hash: await sha256Hex(SESSION_SECRET), expires_at: "2999-01-01T00:00:00.000Z", revoked_at: null, last_seen_at: now,
     user_id: "u-cpu", email: "reader@example.com", lang: "en", status: "active", plan: "pro", plan_until: null, created_at: now,
   };
-  const pro = { id: "e-cpu", plan: "pro", starts_at: "2026-01-01T00:00:00.000Z", ends_at: null, created_at: "2026-01-01T00:00:00.000Z", revoked_at: null };
+  // The plan statement's own half (entitlements.ts PLAN_ROWS_SQL): the account's own row, no seat.
+  const pro = { via: "own", id: "e-cpu", plan: "pro", starts_at: "2026-01-01T00:00:00.000Z", ends_at: null, created_at: "2026-01-01T00:00:00.000Z", revoked_at: null };
   return stubDb((sql) => (sql.includes("FROM sessions s JOIN users u") ? [session] : sql.includes("FROM entitlements") ? [pro] : []));
 }
 // A record for every row a page asks for: two sources and a similar name,
@@ -640,7 +641,7 @@ function ultraAccounts(tokenHash: string, tiles: readonly Record<string, unknown
   const all = (sql: string): Record<string, unknown>[] => {
     if (sql.includes("FROM sessions s JOIN users u")) return [session];
     if (sql.includes("FROM entitlements e LEFT JOIN entitlement_tiers")) {
-      return [{ id: "e-ultra", plan: "ultra", starts_at: "2026-01-01T00:00:00.000Z", ends_at: null, created_at: "2026-01-01T00:00:00.000Z", revoked_at: null }];
+      return [{ via: "own", id: "e-ultra", plan: "ultra", starts_at: "2026-01-01T00:00:00.000Z", ends_at: null, created_at: "2026-01-01T00:00:00.000Z", revoked_at: null }];
     }
     // The account's one dashboard (dashboard.tsx BOARDS_SQL), then its tiles (TILES_SQL): both statements name both tables.
     if (sql.startsWith("SELECT d.id, d.name")) return [{ id: "b".repeat(32), name: "", pos: 0, created_at: at, n: tiles.length }];

@@ -29,7 +29,7 @@ import type { Context, Next } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { AppEnv, Env } from "../env";
 import type { Lang } from "../i18n";
-import { type Plan, isPaidPlan, lastKnownPlan, planFor } from "./entitlements";
+import { type Group, type Plan, type SeatState, isPaidPlan, lastKnownPlan, planFor } from "./entitlements";
 import { newId, plusDays, randomHex, sameHash, sha256Hex } from "./secrets";
 import { accountsEnabled } from "./switch";
 
@@ -55,6 +55,11 @@ export type Account = {
   csrf: string;
   // True when the database could not be read and the last known state answered.
   stale: boolean;
+  // The account's live seat on another account's subscription, and the group
+  // its plan is read in (entitlements.ts planFor); absent for an account with
+  // neither, which is every account until a seat is taken.
+  seat?: SeatState;
+  group?: Group;
 };
 
 // ended: the cookie's own session, revoked elsewhere while the account stands
@@ -256,7 +261,11 @@ async function lookup(c: Context<AppEnv>): Promise<SessionRead> {
       // is known here without the database (lastKnownPlan, as planFor uses on
       // an outage): an entitlement that has ended is closed, outage or not.
       const held = lastKnownPlan({ id: known.account.userId, plan: known.account.plan, plan_until: known.account.planUntil }, now);
-      return { state: "ok", account: { ...known.account, plan: held.plan, planUntil: held.until, stale: true } };
+      // A plan that has ended takes its group with it, and a seat that gave it gives nothing now.
+      const { seat, group, ...rest } = known.account;
+      const lapsed = held.plan !== known.account.plan;
+      const kept = lapsed ? (seat ? { seat: { ...seat, covered: false } } : {}) : { ...(seat ? { seat } : {}), ...(group ? { group } : {}) };
+      return { state: "ok", account: { ...rest, ...kept, plan: held.plan, planUntil: held.until, stale: true } };
     }
     console.error("account session: database unreadable");
     return { state: "unavailable" };
@@ -273,6 +282,7 @@ async function lookup(c: Context<AppEnv>): Promise<SessionRead> {
   const account: Account = {
     userId: row.user_id, email: row.email, lang: row.lang === "fr" ? "fr" : "en", createdAt: row.created_at,
     plan: plan.plan, planUntil: plan.until, sessionId: id, csrf: await csrfFor(secret), stale: false,
+    ...(plan.seat ? { seat: plan.seat } : {}), ...(plan.group ? { group: plan.group } : {}),
   };
   let expiresAt = row.expires_at;
   if (accountsEnabled(c.env) && now.getTime() - Date.parse(row.last_seen_at) > TOUCH_MS) {

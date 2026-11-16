@@ -155,6 +155,7 @@ import {
   pendingInterest, setDelivery,
 } from "./searches";
 import { GROUP_TAGS_MAX, GROUP_TAG_CHARS, USER_RE, provenBy, readGroupTags } from "./group_stop";
+import { endSeatsOf } from "./seats";
 import { randomHex, sameHash, sha256Hex, ipHash } from "./secrets";
 import { isLocalHost, senderFor, signInMessage } from "./sender";
 import {
@@ -1801,13 +1802,16 @@ account.get("/delete", async (c) => {
 // an organization, the weekly email's row and sign-in requests are deleted;
 // so are the address's rows in the alerts form's table. The entitlement rows
 // stay, tied to the id alone, as the record of what was granted. The
-// dashboard's panels, the saved views (with their runs), the watches, the
-// claim, the briefings, the weekly email and the feeds go first, each on its
-// own, so a database without their tables yet still deletes the rest.
+// seats on both sides end (seats.ts endSeatsOf: the ones it gives and the one
+// it holds, and the invitations to its address go), then the dashboard's
+// panels, the saved views (with their runs), the watches, the claim, the
+// briefings, the weekly email and the feeds go, each on its own, so a
+// database without their tables yet still deletes the rest.
 export async function deleteAccount(c: Context<AppEnv>, who: Account, now = new Date()): Promise<void> {
   const db = c.env.ACCOUNTS!;
   const at = now.toISOString();
   const tomb = `deleted:${await sha256Hex(`${randomHex(32)}\n${who.email}`)}`;
+  await endSeatsOf(c.env, who.userId, who.email, now);
   await deletePanelsOf(c.env, who.userId);
   await deleteViewsOf(c.env, who.userId);
   await deleteWatchesOf(c.env, who.userId);

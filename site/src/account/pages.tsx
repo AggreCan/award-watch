@@ -298,6 +298,20 @@ export function planLine(lang: Lang, account: Pick<Account, "plan" | "planUntil"
   return planLabel(lang, account);
 }
 
+// The overview's plan line (docs/accounts.md, Seats). An account whose plan is
+// a seat's names the subscription's holder in place of the end date, which is
+// the holder's billing; an account holding a seat that gives it no plan is
+// told so, with its own plan line. Every other account reads planLine.
+export function overviewPlanLine(lang: Lang, account: Pick<Account, "plan" | "planUntil" | "seat" | "group">, billing?: BillingLine | null): string {
+  const seat = account.seat;
+  if (seat && account.group && account.group.position > 0) {
+    const plan = account.plan === "ultra" ? t(lang, "ultra.tag") : account.plan === "pro" ? t(lang, "pro.tag") : t(lang, "account.plan_free");
+    return t(lang, "account.plan_seat", { plan, holder: seat.holderEmail });
+  }
+  if (seat && !seat.covered) return t(lang, "seat.uncovered", { holder: seat.holderEmail, plan: planLine(lang, account, billing) });
+  return planLine(lang, account, billing);
+}
+
 type OverviewCounts = {
   // searches: the saved searches and the briefings, which share cap (searches.ts heldCount).
   sessions: number; searches: number; cap: number; keys: number;
@@ -482,7 +496,7 @@ export function overviewView(
         <dl class="wide">
           <dt>{t(lang, "account.field_email")}</dt><dd>{account.email}</dd>
           <dt>{t(lang, "account.field_plan")}</dt>
-          <dd>{planLine(lang, account, extra.billing)}</dd>
+          <dd>{overviewPlanLine(lang, account, extra.billing)}</dd>
           <dt>{t(lang, "billing.field")}</dt>
           <dd><a href="/account/billing">{t(lang, stripe ? "billing.manage" : "billing.link_plans")}</a></dd>
           <dt>{t(lang, "account.field_since")}</dt><dd class="mono">{day(account.createdAt)}</dd>
