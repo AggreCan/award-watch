@@ -83,12 +83,15 @@ export const ORG_CLAIM_CSV = /^\/account\/organization\/[a-z]+\.csv$/;
 const BILLING_POSTS = new Set(["/account/billing/checkout", "/account/billing/portal", "/account/billing/refund"]);
 // The dashboard's posts (account/dashboard.tsx): each writes the account's
 // layout or its dashboards (a new one, a name, an order, a deletion), so
-// they count in the "edit" bucket, on the accounts terms; so do the saved
-// views' (account/view_pages.tsx): save one, its email, remove it; and the
-// dashboard's read of one tile (DASHBOARD_TILE, a GET).
+// they count in the "edit" bucket, on the accounts terms (with them the
+// checklist's add of tables and a starter's, account/dashboard_doors.tsx);
+// so do the saved views' (account/view_pages.tsx): save one, its email,
+// remove it; and the dashboard's reads (DASHBOARD_READS, GETs): one tile,
+// the find page (the search database's batch) and a subject's checklist (a
+// records batch).
 const DASHBOARD_POSTS =
-  /^\/account\/dashboard\/(?:panels(?:\/[^/]+\/(?:move|width|delete))?|layout|boards(?:\/[^/]+\/(?:rename|move|delete))?|tiles\/[^/]+\/(?:move|size|board|delete|text))$/;
-const DASHBOARD_TILE = /^\/account\/dashboard\/tiles\/[^/]+$/;
+  /^\/account\/dashboard\/(?:panels(?:\/[^/]+\/(?:move|width|delete))?|layout|boards(?:\/[^/]+\/(?:rename|move|delete))?|tiles\/[^/]+\/(?:move|size|board|delete|text)|tables\/(?:buyers|organizations|segments)\/[^/]+|starter)$/;
+const DASHBOARD_READS = /^\/account\/dashboard\/(?:tiles\/[^/]+|find|tables\/(?:buyers|organizations|segments)\/[^/]+)$/;
 const VIEW_POSTS = /^\/account\/views(?:\/[^/]+(?:\/delete)?)?$/;
 // The overview's Sign out on another of the account's browsers (account/routes.tsx).
 const SESSION_POSTS = /^\/account\/sessions\/[^/]+\/sign-out$/;
@@ -108,7 +111,7 @@ export function bucketFor(method: string, path: string): Bucket {
   if (path === "/account/stop" || path === "/interest/stop") return "stop";
   if (method === "POST" && path === "/account/billing/webhook") return "hook";
   if (method === "POST" && (DASHBOARD_POSTS.test(path) || VIEW_POSTS.test(path) || SESSION_POSTS.test(path))) return "edit";
-  if (method === "GET" && DASHBOARD_TILE.test(path)) return "edit";
+  if (method === "GET" && DASHBOARD_READS.test(path)) return "edit";
   if (method === "POST" && (path === "/account/bug" || BILLING_POSTS.has(path))) return "form";
   if (method === "POST" && (path === "/corrections" || path === "/interest" || /^\/organizations\/[^/]+\/respond$/.test(path))) {
     return "form";

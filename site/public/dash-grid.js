@@ -336,5 +336,41 @@ export function place(tiles, t) {
   return compact([...tiles.map((o) => ({ ...o })), clamp({ ...t, x: 0, y: bottom })]);
 }
 
+/**
+ * New tiles placed under the others in their order, side by side from the left while the row has room for the
+ * next (one wider than what is left starts the row under), then compacted: where several added at once go (a
+ * dashboard's checklist of analytics tables, a starter), so half-width tiles pair up. Of several, one left alone in
+ * its row (beside a wider one, or the last of an odd count) takes the whole row, so no row of them leaves its right
+ * part empty. One tile goes where place puts it.
+ * @template {Tile} T @param {readonly T[]} tiles @param {readonly T[]} news @returns {T[]}
+ */
+export function placeAll(tiles, news) {
+  /** @type {T[][]} */
+  const rows = [];
+  let room = 0;
+  for (const n of news) {
+    const t = clamp({ ...n, x: 0, y: 0 });
+    if (!rows.length || t.w > room) {
+      rows.push([t]);
+      room = COLS - t.w;
+    } else {
+      rows[rows.length - 1].push(t);
+      room -= t.w;
+    }
+  }
+  const out = tiles.map((o) => ({ ...o }));
+  let y = tiles.reduce((n, o) => Math.max(n, o.y + o.h), 0);
+  for (const row of rows) {
+    let x = 0;
+    for (const t of row) {
+      const w = row.length === 1 && news.length > 1 ? COLS : t.w;
+      out.push({ ...clamp({ ...t, w }), x, y });
+      x += w;
+    }
+    y += row.reduce((n, t) => Math.max(n, t.h), 0);
+  }
+  return compact(out);
+}
+
 /** Whether a tile takes both columns of the two-column page (below 1,100 px). @param {Tile} t */
 export const takesBoth = (t) => t.w >= BOTH_FROM;

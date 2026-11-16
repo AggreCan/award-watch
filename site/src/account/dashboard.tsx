@@ -84,6 +84,7 @@ import {
   EARLIEST_FY, MAX_YEARS, PERIODS, ULTRA_YEARS, SEGMENT_SOURCES, SOURCE_NUMBER, type Query, type Read, type Row, fiscalLabel, fiscalYearOf, num,
   orgNumber, readRecords, segmentCode, segmentNumber,
 } from "../records_db";
+import { MAX_Q } from "../search_db";
 import { rivalsOf, shareSegmentOf } from "../view_address";
 import { RADAR_PROV_ROWS_END_SQL, RADAR_PROV_TOTAL_SQL, RADAR_ROWS_END_SQL, RADAR_TOTAL_SQL, radarBinds, radarProvBinds } from "../records_tables";
 import { type KeyRow, listKeys } from "./api_keys";
@@ -92,7 +93,7 @@ import { briefingLabel } from "./briefing_pages";
 import { type Briefing, briefingPath, listBriefings, readBriefing, weekAnchor } from "./briefings";
 import { BOARD_NAME_MAX, anchorOf, boardLabels } from "./dashboard_add";
 import { ANALYTIC_BODIES, ROWS_MAX, analyticFit, analyticKey, analyticPlot, tileFit } from "./dashboard_fit";
-import { DASHBOARD_PATH, boardCap, boardPath, holdsDashboard, missingTiles, tileCap } from "./dashboard_rule";
+import { DASHBOARD_PATH, FIND_PATH, STARTER_PATH, boardCap, boardPath, holdsDashboard, missingTiles, tileCap } from "./dashboard_rule";
 import { EVENT_KEY, watchEventLines } from "./digests";
 import { allowed, matchCap, type Plan } from "./entitlements";
 import {
@@ -376,7 +377,7 @@ export async function addPanel(env: Env, who: { userId: string; plan: Plan }, s:
 
 // The starting layout written as the account's panels, in one batch, before a
 // first change is applied to it there; the rows as they then stand.
-async function writeStarter(env: Env, who: { userId: string; plan: Plan }, specs: readonly Spec[], now: Date): Promise<PanelRow[] | null> {
+export async function writeStarter(env: Env, who: { userId: string; plan: Plan }, specs: readonly Spec[], now: Date): Promise<PanelRow[] | null> {
   const db = env.ACCOUNTS!;
   if (specs.length) await db.batch(specs.map((s, i) => addStatement(db, who.userId, who.plan, s, new Date(now.getTime() + i).toISOString())));
   return listPanels(env, who.userId);
@@ -664,7 +665,7 @@ export function sizeKey(kind: PanelKind, ref: string, views: readonly Pick<Saved
 const viewOf = (ref: string, views: readonly Pick<SavedView, "id" | "address">[]) => (ID_RE.test(ref) ? views.find((v) => v.id === ref)?.address ?? "" : ref);
 
 // The grid's own tiles (the size key as their kind) and back.
-const asTile = (s: Shown): Tile => ({ id: s.id, kind: s.key, x: s.x, y: s.y, w: s.w, h: s.h });
+export const asTile = (s: Shown): Tile => ({ id: s.id, kind: s.key, x: s.x, y: s.y, w: s.w, h: s.h });
 function fromTiles(tiles: readonly Tile[], by: ReadonlyMap<string, Omit<Shown, "x" | "y" | "w" | "h">>): Shown[] {
   return tiles.flatMap((t) => {
     const s = by.get(t.id);
@@ -1412,14 +1413,34 @@ async function contextOf(c: Context<AppEnv>, who: Account, h: Holdings, list: re
 
 // -- the page --------------------------------------------------------------------------------
 
-const Csrf: FC<{ account: Account }> = ({ account }) => <input type="hidden" name="csrf" value={account.csrf} />;
+export const Csrf: FC<{ account: Account }> = ({ account }) => <input type="hidden" name="csrf" value={account.csrf} />;
 
 // What a post's ?m= says on the page. {name} is the dashboard ?to= names (where a tile was moved, or could not be).
 const NOTICE: Readonly<Record<string, Key>> = {
   added: "dash.added", exists: "dash.added", full: "dash.full", briefings_full: "dash.briefings_full", unsaved: "dash.unsaved",
   unsaved_layout: "dash.unsaved_layout", boards_full: "dash.boards_full", renamed: "dash.board_renamed", board_deleted: "dash.board_deleted",
   board_emptied: "dash.board_emptied", moved: "dash.moved", move_exists: "dash.move_exists", move_full: "dash.move_full",
-  text_empty: "dash.text_empty", text_unsaved: "dash.text_unsaved",
+  text_empty: "dash.text_empty", text_unsaved: "dash.text_unsaved", started_taken: "dash.started_taken",
+};
+
+// What the checklist's post says (?m=tables, dashboard_doors.tsx tablesPost): how many tables of how many were
+// added, then why the rest were not (on the dashboard already; past its figure), the counts carried in the address.
+export type TablesCount = { n: number; of: number; there: number; full: number };
+export function tablesNotice(lang: Lang, q: TablesCount, cap: number): string {
+  const n = (v: number) => fmtInt(v, lang);
+  const parts = [
+    q.n === 0 ? t(lang, "dash.tables_added_none")
+      : q.n >= q.of ? tn(lang, "dash.tables_added_one", "dash.tables_added", q.n, { n: n(q.n) })
+      : tn(lang, "dash.tables_added_of_one", "dash.tables_added_of", q.n, { n: n(q.n), total: n(q.of) }),
+  ];
+  if (q.there) parts.push(tn(lang, "dash.tables_there_one", "dash.tables_there", q.there, { n: n(q.there) }));
+  if (q.full) parts.push(tn(lang, "dash.tables_full_one", "dash.tables_full", q.full, { n: n(q.full), cap: n(cap) }));
+  return parts.join(" ");
+}
+// A count the address carries, a whole number of three digits at most; anything else reads 0.
+const countIn = (c: Context<AppEnv>, k: string): number => {
+  const v = c.req.query(k) ?? "";
+  return /^[0-9]{1,3}$/.test(v) ? Number(v) : 0;
 };
 
 // The Add select's choices: what the account holds that is not on the
@@ -1489,20 +1510,88 @@ const MorePanel: FC<{ lang: Lang; lines: readonly MoreLine[] }> = ({ lang, lines
 );
 
 // Add a Tile's place on the page, where a removal that empties the dashboard returns.
-const ADD_ANCHOR = "dash-add";
+export const ADD_ANCHOR = "dash-add";
+
+// The starters an empty dashboard offers (Start From, in its Add a Tile):
+// "org" and "ending" fill it in one post (starterPost, dashboard_doors.tsx),
+// "buyer" and "segment" lead to the find page of their kind, whose subject's
+// checklist then opens with every table checked (all=1).
+export const STARTERS = ["org", "buyer", "segment", "ending"] as const;
+export type Starter = (typeof STARTERS)[number];
+
+// The tiles a starter fills an empty dashboard with, in the order they are
+// laid out two to a row: only kinds the account can hold. Your organization:
+// its matching notices and its blocks, with a claim (none without one).
+// Contracts ending: the watches and each window of contracts ending the plan
+// gives (the 6- and 12-month ones are radar_depth's).
+export function starterSpecs(which: Starter, h: Pick<Holdings, "claim">, plan: Plan): Spec[] {
+  const half = (kind: PanelKind, ref: string): Spec => ({ kind, ref, wide: false });
+  if (which === "org") {
+    if (!h.claim) return [];
+    return [...(matchCap(plan) > 0 ? [half("matches", "")] : []), ...CLAIM_BLOCKS.map((b) => half("org", b))];
+  }
+  if (which === "ending") return [half("watches", ""), ...endingWindows(plan).map((w) => half("radar", w))];
+  return [];
+}
+const endingWindows = (plan: Plan): ExpiringWindow[] => EXPIRING_WINDOWS.filter((w) => w === "3m" || allowed({ plan }, "radar_depth"));
+
+// The find page's address from Add a Tile and the starters: the dashboard it
+// adds to once stored, the kind of subject, and all=1 for a starter, whose
+// checklist opens with every table checked.
+export function findHref(board: string | null, kind?: "buyer" | "segment", all = false): string {
+  const q = new URLSearchParams();
+  if (kind) q.set("kind", kind);
+  if (all) q.set("all", "1");
+  if (board) q.set("board", board);
+  const s = q.toString();
+  return s ? `${FIND_PATH}?${s}` : FIND_PATH;
+}
+
+// Start From: each starter a plain link or a link-style post, with a muted
+// line of what it adds. Your organization without a claim leads to the page
+// where one is named (and is left out while that page cannot keep one).
+const Starters: FC<{ lang: Lang; account: Account; h: Holdings; board: string | null }> = ({ lang, account, h, board }) => {
+  const post = (which: Starter, key: Key) => (
+    <form method="post" action={STARTER_PATH} class="dash-start-post">
+      <Csrf account={account} />
+      {board ? <input type="hidden" name="board" value={board} /> : null}
+      <input type="hidden" name="starter" value={which} />
+      <button type="submit" class="btn-link">{t(lang, key)}</button>
+    </form>
+  );
+  const item = (head: unknown, line: string) => <li>{head as any}<span class="muted small">{line}</span></li>;
+  const windows = endingWindows(account.plan);
+  return (
+    <>
+      <p class="dash-adder-part" id="dash-add-start">{t(lang, "dash.start_head")}</p>
+      <ul class="plain dash-starters" aria-labelledby="dash-add-start">
+        {h.claim ? item(post("org", "dash.start_org"), t(lang, "dash.start_org_line", { n: fmtInt(starterSpecs("org", h, account.plan).filter((s) => s.kind === "org").length, lang) }))
+          : h.absent?.claim ? null
+          : item(<a href="/account/organization">{t(lang, "dash.start_org")}</a>, t(lang, "dash.start_org_claim"))}
+        {item(<a href={findHref(board, "buyer", true)}>{t(lang, "dash.start_buyer")}</a>, t(lang, "dash.start_buyer_line"))}
+        {item(<a href={findHref(board, "segment", true)}>{t(lang, "dash.start_segment")}</a>, t(lang, "dash.start_segment_line"))}
+        {item(post("ending", "dash.start_ending"), t(lang, windows.length === EXPIRING_WINDOWS.length ? "dash.start_ending_line" : "dash.start_ending_line_3m"))}
+      </ul>
+    </>
+  );
+};
 
 // Add a Tile: the page's one filled button, a details element, so it opens
 // without the script: the count of tiles, then what can be added in three
 // groups (From Your Lists: the select of what the account holds and Add;
-// Analytics: each table on an analytics page has its own Add to dashboard;
-// Text: a heading or a note typed here, and Add), or why nothing can be added;
-// More Kinds of Tile under it, less the analytics line the Analytics group
-// says already. An emptied dashboard draws it open, as the one thing the page
-// can do. Its posts name the dashboard shown once one is stored (board), so
-// the tile goes there. A text tile is kept only with the grid's tables.
+// Analytics: a search of buyers, organizations and segments, a GET to the
+// find page, whose subject's checklist adds its tables, and the line that
+// each table on an analytics page has its own Add to dashboard; Text: a
+// heading or a note typed here, and Add), or why nothing can be added; More
+// Kinds of Tile under it, less the analytics line the Analytics group says
+// already. An emptied dashboard draws it open, as the one thing the page can
+// do, with Start From first (starters). Its posts and its search name the
+// dashboard shown once one is stored (board), so the tile goes there. A text
+// tile is kept only with the grid's tables.
 const AddTile: FC<{
   lang: Lang; account: Account; h: Holdings; n: number; cap: number; keeping: Keeping; taken: ReadonlySet<string>; more: readonly MoreLine[]; open: boolean;
-}> = ({ lang, account, h, n, cap, keeping, taken, more, open }) => {
+  starters?: boolean;
+}> = ({ lang, account, h, n, cap, keeping, taken, more, open, starters }) => {
   const choices = addChoices(lang, h, taken);
   const board = keeping === "tiles" ? h.board?.id ?? null : null;
   const lines = more.filter((l) => !l.kinds.includes("view"));
@@ -1515,6 +1604,7 @@ const AddTile: FC<{
         {keeping === "none" ? <p class="muted">{t(lang, "dash.unsaved")}</p>
           : n >= cap ? <p>{t(lang, "dash.full", { cap: fmtInt(cap, lang) })}</p>
           : <>
+            {starters ? <Starters lang={lang} account={account} h={h} board={board} /> : null}
             {part("dash-add-lists", "dash.add_lists")}
             {choices.length ? (
               <form method="post" action={`${DASHBOARD_PATH}/panels`} class="stack" aria-labelledby="dash-add-lists">
@@ -1530,6 +1620,14 @@ const AddTile: FC<{
               </form>
             ) : <p class="muted">{t(lang, "dash.none_left")}</p>}
             {part("dash-add-analytics", "dash.add_analytics")}
+            <form method="get" action={FIND_PATH} class="dash-find" role="search" aria-labelledby="dash-add-analytics">
+              {board ? <input type="hidden" name="board" value={board} /> : null}
+              <label class="field">
+                <span class="field-label">{t(lang, "dash.find_label")}</span>
+                <input type="search" name="q" maxlength={MAX_Q} autocomplete="off" />
+              </label>
+              <button type="submit" class="btn">{t(lang, "dash.find")}</button>
+            </form>
             <p class="muted small">{tj(lang, "dash.add_analytics_line", { link: <a href="/analytics">{t(lang, "dash.more_view_link")}</a> }) as any}</p>
             {part("dash-add-text", "dash.add_text")}
             {keeping === "panels" ? <p class="muted small">{t(lang, "dash.text_unsaved")}</p> : (
@@ -1810,7 +1908,8 @@ export function dashboardView(
       {/* The tabs in the head, under the lead: Add a Tile's choices hang below the head's row, so an emptied
           dashboard's open Add a Tile never covers them. */}
       <PageHead lang={lang} title={t(lang, "dash.title")} lead={t(lang, "dash.lead")}
-        actions={<AddTile lang={lang} account={account} h={s.h} n={n} cap={s.cap} keeping={s.keeping} taken={taken} more={more} open={emptied} />}>
+        actions={<AddTile lang={lang} account={account} h={s.h} n={n} cap={s.cap} keeping={s.keeping} taken={taken} more={more} open={emptied}
+          starters={emptied && s.keeping !== "none"} />}>
         {tabs.length ? <BoardTabs lang={lang} account={account} tabs={tabs} cap={s.boards} /> : null}
       </PageHead>
       {s.notice ? <p class="account-notice" role="status">{s.notice}</p> : null}
@@ -1852,7 +1951,7 @@ export function teaseView(lang: Lang, cards: ReturnType<typeof planCards>) {
 
 // The shell of every dashboard response: an account page with the rail's
 // Dashboard item as the current one, at the dashboard's own address.
-async function dashPage(c: Context<AppEnv>, body: unknown, path = DASHBOARD_PATH, status = 200): Promise<Response> {
+export async function dashPage(c: Context<AppEnv>, body: unknown, path = DASHBOARD_PATH, status = 200): Promise<Response> {
   const lang = c.get("lang");
   const stats = await loadStats(c.env).catch(() => null);
   return page(
@@ -1895,8 +1994,9 @@ export async function dashboardPage(c: Context<AppEnv>, who: Account, board: str
   // The dashboard a notice names: the one ?to= names, among the account's.
   const to = c.req.query("to") ?? "";
   const named = tabsOf(lang, h, drawn.length).find((x) => x.id === to)?.label ?? "";
-  const notice = NOTICE[m]
-    ? t(lang, NOTICE[m], { cap: fmtInt(cap, lang), n: fmtInt(BRIEFING_PANELS_MAX, lang), boards: fmtInt(boards, lang), name: named })
+  const notice = m === "tables" ? tablesNotice(lang, { n: countIn(c, "n"), of: countIn(c, "of"), there: countIn(c, "there"), full: countIn(c, "full") }, cap)
+    : m === "started" ? tn(lang, "dash.started_one", "dash.started", countIn(c, "n"), { n: fmtInt(countIn(c, "n"), lang) })
+    : NOTICE[m] ? t(lang, NOTICE[m], { cap: fmtInt(cap, lang), n: fmtInt(BRIEFING_PANELS_MAX, lang), boards: fmtInt(boards, lang), name: named })
     : null;
   return dashPage(c, dashboardView(lang, who, { drawn, h, starter, keeping, notice, cap, boards }), board ? boardPath(board) : DASHBOARD_PATH);
 }
@@ -1932,7 +2032,7 @@ export async function tileFragment(c: Context<AppEnv>, who: Account, id: string)
 // place the change was made (place: a tile's id, or ADD_ANCHOR), so a reader
 // moving a tile down the page with its menu does not scroll back to it after
 // each press; to names the dashboard a notice is about.
-function back(c: Context<AppEnv>, m = "", place: string | null = null, at = DASHBOARD_PATH, to: string | null = null): Response {
+export function back(c: Context<AppEnv>, m = "", place: string | null = null, at = DASHBOARD_PATH, to: string | null = null): Response {
   const q = [m ? `m=${m}` : "", to ? `to=${to}` : "", c.get("lang") === "fr" ? "lang=fr" : ""].filter(Boolean).join("&");
   const anchor = place === null ? "" : place === ADD_ANCHOR ? `#${ADD_ANCHOR}` : `#tile-${place}`;
   return c.redirect(`${at}${q ? `?${q}` : ""}${anchor}`, 303);
@@ -1946,7 +2046,7 @@ function back(c: Context<AppEnv>, m = "", place: string | null = null, at = DASH
 // For an account in a group, null when no dashboard of the account's stands
 // after it: the group's form was refused, the subscription's dashboards being
 // in use, and every tile, having no dashboard to go to, with it.
-async function writeFirst(env: Env, who: Account, tiles: readonly Shown[], now = new Date()): Promise<Map<string, string> | null> {
+export async function writeFirst(env: Env, who: Account, tiles: readonly Shown[], now = new Date()): Promise<Map<string, string> | null> {
   const db = env.ACCOUNTS!;
   const at = now.toISOString();
   const first = pooled(who, BOARD_INSERT_SQL, BOARD_INSERT_GROUP_SQL, [boardCap(who.plan)]);
@@ -1993,7 +2093,7 @@ async function keepLayout(
 }
 
 // A post's board field: a dashboard's id, or none for the account's first; anything else is no dashboard.
-const boardField = (v: unknown): string | null | false => (v === undefined || v === "" ? null : typeof v === "string" && ID_RE.test(v) ? v : false);
+export const boardField = (v: unknown): string | null | false => (v === undefined || v === "" ? null : typeof v === "string" && ID_RE.test(v) ? v : false);
 
 // Add: the tile a page's "Add to dashboard" names (kind and ref) or the Add
 // select's choice (panel, "kind:ref"), checked against what the account

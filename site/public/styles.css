@@ -785,6 +785,42 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ink); width: 1
 .dash-adder-body > .dash-adder-part + * { margin-top: 0; }
 .dash-adder-body > * + .dash-adder-part { padding-top: 12px; border-top: 1px solid var(--border); }
 .dash-adder-body ul { font-size: 13px; line-height: 20px; }
+/* The Analytics group's search: its field and a flat Find on one line, Find under the field when the body is narrow. */
+.dash-find { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin: 0 0 8px; }
+.dash-find .field { flex: 1 1 200px; }
+.dash-find .field-label { overflow: visible; white-space: normal; font-size: 13px; line-height: 20px; color: var(--ink); }
+.dash-find .btn { flex: none; }
+/* Start From on an empty dashboard: each starter a link or a link-style post, what it adds muted under it. */
+.dash-starters li { margin: 0 0 8px; }
+.dash-starters li > .muted { display: block; }
+.dash-start-post { display: inline; margin: 0; }
+/* The find page's matches: a name a line, what tells it apart muted beside it, wrapping under it when narrow. */
+.dash-find-line { margin: 0 0 var(--gutter); }
+.dash-matches { margin: 0; font-size: 14px; line-height: 20px; }
+.dash-matches li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; margin: 0 0 8px; overflow-wrap: anywhere; }
+.dash-matches li:last-child { margin-bottom: 0; }
+/* The checklist: its source and period (a GET, a flat Show), then a table a line, a box before its title and, beside
+   or under it, the share table's segment and why a table is there already or does not apply. */
+.dash-period { margin: 0; border: 0; border-top: 1px solid var(--border); }
+.dash-period > legend { float: left; margin: 0 8px 0 0; padding: 0; }
+.dash-period-pick { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.dash-period-pick select { width: auto; max-width: 100%; }
+.dash-year { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); }
+.dash-checks { margin: 0 0 16px; }
+.dash-checks li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; padding: 4px 0; border-bottom: 1px solid var(--border); }
+.dash-checks li:last-child { border-bottom: 0; }
+.dash-checks .check { color: var(--ink); font-size: 14px; }
+.dash-checks li.is-off .check { color: var(--muted); cursor: default; }
+.dash-check-note { flex: 1 1 240px; min-width: 0; }
+.dash-check-field { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
+.dash-check-field select { width: auto; min-width: 0; max-width: 100%; }
+.dash-checklist > p { margin: 0 0 16px; }
+/* On a phone the dashboard's and the source's names would be cut two to a row: one to a line. */
+@media (max-width: 699px) {
+  .dash-frame .toolbar-fields { grid-template-columns: minmax(0, 1fr); }
+}
+/* A saved view's row: its checklist of tables under its Add to dashboard. */
+td > .dash-pick { display: inline-block; margin-top: 4px; font-size: 13px; color: var(--ink-2); }
 /* Add to dashboard stands on its own line under a row's label. */
 td > .dash-add { margin-top: 4px; }
 /* With several dashboards it opens on their names, each a flat menu item: under a row's label in the row's

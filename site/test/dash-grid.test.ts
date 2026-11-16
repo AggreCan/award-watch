@@ -10,7 +10,7 @@
 import { describe, expect, it } from "vitest";
 import {
   BOTH_FROM, COLS, H_MAX, H_MIN, LEAST, NARROW_BELOW, START_H, STEPS, W_MIN, type Step, type Tile, clamp, collides, compact, fromPanels, least, move,
-  normalize, place, resize, same, stack, startSize, stepTile, steps, takesBoth,
+  normalize, place, placeAll, resize, same, stack, startSize, stepTile, steps, takesBoth,
 } from "../public/dash-grid.js";
 import { DELAY_MS, KEY_STEPS, UNDO_MAX, fill, layoutJson } from "../public/dashboard.js";
 import dashboardJs from "../public/dashboard.js?raw";
@@ -226,6 +226,32 @@ describe("the grid's rules", () => {
     // An added tile goes under the others at the left, then slides up.
     expect(at(place(column(), { id: "n", kind: "x", x: 9, y: 0, w: 6, h: 3 }))).toEqual({ ...at(column()), n: "0,12 6x3" });
     expect(at(place([{ id: "a", kind: "x", x: 6, y: 0, w: 6, h: 8 }], { id: "n", kind: "x", x: 0, y: 0, w: 6, h: 3 }))).toEqual({ a: "6,0 6x8", n: "0,0 6x3" });
+  });
+
+  it("place several new tiles under the others in their order, side by side while a row has room, then slide them up", () => {
+    const half = (id: string, h: number, w = 6): Tile => ({ id, kind: "x", x: 0, y: 0, w, h });
+    // Under a column of full-width tiles: two to a row, the third, alone in its row, the whole row under them.
+    expect(at(placeAll(column(), [half("n1", 5), half("n2", 3), half("n3", 4)]))).toEqual({ ...at(column()), n1: "0,12 6x5", n2: "6,12 6x3", n3: "0,17 12x4" });
+    // One wider than the room left starts the next row; one that fits beside a narrower one takes the room; one alone
+    // in its row takes all of it.
+    expect(at(placeAll([], [half("a", 4, 7), half("b", 4), half("c", 4, 5), half("d", 2, 3)]))).toEqual({
+      a: "0,0 12x4", b: "0,4 6x4", c: "6,4 5x4", d: "0,8 12x2",
+    });
+    // Into free rows above: a tile beside a short one rises past where its row began.
+    expect(at(placeAll([{ id: "L", kind: "x", x: 0, y: 0, w: 6, h: 10 }, { id: "R", kind: "x", x: 6, y: 0, w: 6, h: 2 }], [half("n1", 3), half("n2", 3)])))
+      .toEqual({ L: "0,0 6x10", R: "6,0 6x2", n1: "0,10 6x3", n2: "6,2 6x3" });
+    // One tile goes where place puts it; the input is left alone; every result is sound.
+    const one = half("n", 3);
+    expect(placeAll(column(), [one])).toEqual(place(column(), one));
+    const before = column();
+    placeAll(before, [half("n1", 5), half("n2", 3)]);
+    expect(before).toEqual(column());
+    for (let seed = 1; seed <= 40; seed++) {
+      const r = rng(seed);
+      const now = normalize(anyLayout(r, r.int(0, 10)));
+      const news = anyLayout(r, r.int(1, 8)).map((t) => ({ ...t, id: `n${t.id}` }));
+      expectSound(placeAll(now, news), [...now, ...news].map((t) => t.id), `seed ${seed} placeAll`);
+    }
   });
 
   it("put a tile of seven columns or more across both of the narrower page's two", () => {

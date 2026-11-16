@@ -848,4 +848,27 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
     const r = await signedInRatio("/account/dashboard", 8, accounts, '<div class="dash-grid" id="dash-grid">', { RECORDS: dashRecords });
     expect(r, `/account/dashboard, 24 analytics tables ${r.toFixed(2)}`).toBeLessThanOrEqual(DASHBOARD_ANALYTICS_BOUND);
   }, 120_000);
+
+  // An organization's checklist of analytics tables (B3b, 2026-11-16; account/dashboard_doors.tsx tablesPage): the
+  // account's rows, one records batch (its name, and its segments at the source for the share table), and the page,
+  // its source and period choices (27 fiscal years in each of From and To) and a box a table. About three times the
+  // larger of two ratios measured then (in brackets), rounded up.
+  const TABLES_PAGE_BOUND = 8; // [2.11, 2.41]
+  it("keeps an Ultra account's checklist of an organization's tables within its bound, its records read in one batch", async () => {
+    clearParsedCache();
+    clearClosingCache();
+    const accounts = ultraAccounts(await sha256Hex(SECRET));
+    const path = "/account/dashboard/tables/organizations/org-a000000001?source=awards&years=10";
+    const batches: number[] = [];
+    const records = { ...dashRecords, batch: (list: D1PreparedStatement[]) => (batches.push(list.length), dashRecords.batch(list)) } as D1Database;
+    const first = await app.request(path, { headers: { "sec-fetch-mode": "navigate", cookie: COOKIE } },
+      { ...env, ASSETS: assetsOf(FIT_BODIES, "v1-fit"), ACCOUNTS: accounts, ACCOUNTS_ENABLED: "true", RECORDS: records });
+    const html = await first.text();
+    expect(first.status).toBe(200);
+    expect(html.match(/<input type="checkbox" name="table"/g)).toHaveLength(6);
+    // The state row, the name and the segments, and nothing read apart from them.
+    expect(batches).toEqual([3]);
+    const r = await signedInRatio(path, 16, accounts, '<ul class="plain dash-checks"', { RECORDS: dashRecords });
+    expect(r, `${path} ${r.toFixed(2)}`).toBeLessThanOrEqual(TABLES_PAGE_BOUND);
+  }, 120_000);
 });

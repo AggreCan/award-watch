@@ -23,7 +23,7 @@ import { fmtInt, t, type Key, type Lang } from "../i18n";
 import { PageHead, Panel } from "../layout";
 import { PlanCards, type PlanCard } from "../pro";
 import type { View } from "../view_address";
-import { AddToDashboard, type BoardChoice } from "./dashboard_add";
+import { AddToDashboard, type BoardChoice, savedViewTables } from "./dashboard_add";
 import { holdsDashboard } from "./dashboard_rule";
 import { RULES, allowed, savedViewCap } from "./entitlements";
 import { VIEW_DELIVERY, type SavedView, type ViewDelivery, type ViewRun, NAME_MAX, viewState } from "./saved_views";
@@ -103,6 +103,13 @@ export const SaveViewRow: FC<{ lang: Lang; state: SaveViewState | null }> = ({ l
 
 // -- /account/views ---------------------------------------------------------------------------
 
+// Beside a row's one-press Add to dashboard, for an account that holds the dashboard: the view's checklist of
+// tables (dashboard_doors.tsx), opened at its subject, source and period, a plain link.
+const ChooseTables: FC<{ lang: Lang; address: string }> = ({ lang, address }) => {
+  const href = savedViewTables(address);
+  return href ? <a href={href} class="dash-pick">{t(lang, "dash.choose_tables")}</a> : null;
+};
+
 const DELIVER_KEY: Readonly<Record<ViewDelivery, Key>> = {
   weekly: "views.deliver_weekly", monthly: "views.deliver_monthly", off: "views.deliver_off",
 };
@@ -162,6 +169,7 @@ export function viewsView(lang: Lang, account: Account, s: ViewsPageState) {
                         <br /><span class="muted small">{t(lang, KIND_KEY[v.kind])}</span>
                         {i >= cap ? <><br /><span class="muted small">{t(lang, "views.past")}</span></> : null}
                         {dash ? <AddToDashboard lang={lang} account={account} kind="view" panelRef={v.id} boards={s.boards} /> : null}
+                        {dash ? <ChooseTables lang={lang} address={v.address} /> : null}
                       </td>
                       {s.ultra ? (
                         <td data-label={t(lang, "views.col_email")}>

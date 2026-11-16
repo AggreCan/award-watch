@@ -20,7 +20,8 @@ import { getCookie } from "hono/cookie";
 import type { FC } from "hono/jsx";
 import type { AppEnv, Env } from "../env";
 import { t, type Lang } from "../i18n";
-import { DASHBOARD_PATH, holdsDashboard, missingTiles } from "./dashboard_rule";
+import { viewBase, viewOf } from "../view_address";
+import { DASHBOARD_PATH, TABLES_PATH, holdsDashboard, missingTiles } from "./dashboard_rule";
 import { type Account, SESSION_COOKIE, readSession } from "./session";
 import { accountsEnabled } from "./switch";
 
@@ -67,6 +68,14 @@ export async function dashboardAccount(c: Context<AppEnv>): Promise<Account | nu
 // back): its path, then its source and its period, the keys in order.
 export function viewPanelRef(base: string, f: { source: string; years: number; first: number; last: number; custom: boolean }): string {
   return f.custom ? `${base}?from=${f.first}&source=${f.source}&to=${f.last}` : `${base}?source=${f.source}&years=${f.years}`;
+}
+
+// A saved view's checklist of tables (dashboard_doors.tsx tablesPage), for
+// its row on the saved views page: the view's subject at the source, period
+// and choices its address names; null for an address that names no view.
+export function savedViewTables(address: string): string | null {
+  const v = viewOf(address);
+  return v ? `${TABLES_PATH}${viewBase(v.kind, v.id).replace(/\/analytics$/, "")}${v.url.search}` : null;
 }
 
 // The anchor of a table's panel on its analytics page, which the table's tile

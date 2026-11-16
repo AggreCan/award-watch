@@ -44,6 +44,35 @@ export const DASHBOARD_STRINGS = {
     fr: "Chaque tableau et chaque graphique d'une vue d'analyse a sa propre commande Ajouter au tableau de bord : ouvrez une vue depuis {link}.",
   },
   "dash.add_text": { en: "Text", fr: "Texte" },
+  // The Analytics group's search (dashboard.tsx AddTile), a GET to the find page (dashboard_doors.tsx).
+  "dash.find_label": { en: "Buyer, organization or segment", fr: "Acheteur, organisation ou segment" },
+  "dash.find": { en: "Find", fr: "Trouver" },
+  // Start From, the group an empty dashboard's Add a Tile opens on (dashboard.tsx Starters): each starter's name and
+  // what it adds ({n}: the organization's blocks).
+  "dash.start_head": { en: "Start From", fr: "Commencer à partir de" },
+  "dash.start_org": { en: "Your organization", fr: "Votre organisation" },
+  "dash.start_org_line": { en: "Its {n} blocks and the notices that match it.", fr: "Ses {n} blocs et les avis qui lui correspondent." },
+  "dash.start_org_claim": { en: "Choose your organization first.", fr: "Choisissez d'abord votre organisation." },
+  "dash.start_buyer": { en: "A buyer", fr: "Un acheteur" },
+  "dash.start_buyer_line": { en: "Find one, then add its analytics tables.", fr: "Trouvez-en un, puis ajoutez ses tableaux d'analyse." },
+  "dash.start_segment": { en: "A segment", fr: "Un segment" },
+  "dash.start_segment_line": { en: "Choose one, then add its analytics tables.", fr: "Choisissez-en un, puis ajoutez ses tableaux d'analyse." },
+  "dash.start_ending": { en: "Contracts ending", fr: "Contrats prenant fin" },
+  "dash.start_ending_line": {
+    en: "The lists of contracts ending within 3, 6 and 12 months, and your watches.",
+    fr: "Les listes de contrats prenant fin d'ici 3, 6 et 12 mois, et vos suivis.",
+  },
+  "dash.start_ending_line_3m": {
+    en: "The list of contracts ending within 3 months, and your watches.",
+    fr: "La liste des contrats prenant fin d'ici 3 mois, et vos suivis.",
+  },
+  // What a starter's post says once done, and when the dashboard holds a tile already (a starter fills an empty one).
+  "dash.started_one": { en: "{n} tile added.", fr: "{n} tuile ajoutée." },
+  "dash.started": { en: "{n} tiles added.", fr: "{n} tuiles ajoutées." },
+  "dash.started_taken": {
+    en: "This dashboard holds tiles already, and a starter fills an empty one. New dashboard makes one.",
+    fr: "Ce tableau de bord contient déjà des tuiles, et un point de départ remplit un tableau vide. Nouveau tableau de bord en crée un.",
+  },
   // A text tile (dashboard.tsx TextTile): the field, its note, the menu's Edit and the form's Save.
   "dash.text_label": { en: "A heading or a note", fr: "Un titre ou une note" },
   "dash.text_note": {
@@ -89,6 +118,68 @@ export const DASHBOARD_STRINGS = {
   "dash.shown": { en: "{n} of {total}", fr: "{n} sur {total}" },
   // The watches tile when no watch had an event in the week's data dates.
   "dash.none_week": { en: "No event on your watches this week.", fr: "Aucun événement sur vos suivis cette semaine." },
+
+  // -- the find page and the checklist (dashboard_doors.tsx) ------------------------------------------
+  "dash.back": { en: "Back to the dashboard", fr: "Retour au tableau de bord" },
+  "dash.find_title": { en: "Find a Buyer, Organization or Segment", fr: "Trouver un acheteur, une organisation ou un segment" },
+  "dash.find_title_buyer": { en: "Find a Buyer", fr: "Trouver un acheteur" },
+  "dash.find_title_organization": { en: "Find an Organization", fr: "Trouver une organisation" },
+  "dash.find_title_segment": { en: "Choose a Segment", fr: "Choisir un segment" },
+  // {name}: the dashboard the tables go on.
+  "dash.find_lead": {
+    en: "Choose one, then check which of its analytics tables go on {name}.",
+    fr: "Choisissez-en un, puis cochez ceux de ses tableaux d'analyse qui vont sur {name}.",
+  },
+  "dash.find_empty": {
+    en: "Type a name, or a word of one: a few matches of each kind show here.",
+    fr: "Tapez un nom, ou un mot d'un nom : quelques résultats de chaque genre s'affichent ici.",
+  },
+  "dash.find_none": { en: "Nothing matches {q}.", fr: "Rien ne correspond à {q}." },
+  "dash.find_unavailable": {
+    en: "The search of buyers and organizations cannot be read right now; the segments are listed as usual.",
+    fr: "La recherche des acheteurs et des organisations ne peut pas être lue pour le moment; les segments sont présentés comme d'habitude.",
+  },
+  // Under a kind's first matches: the rest, on the search page (buyers, organizations) or here (segments).
+  "dash.find_all_kind": { en: "See every match", fr: "Voir tous les résultats" },
+  "dash.tables_eyebrow": { en: "Add Analytics Tables", fr: "Ajouter des tableaux d'analyse" },
+  // {name}: the dashboard the tables go on.
+  "dash.tables_lead": {
+    en: "Each table you check becomes a tile of {name}, at the source and period chosen here.",
+    fr: "Chaque tableau coché devient une tuile de {name}, avec la source et la période choisies ici.",
+  },
+  "dash.tables_choose": { en: "Source and period", fr: "Source et période" },
+  "dash.tables_board": { en: "Dashboard", fr: "Tableau de bord" },
+  "dash.period_latest": { en: "The latest", fr: "Les plus récents" },
+  "dash.period_span": { en: "Chosen years", fr: "Exercices choisis" },
+  "dash.tables_show": { en: "Show", fr: "Afficher" },
+  "dash.tables_legend": { en: "Tables", fr: "Tableaux" },
+  "dash.tables_here": { en: "On this dashboard already", fr: "Déjà sur ce tableau de bord" },
+  "dash.tables_no_share": {
+    en: "It has no record in a segment from this source over these fiscal years.",
+    fr: "Elle n'a aucun dossier dans un segment pour cette source et ces exercices.",
+  },
+  "dash.tables_unread": { en: "Its segments cannot be read right now.", fr: "Ses segments ne peuvent pas être lus pour le moment." },
+  // {name} the dashboard, {n} its tiles, {cap} its figure.
+  "dash.tables_count": { en: "{name} holds {n} of {cap} tiles.", fr: "{name} contient {n} tuiles sur {cap}." },
+  "dash.tables_pick": { en: "Check a table to add it.", fr: "Cochez un tableau pour l'ajouter." },
+  // What the checklist's post says on the dashboard: how many of how many were added, and why the rest were not.
+  "dash.tables_added_one": { en: "{n} table added.", fr: "{n} tableau ajouté." },
+  "dash.tables_added": { en: "{n} tables added.", fr: "{n} tableaux ajoutés." },
+  "dash.tables_added_of_one": { en: "{n} of {total} tables added.", fr: "{n} tableau ajouté sur {total}." },
+  "dash.tables_added_of": { en: "{n} of {total} tables added.", fr: "{n} tableaux ajoutés sur {total}." },
+  "dash.tables_added_none": { en: "No table was added.", fr: "Aucun tableau n'a été ajouté." },
+  "dash.tables_there_one": { en: "{n} was on this dashboard already.", fr: "{n} était déjà sur ce tableau de bord." },
+  "dash.tables_there": { en: "{n} were on this dashboard already.", fr: "{n} étaient déjà sur ce tableau de bord." },
+  "dash.tables_full_one": {
+    en: "{n} did not fit: the dashboard holds its {cap} tiles.",
+    fr: "{n} n'a pas trouvé de place : le tableau de bord contient ses {cap} tuiles.",
+  },
+  "dash.tables_full": {
+    en: "{n} did not fit: the dashboard holds its {cap} tiles.",
+    fr: "{n} n'ont pas trouvé de place : le tableau de bord contient ses {cap} tuiles.",
+  },
+  // A saved view's row (view_pages.tsx): the checklist at the view's subject, source and period.
+  "dash.choose_tables": { en: "Choose its tables", fr: "Choisir ses tableaux" },
 
   // -- the dashboards' row (dashboard.tsx BoardTabs) -------------------------------------------
   "dash.boards_nav": { en: "Your dashboards", fr: "Vos tableaux de bord" },

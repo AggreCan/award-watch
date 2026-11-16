@@ -84,6 +84,12 @@
 //   POST /account/dashboard/tiles/:id/text     a text tile's text (text)               (session, CSRF)
 //   POST /account/dashboard/panels/:id/move|width|delete  the earlier page's three posts, kept for a page
 //                                      loaded before the grid                         (session, CSRF)
+//   GET  /account/dashboard/find       Add a Tile's search: a few buyers, organizations and segments (q, kind,
+//                                      board, all)                                     (session; as the dashboard)
+//   GET  /account/dashboard/tables/:base/:id  a subject's checklist of analytics tables (source, period, board)
+//                                                                                      (session; as the dashboard)
+//   POST /account/dashboard/tables/:base/:id  add every table checked (table, once each) (session, CSRF, plan's figure)
+//   POST /account/dashboard/starter    fill an empty dashboard from a starter (starter, board) (session, CSRF)
 //   GET  /account/views                saved analytics views, each with its email      (session; the site's 404 until
 //                                      the schema holds saved_views)
 //   POST /account/views                save a view's own address, with a name          (session, CSRF, plan's figure)
@@ -140,6 +146,7 @@ import {
 } from "./dashboard";
 import { STEPS, type Step } from "../../public/dash-grid.js";
 import { boardChoices } from "./dashboard_add";
+import { type ViewBase, findPage, starterPost, tablesPage, tablesPost } from "./dashboard_doors";
 import { DASHBOARD_PATH, holdsDashboard } from "./dashboard_rule";
 import { type PlanState, RULES, allowed, planFor, savedViewCap, watchCap } from "./entitlements";
 import {
@@ -216,15 +223,20 @@ function clean(fields: Record<string, string>, key: string, max: number): string
   return (typeof v === "string" ? v : "").replace(CONTROL_RE, "").trim().slice(0, max);
 }
 
-// The body of a POST from the site's own pages, or the refusal.
-async function postFields(c: Context<AppEnv>): Promise<Record<string, string> | Response> {
+// The body of a POST from the site's own pages, or the refusal: each field's
+// first value, and every value of a field sent more than once (values).
+async function postForm(c: Context<AppEnv>): Promise<{ fields: Record<string, string>; values: Record<string, string[]> } | Response> {
   const origin = c.req.header("origin");
   if (origin !== undefined && !isOwnAddress(origin, c.req.url)) return c.text(t(c.get("lang"), "form.rejected"), 403);
   const form = await readForm(c);
   if (!form.ok) return c.text(t(c.get("lang"), "form.rejected"), form.status);
   const asked = form.fields.lang;
   if (asked === "en" || asked === "fr") c.set("lang", asked);
-  return form.fields;
+  return { fields: form.fields, values: form.values };
+}
+async function postFields(c: Context<AppEnv>): Promise<Record<string, string> | Response> {
+  const form = await postForm(c);
+  return form instanceof Response ? form : form.fields;
 }
 
 function unavailable(c: Context<AppEnv>): Promise<Response> {
@@ -267,16 +279,18 @@ function signInFor(c: Context<AppEnv>, ended = false): string {
 // site's shell says so, with a link to reload the page the form was on (its
 // Referer on this site, held to safeNext; else the account page). Still a
 // 403, and nothing is done.
-async function signedInPost(c: Context<AppEnv>): Promise<{ account: Account; fields: Record<string, string> } | Response> {
-  const fields = await postFields(c);
-  if (fields instanceof Response) return fields;
+async function signedInPost(
+  c: Context<AppEnv>,
+): Promise<{ account: Account; fields: Record<string, string>; values: Record<string, string[]> } | Response> {
+  const form = await postForm(c);
+  if (form instanceof Response) return form;
   const who = await signedIn(c);
   if (who instanceof Response) return who;
-  if (!csrfValid(who, fields.csrf)) {
+  if (!csrfValid(who, form.fields.csrf)) {
     const lang = c.get("lang");
     return accountPage(c, t(lang, "account.stale_form_title"), staleFormView(lang, refererPath(c.req.header("referer"), c.req.url) ?? "/account"), 403);
   }
-  return { account: who, fields };
+  return { account: who, fields: form.fields, values: form.values };
 }
 
 // Any database fault inside a handler ends on the 503 page, never a 500.
@@ -1582,6 +1596,15 @@ account.post("/bug", async (c) => {
 // not hold it (dashboardOpen), so it reads as it did before Ultra; a reader
 // signed out signs in and comes back (?next), to the dashboard the address names.
 async function dashboardGet(c: Context<AppEnv>, board: string | null): Promise<Response> {
+  return dashboardDoor(c, (who) => dashboardPage(c, who, board), board);
+}
+
+// A page under the dashboard's address for the reader it is for: the site's
+// 404 while Ultra is off sale for anyone who does not hold it, the sign-in
+// page (and back) for a reader signed out, and for an account that does not
+// hold it what the dashboard's address gives it (dashboardPage, what the
+// dashboard holds); run for one that does.
+async function dashboardDoor(c: Context<AppEnv>, run: (who: Account) => Promise<Response>, board: string | null = null): Promise<Response> {
   const open = await dashboardOpen(c, async () => {
     if (!getCookie(c, SESSION_COOKIE)) return { state: "none" };
     const read = await readSession(c);
@@ -1590,10 +1613,26 @@ async function dashboardGet(c: Context<AppEnv>, board: string | null): Promise<R
   if (!open) return c.notFound();
   const who = await signedIn(c);
   if (who instanceof Response) return who;
-  return guarded(c, () => dashboardPage(c, who, board));
+  if (!holdsDashboard(who.plan)) return guarded(c, () => dashboardPage(c, who, board));
+  return guarded(c, () => run(who));
 }
 
 account.get("/dashboard", (c) => dashboardGet(c, null));
+// Add a Tile's Analytics door (dashboard_doors.tsx): the find page and a subject's checklist of tables, read in the
+// "edit" bucket (limits.ts), and the checklist's post; a starter's post on an empty dashboard.
+account.get("/dashboard/find", (c) => dashboardDoor(c, (who) => findPage(c, who)));
+account.get("/dashboard/tables/:base{buyers|organizations|segments}/:id", (c) =>
+  dashboardDoor(c, (who) => tablesPage(c, who, c.req.param("base") as ViewBase, c.req.param("id") ?? "")));
+account.post("/dashboard/tables/:base{buyers|organizations|segments}/:id", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  return guarded(c, () => tablesPost(c, post.account, c.req.param("base") as ViewBase, c.req.param("id") ?? "", post.fields, post.values));
+});
+account.post("/dashboard/starter", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  return guarded(c, () => starterPost(c, post.account, post.fields));
+});
 // A dashboard's id is 32 hexadecimal characters; any other path under the address is the site's 404.
 account.get("/dashboard/:board{[0-9a-f]+}", (c) => {
   const board = c.req.param("board") ?? "";

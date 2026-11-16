@@ -3037,7 +3037,9 @@ dashboards, the page, its posts and its read), `site/public/dash-grid.js`
 `dashboard_fit.ts` (what a tile shows at its size),
 `site/public/dashboard.js` (the page's script), `dashboard_rule.ts` (who
 has it, the ceilings, a dashboard's address and the rail's item),
-`dashboard_add.tsx` (Add to dashboard, and the dashboards' names) and
+`dashboard_add.tsx` (Add to dashboard, and the dashboards' names),
+`dashboard_doors.tsx` (the find page, a subject's checklist of tables and
+the starters, *Finding a subject and choosing its tables*) and
 `dashboard_strings.ts`; the rail item is in `site/src/layout.tsx`. An
 analytics table on a tile is drawn by the analytics view's own code in
 `site/src/pages/analytics.tsx` (*Analytics tables*). The tests are
@@ -3045,7 +3047,9 @@ analytics table on a tile is drawn by the analytics view's own code in
 (the page, the three states of storage, the posts, several dashboards, a
 dashboard of 24 tiles, the analytics tables and the analytics pages' own
 Add to dashboard, the text tile), `site/test/dashboard-aid.test.ts` (More
-Kinds of Tile) and a 12-tile, a 24-tile and a 24-analytics-table entry in
+Kinds of Tile), `site/test/dashboard-doors.test.ts` (the find page, the
+checklist and its post, a saved view's link, the starters) and a 12-tile, a
+24-tile, a 24-analytics-table and a checklist entry in
 `site/test/cpu-budget.test.ts`.
 
 ### Several dashboards
@@ -3130,6 +3134,12 @@ nowhere else:
   down to the next place where the layout changes, since one row is often
   not enough to pass a tile; a column wider or narrower; a row taller or
   shorter. A step that changes nothing is offered disabled in the menu.
+- **Several added at once** (a checklist's tables, a starter): under the
+  others in their order, side by side from the left while the row has room
+  for the next, then compacted (`placeAll`); of several, one left alone in
+  its row (beside a wider one, or the last of an odd count) takes the whole
+  row, so no row of them leaves its right part empty. One tile alone goes
+  where `place` puts it, as an add.
 - **Clamping**: any layout read or posted is first held to whole numbers,
   the columns and the least sizes (`normalize`). The Worker never trusts a
   stored place: a page view, a fragment and every post lay the layout out
@@ -3272,12 +3282,16 @@ no edit mode: `?edit=1` shows the same page. The page's one filled button
 is Add a Tile, at the head's right, a `details` too: the count of tiles,
 then three groups. From Your Lists: the select of what the account holds
 and is not on the dashboard shown yet (its choices as before) and Add.
-Analytics: a line saying each table and chart of an analytics view has its
-own Add to dashboard, with the link to Analytics. Text: a field for a
+Analytics: a search, one field ("Buyer, organization or segment") and a
+flat Find, a GET to the find page for the dashboard shown, then the line
+saying each table and chart of an analytics view has its own Add to
+dashboard, with the link to Analytics (*Finding a subject and choosing its
+tables*). Text: a field for a
 heading or a note and Add (a plain button, so Add a Tile stays the one
 filled one). Then More Kinds of Tile, less its analytics line, which the
 Analytics group says. Each post names the dashboard shown. An emptied
-dashboard draws it open. The tabs sit in the head under the lead, so Add a
+dashboard draws it open, with Start From first (*Starter dashboards*). The
+tabs sit in the head under the lead, so Add a
 Tile's choices, which hang below the head's row, never cover them
 (*Several dashboards*).
 
@@ -3372,6 +3386,10 @@ entry measured 14.62 against the 12 tiles' 8.62 (bound 44).
 | `POST /account/dashboard/tiles/:id/delete` | remove it |
 | `POST /account/dashboard/tiles/:id/text` | a text tile's `text`, cleaned as on its add; emptied, the tile stays and says it is empty; on any other kind, nothing |
 | `POST /account/dashboard/panels/:id/move`, `/width`, `/delete` | the earlier page's posts, for a page loaded before the grid: up or down, full or half width, remove |
+| `GET /account/dashboard/find` | the find page: `q` the words, `board` the dashboard (none, the first), `kind` buyer, organization or segment to list one kind, `all=1` a starter's |
+| `GET /account/dashboard/tables/:base/:id` | a subject's checklist (`:base` buyers, organizations or segments): `source`, the period (`years`, or `from` and `to`; `period=latest` or `span` from its own form), an organization's `segment` and `vs`, `board`, `all=1` |
+| `POST /account/dashboard/tables/:base/:id` | the checklist's Add to dashboard: `table` once a table checked, the source and period, the share table's `segment` and `vs`, `board` |
+| `POST /account/dashboard/starter` | `starter` org or ending, `board`: an empty dashboard filled in one post |
 
 Every post is behind the session, the CSRF value and the Origin; the read
 is behind the session and the CSRF value in its header. All of them count
@@ -3381,13 +3399,17 @@ forms' 5. A post from the menu returns to the dashboard it changed (the
 bare address while that is the first) with what happened (`?m=added`,
 `exists`, `full`, `briefings_full`, `unsaved`, `unsaved_layout`,
 `boards_full`, `renamed`, `board_deleted`, `board_emptied`, `text_empty`,
-`text_unsaved`, and `moved`,
+`text_unsaved`, `started_taken`; `tables` with its counts `n`, `of`,
+`there` and `full`; `started` with `n`; and `moved`,
 `move_exists`, `move_full` with `to=<id>` naming the dashboard), at the
 place the change was made: a step or a size at
 the tile's own anchor (`#tile-<id>`), an add at the tile added (or found
 added), a removal at the tile that takes its place in reading order, else
 the one before it, else Add a Tile (`#dash-add`). The page, the posts and
-the read are `private, no-store`.
+the read are `private, no-store`, the find page and the checklist too; those
+two reads count in the "edit" bucket as the tile's read does
+(`DASHBOARD_READS` in `limits.ts`), and the checklist's and the starters'
+posts with the others.
 
 ### The starting layout
 
@@ -3431,13 +3453,98 @@ visit finds it. It is left out while the dashboard holds its plan's figure
 of tiles and while nothing can be kept (neither the grid's tables nor the
 panels' table).
 
+### Finding a subject and choosing its tables
+
+Add a Tile's Analytics door: any buyer, organization or segment, found from
+the dashboard, its tables added from a checklist without leaving it. Built
+in `dashboard_doors.tsx`.
+
+- **The find page** (`/account/dashboard/find?q=`) lists a few matches of
+  each kind (6; 20 when `kind` asks for one kind), each leading to its
+  checklist at the source the subject's analytics page opens on (the one
+  with the most records) and the default period, 10 fiscal years, for the
+  dashboard the search came from (`board`). Buyers and organizations are
+  read by the site's own search (`search_db.ts` `runSearch`, the hosted
+  search database's one batch of `/search`'s first page: both counts, the
+  organizations and the buyers), so they come in `/search`'s order and the
+  page names no one `/search` does not name, a supplier withheld as a
+  person included (the search database never holds one). The segments are
+  the site's list of 57, matched in the code by the search's own rule (each
+  word in the code and title or the short name, in either language, the last
+  as a prefix); `kind=segment` with no word lists all 57. A kind with more
+  matches says "6 of 31" and links the rest (`/search` for buyers and
+  organizations, the segments alone here). With no word the page says what
+  it searches; with no match, that nothing matches; with the search database
+  unavailable, that it cannot be read, and the segments still show. Its
+  Find is the page's one filled button.
+- **The checklist** (`/account/dashboard/tables/<base>/<id>`): the
+  subject's name, then a GET with a flat Show: the dashboard (when the
+  account holds several), the source (the four, or a segment's two) and the
+  period, the latest 3, 5, 10 or 20 fiscal years or chosen first and last
+  years (every one from 2000-01), read as the view reads its own address
+  for the plan (`viewFrame`: held to the plan's years, a value it cannot
+  use read as the default). Then the subject's tables as boxes, by their
+  titles (`TABLE_TITLES`), in the view's order. A table that does not apply
+  at the source (`tableApplies` in `pages/analytics.tsx`, held by a test to
+  the panels that offer their own Add to dashboard) is offered disabled
+  with the analytics page's own line why; the share table also needs a
+  segment, chosen in a select of the organization's largest at that source
+  and period, and says so when it has none. A table the dashboard holds
+  already (the same ref) says "On this dashboard already". With `all=1` (a
+  starter) every other table that applies is checked. It reads one records
+  batch: the buyer's or the organization's name by its key and, for an
+  organization at a source with segments, its largest segments
+  (`ORG_SEGMENTS_SQL`, the view's own); a segment's reads none. Its Add to
+  dashboard is the page's one filled button, offered disabled on a
+  dashboard at its figure.
+- **Its post** adds every table checked as an `analytic` tile. Each is
+  checked as Add to dashboard's ref is (`analyticRef`) and must apply at the
+  source; a table its view does not draw, one that does not apply, a share
+  table without its segment or a period the check refuses answers 400 and
+  adds nothing. Stored in the ref's one form (`analyticAddress`), in the
+  checklist's order, the same item once; the ones there already are
+  counted, and of the rest as many as the dashboard's figure leaves room
+  for go in one batch, each insert holding the figure and the same item
+  once (`ADD_TILE_SQL`), laid out under the others (`placeAll`). The
+  dashboard then says how many of how many were added and why the rest
+  were not: "2 of 5 tables added. 1 was on this dashboard already. 2 did not
+  fit: the dashboard holds its 24 tiles." (`?m=tables&n=&of=&there=&full=`),
+  at the first tile added. With nothing checked it returns to the checklist,
+  which says to check one. In each state of storage as an add: into the
+  panels while the grid's tables are absent (half the row each), the
+  computed first written first (`writeFirst`), nothing kept without either.
+  A dashboard the account does not hold, another account's included, is
+  refused: the first, with nothing added.
+- **From a saved view**: on `/account/views`, each row keeps its one-press
+  Add to dashboard and, for an account that holds the dashboard, gains a
+  plain link, "Choose its tables", to the checklist at the view's subject,
+  source, period and choices. Every other reader's page is as it was.
+
+### Starter dashboards
+
+A dashboard with no tile (one emptied, or a new one) opens Add a Tile with
+Start From first, four quiet choices: Your organization (its matching
+notices and its 6 blocks, in one post; without a claim, a link to the page
+where one is named), A buyer and A segment (the find page of that kind with
+`all=1`, whose checklist opens with every table that applies checked), and
+Contracts ending (the watches and each window of contracts ending the plan
+gives, 3, 6 and 12 months on Ultra, in one post). A starter adds only kinds
+the account can hold, within the figure, two to a row (`placeAll`), and
+never touches a dashboard that holds a tile: the post is refused there
+(`?m=started_taken`), and each insert holds the dashboard empty but for its
+own batch (`STARTER_TILE_SQL`; `STARTER_PANEL_SQL` while the grid's tables
+are absent). The account's first dashboard, computed while nothing is
+stored, keeps its starting layout (*The starting layout*): it holds tiles,
+so no starter shows there.
+
 ### What each reader sees
 
 - **Ultra**, whether or not Ultra is on sale (a grant by hand included): the
   tabs, the tiles, Add a Tile, More Kinds of Tile while a kind needs a step
   first, and Add to dashboard in each panel of an analytics view (with the
   panel's anchor), on each saved search a tile can show, on each briefing
-  of the searches page and on each row of the saved views page.
+  of the searches page and on each row of the saved views page, with that
+  row's Choose its tables; the find page, the checklists and Start From.
 - **Free and Pro while Ultra is on sale**: the head, What the Dashboard Holds
   ("Pages of tiles you choose from what the site already shows you: 5
   dashboards of 24 tiles each.", Ultra's figures from `RULES`; then the
@@ -3446,7 +3553,8 @@ panels' table).
   say they show as many rows as a tile's size holds), the gate line with
   Plans and prices, and the three
   plan cards, Ultra's link the page's filled button. No records read, no
-  script. The same at any dashboard's address.
+  script. The same at any dashboard's address, the find page's and a
+  checklist's; their posts go to the dashboard's address and write nothing.
 - **Free and Pro while Ultra is off sale**: the site's 404, as before Ultra.
 - **Signed out**: the sign-in page with `next=/account/dashboard` while
   Ultra is on sale; the site's 404 while it is not.
@@ -3580,6 +3688,14 @@ panels become its tiles at its first change.
   first, after a move or a deletion).
 - After Move to the reader stays on the dashboard the tile left; the notice
   names the dashboard it went to, whose tab is beside.
+- Room under a list: measured on the local Worker (2026-11-16) at 1,280 px,
+  each tile's rows were within one of what its height holds, either way
+  (with the script, a row too many is taken off and leaves its height
+  under the last); at 1,600 px a tile reckoned for 1,280 px lists up to 5
+  rows fewer than it holds, since its table no longer stacks. The server
+  cannot know the window without a second read, so the room stays; sending
+  a few rows past the reckoning, hidden, for the script to show where they
+  fit, would remove it and touches every table's drawing (queued).
 
 ## Saved views
 

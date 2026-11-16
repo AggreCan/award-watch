@@ -111,6 +111,21 @@ export const TABLE_TITLES: Readonly<Record<View, Readonly<Record<string, Key>>>>
   },
 };
 
+// Whether a table of a view applies at a source, as each panel offers its Add to dashboard there: a table of
+// segments (the buyer's and the organization's, and the share of one) needs a source whose records carry UNSPSC
+// codes, the competition a source that flags it (grants do not), the growth a source that numbers its versions.
+// The share table also needs a segment, which only the data can give. A segment's view offers only the sources
+// with segments. The dashboard's checklist of a subject's tables (account/dashboard_doors.tsx) reads it, and a test
+// holds it to the panels' own Add to dashboard.
+export function tableApplies(view: View, table: string, source: MoneySource): boolean {
+  if (!(VIEW_TABLES[view] as readonly string[]).includes(table)) return false;
+  if (!(view === "segment" ? SEGMENT_SOURCES : MONEY_SOURCES).includes(source)) return false;
+  if (table === "segments" || table === "share") return SEGMENT_SOURCES.includes(source);
+  if (table === "competition") return source !== "grants";
+  if (table === "growth") return AMENDED_SOURCES.includes(source);
+  return true;
+}
+
 // A dashboard tile's sizes for a table drawn on it (account/dashboard_fit.ts
 // analyticFit): the rows it lists, each plot's height and width, and the
 // plots' height once the read is known to list fewer rows than the tile holds

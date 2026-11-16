@@ -7,6 +7,11 @@ import { type Plan, RULES } from "./entitlements";
 import { ultraOnSale } from "./payments";
 
 export const DASHBOARD_PATH = "/account/dashboard";
+// Add a Tile's Analytics door (dashboard_doors.tsx): the find page, a subject's checklist of tables (the view's
+// base, buyers, organizations or segments, then its id), and a starter's post.
+export const FIND_PATH = `${DASHBOARD_PATH}/find`;
+export const TABLES_PATH = `${DASHBOARD_PATH}/tables`;
+export const STARTER_PATH = `${DASHBOARD_PATH}/starter`;
 
 // The ceilings whatever the plan, as SAVED_SEARCH_MAX is for searches: the
 // dashboards an account keeps, and the tiles one dashboard holds. A plan's
