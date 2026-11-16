@@ -12,6 +12,8 @@
 //   POST /account/weekly               the weekly email on or off                     (session, CSRF)
 //   POST /account/mail-language        the language of the account's own mail         (session, CSRF)
 //   POST /account/sign-out             this browser, or every browser (scope=all)     (session, CSRF)
+//   POST /account/sessions/:id/sign-out  another of the account's browsers, from the overview's panel
+//                                      (session, CSRF; bound to the account's id)
 //   GET  /account/searches             saved searches, the alerts form's rows to add  (session)
 //   POST /account/searches             add from a page address, or Save this search   (session, CSRF)
 //   POST /account/searches/import      add the alerts form's rows                     (session, CSRF)
@@ -155,8 +157,8 @@ import { GROUP_TAGS_MAX, GROUP_TAG_CHARS, USER_RE, provenBy, readGroupTags } fro
 import { randomHex, sameHash, sha256Hex, ipHash } from "./secrets";
 import { isLocalHost, senderFor, signInMessage } from "./sender";
 import {
-  type Account, type UaClass, SESSION_COOKIE, clearSessionCookie, csrfValid, markSignedOut, readSession, revokeAllSessions,
-  revokeSession, startSession,
+  type Account, type UaClass, SESSION_COOKIE, SESSIONS_MAX, clearSessionCookie, csrfValid, liveSessions, markSignedOut, readSession,
+  revokeAllSessions, revokeOtherSession, revokeSession, startSession,
 } from "./session";
 import {
   BRIEF_CODE_DETAIL, CODE_MINUTES, CODES_PER_HOUR, CODE_TRIES, type Checked, FOLLOW_CODES_PER_HOUR, FOLLOW_CODE_DETAIL, checkCode, checkLink,
@@ -236,7 +238,7 @@ async function signedIn(c: Context<AppEnv>): Promise<Account | Response> {
   if (read.state === "ok") return read.account;
   if (read.state === "unavailable") return unavailable(c);
   if (getCookie(c, SESSION_COOKIE)) clearSessionCookie(c);
-  return c.redirect(signInFor(c), 303);
+  return c.redirect(signInFor(c, !!read.ended), 303);
 }
 
 // Where a request without a session is sent. A page asked for by its address
@@ -244,12 +246,16 @@ async function signedIn(c: Context<AppEnv>): Promise<Account | Response> {
 // next, so signing in ends on that page and not on the overview; safeNext
 // holds it to a path on this site. The overview is where sign-in ends anyway,
 // and a form's press has no page of its own to return to: both go to the
-// plain sign-in page.
-function signInFor(c: Context<AppEnv>): string {
-  if (c.req.method !== "GET") return "/account/sign-in";
-  const url = new URL(c.req.url);
-  const next = safeNext(url.pathname + url.search);
-  return next && url.pathname !== "/account" ? `/account/sign-in?next=${encodeURIComponent(next)}` : "/account/sign-in";
+// plain sign-in page. A session another browser ended (session.ts, ended)
+// adds m=ended, whose line says so, to either.
+function signInFor(c: Context<AppEnv>, ended = false): string {
+  const parts = ended ? ["m=ended"] : [];
+  if (c.req.method === "GET") {
+    const url = new URL(c.req.url);
+    const next = safeNext(url.pathname + url.search);
+    if (next && url.pathname !== "/account") parts.push(`next=${encodeURIComponent(next)}`);
+  }
+  return parts.length ? `/account/sign-in?${parts.join("&")}` : "/account/sign-in";
 }
 
 // A POST that needs the session: the Origin, then the session, then the CSRF
@@ -325,7 +331,8 @@ account.get("/sign-in", async (c) => {
   const follow = followOf(c.req.query("follow"));
   const brief = briefOf(c.req.query("brief"));
   const m = c.req.query("m");
-  const notice = m === "out" ? t(lang, "account.msg_signed_out") : m === "out_all" ? t(lang, "account.msg_signed_out_all") : null;
+  const notice = m === "out" ? t(lang, "account.msg_signed_out") : m === "out_all" ? t(lang, "account.msg_signed_out_all")
+    : m === "ended" ? t(lang, "account.msg_ended", { cap: fmtInt(SESSIONS_MAX, lang) }) : null;
   const offerWeekly = await weeklyReady(c.env);
   return accountPage(c, t(lang, "account.sign_in_title"), signInView(lang, { notice, next, follow, brief, offerWeekly }));
 });
@@ -459,12 +466,16 @@ account.post("/check", async (c) => {
       await revokeSession(c.env, before.account.sessionId, now);
       await audit(c.env, before.account.userId, "signed_out", "replaced", now);
     }
-    await startSession(c, user.id, uaClass(c), now);
+    const capped = await startSession(c, user.id, uaClass(c), now);
     await audit(c.env, user.id, "signed_in", token ? "link" : "code", now);
+    // The browsers the cap signed out (session.ts SESSIONS_MAX): one row with the count, no session named.
+    if (capped) await audit(c.env, user.id, "signed_out", `cap ${capped}`, now);
     if (follow) await followAtSignIn(c, user.id, follow, lang, now);
     if (brief) await briefAtSignIn(c, user.id, brief, lang, now);
     if (weekly) await weeklyAtSignIn(c, user.id, now);
     if (next) return c.redirect(next, 303);
+    // Without a page to return to, the overview says another browser was signed out, ahead of the alerts form's rows.
+    if (capped) return c.redirect("/account?m=capped", 303);
     const pending = await pendingInterest(c.env, checked.email, user.id).catch(() => []);
     return c.redirect(pending.length ? "/account/searches" : "/account", 303);
   });
@@ -485,6 +496,21 @@ account.post("/sign-out", async (c) => {
   });
 });
 
+// The overview's Sign out on another browser's row (pages.tsx SessionsPanel).
+// The same answer whatever the id names: one of the account's live sessions
+// (ended now), one already ended, this browser's own, another account's or
+// none, so the post tells nothing of a session that is not the account's.
+// The audit row says another browser was signed out, never which.
+account.post("/sessions/:id/sign-out", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  const { account: who } = post;
+  return guarded(c, async () => {
+    if (await revokeOtherSession(c.env, who, c.req.param("id") ?? "")) await audit(c.env, who.userId, "signed_out", "other browser");
+    return c.redirect("/account?m=session_out", 303);
+  });
+});
+
 // -- the overview ------------------------------------------------------------------------------
 
 account.get("/", async (c) => {
@@ -492,10 +518,10 @@ account.get("/", async (c) => {
   if (who instanceof Response) return who;
   const lang = c.get("lang");
   return guarded(c, async () => {
-    const counts = await c.env.ACCOUNTS!.prepare(
-      "SELECT (SELECT COUNT(*) FROM sessions WHERE user_id = ?1 AND revoked_at IS NULL AND expires_at > ?2) AS sessions, " +
-      "(SELECT COUNT(*) FROM api_keys WHERE user_id = ?1 AND revoked_at IS NULL) AS keys",
-    ).bind(who.userId, new Date().toISOString()).first<{ sessions: number; keys: number }>();
+    const counts = await c.env.ACCOUNTS!.prepare("SELECT COUNT(*) AS keys FROM api_keys WHERE user_id = ? AND revoked_at IS NULL")
+      .bind(who.userId).first<{ keys: number }>();
+    // The account's live sessions: the Account panel's row counts them, the Signed-In Browsers panel lists them.
+    const sessions = await liveSessions(c.env, who.userId);
     // The saved searches with the briefings, which share the cap: the count every page states (searches.ts heldCount).
     const held = await heldCount(c.env, who.userId);
     const watching = await watchCount(c.env, who.userId);
@@ -505,7 +531,7 @@ account.get("/", async (c) => {
     const returned = c.req.query("session");
     if ((c.req.query("billing") === "done" || c.req.query("billing") === "done_ultra") && returned) await bindReturn(c.env, who, returned);
     return accountPage(c, t(lang, "account.title"), overviewView(lang, who, {
-      sessions: counts?.sessions ?? 0, searches: held, cap: capFor(who), keys: counts?.keys ?? 0,
+      sessions: sessions.length, searches: held, cap: capFor(who), keys: counts?.keys ?? 0,
       watches: watching?.n ?? null, watchesOwn: watching?.own ?? false, org,
     }, {
       billing: await billingLine(c.env, who.userId),
@@ -513,9 +539,12 @@ account.get("/", async (c) => {
       notice: c.req.query("billing") === "done" ? t(lang, "billing.msg_done", { plan: t(lang, "pro.tag") })
         : c.req.query("billing") === "done_ultra" ? t(lang, "billing.msg_done", { plan: t(lang, "ultra.tag") })
         : m === "weekly_on" ? t(lang, "weekly.msg_on") : m === "weekly_off" ? t(lang, "weekly.msg_off")
-        : m === "mail_lang" ? t(lang, "account.msg_mail_lang") : null,
+        : m === "mail_lang" ? t(lang, "account.msg_mail_lang")
+        : m === "capped" ? t(lang, "account.msg_capped", { cap: fmtInt(SESSIONS_MAX, lang) })
+        : m === "session_out" ? t(lang, "account.msg_session_out") : null,
       // The weekly email's control; null leaves it out while its table is not on the database.
       weekly: await weeklyState(c.env, who.userId),
+      sessions,
     }));
   });
 });

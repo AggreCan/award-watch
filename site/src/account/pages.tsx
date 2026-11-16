@@ -24,7 +24,7 @@ import { holdsDashboard } from "./dashboard_rule";
 import { RULES, allowed, watchCap } from "./entitlements";
 import { FEEDS_MAX, type FeedKind } from "./feeds";
 import { DELIVERY, type Delivery, type InterestRow, type LastDelivery, type SavedSearch, paidCapLine } from "./searches";
-import type { Account } from "./session";
+import { type Account, type LiveSession, SESSIONS_MAX } from "./session";
 import { CODE_MINUTES } from "./signin";
 import { type Follow, followValue } from "./watch_events";
 
@@ -410,10 +410,67 @@ const MailLangRow: FC<{ lang: Lang; account: Account }> = ({ lang, account }) =>
   );
 };
 
+// The device word the console already uses for a session's class, capitalized for a cell.
+const DEVICE_KEY: Record<string, Key> = { desktop: "admin.device_desktop", mobile: "admin.device_mobile", tablet: "admin.device_tablet" };
+
+function deviceWord(lang: Lang, ua: string | null): string {
+  const word = t(lang, DEVICE_KEY[ua ?? ""] ?? "admin.device_unknown");
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+// The account's live sessions (session.ts liveSessions), this browser marked
+// and each other one with its Sign out (routes.tsx, POST
+// /account/sessions/:id/sign-out), a link-styled button so the page keeps its
+// one filled button; the Sign Out panel below holds this browser's own. The
+// table restacks below 700 px as the account's other tables do. Each button's
+// accessible name carries its row, since the word alone repeats down the column.
+const SessionsPanel: FC<{ lang: Lang; account: Account; sessions: readonly LiveSession[] }> = ({ lang, account, sessions }) => (
+  <Panel title={t(lang, "account.sessions_title")} id="browsers">
+    <div class="table-wrap">
+      <table class="restack">
+        <thead>
+          <tr>
+            <th>{t(lang, "account.session_col_device")}</th><th>{t(lang, "account.session_col_start")}</th>
+            <th>{t(lang, "account.col_last_used")}</th><th><span class="visually-hidden">{t(lang, "account.session_out")}</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {sessions.map((s) => {
+            const device = deviceWord(lang, s.ua_class);
+            const start = stamp(s.created_at);
+            const last = stamp(s.last_seen_at);
+            const out = t(lang, "account.session_out");
+            return (
+              <tr>
+                <td>{device}</td>
+                <td data-label={t(lang, "account.session_col_start")} class="mono">{start}</td>
+                <td data-label={t(lang, "account.col_last_used")} class="mono">{last}</td>
+                <td>
+                  {s.id === account.sessionId ? <span>{t(lang, "account.session_this")}</span> : (
+                    <form method="post" action={`/account/sessions/${s.id}/sign-out`} class="account-inline">
+                      <Csrf account={account} />
+                      <button type="submit" class="btn-link" aria-label={`${out} (${t(lang, "account.session_row", { device, start, last })})`}>{out}</button>
+                    </form>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+    <p class="muted small">{t(lang, "account.sessions_rule", { cap: fmtInt(SESSIONS_MAX, lang) })}</p>
+  </Panel>
+);
+
 export function overviewView(
   lang: Lang, account: Account,
   counts: OverviewCounts,
-  extra: { billing?: BillingLine | null; notice?: string | null; weekly?: { on: boolean } | null } = {},
+  extra: {
+    billing?: BillingLine | null; notice?: string | null; weekly?: { on: boolean } | null;
+    // The account's live sessions for the Signed-In Browsers panel; absent, the panel is left out.
+    sessions?: readonly LiveSession[];
+  } = {},
 ) {
   const stripe = extra.billing?.stripe && account.plan !== "free";
   return (
@@ -429,7 +486,8 @@ export function overviewView(
           <dt>{t(lang, "billing.field")}</dt>
           <dd><a href="/account/billing">{t(lang, stripe ? "billing.manage" : "billing.link_plans")}</a></dd>
           <dt>{t(lang, "account.field_since")}</dt><dd class="mono">{day(account.createdAt)}</dd>
-          <dt>{t(lang, "account.field_sessions")}</dt><dd>{fmtInt(counts.sessions, lang)}</dd>
+          <dt>{t(lang, "account.field_sessions")}</dt>
+          <dd>{t(lang, "account.sessions_count", { n: fmtInt(counts.sessions, lang), cap: fmtInt(SESSIONS_MAX, lang) })}</dd>
           {extra.weekly ? <WeeklyRow lang={lang} account={account} on={extra.weekly.on} /> : null}
           <MailLangRow lang={lang} account={account} />
           {/* A Free account sees the row too, with the Pro chip, leading to the page's notice (bugs.tsx). */}
@@ -475,6 +533,7 @@ export function overviewView(
           {counts.org ? <li><a href="/account/matches">{t(lang, "fit.overview")}</a></li> : null}
         </ul>
       </Panel>
+      {extra.sessions ? <SessionsPanel lang={lang} account={account} sessions={extra.sessions} /> : null}
       <Panel title={t(lang, "account.panel_sign_out")}>
         <p>{t(lang, "account.sign_out_text")}</p>
         <div class="account-actions">

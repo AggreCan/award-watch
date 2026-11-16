@@ -49,7 +49,9 @@ import { isNavigation, refusalPage } from "./limit_page";
 // a tile's menu, a post a step, so the forms' 5 would stop a reader
 // mid-move and spend the cap a billing post or a bug report needs. The
 // dashboard's one read, a tile at a new size after a resize, counts there
-// too: it reads the account's rows and a tile's records.
+// too: it reads the account's rows and a tile's records. So does the
+// overview's Sign out on another browser's row, which ends one session of
+// the account's own.
 //
 // Which requests are downloads is bucketFor's decision alone. Who they are
 // counted against is throttle's: a download whose session is signed in on Pro
@@ -88,6 +90,8 @@ const DASHBOARD_POSTS =
   /^\/account\/dashboard\/(?:panels(?:\/[^/]+\/(?:move|width|delete))?|layout|boards(?:\/[^/]+\/(?:rename|move|delete))?|tiles\/[^/]+\/(?:move|size|board|delete))$/;
 const DASHBOARD_TILE = /^\/account\/dashboard\/tiles\/[^/]+$/;
 const VIEW_POSTS = /^\/account\/views(?:\/[^/]+(?:\/delete)?)?$/;
+// The overview's Sign out on another of the account's browsers (account/routes.tsx).
+const SESSION_POSTS = /^\/account\/sessions\/[^/]+\/sign-out$/;
 
 // A HEAD request for a download (a link checker, a client asking a file's
 // size before fetching it) moves no file, so it is not counted against the
@@ -103,7 +107,7 @@ export function bucketFor(method: string, path: string): Bucket {
   if (method === "POST" && (path === "/account/sign-in" || path === "/account/check")) return "auth";
   if (path === "/account/stop" || path === "/interest/stop") return "stop";
   if (method === "POST" && path === "/account/billing/webhook") return "hook";
-  if (method === "POST" && (DASHBOARD_POSTS.test(path) || VIEW_POSTS.test(path))) return "edit";
+  if (method === "POST" && (DASHBOARD_POSTS.test(path) || VIEW_POSTS.test(path) || SESSION_POSTS.test(path))) return "edit";
   if (method === "GET" && DASHBOARD_TILE.test(path)) return "edit";
   if (method === "POST" && (path === "/account/bug" || BILLING_POSTS.has(path))) return "form";
   if (method === "POST" && (path === "/corrections" || path === "/interest" || /^\/organizations\/[^/]+\/respond$/.test(path))) {

@@ -32,6 +32,8 @@ const ACCOUNT_ROUTES: [string, string][] = [
   ["GET", "/account/searches"], ["GET", "/account/keys"], ["GET", "/account/delete"], ["GET", "/account/billing"],
   ["POST", "/account/sign-in"], ["POST", "/account/check"], ["POST", "/account/sign-out"], ["POST", "/account/searches"],
   ["POST", "/account/searches/import"], ["POST", "/account/keys"], ["POST", "/account/delete"],
+  // The overview's Sign out on another browser's row.
+  ["POST", `/account/sessions/${"a".repeat(32)}/sign-out`],
   // The keys' usage page (account/api_usage_page.tsx).
   ["GET", "/account/api"],
   ["GET", `/account/stop?s=${"a".repeat(32)}&t=${"b".repeat(32)}`], ["POST", "/account/stop"],

@@ -118,6 +118,12 @@ export const ACCOUNT_STRINGS = {
   "account.stale_form_reload": { en: "Reload the page", fr: "Recharger la page" },
   "account.msg_signed_out": { en: "You are signed out.", fr: "Vous êtes déconnecté." },
   "account.msg_signed_out_all": { en: "Every browser is signed out.", fr: "Tous les navigateurs sont déconnectés." },
+  // A browser whose session was ended elsewhere, on its next account page (routes.tsx signedIn, m=ended). Why
+  // it ended is not stored, so the line says when that happens without saying which; {cap} is SESSIONS_MAX (session.ts).
+  "account.msg_ended": {
+    en: "This browser was signed out. That happens when the account signs out from another browser, or signs in on more than {cap} browsers. Sign in again to continue.",
+    fr: "Ce navigateur a été déconnecté. Cela se produit quand le compte se déconnecte depuis un autre navigateur ou se connecte dans plus de {cap} navigateurs. Reconnectez-vous pour continuer.",
+  },
 
   // -- the overview -------------------------------------------------------------------
   "account.title": { en: "Your Account", fr: "Votre compte" },
@@ -158,6 +164,26 @@ export const ACCOUNT_STRINGS = {
   },
   "account.sign_out": { en: "Sign out", fr: "Se déconnecter" },
   "account.sign_out_all": { en: "Sign out everywhere", fr: "Se déconnecter partout" },
+  // The account's signed-in browsers (pages.tsx SessionsPanel; session.ts SESSIONS_MAX is {cap}): the Account
+  // panel's row, then a panel of the live sessions, this browser marked, Sign out on each other one.
+  "account.sessions_title": { en: "Signed-In Browsers", fr: "Navigateurs connectés" },
+  "account.sessions_count": { en: "{n} of {cap} browsers", fr: "{n} navigateurs sur {cap}" },
+  "account.sessions_rule": {
+    en: "An account stays signed in on at most {cap} browsers. Signing in on another signs out the one used least recently.",
+    fr: "Un compte reste connecté dans au plus {cap} navigateurs. Une connexion dans un autre déconnecte celui qui a servi le moins récemment.",
+  },
+  "account.session_col_device": { en: "Device", fr: "Appareil" },
+  "account.session_col_start": { en: "Signed in", fr: "Connexion" },
+  // A row in one line, the accessible name of its Sign out button beside the button's own word.
+  "account.session_row": { en: "{device}, signed in {start}, last used {last}", fr: "{device}, connecté le {start}, dernière utilisation le {last}" },
+  "account.session_this": { en: "This browser", fr: "Ce navigateur" },
+  "account.session_out": { en: "Sign out", fr: "Déconnecter" },
+  "account.msg_session_out": { en: "The browser was signed out.", fr: "Le navigateur a été déconnecté." },
+  // The sign-in that ended a session past the cap lands on the overview with this line (routes.tsx, m=capped).
+  "account.msg_capped": {
+    en: "This account was signed in on {cap} browsers already, so the one used least recently was signed out.",
+    fr: "Ce compte était déjà connecté dans {cap} navigateurs; celui qui a servi le moins récemment a donc été déconnecté.",
+  },
   "account.delete_text": {
     en: "Deleting the account removes its saved searches and API keys and signs out every browser.",
     fr: "La suppression du compte retire ses recherches enregistrées et ses clés d'API, et déconnecte chaque navigateur.",
@@ -624,6 +650,11 @@ export const ACCOUNT_STRINGS = {
   "account.privacy_secrets": {
     en: "There are no passwords. Sign-in codes, sign-in links, the session and API keys are stored only as one-way hashes. A signed-in browser holds a second cookie, __Host-aw_session, which keeps the session for 30 days after its last use.",
     fr: "Il n'y a pas de mot de passe. Les codes et liens de connexion, la session et les clés d'API ne sont conservés que sous forme de hachages à sens unique. Un navigateur connecté détient un second témoin, __Host-aw_session, qui conserve la session pendant 30 jours après sa dernière utilisation.",
+  },
+  // {cap} is SESSIONS_MAX (session.ts), {days} AUDIT_DAYS, after which signin.ts sweep deletes an ended session.
+  "account.privacy_sessions": {
+    en: "An account stays signed in on at most {cap} browsers; signing in on another signs out the one used least recently. Each signed-in browser keeps its device class (desktop, phone or tablet) and when it signed in and was last used, for {days} days after it ends.",
+    fr: "Un compte reste connecté dans au plus {cap} navigateurs; une connexion dans un autre déconnecte celui qui a servi le moins récemment. Chaque navigateur connecté conserve sa catégorie d'appareil (ordinateur, téléphone ou tablette) et le moment de sa connexion et de sa dernière utilisation, pendant {days} jours après sa fin.",
   },
   "account.privacy_not_kept": {
     en: "An account keeps no name, postal address, IP address or browser identification. A sign-in request, made on the sign-in page or with the Follow field of a page, keeps for one day the email address it was made for and a hash of the IP address under a key that changes every day, whether or not the sign-in is completed.",

@@ -988,7 +988,8 @@ describe("sign out everywhere", () => {
     expect(await liveSessions(r.id)).toBe(0);
     const after = await get("/account", { cookie: r.cookie, env: op.env });
     expect(after.status).toBe(303);
-    expect(after.headers.get("location")).toBe("/account/sign-in");
+    // A session ended elsewhere while the account stands reads as ended (session.ts lookup), whoever ended it.
+    expect(after.headers.get("location")).toBe("/account/sign-in?m=ended");
     expect(await auditOf(r.id, "operator_signed_out")).toEqual([`by ${op.id}, 1 sessions`]);
   });
 });

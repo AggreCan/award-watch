@@ -19,6 +19,11 @@
 // hour on its last known state, its plan until the plan's own end. Past that
 // hour the request is treated as one the database cannot answer: a
 // revocation made through another isolate stands at most an hour unseen.
+//
+// An account stays signed in on at most SESSIONS_MAX browsers, on every plan:
+// a sign-in past that ends the sessions used least recently (startSession).
+// Why a session ended is not stored; the browser that holds one ended by
+// another browser is told only that it was (lookup's ended).
 
 import type { Context, Next } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
@@ -31,6 +36,10 @@ import { accountsEnabled } from "./switch";
 export const SESSION_COOKIE = "__Host-aw_session";
 export const SESSION_DAYS = 30;
 const TOUCH_MS = 60 * 60 * 1000;
+// Live sessions an account keeps, any plan (docs/accounts.md, Sign-in flow):
+// a desk computer, a laptop and a phone. The overview's row and panel, the
+// sign-in page's line and the privacy page read the figure from here.
+export const SESSIONS_MAX = 3;
 
 export type UaClass = "desktop" | "mobile" | "tablet";
 
@@ -48,9 +57,14 @@ export type Account = {
   stale: boolean;
 };
 
-export type SessionRead = { state: "none" } | { state: "ok"; account: Account } | { state: "unavailable" };
+// ended: the cookie's own session, revoked elsewhere while the account stands
+// (the cap, a sign-out everywhere, the overview's Sign out on its row, the
+// operator's console); the account pages send the reader to sign in with a
+// line saying so.
+export type SessionRead = { state: "none"; ended?: true } | { state: "ok"; account: Account } | { state: "unavailable" };
 
 const COOKIE_RE = /^([0-9a-f]{32})\.([0-9a-f]{64})$/;
+const SESSION_ID_RE = /^[0-9a-f]{32}$/;
 
 const cookieOptions = (maxAge: number) =>
   ({ path: "/", httpOnly: true, secure: true, sameSite: "Lax", maxAge }) as const;
@@ -63,16 +77,40 @@ export function csrfValid(account: Account, value: string | undefined): boolean 
   return typeof value === "string" && sameHash(value, account.csrf);
 }
 
-// A new session for a user who has just proved the address: the row, then
-// the cookie.
-export async function startSession(c: Context<AppEnv>, userId: string, uaClass: UaClass | null, now = new Date()): Promise<void> {
+// The cap, the second statement of startSession's batch: every live session
+// of the account outside the SESSIONS_MAX used most recently ends. ?1 the
+// time, ?2 the account, ?3 SESSIONS_MAX, ?4 the new session's id, which the
+// order puts first: its last_seen_at is the request's clock, and another
+// browser's touch stamped a moment later by another isolate (or a sign-in of
+// the same millisecond whose id sorts higher) must not end the session this
+// sign-in is handing out. idx_sessions_user serves both reads.
+export const SESSION_CAP_SQL =
+  "UPDATE sessions SET revoked_at = ?1 WHERE user_id = ?2 AND revoked_at IS NULL AND expires_at > ?1 " +
+  "AND id NOT IN (SELECT id FROM sessions WHERE user_id = ?2 AND revoked_at IS NULL AND expires_at > ?1 " +
+  "ORDER BY id = ?4 DESC, last_seen_at DESC, created_at DESC, id DESC LIMIT ?3)";
+
+// A new session for a user who has just proved the address: the row and the
+// cap in one batch, which D1 runs as one transaction, then the cookie. The
+// cap keeps the new row and ends the sessions used least recently; a second
+// sign-in at the same moment runs after this one and sees its row, so two
+// at once still leave SESSIONS_MAX. Answers how many sessions the cap ended.
+export async function startSession(c: Context<AppEnv>, userId: string, uaClass: UaClass | null, now = new Date()): Promise<number> {
+  const db = c.env.ACCOUNTS!;
   const id = newId();
   const secret = randomHex(32);
   const at = now.toISOString();
-  await c.env.ACCOUNTS!.prepare(
-    "INSERT INTO sessions (id, user_id, token_hash, created_at, last_seen_at, expires_at, ua_class) VALUES (?, ?, ?, ?, ?, ?, ?)",
-  ).bind(id, userId, await sha256Hex(secret), at, at, plusDays(now, SESSION_DAYS), uaClass).run();
+  const [, cap] = await db.batch([
+    db.prepare(
+      "INSERT INTO sessions (id, user_id, token_hash, created_at, last_seen_at, expires_at, ua_class) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    ).bind(id, userId, await sha256Hex(secret), at, at, plusDays(now, SESSION_DAYS), uaClass),
+    db.prepare(SESSION_CAP_SQL).bind(at, userId, SESSIONS_MAX, id),
+  ]);
+  const ended = cap?.meta?.changes ?? 0;
+  // The statement names no session, so this isolate forgets every one of the
+  // account it remembered for an outage: those still live are read again.
+  if (ended) forgetUser(userId);
   setCookie(c, SESSION_COOKIE, `${id}.${secret}`, cookieOptions(SESSION_DAYS * 86_400));
+  return ended;
 }
 
 export function clearSessionCookie(c: Context<AppEnv>): void {
@@ -87,10 +125,38 @@ export async function revokeSession(env: Env, sessionId: string, now = new Date(
 
 // Sign out everywhere: every live session of the user, this one included.
 export async function revokeAllSessions(env: Env, userId: string, now = new Date()): Promise<number> {
-  for (const [id, known] of lastKnown) if (known.account.userId === userId) lastKnown.delete(id);
+  forgetUser(userId);
   const res = await env.ACCOUNTS!.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL")
     .bind(now.toISOString(), userId).run();
   return res.meta?.changes ?? 0;
+}
+
+// The overview's Sign out on another browser's row: one live session of the
+// account, never the one making the request (that browser signs out with the
+// Sign Out panel's button). Bound to the account's id, so an id of another
+// account changes nothing, exactly as an id that does not exist; the route
+// answers both alike. True when a session ended.
+export async function revokeOtherSession(env: Env, account: Pick<Account, "userId" | "sessionId">, id: string, now = new Date()): Promise<boolean> {
+  if (!SESSION_ID_RE.test(id) || id === account.sessionId) return false;
+  const at = now.toISOString();
+  const res = await env.ACCOUNTS!.prepare(
+    "UPDATE sessions SET revoked_at = ?1 WHERE id = ?2 AND user_id = ?3 AND id <> ?4 AND revoked_at IS NULL AND expires_at > ?1",
+  ).bind(at, id, account.userId, account.sessionId).run();
+  if ((res.meta?.changes ?? 0) !== 1) return false;
+  lastKnown.delete(id);
+  return true;
+}
+
+// The account's live sessions for the overview's panel, the one used most
+// recently first: never the secret's hash, never another account's row.
+export type LiveSession = { id: string; ua_class: UaClass | null; created_at: string; last_seen_at: string };
+
+export async function liveSessions(env: Env, userId: string, now = new Date()): Promise<LiveSession[]> {
+  const res = await env.ACCOUNTS!.prepare(
+    "SELECT id, ua_class, created_at, last_seen_at FROM sessions WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ? " +
+    "ORDER BY last_seen_at DESC, created_at DESC, id DESC",
+  ).bind(userId, now.toISOString()).all<LiveSession>();
+  return res.results ?? [];
 }
 
 // -- reading the cookie ---------------------------------------------------------
@@ -113,6 +179,10 @@ function remember(id: string, known: Known): void {
 // For tests: forget what this isolate has seen.
 export function forgetSessions(): void {
   lastKnown.clear();
+}
+
+function forgetUser(userId: string): void {
+  for (const [id, known] of lastKnown) if (known.account.userId === userId) lastKnown.delete(id);
 }
 
 type Row = {
@@ -193,7 +263,11 @@ async function lookup(c: Context<AppEnv>): Promise<SessionRead> {
   }
   if (!row || !sameHash(row.token_hash, tokenHash) || row.revoked_at || row.expires_at <= at || row.status !== "active") {
     lastKnown.delete(id);
-    return { state: "none" };
+    // Ended by another browser: only for the cookie's own secret, so an id
+    // alone learns nothing, and only while the account stands (a deleted
+    // account's browsers read as signed out, nothing more).
+    const ended = !!row && !!row.revoked_at && row.status === "active" && sameHash(row.token_hash, tokenHash);
+    return ended ? { state: "none", ended: true } : { state: "none" };
   }
   const plan = await planFor(c.env, { id: row.user_id, plan: row.plan, plan_until: row.plan_until }, now);
   const account: Account = {

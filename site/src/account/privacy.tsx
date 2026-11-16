@@ -1,8 +1,10 @@
 import type { FC } from "hono/jsx";
-import { t, type Lang } from "../i18n";
+import { fmtInt, t, type Lang } from "../i18n";
+import { AUDIT_DAYS } from "./audit";
 import { EVENT_DAYS } from "./billing";
 import { VIEW_DELIVERY_DAYS } from "./saved_views";
 import { DELIVERY_ROW_DAYS } from "./searches";
+import { SESSIONS_MAX } from "./session";
 import { BUG_REPORT_DAYS } from "./signin";
 import { WATCH_DELIVERY_DAYS } from "./watches";
 
@@ -11,7 +13,9 @@ import { WATCH_DELIVERY_DAYS } from "./watches";
 // what it never keeps. A saved analytics view is Pro's, so the section says
 // what one keeps whenever accounts are open.
 // dashboard: Ultra is on sale (pages/docs.tsx), so the section says what a
-// dashboard keeps, and what a saved view sent by email keeps beside it.
+// dashboard keeps, and what a saved view sent by email keeps beside it. The
+// signed-in browsers' sentence follows the session's own, its figures read
+// from session.ts and audit.ts (the sweep's AUDIT_DAYS).
 export const AccountsPrivacy: FC<{ lang: Lang; dashboard?: boolean }> = ({ lang, dashboard }) => (
   <>
     <p>{t(lang, "account.privacy_kept", { days: DELIVERY_ROW_DAYS })}</p>
@@ -26,6 +30,7 @@ export const AccountsPrivacy: FC<{ lang: Lang; dashboard?: boolean }> = ({ lang,
     <p>{t(lang, "weekly.privacy")}</p>
     <p>{t(lang, "bugs.privacy", { days: BUG_REPORT_DAYS })}</p>
     <p>{t(lang, "account.privacy_secrets")}</p>
+    <p>{t(lang, "account.privacy_sessions", { cap: fmtInt(SESSIONS_MAX, lang), days: fmtInt(AUDIT_DAYS, lang) })}</p>
     <p>{t(lang, "account.privacy_not_kept")}</p>
     <p>{t(lang, "account.privacy_delete")}</p>
   </>

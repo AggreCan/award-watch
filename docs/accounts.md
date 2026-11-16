@@ -168,8 +168,50 @@ cascade). The sweep runs with each sign-in request.
    without a `Domain`, so no other host under the domain can set or shadow
    it. A session the browser already held, for this account or another,
    is revoked when the new one starts.
+
+   An account stays signed in on at most `SESSIONS_MAX` (3) browsers, on
+   every plan: a desk computer, a laptop and a phone. `startSession` writes
+   the new row and the cap in one batch, which D1 runs as one transaction:
+   the insert, then an update (`SESSION_CAP_SQL`) that ends every live
+   session of the account outside the 3 used most recently, by
+   `last_seen_at`, then `created_at`, then `id`. The new session is ordered
+   first, so a touch that another instance stamped a moment after this
+   request's clock cannot end the session being handed out. A second
+   sign-in at the same moment runs after the first and sees its row, so two
+   at once still leave 3. When the update ended any, the audit gains one
+   row, `signed_out` with the detail `cap <n>` (the count; no session id, no
+   address), and a sign-in without `next` ends on `/account?m=capped`, whose
+   line reads "This account was signed in on 3 browsers already, so the one
+   used least recently was signed out." A sign-in with `next` goes there as
+   before. No column or index was added: `idx_sessions_user` serves both
+   statements.
 6. `POST /account/sign-out` ends the session on this browser, or on every
-   browser (`scope=all`).
+   browser (`scope=all`). The overview's Account panel reads "Signed-in
+   browsers: 2 of 3 browsers", and its panel "Signed-In Browsers" lists the
+   account's live sessions, the one used most recently first: the device
+   class, when it signed in and when it was last used (UTC), "This browser"
+   on the reader's own row and a link-styled Sign out on each other one.
+   That button posts to `POST /account/sessions/:id/sign-out` (`Origin`,
+   session, CSRF; the `edit` bucket). Its statement is bound to the
+   account's id and never ends the browser making the request, and the
+   answer is the same redirect to `/account?m=session_out` whatever the id
+   names (a live session of the account, one already ended, this browser's
+   own, another account's, none at all), so the post tells nothing of a
+   session that is not the account's. The audit row, written only when a
+   session ended, is `signed_out` with the detail `other browser`.
+7. A browser whose session was ended elsewhere (the cap, a sign-out
+   everywhere, the panel's Sign out, the operator's console) learns it on
+   its next account page: `lookup` finds the row revoked, the cookie's own
+   secret matching and the account still active, and answers `ended`. The
+   page clears the cookie and sends the reader to
+   `/account/sign-in?m=ended`, with `next` as for any other page, where the
+   line reads "This browser was signed out. That happens when the account
+   signs out from another browser, or signs in on more than 3 browsers.
+   Sign in again to continue." Why a session ended is not stored, so the
+   line says when that happens and never which. A cookie with the right id and a
+   wrong secret, a session that ran out and a deleted account's session go
+   to the plain sign-in page. On a public page an ended session reads as
+   signed out, the same page a reader without a session gets.
 
 The sign-in page serves a first visit and a return with the same form: its
 heading is "Create a Free Account or Sign In", its lead says an account is
@@ -543,7 +585,8 @@ the console is the safer way, since its batch is one transaction.
   email in the database. The keyed API adds `KEY_LIMIT` (600 a minute per key, keyed by
   the key's id) on top of `API_LIMIT` (60 a minute per address), and a
   daily quota per key in the database (*The keyed API*). The dashboard's
-  posts and the saved views' count against `EDIT_LIMIT` (60 a minute per
+  posts, the saved views' and the overview's Sign out on another browser
+  count against `EDIT_LIMIT` (60 a minute per
   address, namespace 2012), apart from `FORM_LIMIT`'s 5, so a long
   rearrangement leaves the billing posts and the bug report their own
   count. Which requests are downloads is `bucketFor`'s decision (the Data
@@ -622,8 +665,14 @@ the console is the safer way, since its batch is one transaction.
 - **No account enumeration.** The sign-in page answers the same whether or
   not the address has an account, and the per-email limit applies to every
   address alike.
-- **Sessions are revocable.** Sign out on one browser or on all of them;
-  deletion revokes every session.
+- **Sessions are revocable, and capped.** Sign out on this browser, on
+  another from the overview's panel, or on all of them; deletion revokes
+  every session. An account holds at most 3 live sessions
+  (`SESSIONS_MAX`), whatever its plan: a fourth sign-in ends the one used
+  least recently (*Sign-in flow*). One inbox shared by a team keeps 3
+  browsers at a time, and each new one needs a fresh code from the inbox,
+  at most 5 an hour an address. The audit counts each cap's sign-out
+  (`signed_out`, `cap <n>`); nothing blocks an account for it.
 - **Fail open to outages, closed to revocation.** When the database cannot
   be read, a session this Worker instance verified within the last hour
   keeps its last known state, its plan until the plan's own end; past that
