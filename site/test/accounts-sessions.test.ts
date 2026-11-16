@@ -168,7 +168,7 @@ describe("a browser the cap signed out", () => {
     expect(form).toContain('<input type="hidden" name="next" value="/account/searches?m=added"/>');
     const fr = await read(await get("/account/sign-in?m=ended&lang=fr"));
     expect(fr).toContain(nbsp(t("fr", "account.msg_ended", { cap: fmtInt(SESSIONS_MAX, "fr") })));
-    expect(fr).toContain("Ce navigateur a été déconnecté, par une connexion dans un autre navigateur au-delà des 3 du compte ou par une déconnexion partout.");
+    expect(fr).toContain("Ce navigateur a été déconnecté. Cela se produit quand le compte se déconnecte depuis un autre navigateur ou se connecte dans plus de 3 navigateurs.");
   });
 
   it("is told only with the cookie's own secret: the id with another secret reads as any unknown session", async () => {
