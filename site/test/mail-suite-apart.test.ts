@@ -17,6 +17,10 @@ const SUITES = JSON.parse((env as unknown as { SUITES: string }).SUITES) as { de
 const MAIL_FILES = Object.keys(import.meta.glob("../test-mail/**/*")).map((f) => f.slice("../".length));
 const DEFAULT_FILES = Object.keys(import.meta.glob("./**/*.test.ts")).map((f) => `test/${f.slice("./".length)}`);
 const WORKFLOWS = import.meta.glob("../../.github/workflows/*.yml", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+// The workflows that run the suites, each through the package's two scripts and never by naming vitest.
+const RUN_THE_SUITES = ["../../.github/workflows/tests.yml"];
+// A workflow without its comments, so a comment that names a suite is not a step that runs one.
+const steps = (text: string) => text.split("\n").filter((line) => !/^\s*#/.test(line)).join("\n");
 
 // A glob as vitest reads one: "**/" any folders or none, "**" anything, "*"
 // anything within one folder name.
@@ -77,16 +81,22 @@ describe("the mail suite", () => {
     }
   });
 
-  it("runs under its own script and config, and no workflow runs either suite", () => {
+  it("runs under its own script and config, and only the tests workflow runs the suites", () => {
     expect(pkg.scripts.test).toBe("vitest run");
     expect(pkg.scripts["test:mail"]).toBe("vitest run --config vitest.mail.config.ts");
     expect(mailConfig).toContain("include: MAIL_SUITE.include");
     expect(mailConfig).toContain("exclude: MAIL_SUITE.exclude");
     expect(mailConfig).not.toContain("DEFAULT_SUITE");
-    // The suites are local (docs/mail.md); the live check is a workflow of its own that calls the site.
+    // The suites run locally and in the tests workflow, each by its own script (docs/mail.md); the live
+    // check is a workflow of its own that calls the site and runs neither.
     expect(Object.keys(WORKFLOWS)).toContain("../../.github/workflows/mail-check.yml");
-    for (const [file, text] of Object.entries(WORKFLOWS)) {
-      expect(text, file).not.toMatch(/\bvitest\b|npm (?:run )?test/);
+    const running = Object.entries(WORKFLOWS).filter(([, text]) => /\bvitest\b|npm (?:run )?test/.test(steps(text))).map(([file]) => file).sort();
+    expect(running).toEqual(RUN_THE_SUITES);
+    for (const file of RUN_THE_SUITES) {
+      const text = steps(WORKFLOWS[file]);
+      expect(text, file).toMatch(/run: npm test$/m);
+      expect(text, file).toMatch(/run: npm run test:mail$/m);
+      expect(text, file).not.toMatch(/\bvitest\b/);
     }
   });
 });

@@ -1,0 +1,71 @@
+# The tests, on request: the site's typecheck, the Worker suite, the mail
+# suite and the pipeline's suite, on GitHub's runner. It deploys nothing, reads
+# no secret and writes nothing: a red run here says the commit it was started
+# from fails its own tests on a clean Linux machine, whatever a developer's
+# own machine says. Manual only, as every workflow here is manual or
+# scheduled (site/test/hardening.test.ts holds that).
+#
+# Two jobs, side by side:
+# - site: npm ci, then the typecheck (tsc --noEmit), the Worker suite (vitest
+#   in the Workers pool) and the mail suite, as site/package.json names them.
+# - pipeline: the package installed editable with its dev extra, then pytest.
+#
+# pipeline/tests/test_tests_workflow.py fails when this file gains a secret, a
+# wider permission, another trigger or a command outside the suites.
+
+name: tests
+
+on:
+  workflow_dispatch:
+
+# Read the repository and nothing else.
+permissions:
+  contents: read
+
+# One run a branch: a second start while a run is going replaces it, since
+# only the newest commit's answer matters.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  site:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install the site's tools
+        working-directory: site
+        run: npm ci
+      - name: Typecheck
+        working-directory: site
+        run: npm run typecheck
+      - name: The Worker suite
+        working-directory: site
+        run: npm test
+      - name: The mail suite
+        working-directory: site
+        run: npm run test:mail
+
+  pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      # Editable, as in the nightly: config.py finds its files relative to
+      # its own path. The dev extra brings pytest.
+      - name: Install the pipeline
+        run: pip install -e "./pipeline[dev]"
+      - name: The pipeline suite
+        working-directory: pipeline
+        run: pytest

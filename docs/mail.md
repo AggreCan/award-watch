@@ -14,8 +14,10 @@ deploy and from the default test suite:
 The live check never sends to a reader: its one recipient is the address in
 `MAIL_TEST_TO`.
 
-No workflow runs either test suite. The default suite (`npm test`) is local
-too; the deploys run neither.
+Both suites also run on GitHub's runner in the tests workflow
+(`.github/workflows/tests.yml`, started by hand), each by its own script. The
+mail suite sends nothing there either: its sender only records. The live
+check runs neither suite.
 
 ## The shell
 
