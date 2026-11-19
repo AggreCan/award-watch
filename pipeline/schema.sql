@@ -890,6 +890,53 @@ CREATE TABLE IF NOT EXISTS tender_follows (
   PRIMARY KEY (reference, rank)
 );
 
+-- The analytics builder's cubes (cubes.py, docs/analytics.md "The builder's cubes"), counted from the rows the records
+-- sync sends as records (records_db.record_rows), in the columns of the records database's tables of the same names
+-- (records_schema.sql, which says what each counts). Rebuilt whole by the cubes stage in one transaction, with meta
+-- cubes_as_of, the data date they describe; the records sync sends them to D1 as they stand. Never exported to a
+-- static file.
+CREATE TABLE IF NOT EXISTS cube_bs (
+  k INTEGER PRIMARY KEY,                         -- records_db.key_of('bs:<bid>:<sid>:<src>:<fy>')
+  bid INTEGER NOT NULL,                          -- the buyer's number (records_db.buyer_number), 0 for every buyer
+  sid INTEGER NOT NULL,                          -- the UNSPSC segment, 0 for every segment
+  src INTEGER NOT NULL,
+  fy INTEGER NOT NULL,
+  n INTEGER NOT NULL,
+  cents INTEGER,
+  n_no_value INTEGER NOT NULL,
+  n_nc INTEGER NOT NULL,
+  n_unstated INTEGER NOT NULL,
+  n_pos INTEGER NOT NULL,
+  pos INTEGER,
+  pos_nc INTEGER,
+  pos_unstated INTEGER,
+  med INTEGER,
+  n_amended INTEGER,
+  n_compared INTEGER,
+  n_grew INTEGER,
+  first_cents INTEGER,
+  last_cents INTEGER,
+  n_orgs INTEGER NOT NULL,
+  top1 INTEGER,
+  top5 INTEGER,
+  top10 INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS cube_place (
+  k INTEGER PRIMARY KEY,                         -- records_db.key_of('pl:<bid>:<sid>:<prov>:<src>:<fy>')
+  bid INTEGER NOT NULL,
+  sid INTEGER NOT NULL,
+  prov TEXT NOT NULL,                            -- the province or territory of delivery, '' for none named
+  src INTEGER NOT NULL,
+  fy INTEGER NOT NULL,
+  n INTEGER NOT NULL,
+  cents INTEGER,
+  n_nc INTEGER NOT NULL,
+  n_pos INTEGER NOT NULL,
+  pos INTEGER,
+  med INTEGER
+);
+
 -- Nightly link sampling (link_sample.py, docs/link-sampling.md): one row per
 -- government link checked, from the sample drawn each night. Rows older than
 -- link_sample.RETENTION_DAYS (60) are deleted by the night that writes the

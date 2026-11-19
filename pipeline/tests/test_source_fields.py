@@ -359,5 +359,5 @@ def test_a_new_table_needs_no_full_reload():
     assert len({t.code for t in rd.TABLES}) == len(rd.TABLES)
     # The comment beside LAYOUT counts the tables in words; it stays true.
     source = Path(rd.__file__).read_text(encoding="utf-8")
-    words = {19: "nineteen", 20: "twenty", 21: "twenty-one", 22: "twenty-two"}
+    words = {19: "nineteen", 20: "twenty", 21: "twenty-one", 22: "twenty-two", 23: "twenty-three", 24: "twenty-four"}
     assert f"any of the {words[len(rd.TABLES)]} raises it" in source

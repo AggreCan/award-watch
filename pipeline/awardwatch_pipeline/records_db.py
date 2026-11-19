@@ -65,6 +65,11 @@ Two serve the page of each standing offer or supply arrangement
 rec_holders (its active holders whose names are shown; a holder withheld as a
 person is only counted, in rec_instruments.nw). Their rows come from the sosa
 tables (sosa_export.instrument_rows and holder_rows).
+Three serve the analytics builder (docs/analytics.md, "The builder's cubes"):
+cube_bs (the figures of each buyer, segment, source and fiscal year),
+cube_place (of each province of delivery) and cube_meta (the data date they
+describe), copied from the pipeline tables the cubes stage (cubes.py) builds
+from record_rows, so a cube's figure is the one the views read in records.
 
 The sync is the search sync's (search_db.py) with three changes, because the
 records table is about a hundred times larger:
@@ -176,8 +181,17 @@ LINES = Table(18, "rec_lines", "k", ("sk", "j"))
 FOLLOWS = Table(19, "rec_follows", "k", ("tref", "rank", "j"))
 # A published contract row's section 6 exception, keyed as its rec_contracts row (published_exception_rows).
 CONTRACT_EXCEPTION = Table(20, "rec_contract_exception", "k", ("exc",))
+# The analytics builder's cubes, copied from the pipeline tables of the same names the cubes stage rebuilds whole
+# (cubes.py), and the data date they describe (META_CUBES_AS_OF), one row keyed 1. A cube whose columns change
+# becomes a new table under a new name, so these never need a full reload.
+CUBE_BS = Table(21, "cube_bs", "k", ("bid", "sid", "src", "fy", "n", "cents", "n_no_value", "n_nc", "n_unstated", "n_pos", "pos",
+                                     "pos_nc", "pos_unstated", "med", "n_amended", "n_compared", "n_grew", "first_cents",
+                                     "last_cents", "n_orgs", "top1", "top5", "top10"))
+CUBE_PLACE = Table(22, "cube_place", "k", ("bid", "sid", "prov", "src", "fy", "n", "cents", "n_nc", "n_pos", "pos", "med"))
+CUBE_META = Table(23, "cube_meta", "k", ("as_of",))
 TABLES = (RECORDS, ORGS, BUYERS, BUYER_QUARTERS, SEGMENT_YEARS, BUYER_YEARS, DUE, DETAILS, CLASSES, EXPIRING, CONTRACTS, GSIN,
-          EVENTS, INSTRUMENTS, HOLDERS, EXPIRING_PROV, CONTRACT_INDIGENOUS, LINES, FOLLOWS, CONTRACT_EXCEPTION)
+          EVENTS, INSTRUMENTS, HOLDERS, EXPIRING_PROV, CONTRACT_INDIGENOUS, LINES, FOLLOWS, CONTRACT_EXCEPTION, CUBE_BS,
+          CUBE_PLACE, CUBE_META)
 BY_CODE = {t.code: t for t in TABLES}
 
 # The form of the tables in records_schema.sql. 1: phase 1 (no meta row says
@@ -185,9 +199,10 @@ BY_CODE = {t.code: t for t in TABLES}
 # rec_buyer_years, rec_due. Recorded in meta (META_LAYOUT) by the full load
 # that wrote it; a sync that finds another reloads in full by itself. The
 # tables added beside them (rec_details to rec_gsin, then rec_events, rec_instruments, rec_holders,
-# rec_expiring_prov, rec_contract_indigenous, rec_lines, rec_follows and rec_contract_exception) leave it at 2: no
-# table D1 holds changed form, the nightly schema creates a missing table, and its rows are all new to the ledger, so
-# the ordinary changes fill it. A column added to any of the twenty raises it.
+# rec_expiring_prov, rec_contract_indigenous, rec_lines, rec_follows, rec_contract_exception, and the cubes cube_bs,
+# cube_place and cube_meta) leave it at 2: no table D1 holds changed form, the nightly schema creates a missing table,
+# and its rows are all new to the ledger, so the ordinary changes fill it.
+# A column added to any of the twenty-three raises it.
 LAYOUT = 2
 
 # The source numbers the site's records_db.ts SOURCE_NUMBER repeats.
@@ -215,6 +230,7 @@ META_RELOAD = "records_reload_due"      # the date records-check found a count d
 META_FULL_AT = "records_full_at"        # the date the last full reload was written
 META_PLAN = "records_plan"              # the plan number of the stage records-synced may record
 META_LAYOUT = "records_layout"          # the LAYOUT of the last full load D1 received
+META_CUBES_AS_OF = "cubes_as_of"        # the data date of the cubes the cubes stage last wrote (cube_meta)
 MANIFEST = "manifest.json"
 BATCH_LIST = "batches.txt"
 FINISH = "finish.sql"                   # applied after the count check: state ready, the data date
@@ -836,12 +852,14 @@ def _now(table: Table) -> str:
     return f"records_now_{table.code}"
 
 
-def value_figures(conn: sqlite3.Connection, columns: str, where: str) -> dict[tuple, tuple[int, int, int]]:
+def value_figures(conn: sqlite3.Connection, columns: str, where: str, table: str | None = None) -> dict[tuple, tuple[int, int, int]]:
     """(count, sum, median) of the counted values above zero in tonight's records, per group of columns.
 
     The median of an even count is the mean of the two middle values, its
     half cent dropped. Read in one ordered pass, so no group's values are
-    held beyond its own.
+    held beyond its own. table is tonight's records table unless named: the
+    cubes stage (cubes.py) reads its own copy of the same rows, so its
+    medians are these by the same code.
     """
     out: dict[tuple, tuple[int, int, int]] = {}
     group: tuple | None = None
@@ -852,7 +870,7 @@ def value_figures(conn: sqlite3.Connection, columns: str, where: str) -> dict[tu
             n, mid = len(values), len(values) // 2
             out[group] = (n, sum(values), values[mid] if n % 2 else (values[mid - 1] + values[mid]) // 2)
 
-    for row in conn.execute(f"SELECT {columns}, cents FROM temp.{_now(RECORDS)} WHERE {where} AND cents > 0 "
+    for row in conn.execute(f"SELECT {columns}, cents FROM {table or f'temp.{_now(RECORDS)}'} WHERE {where} AND cents > 0 "
                             f"ORDER BY {columns}, cents"):
         here = tuple(row)
         if here[:-1] != group:
@@ -927,7 +945,8 @@ def build(conn: sqlite3.Connection, today: date | None = None, static_dir: Path 
     static_dir is the static export (default data/out/static), whose 12-month
     radar window becomes rec_expiring and rec_expiring_prov, and with the lines
     stage's expiring_lines, rec_lines; the stage's tender_follows becomes
-    rec_follows.
+    rec_follows. The cubes stage's cube_bs and cube_place are copied as they
+    stand.
     """
     day = today or date.fromisoformat(today_iso()[:10])
     as_of = day.isoformat()
@@ -1045,6 +1064,13 @@ def build(conn: sqlite3.Connection, today: date | None = None, static_dir: Path 
         fill(HOLDERS, sosa_export.holder_rows(conn, key_of, org_number))
     except sqlite3.IntegrityError:
         raise ValueError("two instruments or holders have the same key; key_of needs more bits") from None
+
+    # The analytics builder's cubes as the cubes stage last wrote them whole, so a night whose stage failed sends
+    # last night's rows unchanged, and the data date they describe; a database the stage never ran on has none.
+    for cube in (CUBE_BS, CUBE_PLACE):
+        fill(cube, (tuple(r) for r in conn.execute(f"SELECT {', '.join(cube.written)} FROM {cube.name} ORDER BY {cube.key}")))
+    cubes_as_of = get_meta(conn, META_CUBES_AS_OF)
+    fill(CUBE_META, iter([(1, cubes_as_of)] if cubes_as_of else []))
     return left_out
 
 

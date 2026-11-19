@@ -53,6 +53,9 @@ reads it, with prepared statements.
 | `rec_events` | thing that happened on a data date of the last 90 to an organization, a buyer, a single record or a tender notice, plus a count row past 100 a subject a day (*Events*) | thousands a night, a few hundred thousand |
 | `rec_instruments` | standing offer or supply arrangement the pipeline keeps (`docs/sosa.md`): its fields and its call-ups as JSON | a few thousand |
 | `rec_holders` | active holder of one, by region, whose name is shown | about 10,000 |
+| `cube_bs` | buyer (or every buyer), segment (or every segment), source and fiscal year: the analytics builder's figures (*The builder's cubes*) | 3,853 rows for both cubes on the development copy; 70,000 to 195,000 estimated |
+| `cube_place` | buyer or segment (or every record), province of delivery, source and fiscal year, award notices and history only | see `cube_bs` |
+| `cube_meta` | one row: the data date the cubes describe | 1 |
 | `rec_meta` | key: `state` (`loading` or `ready`), `as_of` (the data date the rows describe), `rules` | 3 |
 
 A row of `records` is one record as the profiles count it (*Counting money*
@@ -727,6 +730,120 @@ buyer and segment); each ends in a `LIMIT`, and the tests read their plans.
 The rows statement joins each `sosa:` row to `rec_instruments` through
 `rec_instruments_agr` for the instrument's active holders now, one seek per
 row read.
+
+## The builder's cubes
+
+Two tables counted ahead for the analytics builder (the Ultra design,
+section 4.4): `cube_bs` and `cube_place`, with `cube_meta`. Nothing on the
+site reads them yet; the builder's page, its menus and its statements are a
+later build.
+
+**Built from the views' own rows.** The pipeline stage `cubes`
+(`pipeline/awardwatch_pipeline/cubes.py`) reads `records_db.record_rows`,
+the rows the sync sends as `records`, with the same data date bound
+(`NOTICE_DAY`), into a temporary table, and counts the cells from it, so a
+figure in a cube is the figure the fixed views read for the same buyer,
+segment, source and fiscal year. A record with no fiscal year is in no cell,
+as it is in no view. A grant to a person is not in `records`, so it is in no
+cell either; a supplier withheld as a person counts in every total and never
+as an organization (`n_orgs`, `top1` to `top10`).
+
+**The cells of `cube_bs`.** `src` is one source: no row adds two. `fy` is
+one fiscal year.
+
+| `bid` | `sid` | The rows of `records` a cell reads | As the views read them |
+|---|---|---|---|
+| a buyer | a segment | the buyer's rows in the segment, extra or not | `BUYER_SEGMENTS_SQL` |
+| a buyer | 0 | the buyer's records, each once (`extra = 0`), with a segment or without | `rec_buyer_quarters`, `rec_buyer_years`, `BUYER_COMPETITION_SQL`, `BUYER_SUPPLIERS_SQL`, `BUYER_GROWTH_SQL` |
+| 0 | a segment | every row of the segment, extra or not, the records naming no buyer included | `rec_segment_years`, `SEGMENT_WINNERS_SQL`, `SEGMENT_BUYERS_SQL` |
+| 0 | 0 | every record, each once | (the source's total) |
+
+So a notice whose codes reach two segments counts in each segment's cells
+and once in its buyer's `sid 0` cell; segment rows are never added together.
+Published contracts and grants carry no segment and have `sid 0` rows only.
+A buyer's number is a 40-bit hash; the stage stops if one is 0.
+
+**The columns of `cube_bs`**, each with the statement of
+`site/src/records_db.ts` (or the summary table the sync writes) it was
+matched to:
+
+| Column | What it counts | Matched to |
+|---|---|---|
+| `n` | the cell's rows | `COUNT(*)` of the statements above; `rec_buyer_quarters.n` added over the year's quarters; `rec_segment_years.n` |
+| `cents` | the sum of the counted values (`records.cents`: Canadian dollars, published, not flagged), negatives included; null when none was counted | `SUM(cents)` of the same; `rec_buyer_quarters.cents`; `rec_segment_years.cents` |
+| `n_no_value` | `vnote = 1`: no value published (another currency and a flagged value are not this) | `rec_buyer_quarters.n_no_value`, `rec_segment_years.n_no_value`, `ORG_YEARS_SQL` |
+| `n_nc`, `n_unstated` | `comp = 0`; `comp IS NULL` (every grant) | `BUYER_COMPETITION_SQL` |
+| `n_pos`, `pos`, `med` | the counted values above zero: how many, their sum, their median (the mean of the two middle values for an even count, its half cent dropped) | `rec_buyer_years`, `rec_segment_years`: the same function, `records_db.value_figures` |
+| `pos_nc` | the sum of the values above zero with `comp = 0` | `BUYER_COMPETITION_SQL` `pos_nc` |
+| `pos_unstated` | the sum of the values above zero with `comp IS NULL` | no statement reads it yet; the form of `pos_nc` |
+| `n_amended`, `n_compared`, `n_grew`, `first_cents`, `last_cents` | award notices and history: the records amended (`namd > 0`); of them, those with a first value above zero and a counted last value; of those, the ones whose value grew; and the sums of their first (`ocents`) and last (`cents`) values. Null for published contracts and grants | `BUYER_GROWTH_SQL`, `ORG_GROWTH_SQL` (`COMPARED`) |
+| `n_orgs` | the distinct organizations named | `rec_segment_years.n_orgs`; `n_orgs` of `BUYER_SUPPLIERS_SQL` and `SEGMENT_WINNERS_SQL` |
+| `top1`, `top5`, `top10` | the cents held by the 1, 5 and 10 organizations with the largest values, ranked as the suppliers' lists rank them (their counted values added, none last, then the records, then the number), a value of none added as 0; null when no organization is named | `BUYER_SUPPLIERS_SQL` and `SEGMENT_WINNERS_SQL` for the order, the buyer view's shares of the largest 1, 5 and 10 (`pages/analytics.tsx`) for the sum |
+
+A median, `n_orgs` and the three largest values cannot be added across
+years, so each row holds one fiscal year. The buyer view divides the largest
+organizations' values by the buyer's `rec_buyer_quarters.cents` for the
+period, which for one fiscal year is the same row's `cents`.
+
+**`cube_place`.** Award notices and history only. `prov` is a province or
+territory of delivery as the radar's province filter reads it
+(`records_db.expiring_province_rows`): the newest version's stated provinces
+and the ones derived from its other fields (`places.py`), the thirteen codes
+only, or `''` when the notice names none. A cell is a buyer (`sid` 0, each
+record once), a segment (`bid` 0, every row of the segment) or every record
+(both 0), by province, source and fiscal year; there is no cell of a buyer in
+a segment. A notice naming several provinces counts in each, so provinces
+are never added together; the same cell of `cube_bs` counts it once. The
+columns `n`, `cents`, `n_nc`, `n_pos`, `pos` and `med` count as in
+`cube_bs`.
+
+Keys: `key_of('bs:<bid>:<sid>:<src>:<fy>')` and
+`key_of('pl:<bid>:<sid>:<prov>:<src>:<fy>')`. Indexes: `cube_bs (bid, src,
+sid, fy)`, `cube_bs (sid, src, bid, fy)`, `cube_place (bid, src, fy, prov)`
+and `cube_place (sid, src, fy, prov)`; `pipeline/tests/test_cubes.py` reads
+the plans of a buyer's and a segment's statements through them. A cube whose
+columns change becomes a new table under a new name, never an altered one.
+
+**The stage.** `cubes` runs after `lines` and before `export`
+(`cli.STAGES`), through `cli._stage`, with its own log row: a fault there is
+logged, the run reads red, and the radar, the lines, the export and every
+other stage stand. The data date is the run's UTC date, the one the export
+then records as `data_as_of` and the sync binds. It rebuilds the pipeline
+tables `cube_bs` and `cube_place` (`schema.sql`) whole in one transaction,
+with meta `cubes_as_of`, the data date they describe; a failure rolls back
+to last night's rows and date, which the sync then sends unchanged. The
+guard: when the two would hold more than `CUBE_ROWS_MAX` (400,000) rows
+together, it raises `CubesTooLarge` before anything is written. The log row's
+detail holds counts and the seconds, never a name: the records rows read,
+the cells of each kind (`buyer_segment`, `buyer`, `segment`, `all`,
+`place_buyer`, `place_segment`, `place_all`), each cube's rows, `rows` and
+`seconds`.
+
+**The sync.** `records_db.TABLES` numbers them 21 (`cube_bs`), 22
+(`cube_place`) and 23 (`cube_meta`, one row keyed 1 holding `as_of`, none
+before the stage first runs). `build` copies the two pipeline tables as they
+stand, and the ordinary changes send them: new tables beside the others
+(`records_schema.sql` creates them with `IF NOT EXISTS`), rows all new to the
+ledger, so no full reload, and `LAYOUT` stays 2. The count statement
+(`records_db.COUNT_SQL` and its copy in `nightly.yml`) counts all three. The
+first night after the stage first runs sends every cube row and the one meta
+row (3,853 rows on the development copy; at most about 200,000 estimated on
+production, of the 50 million writes a month); a later night sends the cells
+whose figures changed (most in the current fiscal year, and the rollups of a
+changed record: a notice in two segments and three provinces changes six
+`cube_bs` rows and twelve `cube_place` rows) and the meta row when the date
+moved; a night with nothing changed sends nothing.
+
+**Measured on the development copy** (2026-11-01 data date, 16,841 rows of
+`records`, its schema brought current and its provinces derived on a
+scratch copy): 0.6 seconds for the stage, 0.34 of them in `record_rows`;
+`cube_bs` 1,587 rows (buyer by segment 659 for award notices and 350 for
+history, as the design counted them, 357 and 350 of them in 2026-27; `sid 0`
+224; `bid 0` 307; both 0, 47), `cube_place` 2,266 (buyer by province 434 and
+236, segment by province 1,086 and 367, every record by province 143). With
+stated provinces alone and no `''` cells, the buyer-province cells are the
+design's 332 and 163; the provinces derived from other fields and the
+notices placed nowhere make up the rest.
 
 ## Phase 3
 

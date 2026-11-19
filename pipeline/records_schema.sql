@@ -427,3 +427,71 @@ CREATE TABLE IF NOT EXISTS rec_holders (
 CREATE INDEX IF NOT EXISTS rec_holders_instrument ON rec_holders (ik, name, region);
 -- An organization's instruments: the claim page's block and the watches' calendar read holders by oid.
 CREATE INDEX IF NOT EXISTS rec_holders_org ON rec_holders (oid) WHERE oid IS NOT NULL;
+
+-- The analytics builder's cube by buyer, segment, source and fiscal year
+-- (pipeline cubes.py, docs/analytics.md "The builder's cubes"), counted from
+-- the rows of records. bid 0 is every buyer, the records naming none
+-- included; sid 0 is every segment, each record once (records with extra =
+-- 0); otherwise a notice counts in each segment its codes reach, as the
+-- segment views count it. Published contracts and grants have sid 0 rows
+-- only. The organizations' figures leave out suppliers withheld as persons,
+-- whose values count in the totals. A new table beside the others: the
+-- nightly schema creates it, its rows are all new to the ledger, and a cube
+-- whose columns change becomes a new table under a new name.
+CREATE TABLE IF NOT EXISTS cube_bs (
+  k INTEGER PRIMARY KEY,                         -- key_of('bs:<bid>:<sid>:<src>:<fy>')
+  bid INTEGER NOT NULL,                          -- rec_buyers.bid, or 0
+  sid INTEGER NOT NULL,                          -- the UNSPSC segment, or 0
+  src INTEGER NOT NULL,                          -- records.src
+  fy INTEGER NOT NULL,                           -- records.fy
+  n INTEGER NOT NULL,                            -- records
+  cents INTEGER,                                 -- their counted values; NULL when none was counted
+  n_no_value INTEGER NOT NULL,                   -- records.vnote = 1: no value published
+  n_nc INTEGER NOT NULL,                         -- records.comp = 0
+  n_unstated INTEGER NOT NULL,                   -- records.comp IS NULL
+  n_pos INTEGER NOT NULL,                        -- counted values above zero, which the next four read
+  pos INTEGER,                                   -- their sum
+  pos_nc INTEGER,                                -- the sum of those with comp = 0
+  pos_unstated INTEGER,                          -- the sum of those with comp IS NULL
+  med INTEGER,                                   -- their median, the lower cent of a half
+  n_amended INTEGER,                             -- awards and history only, as the growth statements count: amended,
+  n_compared INTEGER,                            -- amended with a first value above zero and a counted last value,
+  n_grew INTEGER,                                -- of those, the ones whose value grew,
+  first_cents INTEGER,                           -- and the sums of their first
+  last_cents INTEGER,                            -- and last values
+  n_orgs INTEGER NOT NULL,                       -- distinct organizations named
+  top1 INTEGER,                                  -- cents held by the 1, 5 and 10 organizations with the largest values;
+  top5 INTEGER,                                  -- NULL when no organization is named
+  top10 INTEGER
+);
+CREATE INDEX IF NOT EXISTS cube_bs_buyer ON cube_bs (bid, src, sid, fy);
+CREATE INDEX IF NOT EXISTS cube_bs_segment ON cube_bs (sid, src, bid, fy);
+
+-- By province of delivery (stated or derived, as the radar's province filter
+-- reads them; '' for none named), for a buyer (sid 0) or a segment (bid 0),
+-- or both 0 for every record; award notices and history only. A notice
+-- naming several provinces counts in each, so provinces are never added
+-- together.
+CREATE TABLE IF NOT EXISTS cube_place (
+  k INTEGER PRIMARY KEY,                         -- key_of('pl:<bid>:<sid>:<prov>:<src>:<fy>')
+  bid INTEGER NOT NULL,
+  sid INTEGER NOT NULL,
+  prov TEXT NOT NULL,                            -- AB BC MB NB NL NS NT NU ON PE QC SK YT, or ''
+  src INTEGER NOT NULL,
+  fy INTEGER NOT NULL,
+  n INTEGER NOT NULL,
+  cents INTEGER,
+  n_nc INTEGER NOT NULL,
+  n_pos INTEGER NOT NULL,
+  pos INTEGER,
+  med INTEGER
+);
+CREATE INDEX IF NOT EXISTS cube_place_buyer ON cube_place (bid, src, fy, prov);
+CREATE INDEX IF NOT EXISTS cube_place_segment ON cube_place (sid, src, fy, prov);
+
+-- The data date the cubes describe, one row keyed 1: the night the cubes
+-- stage last wrote them, which a night whose stage failed leaves as it was.
+CREATE TABLE IF NOT EXISTS cube_meta (
+  k INTEGER PRIMARY KEY,
+  as_of TEXT NOT NULL                            -- YYYY-MM-DD
+);

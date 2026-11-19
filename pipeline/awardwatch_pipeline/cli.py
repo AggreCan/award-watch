@@ -24,7 +24,7 @@ from .db import connect, log_run
 from .http import PoliteClient
 from .sources import buyers, canadabuys, registry_federal
 from . import indicators
-from . import expiring, export, export_static, lines, migrate, places
+from . import cubes, expiring, export, export_static, lines, migrate, places
 from . import link_sample, records_db, search_db
 from .sources import contracts, grants, indigenous_target, lobbying, matching, public_accounts, sosa
 
@@ -38,10 +38,12 @@ log = logging.getLogger("awardwatch_pipeline")
 # it running. families after them too: a member merged tonight counts as the
 # organization that took its records. lines after expiring: the holder's
 # record of each radar row, a stage of its own so a fault there leaves the
-# radar and the export standing.
+# radar and the export standing. cubes after lines: the analytics builder's
+# cubes, a stage of its own for the same reason; a fault there keeps last
+# night's cubes.
 STAGES = ["buyers", "tenders", "awards", "history", "contracts", "grants", "lobbying", "registry",
           "organizations", "sosa", "public_accounts", "indigenous_target", "families", "indicators", "expiring", "lines",
-          "export"]
+          "cubes", "export"]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -148,6 +150,8 @@ def stage_runners(conn: sqlite3.Connection, client: PoliteClient | None,
         "indicators": lambda: indicators.run(conn),
         "expiring": lambda: expiring.run(conn),
         "lines": lambda: lines.run(conn),
+        # The analytics builder's cubes, from the rows the records sync sends.
+        "cubes": lambda: cubes.run(conn),
         "export": lambda: _export(conn),
     }
 
