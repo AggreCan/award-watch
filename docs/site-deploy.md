@@ -265,7 +265,7 @@ time every day.
 
 | Cron (`site/wrangler.jsonc`) | Constant | What the Worker does |
 |---|---|---|
-| `0 6 * * *` | `WATCHDOG_CRON` | the daily check (`site/src/watchdog.ts`) |
+| `0 6 * * *` | `WATCHDOG_CRON` | the daily check (`site/src/watchdog.ts`), and the accounts' retention sweep (`site/src/account/signin.ts`) |
 | `0 15-20 * * *` | `DELIVERY_CRON` | the deliveries (`site/src/account/deliveries.ts`) |
 | `30 12,16,20 * * *` | `NIGHTLY_CRON` | starts `nightly.yml` on `main`, input `gate` = `"true"` |
 | `45 1,3,11,13,15,17,19,21,23 * * *` | `SAME_DAY_CRON` | starts `intraday.yml` on `main`, no input |

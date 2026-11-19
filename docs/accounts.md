@@ -121,7 +121,9 @@ with the account); sessions 90 days after they end; audit rows after 90
 days; bug reports after 180 days (and with the account); the keyed API's
 daily counts after 60 days (and with the account's keys, by the table's
 cascade); a seat 30 days after it ends, and an invitation never taken 30
-days after it was sent. The sweep runs with each sign-in request.
+days after it was sent. The sweep runs with each sign-in request and once
+a day from the Worker's 06:00 UTC cron, so the days hold when nobody signs
+in.
 
 ## Sign-in flow
 

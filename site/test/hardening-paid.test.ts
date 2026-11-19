@@ -1063,6 +1063,9 @@ describe("the webhook's rate-limit bucket", () => {
     // the payment service.
     expect(bucketFor("POST", "/account/billing/checkout")).toBe("form");
     expect(bucketFor("POST", "/account/billing/portal")).toBe("form");
+    // A move between plans calls the payment service twice: a form post too.
+    expect(bucketFor("POST", "/account/billing/change")).toBe("form");
+    expect(bucketFor("GET", "/account/billing/change")).toBe("page");
     expect(bucketFor("GET", "/account/billing/portal")).toBe("page");
     expect(wranglerConfig).toContain('{ "name": "WEBHOOK_LIMIT", "namespace_id": "2008", "simple": { "limit": 120, "period": 60 } }');
     const keys: string[] = [];

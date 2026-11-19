@@ -230,8 +230,9 @@ export async function findOrCreateUser(env: Env, email: string, lang: Lang, now 
 // after they ended, the audit trail after 90 days, bug reports after
 // BUG_REPORT_DAYS, the keyed API's daily counts after USAGE_KEEP_DAYS, seats
 // SEAT_KEEP_DAYS after they end and invitations never taken SEAT_KEEP_DAYS
-// after they were sent. Run with each sign-in request, so the tables stay
-// small without a schedule of their own.
+// after they were sent. Run with each sign-in request and once a day from the
+// Worker's 06:00 UTC cron (src/index.tsx scheduled), so the keeping days hold
+// on a day when nobody signs in.
 export async function sweep(env: Env, now = new Date()): Promise<void> {
   const db = env.ACCOUNTS!;
   const day = plusDays(now, -1);

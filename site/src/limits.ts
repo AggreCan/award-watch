@@ -80,7 +80,7 @@ export const FEED_ICS = /^\/account\/calendar\/[^/]+\.ics$/;
 export const ORG_CLAIM_CSV = /^\/account\/organization\/[a-z]+\.csv$/;
 
 // The billing page's own posts (account/routes.tsx); the webhook has its bucket.
-const BILLING_POSTS = new Set(["/account/billing/checkout", "/account/billing/portal", "/account/billing/refund"]);
+const BILLING_POSTS = new Set(["/account/billing/checkout", "/account/billing/portal", "/account/billing/change", "/account/billing/refund"]);
 // The dashboard's posts (account/dashboard.tsx): each writes the account's
 // layout or its dashboards (a new one, a name, an order, a deletion), so
 // they count in the "edit" bucket, on the accounts terms (with them the

@@ -58,6 +58,7 @@ import { account } from "./account/routes";
 import { admin } from "./account/admin";
 import { interestStopPage, interestStopPost } from "./account/announce";
 import { DELIVERY_CRON, runDeliveries } from "./account/deliveries";
+import { sweep } from "./account/signin";
 import { billingFormAction } from "./account/stripe";
 
 const app = new Hono<AppEnv>();
@@ -432,7 +433,7 @@ export default {
   fetch: app.fetch,
   // The cron triggers from wrangler.jsonc, each by its exact expression
   // (Cloudflare hands the expression as written there): the daily check at
-  // 06:00 UTC; the hourly one from 15:00 to 20:00 UTC delivers saved searches
+  // 06:00 UTC, and with it the accounts' retention sweep; the hourly one from 15:00 to 20:00 UTC delivers saved searches
   // (src/account/deliveries.ts, which does nothing while the accounts switch
   // is off); the nightly's three slots and the same-day job's nine start
   // those workflows through GitHub's API (src/dispatch.ts). This handler is
@@ -446,6 +447,10 @@ export default {
         return;
       case WATCHDOG_CRON:
         ctx.waitUntil(runWatchdog(env));
+        // The accounts' retention sweep (src/account/signin.ts sweep), once a
+        // day whether or not anyone signs in, so the stated keeping days hold.
+        // Apart from the check: neither waits on the other or fails with it.
+        if (accountsEnabled(env)) ctx.waitUntil(sweep(env).catch(() => console.error("account sweep: the daily run failed")));
         return;
       case NIGHTLY_CRON:
         ctx.waitUntil(startWorkflow(env, NIGHTLY_WORKFLOW, { ...NIGHTLY_INPUTS }));

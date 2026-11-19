@@ -214,6 +214,20 @@ describe("the scheduled handler", () => {
     expect(r.seen).toContain(`DATA head ${BACKUP_KEY}`);
     expect(r.seen.filter((s) => s.includes("INSERT INTO delivery_runs"))).toEqual([]);
     expect(calls.map((c) => [c.method, c.url])).toEqual([["GET", `${BASE}/nightly.yml`]]);
+    // With it, the accounts' retention sweep (signin.ts sweep): its deletes, each once.
+    const deletes = r.seen.filter((s) => s.startsWith("ACCOUNTS: DELETE FROM "));
+    for (const table of ["magic_codes", "code_misses", "sessions", "audit", "bug_reports", "api_usage", "seats"]) {
+      expect(deletes.filter((s) => s.startsWith(`ACCOUNTS: DELETE FROM ${table}`)), table).toHaveLength(1);
+    }
+
+    // The same cron while the accounts switch is off: the check runs, the sweep does not.
+    vi.restoreAllMocks();
+    calls = fakeGitHub(answer);
+    log = logged();
+    r = recordingEnv();
+    await fire(WATCHDOG_CRON, { ...r.env, ACCOUNTS_ENABLED: "false" });
+    expect(r.seen).toContain(`DATA head ${BACKUP_KEY}`);
+    expect(r.seen.filter((s) => s.includes("DELETE FROM"))).toEqual([]);
 
     // The nightly's slots: one start of nightly.yml with the gate's input, and nothing read.
     vi.restoreAllMocks();
