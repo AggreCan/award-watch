@@ -36,8 +36,9 @@ import {
   type Ceiling, type QueryCount, STOP_CODES, type Tally, afterSend, budgetStop, likelyServed, sendWithHeaders, unfinished,
 } from "./deliveries";
 import { type ViewRecord, type ViewYear, VIEW_MAIL_ROWS, siteLink, viewDigest } from "./digests";
-import { allowed, planFor, savedViewCap, type Plan } from "./entitlements";
+import { allowed, savedViewCap, type Plan } from "./entitlements";
 import { ultraOnSale } from "./payments";
+import { RunPool } from "./pool";
 import { VIEW_DELIVERY_DAYS, missingViews, survivingAddress } from "./saved_views";
 import { randomHex, sha256Hex } from "./secrets";
 
@@ -244,10 +245,13 @@ export async function runViewMail(
   o: {
     site: string; dataDate: string; now: Date; plans: Map<string, Plan>; room: number; capText: string; queries?: QueryCount; tally?: Tally;
     ceiling?: Ceiling;
+    // The run's groups and their counts (pool.ts RunPool); a part run alone keeps its own.
+    pool?: RunPool;
   },
 ): Promise<{ report: ViewReport | null; stop: string | null; capped: boolean }> {
   if (!(await ultraOnSale(env).catch(() => false))) return { report: null, stop: null, capped: false };
   const { site, dataDate, now } = o;
+  const pool = o.pool ?? new RunPool();
   const report = emptyViewReport();
   const week = weekAnchor(dataDate);
   const month = monthAnchor(dataDate);
@@ -284,12 +288,9 @@ export async function runViewMail(
       if (!viewDue(row.deliver, row.last_delivered_at, dataDate)) continue;
       if (pause()) break;
       const cadence = row.deliver as ViewCadence;
-      let plan = o.plans.get(row.user_id);
-      if (!plan) {
-        plan = (await planFor(env, { id: row.user_id, plan: row.plan, plan_until: row.plan_until }, now)).plan;
-        o.plans.set(row.user_id, plan);
-      }
-      if (!allowed({ plan }, "view_mail") || (row.n_before ?? 0) >= savedViewCap(plan)) {
+      const plan = await pool.plan(env, o.plans, { id: row.user_id, plan: row.plan, plan_until: row.plan_until }, now);
+      // In a group, past the account's allowance of the subscription's figure (pool.ts).
+      if (!allowed({ plan }, "view_mail") || (row.n_before ?? 0) >= (await pool.allowance(env, row.user_id, "views", savedViewCap(plan)))) {
         report.skipped++;
         passed.push({ id: row.id, anchor: anchorOf(cadence, dataDate) });
         continue;

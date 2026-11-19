@@ -23,6 +23,8 @@ import { AddToDashboard, type BoardChoice } from "./dashboard_add";
 import { holdsDashboard } from "./dashboard_rule";
 import { RULES, allowed, watchCap } from "./entitlements";
 import { FEEDS_MAX, type FeedKind } from "./feeds";
+import type { PoolLine } from "./pool";
+import { PoolLines, PoolMark, poolCount, poolOver } from "./pool_lines";
 import { DELIVERY, type Delivery, type InterestRow, type LastDelivery, type SavedSearch, paidCapLine } from "./searches";
 import { type Account, type LiveSession, SESSIONS_MAX } from "./session";
 import { CODE_MINUTES } from "./signin";
@@ -608,11 +610,13 @@ const CapNote: FC<{ lang: Lang; n: number; cap: number }> = ({ lang, n, cap }) =
 // its feed when it has one (the watches' feed is on the watches page,
 // watch_pages.tsx). events is how many the feed holds now, null when what it
 // reads could not be read for the count.
+// past: in a group, a feed the subscription has no room for, or whose search is past the account's allowance.
 export type CalendarRow = {
   kind: FeedKind; searchId: string | null; label: string; href: string | null;
-  feed: { id: string; address: string; lastRead: string | null; events: number | null } | null;
+  feed: { id: string; address: string; lastRead: string | null; events: number | null; past?: true } | null;
 };
-export type CalendarView = { rows: CalendarRow[]; live: number };
+// pool: in a group, the subscription's feeds and how many of the account's are past its allowance.
+export type CalendarView = { rows: CalendarRow[]; live: number; pool?: { line: PoolLine; past: number } };
 
 // The feed's own cell: the address to copy (calendar.js adds the copy
 // button), when a calendar last read it and how many events it holds, and
@@ -625,6 +629,7 @@ export const FeedCell: FC<{ lang: Lang; account: Account; feed: NonNullable<Cale
       {feed.lastRead ? t(lang, "calfeed.last_read", { date: feed.lastRead }) : t(lang, "calfeed.not_read")}
       {feed.events === null ? null : <>{" · "}{tn(lang, "calfeed.events_one", "calfeed.events_many", feed.events, { n: fmtInt(feed.events, lang) })}</>}
     </p>
+    {feed.past ? <p class="muted small">{t(lang, "pool.mark")}</p> : null}
     <div class="account-inline">
       <form method="post" action={`/account/calendar/${feed.id}/rotate`} class="account-inline">
         <Csrf account={account} />
@@ -649,10 +654,12 @@ const CalendarPanel: FC<{ lang: Lang; account: Account; view: CalendarView }> = 
       </Panel>
     );
   }
-  const full = view.live >= FEEDS_MAX;
+  // In a group the figure is the subscription's: its feeds, the account's own among them.
+  const held = view.pool ? view.pool.line.total : view.live;
+  const full = held >= FEEDS_MAX;
   return (
     <Panel title={t(lang, "calfeed.panel")} id="calendar"
-      count={t(lang, "calfeed.count", { n: fmtInt(view.live, lang), max: fmtInt(FEEDS_MAX, lang) })}
+      count={t(lang, "calfeed.count", { n: fmtInt(held, lang), max: fmtInt(FEEDS_MAX, lang) })}
       foot={<>
         <p>{t(lang, "calfeed.route_google")}</p>
         <p>{t(lang, "calfeed.route_outlook")}</p>
@@ -660,6 +667,7 @@ const CalendarPanel: FC<{ lang: Lang; account: Account; view: CalendarView }> = 
         <p>{t(lang, "calfeed.refresh")}</p>
       </>}>
       <p>{t(lang, "calfeed.lead")}</p>
+      {view.pool ? <PoolLines lang={lang} figure="feeds" line={view.pool.line} past={view.pool.past} /> : null}
       {view.rows.length ? (
         <div class="table-wrap">
           {/* Sorted in the page by the feed's name; the address cell holds a form, with nothing to sort by. */}
@@ -670,8 +678,9 @@ const CalendarPanel: FC<{ lang: Lang; account: Account; view: CalendarView }> = 
                 <tr>
                   <td data-label={t(lang, "calfeed.col_feed")}>{r.href ? <a href={r.href}>{r.label}</a> : r.label}</td>
                   <td data-label={t(lang, "calfeed.col_address")}>
+                    {/* In a group, at the subscription's figure, the line above the rows says so and the cell holds nothing. */}
                     {r.feed ? <FeedCell lang={lang} account={account} feed={r.feed} /> : full ? (
-                      <p class="muted small">{t(lang, "calfeed.cap", { n: fmtInt(FEEDS_MAX, lang) })}</p>
+                      view.pool ? null : <p class="muted small">{t(lang, "calfeed.cap", { n: fmtInt(FEEDS_MAX, lang) })}</p>
                     ) : (
                       <form method="post" action="/account/calendar" class="account-inline">
                         <Csrf account={account} />
@@ -704,15 +713,21 @@ export function searchesView(
     ultra?: number | null;
     // The account's dashboards when it holds several, for Add to dashboard's choice (dashboard_add.tsx boardChoices).
     boards?: readonly BoardChoice[];
+    // In a group (pool.ts): the subscription's searches and briefings, and the account's own past its allowance.
+    pool?: { line: PoolLine; past: ReadonlySet<string> };
   },
 ) {
   const { searches, cap, pending } = state;
   const canDeliver = allowed(account, "delivery");
   const dash = holdsDashboard(account.plan);
-  const held = searches.length + (state.briefings?.n ?? 0);
+  const pool = state.pool;
+  const held = pool ? pool.line.total : searches.length + (state.briefings?.n ?? 0);
   const full = held >= cap;
-  // A paid account's line states what it holds of its figure (searches.ts paidCapLine), Ultra's while on sale above it.
-  const capLine = account.plan === "free" ? t(lang, "account.cap_free", { cap: fmtInt(cap, lang) }) : paidCapLine(lang, held, cap, state.ultra ?? null);
+  // A paid account's line states what it holds of its figure (searches.ts paidCapLine), Ultra's while on sale above it; an
+  // account in a group, what the subscription holds and how much is its own.
+  const capLine = pool ? poolCount(lang, "searches", pool.line)
+    : account.plan === "free" ? t(lang, "account.cap_free", { cap: fmtInt(cap, lang) }) : paidCapLine(lang, held, cap, state.ultra ?? null);
+  const over = pool ? poolOver(lang, "searches", pool.line, pool.past.size) : null;
   const foot = !canDeliver ? <CapNote lang={lang} n={held} cap={cap} />
     : state.ultra ? (
       <p>
@@ -740,7 +755,8 @@ export function searchesView(
         foot={foot}>
         {/* Past the plan's figure (after a move to a smaller plan): nothing deleted, and the line says which are sent.
             A Free account sends none, so its foot's own line ("n of cap") says it instead. */}
-        {held > cap && canDeliver ? <p>{t(lang, "account.over_cap", { n: fmtInt(held, lang), cap: fmtInt(cap, lang) })}</p> : null}
+        {pool ? (over ? <p>{over}</p> : null)
+          : held > cap && canDeliver ? <p>{t(lang, "account.over_cap", { n: fmtInt(held, lang), cap: fmtInt(cap, lang) })}</p> : null}
         {searches.length ? (
           <div class="table-wrap">
             {/* Sorted in the page by the search; the other cells are forms. */}
@@ -755,9 +771,10 @@ export function searchesView(
                     {dash && DASH_KINDS[s.kind] ? (
                       <td data-label={t(lang, "account.col_search")} data-sort={s.label}>
                         <a href={s.params}>{s.label}</a>
+                        {pool?.past.has(s.id) ? <PoolMark lang={lang} /> : null}
                         <AddToDashboard lang={lang} account={account} kind={DASH_KINDS[s.kind]!} panelRef={s.id} boards={state.boards} />
                       </td>
-                    ) : <td data-label={t(lang, "account.col_search")}><a href={s.params}>{s.label}</a></td>}
+                    ) : <td data-label={t(lang, "account.col_search")}><a href={s.params}>{s.label}</a>{pool?.past.has(s.id) ? <PoolMark lang={lang} /> : null}</td>}
                     <td data-label={t(lang, "account.col_delivery")}>
                       {canDeliver ? (
                         <>
@@ -926,9 +943,16 @@ export function weeklyStoppedView(lang: Lang) {
 // when the counts cannot be read, and a key with none in the period is absent.
 export function keysView(
   lang: Lang, account: Account,
-  state: { keys: KeyRow[]; usage?: Map<string, KeyUsage> | null; created?: string; notice?: string | null; errors?: Key[] },
+  state: {
+    keys: KeyRow[]; usage?: Map<string, KeyUsage> | null; created?: string; notice?: string | null; errors?: Key[];
+    // In a group (pool.ts): the subscription's keys, and the account's own live keys past its allowance.
+    pool?: { line: PoolLine; past: ReadonlySet<string> };
+  },
 ) {
   const live = state.keys.filter((k) => !k.revoked_at).length;
+  const pool = state.pool;
+  // In a group the keys are the subscription's: the form while it has room, and its count in either case.
+  const full = pool ? pool.line.total >= KEYS_MAX : live >= KEYS_MAX;
   const canCreate = allowed(account, "api");
   const count = (k: KeyRow, which: keyof KeyUsage) => (state.usage ? fmtInt(state.usage.get(k.id)?.[which] ?? 0, lang) : "");
   return (
@@ -952,10 +976,11 @@ export function keysView(
       ) : null}
       <Panel title={t(lang, "account.panel_create_key")} class="panel-form" tools={canCreate ? undefined : <ProTag lang={lang} />}>
         <Errors lang={lang} errors={state.errors} />
+        {pool && canCreate ? <p>{poolCount(lang, "keys", pool.line)}</p> : null}
         {!canCreate ? (
           <p>{t(lang, "account.keys_pro")} <a href="/account/billing">{t(lang, "billing.link_plans")}</a></p>
-        ) : live >= KEYS_MAX ? (
-          <p>{t(lang, "account.keys_limit", { n: KEYS_MAX })}</p>
+        ) : full ? (
+          pool ? null : <p>{t(lang, "account.keys_limit", { n: KEYS_MAX })}</p>
         ) : (
           <form method="post" action="/account/keys" class="stack">
             <Csrf account={account} />
@@ -968,6 +993,7 @@ export function keysView(
         )}
       </Panel>
       <Panel title={t(lang, "account.panel_keys")} count={fmtInt(live, lang)}>
+        {pool && poolOver(lang, "keys", pool.line, pool.past.size) ? <p>{poolOver(lang, "keys", pool.line, pool.past.size)}</p> : null}
         {state.keys.length ? (
           <div class="table-wrap">
             <table class="restack" data-sorting="client">
@@ -982,7 +1008,7 @@ export function keysView(
               <tbody>
                 {state.keys.map((k) => (
                   <tr>
-                    <td data-label={t(lang, "account.key_name")}>{k.name}</td>
+                    <td data-label={t(lang, "account.key_name")}>{k.name}{pool?.past.has(k.id) ? <PoolMark lang={lang} /> : null}</td>
                     <td data-label={t(lang, "account.col_prefix")} class="mono">aw_{k.prefix}</td>
                     <td data-label={t(lang, "account.col_created")} class="mono">{day(k.created_at)}</td>
                     <td data-label={t(lang, "account.col_last_used")} class="mono">{k.last_used_at ? day(k.last_used_at) : t(lang, "account.key_never")}</td>

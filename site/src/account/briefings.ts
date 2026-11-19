@@ -49,8 +49,8 @@ import {
   type Ceiling, type QueryCount, STOP_CODES, type Tally, afterSend, budgetStop, likelyServed, sendWithHeaders, unfinished,
 } from "./deliveries";
 import { type DigestMessage, briefingDigest, siteLink } from "./digests";
-import { allowed, planFor, savedSearchCap, SAVED_SEARCH_MAX, type Plan } from "./entitlements";
-import { type InGroup, groupIn, pooled } from "./pool";
+import { allowed, savedSearchCap, SAVED_SEARCH_MAX, type Plan } from "./entitlements";
+import { type InGroup, RunPool, groupIn, pooled } from "./pool";
 import { type RecordsWait, missingTable } from "./records_deliveries";
 import { newId, randomHex } from "./secrets";
 import { EVENT_NOTABLE_CENTS, EVENT_NOTABLE_SHARE } from "./watch_events";
@@ -751,9 +751,12 @@ export async function runBriefings(
   o: {
     site: string; dataDate: string; now: Date; plans: Map<string, Plan>; room: number; capText: string; queries?: QueryCount; tally?: Tally;
     ceiling?: Ceiling;
+    // The run's groups and their counts (pool.ts RunPool); a part run alone keeps its own.
+    pool?: RunPool;
   },
 ): Promise<{ report: BriefingReport; stop: string | null; capped: boolean }> {
   const { site, dataDate, now } = o;
+  const pool = o.pool ?? new RunPool();
   const report = emptyBriefingReport();
   const anchor = weekAnchor(dataDate);
   let due: DueRow[];
@@ -788,12 +791,9 @@ export async function runBriefings(
       const saved = toBriefing(row);
       if (!saved || !briefingDue(saved.deliver, saved.last_delivered_at, dataDate)) continue;
       if (pause()) break;
-      let plan = o.plans.get(row.user_id);
-      if (!plan) {
-        plan = (await planFor(env, { id: row.user_id, plan: row.plan, plan_until: row.plan_until }, now)).plan;
-        o.plans.set(row.user_id, plan);
-      }
-      if (!allowed({ plan }, "delivery") || (row.n_before ?? 0) >= sharedCap(plan)) {
+      const plan = await pool.plan(env, o.plans, { id: row.user_id, plan: row.plan, plan_until: row.plan_until }, now);
+      // One figure with the saved searches: in a group, the account's allowance of the subscription's (pool.ts).
+      if (!allowed({ plan }, "delivery") || (row.n_before ?? 0) >= (await pool.allowance(env, row.user_id, "searches", sharedCap(plan)))) {
         report.skipped++;
         passed.push(saved.id);
         continue;

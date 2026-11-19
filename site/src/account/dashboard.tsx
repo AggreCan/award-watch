@@ -101,7 +101,8 @@ import {
   type ClaimFrame, checkOrganization, claimFrame, endingParams, isClaimBlock, readClaim, shareBinds, shareSegment,
 } from "./org_claim";
 import { ultraOnSale } from "./payments";
-import { groupIn, pooled } from "./pool";
+import { type PoolLine, groupIn, pastAllowance, poolLine, poolOf, pooled } from "./pool";
+import { poolOver } from "./pool_lines";
 import {
   BUYER_COUNTS_SQL, BUYER_NAME_SQL, KIND_SOURCES, ORG_COUNTS_SQL, ORG_NAME_SQL, type RecordsKind, SEGMENT_COUNTS_SQL, entityOf, isRecordsKind,
   missingTable,
@@ -1659,8 +1660,11 @@ export const boardPostPath = (id: string | null) => `${DASHBOARD_PATH}/boards/${
 // dashboard while the account holds fewer than its plan's figure; and the
 // shown one's Rename, Order or Delete, a details element that opens without
 // the script, its deletion asked inside it (a second details element with the
-// question and its own button), never in a browser dialog.
-const BoardTabs: FC<{ lang: Lang; account: Account; tabs: readonly Tab[]; cap: number }> = ({ lang, account, tabs, cap }) => {
+// question and its own button), never in a browser dialog. For an account in a
+// group (pool: the subscription's dashboards, and the account's own past its
+// allowance), New dashboard while the subscription holds fewer than the figure,
+// and each tab past the allowance keeps its place, marked.
+const BoardTabs: FC<{ lang: Lang; account: Account; tabs: readonly Tab[]; cap: number; pool?: BoardPool }> = ({ lang, account, tabs, cap, pool }) => {
   const i = tabs.findIndex((x) => x.current);
   const at = tabs[i];
   if (!at) return null;
@@ -1676,10 +1680,18 @@ const BoardTabs: FC<{ lang: Lang; account: Account; tabs: readonly Tab[]; cap: n
   return (
     <div class="dash-boards">
       <nav class="tabs dash-tabs" aria-label={t(lang, "dash.boards_nav")}>
-        {tabs.map((x) => <a href={x.href} aria-current={x.current ? "page" : undefined} title={x.label}>{x.label}</a>)}
+        {tabs.map((x) => {
+          const away = !!x.id && !!pool?.past.has(x.id);
+          return (
+            <a href={x.href} aria-current={x.current ? "page" : undefined} title={away ? `${x.label}. ${t(lang, "pool.mark")}` : x.label}>
+              {/* The mark on a line of its own under the name, wrapping there: the tab's own line stops at an ellipsis. */}
+              {x.label}{away ? <span class="muted small nw-block th-wrap">{t(lang, "pool.mark")}</span> : null}
+            </a>
+          );
+        })}
       </nav>
       <div class="dash-board-tools">
-        {tabs.length < cap ? (
+        {(pool ? pool.line.total : tabs.length) < cap ? (
           <form method="post" action={`${DASHBOARD_PATH}/boards`}>
             <Csrf account={account} />
             <button type="submit" class="btn-link">{t(lang, "dash.board_new")}</button>
@@ -1887,9 +1899,13 @@ export function dashClientData(lang: Lang, account: Account, keeping: Keeping, b
   };
 }
 
+// An account in a group's dashboards (pool.ts): the subscription's count, and the account's own past its
+// allowance, by creation (not by tab order).
+type BoardPool = { line: PoolLine; past: ReadonlySet<string> };
+
 export function dashboardView(
   lang: Lang, account: Account,
-  s: { drawn: Drawn[]; h: Holdings; starter: boolean; keeping: Keeping; notice: string | null; cap: number; boards: number },
+  s: { drawn: Drawn[]; h: Holdings; starter: boolean; keeping: Keeping; notice: string | null; cap: number; boards: number; pool?: BoardPool },
 ) {
   const n = s.drawn.length;
   const emptied = !s.starter && !n;
@@ -1910,9 +1926,10 @@ export function dashboardView(
       <PageHead lang={lang} title={t(lang, "dash.title")} lead={t(lang, "dash.lead")}
         actions={<AddTile lang={lang} account={account} h={s.h} n={n} cap={s.cap} keeping={s.keeping} taken={taken} more={more} open={emptied}
           starters={emptied && s.keeping !== "none"} />}>
-        {tabs.length ? <BoardTabs lang={lang} account={account} tabs={tabs} cap={s.boards} /> : null}
+        {tabs.length ? <BoardTabs lang={lang} account={account} tabs={tabs} cap={s.boards} pool={s.pool} /> : null}
       </PageHead>
       {s.notice ? <p class="account-notice" role="status">{s.notice}</p> : null}
+      {s.pool ? <BoardsOver lang={lang} pool={s.pool} /> : null}
       <div class="dash-bar">
         <p class="dash-status muted" id="dash-status" role="status" aria-live="polite">{line}</p>
       </div>
@@ -1927,6 +1944,46 @@ export function dashboardView(
       <script type="module" src="/dashboard.js"></script>
     </>
   );
+}
+
+// The line above the dashboard when some of a group member's dashboards are past its allowance.
+const BoardsOver: FC<{ lang: Lang; pool: BoardPool }> = ({ lang, pool }) => {
+  const over = poolOver(lang, "dashboards", pool.line, pool.past.size);
+  return over ? <p>{over}</p> : null;
+};
+
+// A dashboard of an account in a group that the subscription has no room for
+// (past the account's allowance, by creation; or, with no dashboard of its own
+// yet, an allowance of none): its tab kept and marked among the others, the
+// line saying so in place of its tiles, and nothing of them read or drawn. No
+// grid and no page script, so nothing posts a layout for it.
+export function boardUnavailableView(lang: Lang, account: Account, s: { h: Holdings; notice: string | null; boards: number; pool: BoardPool }) {
+  const tabs = tabsOf(lang, s.h, 0);
+  const here = tabs.find((x) => x.current);
+  return (
+    <>
+      <PageHead lang={lang} title={t(lang, "dash.title")} lead={t(lang, "dash.lead")}>
+        {tabs.length ? <BoardTabs lang={lang} account={account} tabs={tabs} cap={s.boards} pool={s.pool} /> : null}
+      </PageHead>
+      {s.notice ? <p class="account-notice" role="status">{s.notice}</p> : null}
+      <BoardsOver lang={lang} pool={s.pool} />
+      <Panel title={here?.label ?? t(lang, "dash.title")}>
+        <p>{t(lang, "pool.board_unavailable", { cap: fmtInt(s.pool.line.cap, lang) })}</p>
+      </Panel>
+    </>
+  );
+}
+
+// Whether the dashboard a read picked is one the subscription has no room for: for an account in a group only.
+const unavailable = (h: Pick<Holdings, "board">, pool: BoardPool | undefined): boolean =>
+  !!pool && !!h.board && (h.board.id ? pool.past.has(h.board.id) : pool.line.allowance === 0);
+
+// The dashboards' pool for an account in a group (pool.ts POOL_COUNTS_SQL, read with the page's own reads); undefined,
+// and nothing read, for any other account or while the tables are absent.
+function boardPool(h: Pick<Holdings, "board">, pool: Awaited<ReturnType<typeof poolOf>>, who: Account): BoardPool | undefined {
+  if (!pool || !h.board) return undefined;
+  const line = poolLine(pool, who, "dashboards", boardCap(who.plan));
+  return { line, past: pastAllowance(h.board.boards, line.allowance) };
 }
 
 // What a Free or Pro account reads at the address while Ultra is on sale:
@@ -1984,21 +2041,29 @@ export async function dashboardPage(c: Context<AppEnv>, who: Account, board: str
     const cards = planCards(lang, { price, ultra, reader: who.plan === "pro" ? "pro" : "free", place: "tease" });
     return dashPage(c, teaseView(lang, cards), board ? boardPath(board) : DASHBOARD_PATH);
   }
-  const h = await readHoldings(c.env, who.userId, { board });
+  // For an account in a group, the subscription's counts (pool.ts), one statement beside the page's own reads.
+  const [h, read] = await Promise.all([readHoldings(c.env, who.userId, { board }), poolOf(c.env, who)]);
   if (board && !h.board?.found) return c.redirect(inLang(c, DASHBOARD_PATH), 303);
-  const { list, starter, keeping } = shownTiles(h);
-  const drawn = await drawTiles(c, who, h, list);
+  const pool = boardPool(h, read, who);
   const m = c.req.query("m") ?? "";
   const cap = tileCap(who.plan);
   const boards = boardCap(who.plan);
+  const at = board ? boardPath(board) : DASHBOARD_PATH;
   // The dashboard a notice names: the one ?to= names, among the account's.
   const to = c.req.query("to") ?? "";
-  const named = tabsOf(lang, h, drawn.length).find((x) => x.id === to)?.label ?? "";
-  const notice = m === "tables" ? tablesNotice(lang, { n: countIn(c, "n"), of: countIn(c, "of"), there: countIn(c, "there"), full: countIn(c, "full") }, cap)
-    : m === "started" ? tn(lang, "dash.started_one", "dash.started", countIn(c, "n"), { n: fmtInt(countIn(c, "n"), lang) })
-    : NOTICE[m] ? t(lang, NOTICE[m], { cap: fmtInt(cap, lang), n: fmtInt(BRIEFING_PANELS_MAX, lang), boards: fmtInt(boards, lang), name: named })
-    : null;
-  return dashPage(c, dashboardView(lang, who, { drawn, h, starter, keeping, notice, cap, boards }), board ? boardPath(board) : DASHBOARD_PATH);
+  const noticeOf = (shown: number): string | null => {
+    const named = tabsOf(lang, h, shown).find((x) => x.id === to)?.label ?? "";
+    return m === "tables" ? tablesNotice(lang, { n: countIn(c, "n"), of: countIn(c, "of"), there: countIn(c, "there"), full: countIn(c, "full") }, cap)
+      : m === "started" ? tn(lang, "dash.started_one", "dash.started", countIn(c, "n"), { n: fmtInt(countIn(c, "n"), lang) })
+      : NOTICE[m] ? t(lang, NOTICE[m], { cap: fmtInt(cap, lang), n: fmtInt(BRIEFING_PANELS_MAX, lang), boards: fmtInt(boards, lang), name: named })
+      : null;
+  };
+  // A dashboard the subscription has no room for reads and draws no tile.
+  if (unavailable(h, pool)) return dashPage(c, boardUnavailableView(lang, who, { h, notice: noticeOf(0), boards, pool: pool! }), at);
+  const { list, starter, keeping } = shownTiles(h);
+  const drawn = await drawTiles(c, who, h, list);
+  const notice = noticeOf(drawn.length);
+  return dashPage(c, dashboardView(lang, who, { drawn, h, starter, keeping, notice, cap, boards, ...(pool ? { pool } : {}) }), at);
 }
 
 // One tile at a size, for the page's script after a resize: the tile's
@@ -2009,7 +2074,9 @@ export async function dashboardPage(c: Context<AppEnv>, who: Account, board: str
 // anything else is 404.
 export async function tileFragment(c: Context<AppEnv>, who: Account, id: string): Promise<Response> {
   if (!holdsDashboard(who.plan)) return c.text("", 404);
-  const h = await readHoldings(c.env, who.userId, { tile: ID_RE.test(id) ? id : null });
+  const [h, read] = await Promise.all([readHoldings(c.env, who.userId, { tile: ID_RE.test(id) ? id : null }), poolOf(c.env, who)]);
+  // A tile of a dashboard the subscription has no room for is not drawn (for an account in a group only).
+  if (unavailable(h, boardPool(h, read, who))) return c.text("", 404);
   const { list } = shownTiles(h);
   const at = list.find((s) => s.id === id);
   if (!at) return c.text("", 404);

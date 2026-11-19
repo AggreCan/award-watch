@@ -121,9 +121,9 @@ export function withinCap<W extends Pick<Watch, "kind" | "target">>(watches: rea
 
 // The same for a job that has not read the claim: a list within the cap needs
 // no claim and reads nothing; a longer one reads it (org_claim.ts
-// followClaimedId, as the watches page does).
-export async function coveredWatches(env: Env, userId: string, watches: readonly Watch[], plan: Plan): Promise<Watch[]> {
-  const cap = watchCap(plan);
+// followClaimedId, as the watches page does). cap is the plan's figure, or for
+// an account in a group its allowance of the subscription's (pool.ts).
+export async function coveredWatches(env: Env, userId: string, watches: readonly Watch[], plan: Plan, cap = watchCap(plan)): Promise<Watch[]> {
   if (watches.length <= cap) return [...watches];
   return withinCap(watches, cap, await followClaimedId(env, userId).catch(() => null));
 }

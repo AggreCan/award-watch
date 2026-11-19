@@ -125,7 +125,7 @@ import { FEED_ICS } from "../limits";
 import { readPublishedContract } from "../records_tables";
 import { EMAIL_MAX, interestFilter, kindOfPath, normalizeEmail } from "../pages/interest";
 import { deviceClass } from "../views";
-import { KEY_NAME_MAX, createKey, listKeys, revokeKey } from "./api_keys";
+import { KEYS_MAX, KEY_NAME_MAX, createKey, listKeys, revokeKey } from "./api_keys";
 import { keyUsage, nowOf } from "./api_usage";
 import { usagePage } from "./api_usage_page";
 import { audit } from "./audit";
@@ -197,6 +197,8 @@ import {
   withinCap,
 } from "./watches";
 import { ultraOnSale } from "./payments";
+import { type Pool, pastAllowance, poolLine, poolOf } from "./pool";
+import { poolCount } from "./pool_lines";
 import { deleteWeeklyOf, turnWeeklyOff, turnWeeklyOn, weeklyReady, weeklyState, weeklyStopRow } from "./weekly";
 
 export const account = new Hono<AppEnv>();
@@ -627,31 +629,39 @@ async function labelIn(c: Context<AppEnv>, lang: Lang, row: { kind: string; para
 async function searchesPage(c: Context<AppEnv>, who: Account, extra: { errors?: Key[]; url?: string; status?: number } = {}) {
   const lang = c.get("lang");
   // An Ultra account's dashboards, for Add to dashboard's choice when it holds several (dashboard_add.tsx).
-  const [stored, waiting, last, feeds, briefings, boards] = await Promise.all([
+  // For an account in a group, the subscription's counts (pool.ts POOL_COUNTS_SQL), one statement; null, and nothing read, otherwise.
+  const [stored, waiting, last, feeds, briefings, boards, pool] = await Promise.all([
     listSearches(c.env, who.userId), pendingInterest(c.env, who.email, who.userId), lastDeliveries(c.env, who.userId),
     listFeeds(c.env, who.userId), listBriefings(c.env, who.userId),
-    holdsDashboard(who.plan) ? boardChoices(c.env, who.userId, lang) : Promise.resolve([]),
+    holdsDashboard(who.plan) ? boardChoices(c.env, who.userId, lang) : Promise.resolve([]), poolOf(c.env, who),
   ]);
   // No briefings table on the database yet: the page leaves the panel out.
   const runs = briefings?.length ? await lastBriefingRuns(c.env, who.userId) : new Map();
+  const cap = capFor(who);
+  // In a group: the subscription's searches and briefings, and the account's own past its allowance (one figure, both tables).
+  const searchLine = pool ? poolLine(pool, who, "searches", cap) : null;
+  const inGroup = searchLine ? { line: searchLine, past: pastAllowance([...stored, ...(briefings ?? [])], searchLine.allowance) } : null;
   const briefed = briefings === null ? null : {
     n: briefings.length,
-    panel: <BriefingsPanel lang={lang} account={who} briefings={briefings.map((b) => ({ ...b, last: runs.get(b.id) ?? null }))} boards={boards} />,
+    panel: <BriefingsPanel lang={lang} account={who} briefings={briefings.map((b) => ({ ...b, last: runs.get(b.id) ?? null }))} boards={boards}
+      past={inGroup?.past} />,
   };
   const searches = await Promise.all(stored.map(async (s) => ({ ...s, label: await labelIn(c, lang, s), last: last.get(s.id) ?? null })));
   const pending = await Promise.all(waiting.map(async (r) => ({ ...r, label: await labelIn(c, lang, r) })));
-  const cap = capFor(who);
   const m = c.req.query("m") ?? "";
   // No feeds table on the database yet: the page leaves the feeds out.
-  const calendar = feeds === null ? null : await calendarView(c, lang, who, searches, feeds);
+  const calendar = feeds === null ? null : await calendarView(c, lang, who, searches, feeds, pool ? { pool, searchesPast: inGroup!.past } : null);
   // Ultra's figure beside a Pro account's, only while Ultra can be bought (payments.ts ultraOnSale).
   const ultra = RULES.ultra.saved_searches > cap && allowed(who, "delivery") && (await ultraOnSale(c.env)) ? RULES.ultra.saved_searches : null;
-  // A refused add says what the account holds, the briefings counted with the searches.
+  // A refused add says what the account holds, the briefings counted with the searches; in a group, what the subscription holds.
   const notice = m === "cap"
-    ? who.plan === "free" ? t(lang, "account.cap_free", { cap }) : paidCapLine(lang, stored.length + (briefings?.length ?? 0), cap, ultra)
+    ? inGroup ? poolCount(lang, "searches", inGroup.line)
+      : who.plan === "free" ? t(lang, "account.cap_free", { cap }) : paidCapLine(lang, stored.length + (briefings?.length ?? 0), cap, ultra)
     : SEARCH_NOTICE[m] ? t(lang, SEARCH_NOTICE[m]) : null;
   return accountPage(c, t(lang, "account.searches_title"),
-    searchesView(lang, who, { searches, cap, pending, notice, errors: extra.errors, url: extra.url, calendar, briefings: briefed, ultra, boards }),
+    searchesView(lang, who, {
+      searches, cap, pending, notice, errors: extra.errors, url: extra.url, calendar, briefings: briefed, ultra, boards, ...(inGroup ? { pool: inGroup } : {}),
+    }),
     extra.status ?? 200);
 }
 
@@ -666,8 +676,14 @@ async function eventContext(c: Context<AppEnv>, lang: Lang): Promise<{ lang: Lan
 // "all" feed (feeds.ts), each with how many events it holds now (null when
 // what it reads cannot be read): a search's counted from the open notices,
 // the "all" feed's as the feed reads it, with the account's watches.
+// In a group (served: the pool the page read, and the account's searches past
+// its allowance), each feed past the account's allowance of the subscription's
+// feeds, and each search's feed whose search is past its own, is marked, as
+// readFeed answers them; the "all" feed counts the watches within the account's
+// allowance.
 async function calendarView(
-  c: Context<AppEnv>, lang: Lang, who: Pick<Account, "userId" | "plan">, searches: SavedSearch[], feeds: FeedRow[],
+  c: Context<AppEnv>, lang: Lang, who: Pick<Account, "userId" | "plan" | "group">, searches: SavedSearch[], feeds: FeedRow[],
+  served: { pool: Pool; searchesPast: ReadonlySet<string> } | null = null,
 ): Promise<CalendarView> {
   const tenders = searches.filter((s) => s.kind === FEED_SEARCH_KIND);
   const open = tenders.length ? await loadOpenList(c.env).catch(() => null) : null;
@@ -676,8 +692,13 @@ async function calendarView(
     s.id, open ? searchMatches(open, s.params, clock).filter((r) => closingStart(r.closing)).length : null,
   ]));
   const base = siteBase(c);
+  const feedLine = served ? poolLine(served.pool, who, "feeds", FEEDS_MAX) : null;
+  const feedsPast = feedLine ? pastAllowance(feeds, feedLine.allowance) : null;
+  const pastOf = (row: FeedRow): boolean =>
+    !!feedsPast && (feedsPast.has(row.id) || (row.kind === "search" && !!row.search_id && served!.searchesPast.has(row.search_id)));
   const cell = (row: FeedRow | undefined, n: number | null): CalendarRow["feed"] => row ? {
     id: row.id, address: feedAddress(base, row, lang), lastRead: row.last_read_day, events: n === null ? null : Math.min(n, FEED_EVENTS_MAX),
+    ...(pastOf(row) ? { past: true as const } : {}),
   } : null;
   const rows: CalendarRow[] = tenders.map((s) => ({
     kind: "search", searchId: s.id, label: s.label, href: s.params,
@@ -685,13 +706,14 @@ async function calendarView(
   }));
   const allFeed = feeds.find((f) => f.kind === "all");
   if (tenders.length || allFeed) {
-    const watches = allFeed ? await feedWatches(c.env, who.userId, who.plan).catch(() => null) : null;
+    const watchesCap = served ? poolLine(served.pool, who, "watches", watchCap(who.plan)).allowance : undefined;
+    const watches = allFeed ? await feedWatches(c.env, who.userId, who.plan, watchesCap).catch(() => null) : null;
     const n = watches ? await feedSize(c.env, {
       kind: "all", searches: tenders.map(({ id, params, label, lang: l }) => ({ id, params, label, lang: l })), watches,
     }, await eventContext(c, lang)) : null;
     rows.push({ kind: "all", searchId: null, label: t(lang, "calfeed.kind_all"), href: null, feed: cell(allFeed, n) });
   }
-  return { rows, live: feeds.length };
+  return { rows, live: feeds.length, ...(feedLine ? { pool: { line: feedLine, past: feedsPast!.size } } : {}) };
 }
 
 account.get("/searches", async (c) => {
@@ -1224,37 +1246,44 @@ async function alignWatches(c: Context<AppEnv>, userId: string) {
 
 async function watchesPage(c: Context<AppEnv>, who: Account, said?: string, status = 200): Promise<Response> {
   const lang = c.get("lang");
-  const [aligned, mail, stats, feeds] = await Promise.all([
-    alignWatches(c, who.userId), mailOf(c.env, who.userId), loadStats(c.env).catch(() => null), listFeeds(c.env, who.userId),
+  // For an account in a group, the subscription's counts (pool.ts), one statement; nothing more otherwise.
+  const [aligned, mail, stats, feeds, pool] = await Promise.all([
+    alignWatches(c, who.userId), mailOf(c.env, who.userId), loadStats(c.env).catch(() => null), listFeeds(c.env, who.userId), poolOf(c.env, who),
   ]);
   // A watch on an organization or buyer the nightly merged follows the surviving id from this view on.
   const { watches, moved, merged, claimed } = aligned;
   const dataDate = stats?.data_as_of?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
   const days = Array.from({ length: DAY_SLOTS }, (_, i) => addDays(dataDate, -i));
   const cap = watchCap(who.plan);
-  // Past the plan's figure (after a move to a smaller plan), events for the first ones by creation date only.
-  const covered = withinCap(watches, cap, claimed);
+  // Past the plan's figure (after a move to a smaller plan), events for the first ones by creation date only; in a
+  // group, to the account's allowance of the subscription's figure.
+  const line = pool ? poolLine(pool, who, "watches", cap) : null;
+  const covered = withinCap(watches, line ? line.allowance : cap, claimed);
   const read = covered.length ? await readEvents(c.env, covered, days) : null;
   const m = said ?? c.req.query("m") ?? "";
   // Ultra's figure beside a Pro account's, only while Ultra can be bought (payments.ts ultraOnSale).
   const ultra = RULES.ultra.watchlists > cap && allowed(who, "watch_mail") && (await ultraOnSale(c.env)) ? RULES.ultra.watchlists : null;
   const held = countedWatches(watches, claimed);
   const notice = m === "cap"
-    ? allowed(who, "watch_mail") ? paidWatchCapLine(lang, held, cap, ultra)
+    ? line ? poolCount(lang, "watches", line) : allowed(who, "watch_mail") ? paidWatchCapLine(lang, held, cap, ultra)
       : t(lang, "watches.cap_free", { n: fmtInt(held, lang), cap: fmtInt(cap, lang), max: fmtInt(RULES.pro.watchlists, lang) })
     : WATCH_NOTICE[m] ? t(lang, WATCH_NOTICE[m]) : null;
   // The watches' calendar feed, with how many events it holds now; no feeds
   // table on the database yet leaves it out.
   const row = feeds?.find((f) => f.kind === "watchlist");
+  // In a group the feeds are the subscription's: full at its figure, and the account's feed marked when past its allowance.
+  const feedLine = pool && feeds ? poolLine(pool, who, "feeds", FEEDS_MAX) : null;
   const calendar: WatchCalendar | null = feeds === null ? null : {
     feed: row ? {
       id: row.id, address: feedAddress(siteBase(c), row, lang), lastRead: row.last_read_day,
       events: allowed(who, "delivery") ? await feedSize(c.env, { kind: "watchlist", searches: [], watches: covered }, await eventContext(c, lang)) : null,
+      ...(feedLine && pastAllowance(feeds, feedLine.allowance).has(row.id) ? { past: true as const } : {}),
     } : null,
-    full: feeds.length >= FEEDS_MAX,
+    full: feedLine ? feedLine.total >= FEEDS_MAX : feeds.length >= FEEDS_MAX,
+    ...(feedLine ? { pool: feedLine } : {}),
   };
   return accountPage(c, t(lang, "watches.title"),
-    watchesView(lang, who, { watches, read, days, mail, notice, moved, merged, calendar, claimed, covered, ultra }), status);
+    watchesView(lang, who, { watches, read, days, mail, notice, moved, merged, calendar, claimed, covered, ultra, ...(line ? { pool: line } : {}) }), status);
 }
 
 account.get("/watches", async (c) => {
@@ -1523,12 +1552,16 @@ account.get("/matches", async (c) => {
 
 async function keysPage(c: Context<AppEnv>, who: Account, extra: { created?: string; errors?: Key[]; status?: number } = {}) {
   const lang = c.get("lang");
-  const keys = await listKeys(c.env, who.userId);
+  // For an account in a group, the subscription's counts (pool.ts), one statement; nothing more otherwise.
+  const [keys, pool] = await Promise.all([listKeys(c.env, who.userId), poolOf(c.env, who)]);
   // The counts are read only when there is a key to count; null says they cannot be read.
   const usage = keys.length ? await keyUsage(c.env, who.userId, nowOf(c.env)) : new Map();
   const notice = c.req.query("m") === "revoked" && !extra.created ? t(lang, "account.msg_key_revoked") : null;
+  // In a group: the account's own live keys past its allowance of the subscription's, the oldest first in service.
+  const line = pool ? poolLine(pool, who, "keys", KEYS_MAX) : null;
+  const inGroup = line ? { line, past: pastAllowance(keys.filter((k) => !k.revoked_at), line.allowance) } : null;
   return accountPage(c, t(lang, "account.keys_title"),
-    keysView(lang, who, { keys, usage, created: extra.created, notice, errors: extra.errors }), extra.status ?? 200);
+    keysView(lang, who, { keys, usage, created: extra.created, notice, errors: extra.errors, ...(inGroup ? { pool: inGroup } : {}) }), extra.status ?? 200);
 }
 
 account.get("/keys", async (c) => {
@@ -1745,16 +1778,19 @@ async function viewsPage(c: Context<AppEnv>, who: Account): Promise<Response> {
   if (listed === null) return c.notFound();
   const { views, merged } = await followViewAliases(c.env, who.userId, listed);
   for (const id of merged) await deletePanelsFor(c.env, who.userId, ["view"], id);
-  const [runs, boards] = await Promise.all([
+  // For an account in a group, the subscription's counts (pool.ts), one statement; nothing more otherwise.
+  const [runs, boards, pool] = await Promise.all([
     views.length ? lastViewRuns(c.env, who.userId) : Promise.resolve(new Map()),
-    views.length && holdsDashboard(who.plan) ? boardChoices(c.env, who.userId, lang) : Promise.resolve([]),
+    views.length && holdsDashboard(who.plan) ? boardChoices(c.env, who.userId, lang) : Promise.resolve([]), poolOf(c.env, who),
   ]);
+  const line = pool ? poolLine(pool, who, "views", savedViewCap(who.plan)) : null;
   const ultra = await ultraOnSale(c.env).catch(() => false);
   const cards = savedViewCap(who.plan) ? null
     : planCards(lang, { price: checkoutPrice(c.env), ultra: await ultraCheckoutPrice(c.env), reader: "free", place: "tease" });
   const m = c.req.query("m") ?? "";
   return accountPage(c, t(lang, "views.title"), viewsView(lang, who, {
     views: views.map((v) => ({ ...v, last: runs.get(v.id) ?? null })), notice: VIEW_NOTICE[m] ? t(lang, VIEW_NOTICE[m]) : null, ultra, cards, boards,
+    ...(line ? { pool: { line, past: pastAllowance(views, line.allowance) } } : {}),
   }));
 }
 

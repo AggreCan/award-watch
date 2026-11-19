@@ -58,8 +58,9 @@ import { filterTenders, readTenderQuery } from "../pages/tenders";
 import { type Query, type Row, num, orgNumber, readRecords } from "../records_db";
 import { PUBLISHED_CONTRACT_SQL } from "../records_tables";
 import { isBlocked } from "./admin_ops";
-import { type Plan, allowed, lastKnownPlan, planFor } from "./entitlements";
-import { type InGroup, groupIn, pooled } from "./pool";
+import { sharedCap } from "./briefings";
+import { type Group, type Plan, allowed, lastKnownPlan, planFor, watchCap } from "./entitlements";
+import { type InGroup, aheadIds, groupIn, pooled } from "./pool";
 import { newId, randomHex, sameHash } from "./secrets";
 import { OUTAGE_TRUST_MS } from "./session";
 import { TARGET_CHUNK, TARGET_SLOTS, chunked } from "./watch_events";
@@ -194,11 +195,12 @@ export type FeedState = {
 
 // The account's watches for a feed; none while the table is not on the
 // database yet. With the plan, past its figure (after a move to a smaller
-// plan) the first ones by creation date only, as the watch mail reads them.
-export async function feedWatches(env: Env, userId: string, plan?: Plan): Promise<FeedWatch[]> {
+// plan) the first ones by creation date only, as the watch mail reads them;
+// cap, for a member of a group, its allowance of the subscription's figure.
+export async function feedWatches(env: Env, userId: string, plan?: Plan, cap?: number): Promise<FeedWatch[]> {
   try {
     const listed = await listWatches(env, userId);
-    const watches = plan ? await coveredWatches(env, userId, listed, plan) : listed;
+    const watches = plan ? await coveredWatches(env, userId, listed, plan, cap) : listed;
     return watches.map(({ kind, target, segment, events }) => ({ kind, target, segment, events }));
   } catch (e) {
     if (missingTable(e)) return [];
@@ -207,6 +209,38 @@ export async function feedWatches(env: Env, userId: string, plan?: Plan): Promis
 }
 
 type Known = Omit<FeedState, "stale"> & { secret: string; planUntil: string | null; verifiedAt: number };
+
+// A feed of a member of a group (docs/accounts.md, Seats, The pool), in one
+// statement: the live feeds of the accounts ahead of it in its group (?3 to
+// ?7, NULL in the places left) and the account's own live feeds made before
+// this one (?1 the account, ?2 the feed), against FEEDS_MAX; for a search's
+// feed (?8 its search, NULL for the others), the saved searches and briefings
+// ahead and the account's own made before that search, against the shared
+// figure; and the watches ahead, which leave the account its allowance of the
+// subscription's. Each count through its table's index on user_id and the
+// row's own key. Sent only for a member's feed: a holder's are all in service.
+export const FEED_SERVED_SQL =
+  `SELECT (SELECT COUNT(*) FROM feeds WHERE user_id IN ${groupIn(3)} AND revoked_at IS NULL) + ` +
+  "(SELECT COUNT(*) FROM feeds x JOIN feeds f ON f.id = ?2 WHERE x.user_id = ?1 AND x.revoked_at IS NULL " +
+  "AND (x.created_at < f.created_at OR (x.created_at = f.created_at AND x.id < f.id))) AS feeds, " +
+  `(SELECT COUNT(*) FROM saved_searches WHERE user_id IN ${groupIn(3)}) + (SELECT COUNT(*) FROM briefings WHERE user_id IN ${groupIn(3)}) + ` +
+  "(SELECT COUNT(*) FROM saved_searches x JOIN saved_searches s ON s.id = ?8 WHERE x.user_id = ?1 " +
+  "AND (x.created_at < s.created_at OR (x.created_at = s.created_at AND x.id < s.id))) + " +
+  "(SELECT COUNT(*) FROM briefings x JOIN saved_searches s ON s.id = ?8 WHERE x.user_id = ?1 " +
+  "AND (x.created_at < s.created_at OR (x.created_at = s.created_at AND x.id < s.id))) AS searches, " +
+  `(SELECT COUNT(*) FROM watches w WHERE w.user_id IN ${groupIn(3)} ` +
+  "AND NOT (w.kind = 'organization' AND w.target IS (SELECT c.organization_id FROM org_claims c WHERE c.user_id = w.user_id))) AS watches";
+
+// A member's feed: whether it is in service (and its search, for a search's
+// feed), and the account's allowance of the watches.
+async function servedFeed(
+  db: D1Database, row: { id: string; user_id: string; search_id: string | null }, group: Group, plan: Plan,
+): Promise<{ ok: boolean; watches: number }> {
+  const n = await db.prepare(FEED_SERVED_SQL).bind(row.user_id, row.id, ...aheadIds(group), row.search_id)
+    .first<{ feeds: number; searches: number; watches: number }>();
+  const ok = (n?.feeds ?? 0) < FEEDS_MAX && (row.search_id === null || (n?.searches ?? 0) < sharedCap(plan));
+  return { ok, watches: Math.max(0, watchCap(plan) - (n?.watches ?? 0)) };
+}
 
 // What this isolate last read for each feed it served, for the outage case
 // only. Bounded; the oldest entries go first.
@@ -251,6 +285,13 @@ export async function readFeed(env: Env, id: string, secret: string, now = new D
       lastKnown.delete(id);
       return { state: "none" };
     }
+    // A member's feed past the subscription's feeds, or whose search is past its searches, answers as a feed on a
+    // plan without feeds does: saved, and unavailable until there is room. Nothing more is read for any other feed.
+    const served = plan.group && plan.group.position > 0 ? await servedFeed(db, row, plan.group, plan.plan) : null;
+    if (served && !served.ok) {
+      lastKnown.delete(id);
+      return { state: "none" };
+    }
     const searches = kind === "watchlist" ? [] : ((await db.prepare(
       "SELECT id, params, label, lang FROM saved_searches WHERE user_id = ? AND kind = ? AND (? = '' OR id = ?) ORDER BY created_at, id",
     ).bind(row.user_id, FEED_SEARCH_KIND, row.search_id ?? "", row.search_id ?? "").all<SearchRef>()).results ?? []);
@@ -258,7 +299,7 @@ export async function readFeed(env: Env, id: string, secret: string, now = new D
       lastKnown.delete(id);
       return { state: "none" };
     }
-    const watches = kind === "search" ? [] : await feedWatches(env, row.user_id, plan.plan);
+    const watches = kind === "search" ? [] : await feedWatches(env, row.user_id, plan.plan, served?.watches);
     known = {
       id, userId: row.user_id, kind, searchId: row.search_id, searches, watches, plan: plan.plan, planUntil: plan.until,
       secret: row.secret, verifiedAt: now.getTime(),

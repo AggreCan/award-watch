@@ -185,14 +185,23 @@ export async function addView(
 
 // What a view's Save control shows (view_pages.tsx): whether the address is
 // saved on the account, and how many views it holds. One statement; null
-// while the table is not on the database.
-export async function viewState(env: Env, userId: string, address: string): Promise<{ saved: boolean; n: number } | null> {
+// while the table is not on the database. For an account in a group, n is the
+// group's views (?3 to ?7, pool.ts), so the control reads full when the
+// subscription is, and mine the account's own, in the same statement; whether
+// the address is saved stays the account's own.
+const VIEWS_OWN = "(SELECT COUNT(*) FROM saved_views WHERE user_id = ?1)";
+export const VIEW_STATE_SQL = `SELECT EXISTS (SELECT 1 FROM saved_views WHERE user_id = ?1 AND address = ?2) AS saved, ${VIEWS_OWN} AS n`;
+export const VIEW_STATE_GROUP_SQL =
+  `SELECT EXISTS (SELECT 1 FROM saved_views WHERE user_id = ?1 AND address = ?2) AS saved, ` +
+  `(SELECT COUNT(*) FROM saved_views WHERE user_id IN ${groupIn(3)}) AS n, ${VIEWS_OWN} AS mine`;
+
+export async function viewState(
+  env: Env, who: { userId: string } & InGroup, address: string,
+): Promise<{ saved: boolean; n: number; mine?: number } | null> {
   try {
-    const row = await env.ACCOUNTS!.prepare(
-      "SELECT EXISTS (SELECT 1 FROM saved_views WHERE user_id = ?1 AND address = ?2) AS saved, " +
-      "(SELECT COUNT(*) FROM saved_views WHERE user_id = ?1) AS n",
-    ).bind(userId, address).first<{ saved: number; n: number }>();
-    return { saved: row?.saved === 1, n: row?.n ?? 0 };
+    const q = pooled(who, VIEW_STATE_SQL, VIEW_STATE_GROUP_SQL);
+    const row = await env.ACCOUNTS!.prepare(q.sql).bind(who.userId, address, ...q.binds).first<{ saved: number; n: number; mine?: number }>();
+    return { saved: row?.saved === 1, n: row?.n ?? 0, ...(who.group ? { mine: row?.mine ?? 0 } : {}) };
   } catch (e) {
     if (missingViews(e)) return null;
     throw e;

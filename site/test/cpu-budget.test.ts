@@ -722,6 +722,51 @@ function ultraAccounts(tokenHash: string, tiles: readonly Record<string, unknown
   } as unknown as D1Database;
 }
 
+// A member of a group and an account alone (seats slice P2), each holding 60 saved organization searches (a tender
+// search would add its match count over the open list to the feeds panel, the same for both), answered from memory:
+// the session, the plan (the member's through its seat: the holder's Ultra row and the group's one seat; the account
+// alone its own Ultra row), the group's counts (pool.ts POOL_COUNTS_SQL: the holder 70, the member 60) and the
+// searches; every other statement reads nothing.
+const POOL_AT = new Date().toISOString();
+function groupAccounts(tokenHash: string, inGroup: boolean): D1Database {
+  const session = {
+    id: FIT_SESSION_ID, token_hash: tokenHash, expires_at: "2999-01-01T00:00:00.000Z", revoked_at: null, last_seen_at: POOL_AT, user_id: "budget-member",
+    email: "member@example.com", lang: "en", status: "active", plan: "pro", plan_until: null, created_at: POOL_AT,
+  };
+  const entitlement = { id: "e-pool", plan: "ultra", starts_at: "2026-01-01T00:00:00.000Z", ends_at: null, created_at: "2026-01-01T00:00:00.000Z", revoked_at: null };
+  const plan = inGroup
+    ? [
+      { ...entitlement, via: "held", holder_id: "budget-holder", holder_email: "holder@example.com", holder_ok: 1, member_id: null, joined_at: null, seat_id: "seat-1" },
+      { via: "seat", id: null, plan: null, holder_id: "budget-holder", member_id: "budget-member", joined_at: "2026-02-01T00:00:00.000Z", seat_id: "seat-1" },
+    ]
+    : [{ ...entitlement, via: "own" }];
+  const searches = Array.from({ length: 60 }, (_, i) => ({
+    id: `${i}`.padStart(32, "f"), kind: "organization", params: `/organizations/org-a000000001?y=${i}`, label: `Search ${i + 1}`, lang: "en",
+    created_at: `2026-02-01T00:00:${String(i).padStart(2, "0")}.000Z`, deliver: "daily",
+  }));
+  const none = { watches: 0, views: 0, dashboards: 0, keys: 0, feeds: 0 };
+  const all = (sql: string): Record<string, unknown>[] => {
+    if (sql.includes("FROM sessions s JOIN users u")) return [session];
+    if (sql.includes("FROM entitlements e LEFT JOIN entitlement_tiers")) return plan;
+    if (sql.startsWith("SELECT u.id,")) return [{ id: "budget-holder", searches: 70, ...none }, { id: "budget-member", searches: 60, ...none }];
+    if (sql.startsWith("SELECT id, kind, params, label, lang, created_at, deliver FROM saved_searches")) return searches;
+    return [];
+  };
+  const statement = (sql: string) => {
+    const st = {
+      bind: () => st,
+      first: async () => all(sql)[0] ?? null,
+      all: async () => ({ results: all(sql), success: true, meta: {} }),
+      raw: async () => [],
+      run: async () => ({ results: [], success: true, meta: { changes: 0 } }),
+    };
+    return st;
+  };
+  return {
+    prepare: statement,
+    batch: async (list: unknown[]) => list.map(() => ({ results: [], success: true, meta: { changes: 0 } })),
+  } as unknown as D1Database;
+}
 // A row or two for each records statement a panel reads: the state, a radar row, a year's counts, an event.
 const RADAR_J = JSON.stringify({
   kind: "award", reference: "EN578-000001", title_en: "A contract", title_fr: "Un contrat", organization_id: "org-a000000001", organization: "Exemplar",
@@ -898,6 +943,44 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
     expect(batches).toEqual([DASHBOARD_ANALYTICS_STATEMENTS]);
     const r = await signedInRatio("/account/dashboard", 8, accounts, '<div class="dash-grid" id="dash-grid">', { RECORDS: dashRecords });
     expect(r, `/account/dashboard, 24 analytics tables ${r.toFixed(2)}`).toBeLessThanOrEqual(DASHBOARD_ANALYTICS_BOUND);
+  }, 120_000);
+
+  // A list page of a member of a group (seats slice P2, account/pool.ts): the saved searches page of an Ultra member
+  // holding 60 searches with an allowance of 30 (the holder's 70 ahead), its group's counts read with POOL_COUNTS_SQL
+  // and its 30 past the allowance marked, beside the same page for an Ultra account alone holding the same 60, timed in
+  // the same run. About three times the larger of two ratios measured then (in brackets), rounded up.
+  const GROUP_LIST_BOUND = 12; // [3.80, 3.80]; the account alone [3.60, 3.60]
+  it("keeps a group member's saved searches page within its bound, beside the same page for an account alone", async () => {
+    clearParsedCache();
+    clearClosingCache();
+    const hash = await sha256Hex(SECRET);
+    const member = groupAccounts(hash, true);
+    const alone = groupAccounts(hash, false);
+    // An account page answers no-store (account/routes.tsx), so the entry times it with its own loop, as signedInRatio does.
+    const request = (accounts: D1Database) => app.request("/account/searches", {
+      headers: { "sec-fetch-mode": "navigate", cookie: COOKIE, "cf-connecting-ip": `198.18.${100 + ((address >> 8) % 100)}.${(address++ % 250) + 1}` },
+    }, { ...env, ASSETS: assetsOf(FIT_BODIES, "v1-fit"), ACCOUNTS: accounts, ACCOUNTS_ENABLED: "true", DB: stubDb(() => []) });
+    // What the entry times: the group's count, its line and a mark on each of the 30 past the allowance; alone, none of them.
+    const page = await (await request(member)).text();
+    expect(page).toContain("This subscription holds 130 of its 100 saved searches and briefings; 60 are this account&#39;s.");
+    expect(page.match(/Saved, unavailable until there is room/g)).toHaveLength(30);
+    const solo0 = await request(alone);
+    expect(solo0.status).toBe(200);
+    expect(await solo0.text()).not.toContain("This subscription holds");
+    const timed = async (accounts: D1Database) => {
+      const go = async () => (await request(accounts)).arrayBuffer();
+      for (let i = 0; i < 3; i++) await go();
+      const route: number[] = [];
+      const yard: number[] = [];
+      for (let b = 0; b < 5; b++) {
+        yard.push(await batch(yardstick, 16));
+        route.push(await batch(go, 8));
+      }
+      return median(route) / median(yard);
+    };
+    const inGroup = await timed(member);
+    const solo = await timed(alone);
+    expect(inGroup, `/account/searches, a member of a group ${inGroup.toFixed(2)}; alone ${solo.toFixed(2)}`).toBeLessThanOrEqual(GROUP_LIST_BOUND);
   }, 120_000);
 
   // An organization's checklist of analytics tables (B3b, 2026-11-16; account/dashboard_doors.tsx tablesPage): the

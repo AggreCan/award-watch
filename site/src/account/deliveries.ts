@@ -103,8 +103,9 @@ import { faultSummary } from "../search_db";
 import {
   type Cadence, type DigestMessage, type GroupSection, GROUP_SECTION_ROWS, ROWS_MAX, expiringDigest, groupDigest, recordsDigest, siteLink, tenderDigest,
 } from "./digests";
-import { allowed, planFor, type Feature, type Plan } from "./entitlements";
+import { allowed, type Feature, type Plan } from "./entitlements";
 import { groupStopPath } from "./group_stop";
+import { RunPool } from "./pool";
 import {
   type Entity, type Mark, type RecordsWait, type Rise, MARK_WRITE_SQL, entityOf, isRecordsKind, loadMark, markText, missingTable, readCounts,
   rises,
@@ -1013,6 +1014,8 @@ async function deliver(env: Env, now: Date, tally: Tally): Promise<RunReport> {
   const clock = clockAt(now.getTime());
   const files = publishedFiles(env);
   const plans = new Map<string, Plan>();
+  // The groups the run meets and their counts, read once a group (pool.ts RunPool), shared by every part.
+  const pool = new RunPool();
   let stop: string | null = null;
   // The fault that ended a part, for the run log.
   let fault: string | null = null;
@@ -1228,13 +1231,10 @@ async function deliver(env: Env, now: Date, tally: Tally): Promise<RunReport> {
         if (!isDue(s.deliver, s.last_delivered_at, dataDate)) continue;
         // Past the budget the account waits whole, nothing of it claimed but the empty rows written already.
         if (pause()) break accounts;
-        let plan = plans.get(s.user_id);
-        if (!plan) {
-          plan = (await planFor(env, { id: s.user_id, plan: s.plan, plan_until: s.plan_until }, now)).plan;
-          plans.set(s.user_id, plan);
-        }
-        // Past the plan's figure (after a move to a smaller plan), the first ones by creation date only.
-        if (!allowed({ plan }, "delivery") || (s.n_before ?? 0) >= sharedCap(plan)) {
+        const plan = await pool.plan(env, plans, { id: s.user_id, plan: s.plan, plan_until: s.plan_until }, now);
+        // Past the plan's figure (after a move to a smaller plan), the first ones by creation date only; in a
+        // group, past the account's allowance of the subscription's figure (pool.ts).
+        if (!allowed({ plan }, "delivery") || (s.n_before ?? 0) >= (await pool.allowance(env, s.user_id, "searches", sharedCap(plan)))) {
           report.skipped++;
           passed.push(s.id);
           done.add(s.id);
@@ -1308,7 +1308,7 @@ async function deliver(env: Env, now: Date, tally: Tally): Promise<RunReport> {
   if (!stop) {
     try {
       const watch = await runWatchMail(env, {
-        site, dataDate, now, plans, room: roomAfter(report), capText, queries, tally, ceiling: ceilingAfter(report),
+        site, dataDate, now, plans, pool, room: roomAfter(report), capText, queries, tally, ceiling: ceilingAfter(report),
       });
       report.watch = watch.report;
       if (watch.stop) {
@@ -1322,7 +1322,7 @@ async function deliver(env: Env, now: Date, tally: Tally): Promise<RunReport> {
   if (!stop) {
     try {
       const brief = await runBriefings(env, {
-        site, dataDate, now, plans, room: roomAfter(report, report.watch), capText, queries, tally, ceiling: ceilingAfter(report, report.watch),
+        site, dataDate, now, plans, pool, room: roomAfter(report, report.watch), capText, queries, tally, ceiling: ceilingAfter(report, report.watch),
       });
       report.briefing = brief.report;
       if (brief.stop) {
@@ -1336,7 +1336,7 @@ async function deliver(env: Env, now: Date, tally: Tally): Promise<RunReport> {
   if (!stop) {
     try {
       const weekly = await runWeekly(env, {
-        site, dataDate, now, plans, room: roomAfter(report, report.watch, report.briefing), capText, queries, files, stats, tally,
+        site, dataDate, now, plans, pool, room: roomAfter(report, report.watch, report.briefing), capText, queries, files, stats, tally,
         ceiling: ceilingAfter(report, report.watch, report.briefing),
       });
       report.weekly = weekly.report;
@@ -1354,7 +1354,7 @@ async function deliver(env: Env, now: Date, tally: Tally): Promise<RunReport> {
   if (!stop || (report.outcome === "capped" && viewRoom > 0 && !queries.spent)) {
     try {
       const views = await runViewMail(env, {
-        site, dataDate, now, plans, room: viewRoom, capText, queries, tally, ceiling: ceilingAfter(report, report.watch, report.briefing, report.weekly),
+        site, dataDate, now, plans, pool, room: viewRoom, capText, queries, tally, ceiling: ceilingAfter(report, report.watch, report.briefing, report.weekly),
       });
       report.views = views.report;
       if (views.stop) {

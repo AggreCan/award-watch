@@ -2868,14 +2868,16 @@ covering a seat, the seat stays and gives no plan; what its member keeps
 stays theirs.
 
 What is built is the table, the plan read through a seat, deletion, the
-sweep, the console's read and the pool at the inserts (*The pool*). No page
-creates a seat yet: there is no invitation, no Seats page, no route under
-`/account/seats` and no line on any plan card, the Terms or the privacy
-page, and with no seat row every page, post, feed, API answer and email
-reads as before. The code is `site/src/account/entitlements.ts` (`planFor`,
-`withSeats`, `seatsReady`), `site/src/account/seats.ts` and
-`site/src/account/pool.ts`; the tests are `site/test/seats.test.ts`,
-`site/test/seats-unchanged.test.ts` and `site/test/seats-pool.test.ts`.
+sweep, the console's read, the pool at the inserts (*The pool*) and the pool
+in service (*In service*). No page creates a seat yet: there is no
+invitation, no Seats page, no route under `/account/seats` and no line on
+any plan card, the Terms or the privacy page, and with no seat row every
+page, post, feed, API answer and email reads as before. The code is
+`site/src/account/entitlements.ts` (`planFor`, `withSeats`, `seatsReady`),
+`site/src/account/seats.ts`, `site/src/account/pool.ts` and
+`site/src/account/pool_lines.tsx`; the tests are `site/test/seats.test.ts`,
+`site/test/seats-unchanged.test.ts`, `site/test/seats-pool.test.ts` and
+`site/test/seats-service.test.ts`.
 
 ### The table
 
@@ -2989,27 +2991,25 @@ saved.
 A refusal reads as the plan's figure reads today: the searches page's cap,
 the watch button's cap, the views' full line, the keys page at its limit,
 the feeds' cap, the bug form's daily limit. A member with no dashboard whose
-group holds 5 keeps its starting layout: every post that would write its
+group holds 5 has an allowance of none: every post that would write its
 first dashboard keeps nothing and answers with the dashboards' full line
-(`dash.boards_full`), and the page's script is told the layout cannot be
-kept.
+(`dash.boards_full`), the page's script is told the layout cannot be kept,
+and the page says the dashboard is saved and unavailable in place of the
+starting layout (*In service*).
 
 The counts the pages state are the group's for an account in a group, so a
 control reads full when the subscription is: `searchState`, `heldCount`
-(`heldCounts` gives both), `briefingState`, `watchState` and `watchCount`
-answer the group's count as `n` and the account's own as `mine`, from the
-same statement. No page shows `mine` yet and no line is new. For an account
-in no group each answers exactly what it did, with no `mine`. The lines
-that count from the account's own list still state the account's own count
-until the pool's own lines are built: the searches and watches pages' notices
-at the figure, the overview's count of keys, the views' Save control
-(`viewState`), the keys page, the feeds panel and the dashboard's tabs. Past
-the pool, the add they offer is refused by the insert, with the line above.
+(`heldCounts` gives both), `briefingState`, `watchState`, `watchCount` and
+`viewState` (the views' Save control) answer the group's count as `n` and
+the account's own as `mine`, from the same statement. For an account in no
+group each answers exactly what it did, with no `mine`. The list pages state
+the group's count with the account's own (*In service*).
 
 The group is read once a request, so a seat ended or taken between that read
 and the insert makes the count read one account too many (refusing early)
-or one too few (letting one item past the figure). Until items past a
-figure are marked and left out of service, that item is served.
+or one too few (letting one item past the figure). A newcomer's items come
+last in the order below, so an item let past the figure that way is saved and
+unavailable, and the figure in service holds.
 
 Known, left as it is: an account that holds a seat and has an Ultra grant of
 its own is in no group itself (its own plan wins), while the holder's
@@ -3021,6 +3021,64 @@ account in a seat makes this happen.
 No account is in a group until a seat is given. With no seat row, every
 account sends today's statements, and the limiter keys every download as
 before.
+
+### In service
+
+When a group holds more than a figure (a person joins with things of their
+own, the plan moves down), nothing is deleted. The holder's items are in
+service first, then each member's in the order the seat was joined, each
+account's own oldest first (made, then id); the rest are saved and
+unavailable, and come back into service with no step from anyone when there
+is room again (someone removes items or leaves, or the plan grows).
+
+An account's allowance of a figure is the figure less what the accounts ahead
+of it in the group hold, never below none; the holder's is the whole figure.
+Every rule that served "the first N by creation" after a move to a smaller
+plan keeps its statement and compares with the allowance in place of the
+plan's figure. For an account in no group the allowance is the plan's figure
+and nothing more is read.
+
+The counts come from one statement a group, `POOL_COUNTS_SQL` (`pool.ts`):
+for each account of the group, its saved searches with its briefings, its
+watches less its own claimed organization's, its saved views, dashboards,
+live keys and live calendar feeds. It returns numbers by account id and
+nothing else, each counted through the table's index on `user_id`, and is
+sent only for an account in a group, with the ids the session read or
+`planFor` gave.
+
+| Where | In service | Past the allowance | Read for it |
+|---|---|---|---|
+| Saved searches by email (the delivery run) | the account's searches and briefings made before it fewer than the allowance (`n_before`) | passed over for the data date, as a search past a plan's figure is | `POOL_COUNTS_SQL` once a group a run, kept by holder (`RunPool`), counted in the run's query budget |
+| The watch mail | the claimed organization's watch and the first watches up to the allowance (`coveredWatches`) | listed, no events | the same read |
+| Briefings | as the saved searches, one figure with them | passed over for the week | the same read |
+| Saved views by email | the views made before it fewer than the allowance | passed over for the period | the same read |
+| The weekly email | each person's own, not counted | | nothing |
+| An API key | the live keys of the accounts ahead and the account's own made before it fewer than 5 | 403, "This key is saved and unavailable until the subscription has room for it: its 5 keys are in use." | one statement (`KEY_SERVED_SQL`), for a member's key only, its answer kept with the key's last-known answer for 5 minutes (`KEY_SERVED_MS`) |
+| A calendar feed | the same rule for feeds; a search's feed also needs its search in service; the watchlist's watches to the allowance | answers as a feed on a plan without feeds does (the site's 404) | one statement (`FEED_SERVED_SQL`), for a member's feed only |
+| A dashboard | the account's dashboards by creation (not by tab order) up to the allowance | its tab kept and marked; its page says so in place of its tiles and reads none; a tile of it is not drawn alone | `POOL_COUNTS_SQL`, one a page view |
+
+The holder's items are always in service, so the run and the key and feed
+checks read nothing more for a holder; a page reads the group's counts for
+the holder too, to state them.
+
+On the list pages, for an account in a group only, each count is the group's
+with the account's own beside it ("This subscription holds 97 of its 100
+saved searches and briefings; 12 are this account's."), each row past the
+allowance is marked "Saved, unavailable until there is room", and a line
+above the rows says how many are past it: `/account/searches` and its
+briefings and calendar feeds panels, `/account/watches` (with the watches'
+feed), `/account/views` (a view past it offers no email), `/account/keys`
+and the dashboard's tabs. The searches and watches pages' notices at the
+figure state the group's count too. New Dashboard and a new key or feed are
+offered while the subscription has room. A member reads the group's totals
+and its own counts, never another account's count by itself, and nothing of
+what another account keeps.
+
+A person who leaves, is removed, or whose seat stops being covered is in no
+group from the next read: their things are under their own plan's figures
+(Free's, as a rule), saved and unavailable past them, and the group's counts
+drop by theirs at once, so the others' items past their allowance come back
+into service.
 
 ### Before the table is on the database
 

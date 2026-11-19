@@ -24,6 +24,8 @@ import { RULES, allowed, watchCap } from "./entitlements";
 import { FEEDS_MAX } from "./feeds";
 import { type CalendarRow, FeedCell, Honeypot } from "./pages";
 import { ultraOnSale } from "./payments";
+import type { PoolLine } from "./pool";
+import { PoolMark, poolCount, poolOver } from "./pool_lines";
 import { type Account, readSession } from "./session";
 import { accountsEnabled } from "./switch";
 import {
@@ -211,8 +213,9 @@ function lastEvent(read: EventsRead | null, w: Watch): string | null {
 }
 
 // The watches' calendar feed (feeds.ts, kind "watchlist"): the feed's cell
-// when it has one, and whether the account holds as many feeds as it can.
-export type WatchCalendar = { feed: CalendarRow["feed"]; full: boolean };
+// when it has one, and whether the account holds as many feeds as it can; in a
+// group, whether the subscription does, with its feeds (pool).
+export type WatchCalendar = { feed: CalendarRow["feed"]; full: boolean; pool?: PoolLine };
 
 // For a Free account the Pro chip and one line; for Pro the feed's cell
 // (pages.tsx FeedCell, as the searches page shows its feeds) or the button
@@ -237,7 +240,7 @@ const CalendarPanel: FC<{ lang: Lang; account: Account; calendar: WatchCalendar 
       <p class="muted small">{t(lang, "calfeed.watch_horizon")}</p>
       <p class="muted small">{t(lang, "calfeed.watch_instruments")}</p>
       {calendar.feed ? <FeedCell lang={lang} account={account} feed={calendar.feed} /> : calendar.full ? (
-        <p class="muted small">{t(lang, "calfeed.cap", { n: fmtInt(FEEDS_MAX, lang) })}</p>
+        <p class="muted small">{calendar.pool ? poolCount(lang, "feeds", calendar.pool) : t(lang, "calfeed.cap", { n: fmtInt(FEEDS_MAX, lang) })}</p>
       ) : (
         <form method="post" action="/account/calendar" class="account-inline">
           <Csrf account={account} />
@@ -263,6 +266,8 @@ export function watchesView(
     covered?: readonly Watch[];
     // Ultra's figure, for a paid account on a smaller one while Ultra is on sale; null or absent otherwise.
     ultra?: number | null;
+    // In a group (pool.ts): the subscription's watches; covered is then the account's allowance of them.
+    pool?: PoolLine;
   },
 ) {
   const { watches } = state;
@@ -270,9 +275,14 @@ export function watchesView(
   const cap = watchCap(account.plan);
   const days = new Set(state.days);
   const own = ownWatch(watches, state.claimed ?? null);
-  const counted = countedWatches(watches, state.claimed ?? null);
+  const pool = state.pool;
+  // In a group the count is the subscription's, each person's claimed organization's watch beside it.
+  const counted = pool ? pool.total : countedWatches(watches, state.claimed ?? null);
   const covered = new Set(state.covered ?? watches);
-  const capLine = canMail
+  // The account's own watches past its allowance, marked; the claimed organization's is never one.
+  const past = pool ? watches.filter((w) => w !== own && !covered.has(w)).length : 0;
+  const over = pool ? poolOver(lang, "watches", pool, past) : null;
+  const capLine = pool ? <p>{poolCount(lang, "watches", pool)}</p> : canMail
     ? (state.ultra
       ? <p>{t(lang, "watches.cap_note_pro", { n: fmtInt(counted, lang), cap: fmtInt(cap, lang), ultra: fmtInt(state.ultra, lang) })}{" "}
         <a href="/account/billing">{t(lang, "billing.link_plans")}</a></p>
@@ -312,7 +322,8 @@ export function watchesView(
         foot={capLine}>
         {/* Past the plan's figure (after a move to a smaller plan): nothing deleted, and the line says which are covered.
             A Free account is sent nothing, so its foot's own line ("n of cap") says it instead. */}
-        {counted > cap && canMail ? <p>{t(lang, "watches.over_cap", { n: fmtInt(counted, lang), cap: fmtInt(cap, lang) })}</p> : null}
+        {pool ? (over ? <p>{over}</p> : null)
+          : counted > cap && canMail ? <p>{t(lang, "watches.over_cap", { n: fmtInt(counted, lang), cap: fmtInt(cap, lang) })}</p> : null}
         {watches.length ? (
           <div class="table-wrap">
             {/* Sorted in the page by what is followed; the other cells are lists and forms. */}
@@ -332,6 +343,7 @@ export function watchesView(
                         <a href={watchPath(w.kind, w.target)}>{watchLabel(lang, w)}</a>
                         <br /><span class="muted small">{t(lang, WATCH_KIND_KEY[w.kind])}</span>
                         {w === own ? <><br /><span class="muted small">{t(lang, "watches.own_note")}</span></> : null}
+                        {pool && w !== own && !covered.has(w) ? <PoolMark lang={lang} /> : null}
                         {last ? <><br /><span class="muted small mono">{t(lang, "watches.last_event", { date: last })}</span></> : null}
                       </td>
                       <td data-label={t(lang, "watches.col_events")}>{covered.has(w) ? <Events lang={lang} w={w} read={state.read} days={days} /> : null}</td>

@@ -161,6 +161,43 @@ export const ACCOUNT_STRINGS = {
     en: "You hold a seat on the subscription of {holder}, which gives no plan now. Your account is on {plan}.",
     fr: "Vous occupez un siège de l'abonnement de {holder}, qui ne donne aucun forfait pour le moment. Votre compte est au forfait {plan}.",
   },
+  // The pool on the list pages (pool.ts; docs/accounts.md, Seats, The pool), shown only to an account in a
+  // group: what the subscription holds of a figure and how much of it is this account's ({things} one of the
+  // pool.f_* below), the line above the rows when some of the account's are past its allowance, and the mark
+  // on each of those rows. The _one forms are chosen by i18n.ts tn for {own} and {n}.
+  "pool.f_searches": { en: "saved searches and briefings", fr: "recherches enregistrées et bulletins" },
+  "pool.f_watches": { en: "watches", fr: "suivis" },
+  "pool.f_views": { en: "saved views", fr: "vues enregistrées" },
+  "pool.f_dashboards": { en: "dashboards", fr: "tableaux de bord" },
+  "pool.f_keys": { en: "API keys", fr: "clés d'API" },
+  "pool.f_feeds": { en: "calendar feeds", fr: "flux de calendrier" },
+  "pool.count": {
+    en: "This subscription holds {total} of its {cap} {things}; {own} are this account's.",
+    fr: "Cet abonnement détient {total} de ses {cap} {things}; {own} appartiennent à ce compte.",
+  },
+  "pool.count_one": {
+    en: "This subscription holds {total} of its {cap} {things}; {own} is this account's.",
+    fr: "Cet abonnement détient {total} de ses {cap} {things}; {own} appartient à ce compte.",
+  },
+  "pool.over": {
+    en: "{n} of this account's {things} are saved and unavailable until the subscription has room: it holds more than its {cap}, and the subscriber's come first, then each seat's in the order it joined.",
+    fr: "{n} éléments de ce compte, parmi ses {things}, sont enregistrés et indisponibles jusqu'à ce que l'abonnement ait de la place : il en détient plus que ses {cap}; ceux de l'abonné passent en premier, puis ceux de chaque siège dans l'ordre d'arrivée.",
+  },
+  "pool.over_one": {
+    en: "{n} of this account's {things} is saved and unavailable until the subscription has room: it holds more than its {cap}, and the subscriber's come first, then each seat's in the order it joined.",
+    fr: "{n} élément de ce compte, parmi ses {things}, est enregistré et indisponible jusqu'à ce que l'abonnement ait de la place : il en détient plus que ses {cap}; ceux de l'abonné passent en premier, puis ceux de chaque siège dans l'ordre d'arrivée.",
+  },
+  "pool.mark": { en: "Saved, unavailable until there is room", fr: "Enregistré, indisponible jusqu'à ce qu'il y ait de la place" },
+  // A member's API key past the subscription's keys (api_keys.ts requireApiKey, a 403's error) and a member's
+  // dashboard past the subscription's dashboards (dashboard.tsx, its page in place of its tiles).
+  "pool.key_unavailable": {
+    en: "This key is saved and unavailable until the subscription has room for it: its {cap} keys are in use.",
+    fr: "Cette clé est enregistrée et indisponible jusqu'à ce que l'abonnement ait de la place pour elle : ses {cap} clés sont utilisées.",
+  },
+  "pool.board_unavailable": {
+    en: "This dashboard is saved and unavailable until the subscription has room for it: its {cap} dashboards are in use. Its tiles are kept as they are.",
+    fr: "Ce tableau de bord est enregistré et indisponible jusqu'à ce que l'abonnement ait de la place pour lui : ses {cap} tableaux de bord sont utilisés. Ses tuiles sont gardées telles quelles.",
+  },
   // The overview's row: the saved searches and the briefings share the plan's figure, so it counts both.
   "account.searches": { en: "Saved searches and briefings", fr: "Recherches enregistrées et bulletins" },
   "account.searches_n": { en: "{n} of {cap}", fr: "{n} sur {cap}" },

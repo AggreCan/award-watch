@@ -46,7 +46,8 @@ import {
 import { type DigestMatches, type WatchGroup, siteLink, watchDigest } from "./digests";
 import { fitDigestBlock, weekNotices, weeklyTakesMatches } from "./fit_mail";
 import { orgWeekOpening } from "./org_claim";
-import { allowed, planFor, type Plan } from "./entitlements";
+import { allowed, watchCap, type Plan } from "./entitlements";
+import { RunPool } from "./pool";
 import { type RecordsWait, missingTable } from "./records_deliveries";
 import { randomHex } from "./secrets";
 import { DAY_SLOTS, type EventRow, TARGET_SLOTS, closedOn, eventIdentity, foundKey, listed, readEvents, watchPath } from "./watch_events";
@@ -242,9 +243,12 @@ export async function runWatchMail(
   o: {
     site: string; dataDate: string; now: Date; plans: Map<string, Plan>; room: number; capText: string; queries?: QueryCount; tally?: Tally;
     ceiling?: Ceiling;
+    // The run's groups and their counts (pool.ts RunPool); a part run alone keeps its own.
+    pool?: RunPool;
   },
 ): Promise<{ report: WatchReport; stop: string | null; capped: boolean }> {
   const { site, dataDate, now } = o;
+  const pool = o.pool ?? new RunPool();
   const report = emptyWatchReport();
   let accounts: DueRow[];
   try {
@@ -278,19 +282,17 @@ export async function runWatchMail(
     for (; i < accounts.length; i++) {
       const a = accounts[i];
       if (pause()) break;
-      let plan = o.plans.get(a.user_id);
-      if (!plan) {
-        plan = (await planFor(env, { id: a.user_id, plan: a.plan, plan_until: a.plan_until }, now)).plan;
-        o.plans.set(a.user_id, plan);
-      }
+      const plan = await pool.plan(env, o.plans, { id: a.user_id, plan: a.plan, plan_until: a.plan_until }, now);
       if (!allowed({ plan }, "watch_mail")) {
         report.skipped++;
         passed.push(a.user_id);
         continue;
       }
       const all = (await followAliases(env, a.user_id, await listWatches(env, a.user_id))).watches;
-      // Past the plan's figure (after a move to a smaller plan), the first ones by creation date only.
-      const due = (await coveredWatches(env, a.user_id, all, plan)).filter((w) => isDue(w.cadence, w.last_sent_day, dataDate));
+      // Past the plan's figure (after a move to a smaller plan), the first ones by creation date only; in a
+      // group, to the account's allowance of the subscription's figure (pool.ts), its claimed organization's beside them.
+      const cap = await pool.allowance(env, a.user_id, "watches", watchCap(plan));
+      const due = (await coveredWatches(env, a.user_id, all, plan, cap)).filter((w) => isDue(w.cadence, w.last_sent_day, dataDate));
       if (!due.length) continue;
       const spans = new Map(due.map((w) => [w.id, new Set(watchDays(w, dataDate))]));
       const days = [...new Set(due.flatMap((w) => [...spans.get(w.id)!]))].sort().reverse().slice(0, DAY_SLOTS);

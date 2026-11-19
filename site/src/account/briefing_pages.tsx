@@ -29,6 +29,7 @@ import { holdsDashboard } from "./dashboard_rule";
 import { briefingDigest, briefingParts } from "./digests";
 import { allowed } from "./entitlements";
 import { FONT, type MailScheme, escapeHtml, siteLink } from "./mail_html";
+import { PoolMark } from "./pool_lines";
 import { mailSender } from "./sender";
 import { type Account, readSession } from "./session";
 import { accountsEnabled } from "./switch";
@@ -167,10 +168,12 @@ const RunLine: FC<{ lang: Lang; run: BriefingRun | null; deliver: string }> = ({
 const DELIVER_KEY: Record<string, Key> = { weekly: "account.deliver_weekly", off: "account.deliver_off" };
 
 // Each briefing with its delivery (weekly or off on Pro; off with the Pro
-// chip on Free), its newest run and a remove button.
+// chip on Free), its newest run and a remove button. past: for an account in a
+// group, the briefings past its allowance of the subscription's searches and
+// briefings (pool.ts), each marked; absent otherwise.
 export const BriefingsPanel: FC<{
-  lang: Lang; account: Account; briefings: (Briefing & { last: BriefingRun | null })[]; boards?: readonly BoardChoice[];
-}> = ({ lang, account, briefings, boards }) => {
+  lang: Lang; account: Account; briefings: (Briefing & { last: BriefingRun | null })[]; boards?: readonly BoardChoice[]; past?: ReadonlySet<string>;
+}> = ({ lang, account, briefings, boards, past }) => {
   const pro = allowed(account, "delivery");
   const dash = holdsDashboard(account.plan);
   return (
@@ -190,9 +193,10 @@ export const BriefingsPanel: FC<{
                   {dash ? (
                     <td data-label={t(lang, "briefing.col")}>
                       <a href={briefingPath(b)}>{briefingLabel(lang, b)}</a>
+                      {past?.has(b.id) ? <PoolMark lang={lang} /> : null}
                       <AddToDashboard lang={lang} account={account} kind="briefing" panelRef={b.id} boards={boards} />
                     </td>
-                  ) : <td data-label={t(lang, "briefing.col")}><a href={briefingPath(b)}>{briefingLabel(lang, b)}</a></td>}
+                  ) : <td data-label={t(lang, "briefing.col")}><a href={briefingPath(b)}>{briefingLabel(lang, b)}</a>{past?.has(b.id) ? <PoolMark lang={lang} /> : null}</td>}
                   <td data-label={t(lang, "account.col_delivery")}>
                     {pro ? (
                       <>

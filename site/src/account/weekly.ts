@@ -42,8 +42,9 @@ import { num, readRecords } from "../records_db";
 import { WEEK_DAYS, weekAnchor } from "./briefings";
 import { type Ceiling, type Files, type QueryCount, STOP_CODES, type Tally, afterSend, budgetStop, sendWithHeaders } from "./deliveries";
 import { WEEKLY_ENDING_MONTHS, type WatchGroup, type WeekFigures, siteLink, weeklyDigest } from "./digests";
-import { allowed, planFor, type Plan } from "./entitlements";
+import { allowed, type Plan } from "./entitlements";
 import { fitDigestBlock, weekNotices } from "./fit_mail";
+import { RunPool } from "./pool";
 import { type RecordsWait, missingTable } from "./records_deliveries";
 import { randomHex } from "./secrets";
 import { readEvents } from "./watch_events";
@@ -271,9 +272,12 @@ export async function runWeekly(
   o: {
     site: string; dataDate: string; now: Date; plans: Map<string, Plan>; room: number; capText: string; files: Files; stats: Stats;
     queries?: QueryCount; tally?: Tally; ceiling?: Ceiling;
+    // The run's groups (pool.ts RunPool), so a part after this one knows the group of an account read here first.
+    pool?: RunPool;
   },
 ): Promise<{ report: WeeklyReport | null; stop: string | null; capped: boolean }> {
   const { site, dataDate, now } = o;
+  const pool = o.pool ?? new RunPool();
   const week = weekAnchor(dataDate);
   let due: DueRow[];
   try {
@@ -332,11 +336,8 @@ export async function runWeekly(
     for (; i < due.length; i++) {
       const a = due[i];
       if (pause()) break;
-      let plan = o.plans.get(a.user_id);
-      if (!plan) {
-        plan = (await planFor(env, { id: a.user_id, plan: a.plan, plan_until: a.plan_until }, now)).plan;
-        o.plans.set(a.user_id, plan);
-      }
+      // Read through the run's pool so a later part knows the account's group; the weekly email itself counts nothing.
+      const plan = await pool.plan(env, o.plans, { id: a.user_id, plan: a.plan, plan_until: a.plan_until }, now);
       const lang: Lang = a.lang === "fr" ? "fr" : "en";
       // The account's watches, on the ids the nightly's merges left, each read over the whole week; past the
       // plan's figure (after a move to a smaller plan), the first ones by creation date only.

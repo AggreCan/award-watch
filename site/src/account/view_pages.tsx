@@ -26,6 +26,8 @@ import type { View } from "../view_address";
 import { AddToDashboard, type BoardChoice, savedViewTables } from "./dashboard_add";
 import { holdsDashboard } from "./dashboard_rule";
 import { RULES, allowed, savedViewCap } from "./entitlements";
+import type { PoolLine } from "./pool";
+import { PoolLines, PoolMark, poolCount } from "./pool_lines";
 import { VIEW_DELIVERY, type SavedView, type ViewDelivery, type ViewRun, NAME_MAX, viewState } from "./saved_views";
 import { type Account, readSession } from "./session";
 import { accountsEnabled } from "./switch";
@@ -51,7 +53,8 @@ export type SaveViewState = {
   account: Account;
   // The address the view writes for itself, which the post saves, and the site's label of it.
   address: string; label: string;
-  saved: boolean; n: number; cap: number;
+  // n: the account's views, or for an account in a group the subscription's, with mine its own (saved_views.ts viewState).
+  saved: boolean; n: number; cap: number; mine?: number;
 };
 
 // What the control shows for this request: null while the switch is off, for
@@ -62,9 +65,9 @@ export async function saveViewControl(c: Context<AppEnv>, address: string, label
   const read = await readSession(c).catch(() => ({ state: "unavailable" }) as const);
   if (read.state !== "ok") return null;
   try {
-    const s = await viewState(c.env, read.account.userId, address);
+    const s = await viewState(c.env, read.account, address);
     if (!s) return null;
-    return { account: read.account, address, label, saved: s.saved, n: s.n, cap: savedViewCap(read.account.plan) };
+    return { account: read.account, address, label, saved: s.saved, n: s.n, cap: savedViewCap(read.account.plan), ...(s.mine !== undefined ? { mine: s.mine } : {}) };
   } catch {
     return null;
   }
@@ -81,7 +84,12 @@ export const SaveViewRow: FC<{ lang: Lang; state: SaveViewState | null }> = ({ l
   if (!state.cap) {
     return <div class="toolbar-row save-view"><a href={VIEWS_PATH} class="btn">{t(lang, "views.save")}</a></div>;
   }
-  if (state.n >= state.cap) return <p class="toolbar-note save-view">{t(lang, "views.full", { cap: fmtInt(state.cap, lang) })} {manage}</p>;
+  if (state.n >= state.cap) {
+    // In a group the views are the subscription's: what it holds, and how many are this account's.
+    const full = state.mine !== undefined ? poolCount(lang, "views", { total: state.n, own: state.mine, cap: state.cap, allowance: state.cap })
+      : t(lang, "views.full", { cap: fmtInt(state.cap, lang) });
+    return <p class="toolbar-note save-view">{full} {manage}</p>;
+  }
   return (
     <form method="post" action={VIEWS_PATH} class="save-view">
       <Csrf account={state.account} />
@@ -136,11 +144,15 @@ export type ViewsPageState = {
   cards: PlanCard[] | null;
   // The account's dashboards when it holds several, for Add to dashboard's choice (dashboard_add.tsx boardChoices).
   boards?: readonly BoardChoice[];
+  // In a group (pool.ts): the subscription's views, and the account's own past its allowance.
+  pool?: { line: PoolLine; past: ReadonlySet<string> };
 };
 
 export function viewsView(lang: Lang, account: Account, s: ViewsPageState) {
   const cap = savedViewCap(account.plan);
-  const n = s.views.length;
+  const pool = s.pool;
+  // In a group the count is the subscription's; the account's own rows are still the ones listed.
+  const n = pool ? pool.line.total : s.views.length;
   const mail = s.ultra && allowed(account, "view_mail");
   const dash = holdsDashboard(account.plan);
   return (
@@ -151,9 +163,11 @@ export function viewsView(lang: Lang, account: Account, s: ViewsPageState) {
       {cap ? null : <Gate lang={lang} ultra={s.ultra} />}
       {cap || n ? (
         <Panel title={t(lang, "views.title")} count={cap ? t(lang, "views.count", { n: fmtInt(n, lang), cap: fmtInt(cap, lang) }) : fmtInt(n, lang)}>
-          {/* Past the plan's figure (after a move to a smaller plan): nothing deleted, the ones past it marked. */}
-          {n > cap && cap ? <p>{t(lang, "views.over_cap", { n: fmtInt(n, lang), cap: fmtInt(cap, lang) })}</p> : null}
-          {n ? (
+          {/* Past the plan's figure (after a move to a smaller plan): nothing deleted, the ones past it marked. In a
+              group, what the subscription holds, and the account's own past its allowance marked. */}
+          {pool ? <PoolLines lang={lang} figure="views" line={pool.line} past={pool.past.size} />
+            : n > cap && cap ? <p>{t(lang, "views.over_cap", { n: fmtInt(n, lang), cap: fmtInt(cap, lang) })}</p> : null}
+          {s.views.length ? (
             <div class="table-wrap">
               {/* In the order they were saved, which decides the ones within the plan; the cells are forms. */}
               <Table sorting="none" cols={[
@@ -167,13 +181,15 @@ export function viewsView(lang: Lang, account: Account, s: ViewsPageState) {
                       <td data-label={t(lang, "views.col_view")}>
                         <a href={v.address}>{v.name}</a>
                         <br /><span class="muted small">{t(lang, KIND_KEY[v.kind])}</span>
-                        {i >= cap ? <><br /><span class="muted small">{t(lang, "views.past")}</span></> : null}
+                        {pool ? (pool.past.has(v.id) ? <PoolMark lang={lang} /> : null)
+                          : i >= cap ? <><br /><span class="muted small">{t(lang, "views.past")}</span></> : null}
                         {dash ? <AddToDashboard lang={lang} account={account} kind="view" panelRef={v.id} boards={s.boards} /> : null}
                         {dash ? <ChooseTables lang={lang} address={v.address} /> : null}
                       </td>
                       {s.ultra ? (
                         <td data-label={t(lang, "views.col_email")}>
-                          {mail ? (
+                          {/* A view past the account's allowance in a group is not sent: no select for it. */}
+                          {pool?.past.has(v.id) ? null : mail ? (
                             <>
                               <form method="post" action={`${VIEWS_PATH}/${v.id}`} class="watch-settings">
                                 <Csrf account={account} />
