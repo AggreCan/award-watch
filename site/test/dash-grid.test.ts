@@ -65,7 +65,9 @@ function expectSound(tiles: readonly Tile[], ids: readonly string[], label: stri
 }
 
 describe("the grid's properties", () => {
-  it("keep any posted layout sound once normalized, the same each time", () => {
+  // Hundreds of seeded layouts each: seconds of plain arithmetic on a busy runner, where the second of these once
+  // passed the default 5 seconds by 48 ms and stopped a deploy. The time is not under test here.
+  it("keep any posted layout sound once normalized, the same each time", { timeout: 30_000 }, () => {
     for (let seed = 1; seed <= 300; seed++) {
       const r = rng(seed);
       const raw = anyLayout(r, r.int(0, 16));
@@ -79,7 +81,7 @@ describe("the grid's properties", () => {
     }
   });
 
-  it("keep every layout sound through any run of moves, resizes and steps, the same each time", () => {
+  it("keep every layout sound through any run of moves, resizes and steps, the same each time", { timeout: 30_000 }, () => {
     for (let seed = 1; seed <= 200; seed++) {
       const r = rng(seed * 7919);
       let tiles = normalize(anyLayout(r, r.int(1, 12)));
