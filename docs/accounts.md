@@ -997,9 +997,11 @@ side in `pipeline/tests/test_expiring_first_seen.py`).
 
 ### When it runs
 
-The Worker has two cron triggers (`site/wrangler.jsonc`): `0 6 * * *`, the
-daily check, and `0 15-20 * * *`, the deliveries. `index.tsx` sends the
-hourly trigger to the job and any other to the daily check. The nightly
+The Worker has four cron triggers (`site/wrangler.jsonc`): `0 6 * * *`, the
+daily check; `0 15-20 * * *`, the deliveries; and two that start the nightly
+and the same-day job through GitHub's API (`docs/site-deploy.md`, "What
+starts the runs"). `index.tsx` routes each by its exact expression, the
+hourly one to the job, and one it does not know runs nothing. The nightly
 run publishes about 12:30 UTC (later on a retry), so the 15:00 run is
 normally the one that sends, and the hours after it cover a late nightly, a
 run cut short, or the rest after a sending limit.

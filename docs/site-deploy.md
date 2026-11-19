@@ -241,16 +241,112 @@ curl -X POST \
   -d '{"ref": "main", "inputs": {"reason": "fix the tenders page heading"}}'
 ```
 
-GitHub answers 204 and the run appears on the Actions tab. A run started
+GitHub answers with a 2xx status and the run appears on the Actions tab. A run started
 from any branch but `main` stops at its first step.
 
 GitHub keeps one waiting run per concurrency group: a run queued while
 another is waiting replaces the waiting one. So start one site deploy at a
 time, and avoid the minutes around 12:30, 16:30 and 20:30 UTC, when the
-nightly's schedules fire. A site deploy replaced this way changed nothing;
-start it again. A nightly run replaced this way is made up by the next
-schedule (the 16:30 and 20:30 retries run whenever the day's run did not
-finish clean).
+Worker starts the nightly; GitHub's own schedules for the same slots can
+come at any time after them (*What starts the runs*). A site deploy replaced
+this way changed nothing; start it again. A nightly start replaced this way
+is made up by the slot's other start or by the next slot (the 16:30 and
+20:30 slots run whenever the day's run did not finish clean).
+
+## What starts the runs
+
+The nightly (`nightly.yml`) and the same-day job (`intraday.yml`) are
+started by the Worker's own cron through GitHub's API, and by GitHub's own
+schedules at the same times as the fallback. GitHub starts a scheduled
+workflow when it can: from about 2026-11-17 it started this repository's
+runs hours late or not at all (the nightly at 20:49 and 20:53 UTC in place
+of about 13:30), while Cloudflare's cron fired the Worker's schedules on
+time every day.
+
+| Cron (`site/wrangler.jsonc`) | Constant | What the Worker does |
+|---|---|---|
+| `0 6 * * *` | `WATCHDOG_CRON` | the daily check (`site/src/watchdog.ts`) |
+| `0 15-20 * * *` | `DELIVERY_CRON` | the deliveries (`site/src/account/deliveries.ts`) |
+| `30 12,16,20 * * *` | `NIGHTLY_CRON` | starts `nightly.yml` on `main`, input `gate` = `"true"` |
+| `45 1,3,11,13,15,17,19,21,23 * * *` | `SAME_DAY_CRON` | starts `intraday.yml` on `main`, no input |
+
+`site/src/index.tsx` routes each expression exactly; one it does not know
+runs nothing. A start is one request from `site/src/dispatch.ts`,
+`POST https://api.github.com/repos/<WORKFLOW_REPO>/actions/workflows/<file>/dispatches`
+with `{"ref":"main"}` (and the nightly's input), given up after 10 seconds.
+It is called from the Worker's `scheduled` handler alone: no request to the
+site can start a run. The repository is the variable `WORKFLOW_REPO` in
+`site/wrangler.jsonc`; the workflow is one of two names in the code. Each
+start writes one line to the Worker's log, such as
+`dispatch: nightly.yml started (HTTP 204)`, `refused (HTTP 401)` or the
+fault's kind, and never the token; after a refusal or a fault GitHub's own
+schedule starts the run. GitHub has
+answered 204; its current reference describes 200 with the new run's id, and
+the Worker takes either.
+
+Cloudflare's documentation (Workers, Cron Triggers, and the Workers limits
+page) gives five-field expressions with `,`, `-` and `/` in every field, UTC
+times, at most 5 cron triggers an account on the Free plan and 1,000 on the
+Paid plan (this Worker holds 4), and up to 15 minutes for a changed trigger
+to reach every location, during which a slot can be missed: avoid a deploy
+that changes `triggers` in the quarter hour before a slot.
+
+### The token
+
+`WORKFLOW_RUN` is a Worker secret: a fine-grained GitHub personal access
+token for this one repository with one repository permission, Actions:
+read and write, and nothing else. Set it from `site/` (Wrangler asks for the
+value; it never goes in a file, a variable or a workflow):
+
+```
+npx wrangler secret put WORKFLOW_RUN
+```
+
+To replace it (refused, revoked, or near its end): GitHub, Settings,
+Developer settings, Personal access tokens, Fine-grained tokens, Generate new
+token, with this repository alone and Actions read and write; run the command
+above with the new value, then delete the old token on GitHub. A deploy
+keeps the secret. Without it nothing is sent and the runs start on GitHub's
+schedule alone. The permission lets the token start any workflow of the
+repository; the Worker's code names only the two.
+
+The daily check reads `nightly.yml` once a morning with the token
+(`GET .../actions/workflows/nightly.yml`, the same headers):
+
+| What it finds | The email |
+|---|---|
+| 401 or 403 | an item that begins "GitHub refused the token that starts the nightly and the same-day job (WORKFLOW_RUN, HTTP <code>); until it is replaced the runs start on GitHub's own schedule, which can be hours late." |
+| the answer's `github-authentication-token-expiration` 14 days away or less | an item naming the day the token expires |
+| no secret, or no `WORKFLOW_REPO` | a note at the foot of an email that goes anyway: the runs start on GitHub's schedule alone |
+| GitHub not reached, or another status | a line in the Worker's log, nothing in the email |
+
+A read that answers proves the token is valid and current, not that it may
+still start runs: any token reads a public repository's workflow. A refused
+start shows in the Worker's log, and the next morning as a late night: the
+check names a nightly whose last refresh started more than 3 hours after its
+day's 12:30 UTC slot (from a run status written before the start was
+recorded, one that finished after 17:00 UTC).
+
+### The gate
+
+Each nightly slot is often started twice, by the Worker and by GitHub's
+schedule, and a late or stray schedule can come at any hour. The nightly's
+`gate` job asks every schedule of GitHub's and every start whose `gate`
+input is `"true"` the same questions, with the runner's clock:
+
+- before 12:00 UTC: no run. Nothing is due before the 12:30 slot, so the
+  trigger is a late one from the day before.
+- `status.json` shows a run that started at or after 12:00 UTC today
+  (`run_started`; a status from before that field, by its end, `run_at`),
+  with `ok` true and the deploy step's outcome `success`: no run.
+- anything else, a status that cannot be read and a gate that fails
+  included: the refresh runs.
+
+A run started by hand from the Actions tab leaves `gate` at `"false"` and
+always runs. It does not count as the day's run when it starts before
+12:00 UTC, so the 12:30 slot still reads the morning's files. The same-day
+job needs no gate: its concurrency group runs the two starts of a slot one
+after the other, and the second gets 304 from the host.
 
 ## What a failed run means
 

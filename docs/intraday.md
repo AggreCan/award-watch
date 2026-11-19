@@ -56,9 +56,19 @@ Only the new notices file is read. The open notices file (every open notice,
 with its amendments and closing changes) comes once a day, at about 06:20
 Ottawa time, and stays the nightly's.
 
+The Worker's own cron starts each run through GitHub's API at the same
+minutes (`SAME_DAY_CRON`, `45 1,3,11,13,15,17,19,21,23 * * *`, in
+`site/src/dispatch.ts`, with no input, so `force` stays false), and the two
+schedules above stay as the fallback, since GitHub starts a scheduled run
+when it can, in November 2026 hours late or not at all (`docs/site-deploy.md`,
+"What starts the runs"). No request to the site can start a run.
+
 The workflow has a concurrency group of its own (`intraday`), so it never
-waits for the nightly and two of its runs never overlap. It can also be
-started by hand from the Actions tab (Run workflow).
+waits for the nightly and two of its runs never overlap: a slot started by
+the Worker and by GitHub's schedule runs twice, one after the other, and the
+second sends the validators the first recorded, so the host answers 304 and
+the run's row says the file had not changed. It needs no gate of its own for
+that. It can also be started by hand from the Actions tab (Run workflow).
 
 ## Who it runs for
 

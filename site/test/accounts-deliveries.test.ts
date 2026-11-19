@@ -474,8 +474,10 @@ async function cron(env: object, which = DELIVERY_CRON): Promise<void> {
 }
 
 describe("the delivery cron", () => {
-  it("is one of the two triggers wrangler.jsonc sets", () => {
-    expect(wrangler).toContain('"triggers": { "crons": ["0 6 * * *", "0 15-20 * * *"] }');
+  // The whole list, each expression with its job, is held in test/dispatch.test.ts.
+  it("is one of the triggers wrangler.jsonc sets", () => {
+    const crons = JSON.parse(`[${/"triggers": \{ "crons": \[([^\]]*)\] \}/.exec(wrangler)?.[1] ?? ""}]`) as string[];
+    expect(crons).toContain(DELIVERY_CRON);
     expect(DELIVERY_CRON).toBe("0 15-20 * * *");
   });
 

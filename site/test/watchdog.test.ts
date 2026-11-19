@@ -1,10 +1,11 @@
 import { env } from "cloudflare:test";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import accountsSchema from "../accounts_schema.sql?raw";
 import { LIVE_PRO_SQL, planFromRows, type EntitlementRow } from "../src/account/entitlements";
 import {
-  ACCOUNTS_BACKUP_KEY, ACCOUNTS_BACKUP_STALE_DAYS, BACKUP_KEY, FIGURES_KEY, INTRADAY_RUNS_SQL, INTRADAY_STEP_NOTICES, LOOKUP_MAX_BYTES, MONEY_ITEMS_SQL,
-  REFUNDS_TO_CANCEL_SQL, buildEmail, collectAlerts, collectNotices, gatherInputs, readFigures, readIntradayRuns, readStatus, runWatchdog,
+  ACCOUNTS_BACKUP_KEY, ACCOUNTS_BACKUP_STALE_DAYS, BACKUP_KEY, FIGURES_KEY, INTRADAY_RUNS_SQL, INTRADAY_STEP_NOTICES, LATE_END_UTC, LATE_START_HOURS,
+  LOOKUP_MAX_BYTES, MONEY_ITEMS_SQL, NIGHTLY_SLOT_UTC, REFUNDS_TO_CANCEL_SQL, WORKFLOW_TOKEN_WARN_DAYS, buildEmail, collectAlerts, collectNotes,
+  collectNotices, gatherInputs, lateNight, readFigures, readIntradayRuns, readStatus, readTokenExpiry, readWorkflowToken, runWatchdog,
 } from "../src/watchdog";
 import { testEnv } from "./assets";
 import { applySql } from "./setup";
@@ -648,5 +649,255 @@ describe("daily check: the day's figures", () => {
       expect(result, String(figures)).toEqual({ alerts: [], notices: [], sent: false });
       expect(alerts.handed).toEqual([]);
     }
+  });
+});
+
+// -- what starts the runs (src/dispatch.ts) ---------------------------------------------------------
+
+// The Worker's own cron starts the nightly and the same-day job with the token
+// WORKFLOW_RUN; the check reads it once a morning. Every token here is made up,
+// and fetch is a fake: nothing reaches GitHub.
+const TOKEN = "made-up-token-for-tests-1111";
+const READ_URL = "https://api.github.com/repos/AggreCan/award-watch/actions/workflows/nightly.yml";
+const TOKEN_HOW = "make a new one and set it with wrangler secret put WORKFLOW_RUN (docs/site-deploy.md, What starts the runs).";
+const refusedLine = (status: number) =>
+  `GitHub refused the token that starts the nightly and the same-day job (WORKFLOW_RUN, HTTP ${status}); until it is replaced ` +
+  `the runs start on GitHub's own schedule, which can be hours late. To replace it, ${TOKEN_HOW}`;
+const expiryLine = (day: string) =>
+  `The token that starts the nightly and the same-day job (WORKFLOW_RUN) expires on ${day} (UTC); from then the runs start on ` +
+  `GitHub's own schedule alone, which can be hours late. Before that day, ${TOKEN_HOW}`;
+const NO_SECRET = "The Worker has no WORKFLOW_RUN secret, so the nightly and the same-day job start on GitHub's own schedule alone, " +
+  "which can be hours late (docs/site-deploy.md, What starts the runs).";
+
+type GitHubCall = { url: string; method: string; headers: Record<string, string> };
+
+// fetch replaced by a fake that records each request and answers with answer(), or throws what it throws.
+function fakeGitHub(answer: () => Response) {
+  const calls: GitHubCall[] = [];
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+    calls.push({
+      url: input instanceof Request ? input.url : String(input),
+      method: init?.method ?? "GET",
+      headers: Object.fromEntries(new Headers(init?.headers).entries()),
+    });
+    return answer();
+  });
+  return calls;
+}
+const answers = (status: number, headers: Record<string, string> = {}) => () =>
+  new Response(status === 200 ? '{"id":1,"name":"nightly"}' : `{"message":"Bad credentials","echo":"${TOKEN}"}`, { status, headers });
+// A healthy bucket: the backup saved at 00:50 and the healthy status, so only the token can make a line.
+const healthyBucket = {
+  head: async () => ({ uploaded: healthy.backupUploaded }),
+  get: async (key: string) => (key === "status.json" ? { text: async () => JSON.stringify(healthy.status) } : null),
+} as unknown as R2Bucket;
+const tokenEnv = (extra: object = {}) =>
+  ({ ...testEnv(), DATA: healthyBucket, SEARCH: fakeD1(cleanRuns).db, ACCOUNTS: undefined, WORKFLOW_RUN: TOKEN, ...extra }) as never;
+
+// The clean morning after the fixture's data date (stats.json: 2026-10-31): a
+// night that started at 12:44 and finished at 14:48, the same-day refresh
+// through at 03:45, and, unless given, no figures line.
+const morning = new Date("2026-11-01T06:00:00Z");
+function cleanMorning(extra: object = {}, figures: string | null = null) {
+  const status = { ...healthy.status, run_started: "2026-10-31T12:44:10+00:00", run_at: "2026-10-31T14:48:00+00:00" };
+  const bucket = {
+    head: async () => ({ uploaded: new Date("2026-11-01T00:50:00Z") }),
+    get: async (key: string) => (key === "status.json" ? { text: async () => JSON.stringify(status) }
+      : key === FIGURES_KEY && figures ? { text: async () => figures } : null),
+  } as unknown as R2Bucket;
+  const handed: string[] = [];
+  const binding = { async send(m: unknown) { handed.push((m as Record<string, string>)["EmailMessage::raw"]); } } as unknown as SendEmail;
+  const env = {
+    ...testEnv(), DATA: bucket, SEARCH: fakeD1({ ...cleanRuns, last_ok: "2026-11-01T03:45:30Z" }).db, ACCOUNTS: fakeD1({ n: 1 }).db,
+    ALERTS: binding, ALERT_EMAIL: "owner@example.com", ALERT_FROM: "alerts@example.invalid", ...extra,
+  };
+  return { env: env as never, handed };
+}
+
+describe("daily check: the token that starts the runs", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("reads the nightly's workflow once, with the dispatch's headers, and says nothing when all is well", async () => {
+    const calls = fakeGitHub(answers(200, { "github-authentication-token-expiration": "2027-01-15 00:00:00 UTC" }));
+    const inputs = await gatherInputs(tokenEnv(), now);
+    expect(calls).toEqual([{
+      url: READ_URL, method: "GET",
+      headers: { authorization: `Bearer ${TOKEN}`, accept: "application/vnd.github+json", "x-github-api-version": "2022-11-28", "user-agent": "awardwatch.ca" },
+    }]);
+    expect(inputs.workflowToken).toEqual({ state: "accepted", expires: new Date("2027-01-15T00:00:00Z") });
+    expect(collectAlerts(inputs)).toEqual([]);
+    expect(collectNotes(inputs)).toEqual([]);
+    // A token with no end date (no header): nothing either.
+    vi.restoreAllMocks();
+    fakeGitHub(answers(200));
+    const forever = await gatherInputs(tokenEnv(), now);
+    expect(forever.workflowToken).toEqual({ state: "accepted", expires: null });
+    expect(collectAlerts(forever)).toEqual([]);
+    // The whole clean morning with the token: no line, no note, so no message, as before.
+    const { env, handed } = cleanMorning({ WORKFLOW_RUN: TOKEN });
+    expect(await runWatchdog(env, morning)).toEqual({ alerts: [], notices: [], sent: false });
+    expect(handed).toEqual([]);
+  });
+
+  it("names a refused token by its status, in the email, never the token", async () => {
+    for (const status of [401, 403]) {
+      vi.restoreAllMocks();
+      fakeGitHub(answers(status));
+      const log = vi.spyOn(console, "log").mockImplementation(() => {});
+      const inputs = await gatherInputs(tokenEnv(), now);
+      expect(inputs.workflowToken).toEqual({ state: "refused", status });
+      expect(collectAlerts(inputs)).toEqual([refusedLine(status)]);
+      expect(collectNotes(inputs)).toEqual([]);
+      // The whole check: one item, and the message carries it.
+      const { env, handed } = cleanMorning({ WORKFLOW_RUN: TOKEN });
+      const result = await runWatchdog(env, morning);
+      expect(result).toEqual({ alerts: [refusedLine(status)], notices: [], sent: true });
+      expect(handed[0]).toContain(`Subject: Award Watch: 1 item need attention\r\n`);
+      expect(handed[0]).toContain(`1. ${refusedLine(status)}`);
+      for (const text of [handed[0], log.mock.calls.flat().join(" ")]) {
+        expect(text).not.toContain(TOKEN);
+        expect(text).not.toContain("Bad credentials");
+      }
+    }
+  });
+
+  it("names the day the token expires from 14 days before it", async () => {
+    expect(WORKFLOW_TOKEN_WARN_DAYS).toBe(14);
+    const at = (header: string) => collectAlerts({ ...healthy, workflowToken: { state: "accepted", expires: readTokenExpiry(header) } });
+    // now is 2026-10-20T06:00Z: exactly 14 days ahead is within, a second more is not.
+    expect(at("2026-11-03 06:00:00 UTC")).toEqual([expiryLine("2026-11-03")]);
+    expect(at("2026-11-03 06:00:01 UTC")).toEqual([]);
+    expect(at("2026-10-21 00:00:00 UTC")).toEqual([expiryLine("2026-10-21")]);
+    // The day is UTC's: 23:30 at -07:00 is the next day.
+    expect(at("2026-10-25 23:30:00 -0700")).toEqual([expiryLine("2026-10-26")]);
+    // From the answer's header, through the read.
+    fakeGitHub(answers(200, { "github-authentication-token-expiration": "2026-10-30 12:00:00 UTC" }));
+    expect(collectAlerts(await gatherInputs(tokenEnv(), now))).toEqual([expiryLine("2026-10-30")]);
+  });
+
+  it("reads the end date as GitHub writes it, and nothing else", () => {
+    expect(readTokenExpiry("2026-12-01 00:00:00 UTC")).toEqual(new Date("2026-12-01T00:00:00Z"));
+    expect(readTokenExpiry("2026-12-01 00:00:00 -0700")).toEqual(new Date("2026-12-01T07:00:00Z"));
+    expect(readTokenExpiry("2026-12-01 00:00:00 +05:30")).toEqual(new Date("2026-11-30T18:30:00Z"));
+    expect(readTokenExpiry(" 2026-12-01T00:00:00Z ")).toEqual(new Date("2026-12-01T00:00:00Z"));
+    expect(readTokenExpiry("2026-12-01 00:00:00")).toEqual(new Date("2026-12-01T00:00:00Z"));
+    for (const odd of [null, "", "soon", "2026-12-01", "2026-13-01 00:00:00 UTC", "2026-12-01 24:00:00 UTC", `2026-12-01 00:00:00 UTC ${TOKEN}`]) {
+      expect(readTokenExpiry(odd), String(odd)).toBeNull();
+    }
+  });
+
+  it("logs an end date that does not read and says nothing of it", async () => {
+    fakeGitHub(answers(200, { "github-authentication-token-expiration": "next spring" }));
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const inputs = await gatherInputs(tokenEnv(), now);
+    expect(inputs.workflowToken).toEqual({ state: "accepted", expires: null });
+    expect(collectAlerts(inputs)).toEqual([]);
+    expect(log.mock.calls.flat().join(" ")).toContain("watchdog: the WORKFLOW_RUN token's end date did not read");
+  });
+
+  it("notes a Worker without the secret or the repository quietly: no read, no item, never the reason to send", async () => {
+    const calls = fakeGitHub(answers(200));
+    const unset = await gatherInputs({ ...testEnv(), DATA: healthyBucket, SEARCH: fakeD1(cleanRuns).db, ACCOUNTS: undefined }, now);
+    expect(unset.workflowToken).toEqual({ state: "unset", missing: "WORKFLOW_RUN" });
+    const noRepo = await gatherInputs(tokenEnv({ WORKFLOW_REPO: "" }), now);
+    expect(noRepo.workflowToken).toEqual({ state: "unset", missing: "WORKFLOW_REPO" });
+    expect(calls).toEqual([]);
+    expect(collectAlerts(unset)).toEqual([]);
+    expect(collectNotices(unset)).toEqual([]);
+    expect(collectNotes(unset)).toEqual([NO_SECRET]);
+    expect(collectNotes(noRepo)).toEqual([NO_SECRET.replace("no WORKFLOW_RUN secret", "no WORKFLOW_REPO variable")]);
+    // A morning with nothing else to say sends nothing.
+    const quiet = cleanMorning();
+    expect(await runWatchdog(quiet.env, morning)).toEqual({ alerts: [], notices: [], sent: false });
+    expect(quiet.handed).toEqual([]);
+    // A message that goes anyway (the day's figures) carries it at its foot, counted in nothing.
+    const line = "2026-10-31 (UTC): accounts 12 (new 2), sign-in codes asked for 3";
+    const figures = cleanMorning({}, line);
+    expect(await runWatchdog(figures.env, morning)).toEqual({ alerts: [], notices: [], sent: true });
+    expect(figures.handed[0]).toContain("Subject: Award Watch: figures for 2026-10-31\r\n");
+    expect(figures.handed[0]).toContain(`- ${line}\r\n\r\nNote: ${NO_SECRET}\r\n\r\nRun log:`);
+    // buildEmail without notes is the message as it was.
+    expect(buildEmail("a@b.ca", "c@d.ca", ["x"], now, [], {}, null, [])).toBe(buildEmail("a@b.ca", "c@d.ca", ["x"], now));
+  });
+
+  it("makes a fault reaching GitHub, or an answer of another kind, a log line and nothing in the email", async () => {
+    const cases: [() => Response, string][] = [
+      [() => {
+        throw new TypeError(`fetch to ${READ_URL} failed with Bearer ${TOKEN}`);
+      }, "watchdog: the WORKFLOW_RUN token not checked (TypeError)"],
+      [answers(404), "watchdog: the WORKFLOW_RUN token not checked (HTTP 404)"],
+      [answers(500), "watchdog: the WORKFLOW_RUN token not checked (HTTP 500)"],
+    ];
+    for (const [answer, said] of cases) {
+      vi.restoreAllMocks();
+      fakeGitHub(answer);
+      const log = vi.spyOn(console, "log").mockImplementation(() => {});
+      const inputs = await gatherInputs(tokenEnv(), now);
+      expect(inputs.workflowToken, said).toBeNull();
+      expect(collectAlerts(inputs), said).toEqual([]);
+      expect(collectNotes(inputs), said).toEqual([]);
+      const text = log.mock.calls.flat().join("\n");
+      expect(text).toContain(said);
+      expect(text).not.toContain(TOKEN);
+      // The read never throws out of the check.
+      await expect(readWorkflowToken(tokenEnv())).resolves.toBeNull();
+    }
+  });
+});
+
+describe("daily check: a late night", () => {
+  const night = (runStarted: string | undefined, runAt: string) =>
+    ({ ...healthy, status: { ...healthy.status, run_at: runAt, ...(runStarted ? { run_started: runStarted } : {}) } });
+  const WHY = " Either the slot's run failed and a later slot ran the night, or no run started on time: check the nightly's runs, " +
+    "the Worker's dispatch lines in its logs and the WORKFLOW_RUN token (docs/site-deploy.md, What starts the runs).";
+  const started = (at: string) => `The last nightly refresh started at ${at} UTC, more than 3 hours after its day's 12:30 UTC slot.${WHY}`;
+
+  it("names a refresh that started more than 3 hours after its day's 12:30 slot, and no other", () => {
+    expect([NIGHTLY_SLOT_UTC, LATE_START_HOURS, LATE_END_UTC]).toEqual(["12:30", 3, "17:00"]);
+    // now is 2026-10-20T06:00Z. The Worker's 12:30 start on a normal day: nothing.
+    expect(collectAlerts(night("2026-10-19T12:44:10Z", "2026-10-19T14:48:00Z"))).toEqual([]);
+    // Exactly 3 hours after the slot is not more than 3.
+    expect(collectAlerts(night("2026-10-19T15:30:00Z", "2026-10-19T17:40:00Z"))).toEqual([]);
+    expect(collectAlerts(night("2026-10-19T15:30:01Z", "2026-10-19T17:40:00Z"))).toEqual([started("2026-10-19T15:30")]);
+    // GitHub's schedule alone, as on 2026-11-18, or the 20:30 slot after two failed runs.
+    expect(collectAlerts(night("2026-10-19T20:49:10Z", "2026-10-19T23:02:00Z"))).toEqual([started("2026-10-19T20:49")]);
+    expect(collectAlerts(night("2026-10-19T20:44:00+00:00", "2026-10-19T22:58:00+00:00"))).toEqual([started("2026-10-19T20:44")]);
+    // A run started by hand in the night, or a stray trigger after midnight: before its day's slot, nothing.
+    expect(collectAlerts(night("2026-10-20T01:56:00Z", "2026-10-20T04:10:00Z"))).toEqual([]);
+    expect(collectAlerts(night("2026-10-20T03:08:00Z", "2026-10-20T05:15:00Z"))).toEqual([]);
+  });
+
+  it("reads a status written before the start was recorded by its end, after 17:00 UTC", () => {
+    expect(collectAlerts(healthy)).toEqual([]);
+    expect(collectAlerts(night(undefined, "2026-10-19T17:00:00Z"))).toEqual([]);
+    expect(collectAlerts(night(undefined, "2026-10-19T21:30:00Z"))).toEqual([
+      `The last nightly refresh finished at 2026-10-19T21:30 UTC, after 17:00 UTC.${WHY}`]);
+  });
+
+  it("says nothing of a status older than the last night, which the stale line already dates", () => {
+    expect(collectAlerts(night("2026-10-17T20:49:10Z", "2026-10-17T23:02:00Z"))).toEqual(["The last completed run was 2026-10-17T23:02 UTC."]);
+    expect(lateNight({ run_started: "2026-10-20T20:49:10Z", run_at: "2026-10-20T23:02:00Z" }, now)).toBeNull();
+    expect(lateNight({ run_started: "2026-10-19T20:49:10Z" }, now)).toBeNull();
+  });
+
+  it("reads run_started from status.json, and drops one that does not read without an alert", () => {
+    expect(readStatus({ ...healthy.status, run_started: "2026-10-19T12:44:10+00:00" })).toEqual({
+      status: { ...healthy.status, run_started: "2026-10-19T12:44:10+00:00" }, problem: null,
+    });
+    for (const odd of [null, 5, "soon", "", ["2026-10-19T12:44:10Z"]]) {
+      expect(readStatus({ ...healthy.status, run_started: odd }), JSON.stringify(odd)).toEqual({ status: healthy.status, problem: null });
+    }
+  });
+
+  it("comes from the status in R2 into the email", async () => {
+    const status = { ...healthy.status, run_started: "2026-10-19T20:49:10+00:00", run_at: "2026-10-19T23:02:00+00:00" };
+    const bucket = {
+      head: async () => ({ uploaded: new Date("2026-10-20T00:50:00Z") }),
+      get: async (key: string) => (key === "status.json" ? { text: async () => JSON.stringify(status) } : null),
+    } as unknown as R2Bucket;
+    const inputs = await gatherInputs({ ...testEnv(), DATA: bucket, SEARCH: fakeD1(cleanRuns).db, ACCOUNTS: undefined }, now);
+    expect(collectAlerts(inputs)).toEqual([started("2026-10-19T20:49")]);
   });
 });

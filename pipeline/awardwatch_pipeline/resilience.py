@@ -2,8 +2,9 @@
 
 nightly.py calls these from its command line; the workflow calls nightly.py.
 
-  gate          decide whether a retry trigger (16:30 and 20:30 UTC) has
-                anything to do, from the status.json the last run left in R2.
+  gate          decide whether a gated trigger (any schedule of GitHub's, or
+                the Worker's dispatch) has anything to do, from the time and
+                the status.json the last run left in R2.
   live_version  the Worker version serving traffic, from Wrangler's JSON, so
                 a deploy that breaks the site can be rolled back to it.
   live_commit   the commit a Worker version was deployed from, from the
@@ -37,7 +38,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time as clock_time, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping
 from urllib.parse import quote, urlencode, urlsplit
@@ -94,26 +95,48 @@ def _api_codes(resp: Any) -> set[int]:
 # -- gate ---------------------------------------------------------------------
 
 
-def gate(status: Any, today: date) -> tuple[bool, str]:
-    """(skip, reason) for a retry trigger. Skip only when the status shows that
-    a run finished today (UTC) clean and deployed; anything else, a missing or
-    unreadable status included, runs the refresh again. A second refresh on
-    the same day costs only a conditional request per source file: the
-    files that did not change since the first are not downloaded again."""
+# The nightly's day opens at 12:00 UTC, half an hour before its first slot
+# (12:30): CanadaBuys has regenerated the morning's files by then. A trigger
+# before it is a late one from the day before, and a run that started before
+# it read the files of the day before.
+DAY_OPENS = clock_time(12, 0)
+
+
+def gate(status: Any, now: datetime) -> tuple[bool, str]:
+    """(skip, reason) for a gated trigger: every schedule of GitHub's and every
+    dispatch with the input gate "true" (the Worker's own cron). now is the
+    runner's clock, never text from the event.
+
+    Before 12:00 UTC: skip, nothing is due. Otherwise skip only when the
+    status shows a run that started at or after 12:00 UTC today (by
+    run_started; a status written before that field existed is read by its
+    end, run_at) and finished clean and deployed. Anything else, a missing or
+    unreadable status included, runs the refresh. A second refresh on the
+    same day costs only a conditional request per source file: the files
+    that did not change since the first are not downloaded again."""
+    now = now.astimezone(timezone.utc) if now.tzinfo else now.replace(tzinfo=timezone.utc)
+    opens = datetime.combine(now.date(), DAY_OPENS, tzinfo=timezone.utc)
+    if now < opens:
+        return True, (f"it is {now:%H:%M} UTC, before {DAY_OPENS:%H:%M}: nothing is due before the day's first slot, "
+                      f"so this trigger is a late one from the day before; nothing to do")
     if not isinstance(status, dict):
         return False, "no readable run status, so the refresh runs"
-    when = _parse_iso(status.get("run_at"))
+    when, which = _parse_iso(status.get("run_started")), "started"
+    if when is None:
+        when, which = _parse_iso(status.get("run_at")), "finished"
     if when is None:
         return False, "the run status has no readable run time, so the refresh runs"
-    finished = when.astimezone(timezone.utc).date()
-    if finished != today:
-        return False, f"the last run finished on {finished}, not today ({today}), so the refresh runs"
+    when = when.astimezone(timezone.utc)
+    if not opens <= when < opens + timedelta(hours=12):
+        return False, (f"the last run {which} at {when:%Y-%m-%d %H:%M} UTC, not at or after {DAY_OPENS:%H:%M} UTC "
+                       f"today ({now.date()}), so the refresh runs")
     if status.get("ok") is not True:
         return False, "today's run did not finish clean, so the refresh runs again"
     steps = status.get("steps")
     if not isinstance(steps, dict) or steps.get("deploy") != "success":
         return False, "today's run did not deploy, so the refresh runs again"
-    return True, f"today's run finished clean at {status['run_at']}; nothing to do"
+    began = f"started at {when:%H:%M} UTC and " if which == "started" else ""
+    return True, f"today's run {began}finished clean at {status.get('run_at')}; nothing to do"
 
 
 # -- the live version ---------------------------------------------------------

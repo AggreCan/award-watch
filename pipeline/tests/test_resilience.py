@@ -69,33 +69,89 @@ class FakeHttp:
 # -- gate ---------------------------------------------------------------------
 
 
+# The day's clock for the gate (UTC): the main run's stages start about 12:45
+# when the Worker dispatches it at 12:30, and it ends about 14:45.
+STARTED = "2026-10-22T12:44:10Z"
+ENDED = "2026-10-22T14:48:10+00:00"
+
+
+def at(hhmm: str, day: str = "2026-10-22") -> datetime:
+    return datetime.fromisoformat(f"{day}T{hhmm}:00+00:00")
+
+
 def clean_status(**extra):
-    status = {"run_at": "2026-10-22T00:48:10+00:00", "ok": True, "stages": [],
+    status = {"run_at": ENDED, "run_started": STARTED, "ok": True, "stages": [],
               "steps": {"restore": "success", "pipeline": "success", "deploy": "success"}}
     status.update(extra)
     return status
 
 
-def test_the_gate_skips_only_after_a_clean_deployed_run_today():
-    skip, reason = resilience.gate(clean_status(), TODAY)
-    assert skip and "finished clean" in reason
-    assert resilience.gate(clean_status(), TODAY + timedelta(days=1))[0] is False
-    assert resilience.gate(clean_status(ok=False), TODAY)[0] is False
-    assert resilience.gate(clean_status(steps={"deploy": "failure"}), TODAY)[0] is False
-    assert resilience.gate(clean_status(steps={"deploy": "skipped"}), TODAY)[0] is False
+def test_the_gate_skips_only_after_a_clean_deployed_run_that_started_today_from_noon():
+    # GitHub's late 12:30 schedule, the 16:30 and 20:30 slots after a clean main run: skip.
+    for now in ("13:30", "16:30", "20:30", "20:53", "23:59"):
+        skip, reason = resilience.gate(clean_status(), at(now))
+        assert skip and "started at 12:44 UTC and finished clean" in reason, now
+    # After a main run that did not finish clean, or did not deploy: the slots run it again.
+    assert resilience.gate(clean_status(ok=False), at("16:30"))[0] is False
+    assert resilience.gate(clean_status(steps={"deploy": "failure"}), at("16:30"))[0] is False
+    assert resilience.gate(clean_status(steps={"deploy": "skipped"}), at("20:30"))[0] is False
     # A status from before the steps were recorded cannot show a deploy.
     old = clean_status()
     del old["steps"]
-    assert resilience.gate(old, TODAY)[0] is False
+    assert resilience.gate(old, at("16:30"))[0] is False
+    # Yesterday's clean run is not today's: the day's first slot runs.
+    assert resilience.gate(clean_status(), at("12:30", "2026-10-23"))[0] is False
+    # The start is read in UTC whatever offset it was written with.
+    assert resilience.gate(clean_status(run_started="2026-10-22T05:44:10-07:00"), at("16:30"))[0] is True
+    assert resilience.gate(clean_status(run_started="2026-10-22T04:59:59-07:00"), at("16:30"))[0] is False
+
+
+def test_nothing_runs_before_noon_utc_whatever_the_status_says():
+    # A stray trigger after midnight UTC (GitHub's late 20:30 schedule of the day before, as at 01:56 on
+    # 2026-11-19) or any gated trigger in the morning: skip, before the status is even read.
+    for now in ("00:00", "01:56", "03:00", "11:59"):
+        for status in (clean_status(), clean_status(ok=False), None, "{not json", {}):
+            skip, reason = resilience.gate(status, at(now))
+            assert skip and "before 12:00" in reason, (now, status)
+    # Noon itself is the day's: a status from yesterday runs the refresh.
+    assert resilience.gate(clean_status(run_started="2026-10-21T12:44:10Z", run_at="2026-10-21T14:48:10Z"),
+                           at("12:00"))[0] is False
+    # The clock is read in UTC whatever offset it carries: 04:30 in BC is 11:30 UTC.
+    assert resilience.gate(clean_status(), datetime.fromisoformat("2026-10-22T04:30:00-07:00"))[0] is True
+    assert resilience.gate(None, datetime(2026, 10, 22, 11, 30))[0] is True
+
+
+def test_a_run_started_by_hand_in_the_night_is_not_the_day_s():
+    # Started at 03:00 UTC by hand (gate "false", so its own gate never asked), ended at 05:15: the 12:30
+    # slot still runs, so the night reads the morning's files.
+    night = clean_status(run_started="2026-10-22T03:08:00Z", run_at="2026-10-22T05:15:00+00:00")
+    skip, reason = resilience.gate(night, at("12:30"))
+    assert skip is False and "started at 2026-10-22 03:08 UTC" in reason
+    # Once the 12:30 run has finished clean, the later slots skip.
+    assert resilience.gate(clean_status(), at("16:30"))[0] is True
+    # A run that started at noon or later is the day's, wherever it started from.
+    assert resilience.gate(clean_status(run_started="2026-10-22T12:00:00Z"), at("16:30"))[0] is True
+    assert resilience.gate(clean_status(run_started="2026-10-22T11:59:59Z"), at("16:30"))[0] is False
+
+
+def test_an_old_status_without_a_start_is_read_by_its_end():
+    old = clean_status()
+    del old["run_started"]
+    assert resilience.gate(old, at("16:30")) == (True, f"today's run finished clean at {ENDED}; nothing to do")
+    # The night run by hand ended before noon: not the day's.
+    assert resilience.gate({**old, "run_at": "2026-10-22T05:15:00+00:00"}, at("12:30"))[0] is False
     # A run that ended just before midnight is yesterday's.
-    assert resilience.gate(clean_status(run_at="2026-10-21T23:59:59Z"), TODAY)[0] is False
-    # The run time is read in UTC whatever offset it was written with.
-    assert resilience.gate(clean_status(run_at="2026-10-21T20:30:00-07:00"), TODAY)[0] is True
+    assert resilience.gate({**old, "run_at": "2026-10-21T23:59:59Z"}, at("12:30"))[0] is False
+    # A start that is there but does not read falls back to the end, as one that is missing.
+    for odd in (None, "", "soon", 5):
+        assert resilience.gate({**old, "run_started": odd}, at("16:30"))[0] is True, odd
+        assert resilience.gate({**old, "run_started": odd, "run_at": "2026-10-22T05:15:00Z"}, at("16:30"))[0] is False
 
 
-@pytest.mark.parametrize("raw", [None, [], "text", {"ok": True}, {"run_at": "soon", "ok": True}, {"run_at": 5}])
+@pytest.mark.parametrize("raw", [None, [], "text", {"ok": True}, {"run_at": "soon", "ok": True}, {"run_at": 5},
+                                 {"run_started": "soon", "run_at": None, "ok": True}])
 def test_the_gate_runs_the_refresh_on_anything_unreadable(raw):
-    assert resilience.gate(raw, TODAY)[0] is False
+    assert resilience.gate(raw, at("16:30"))[0] is False
 
 
 def test_gate_command_writes_its_output_and_never_fails(tmp_path, monkeypatch):
@@ -103,27 +159,66 @@ def test_gate_command_writes_its_output_and_never_fails(tmp_path, monkeypatch):
     monkeypatch.setenv("GITHUB_OUTPUT", str(gh))
     status = tmp_path / "status.json"
     status.write_text(json.dumps(clean_status()))
-    assert nightly.main(["gate", "--status", str(status), "--today", "2026-10-22"]) == 0
+    # The time as the workflow writes it, date -u +%Y-%m-%dT%H:%M:%SZ.
+    assert nightly.main(["gate", "--status", str(status), "--now", "2026-10-22T16:31:05Z"]) == 0
     assert gh.read_text() == "skip=true\n"
     gh.unlink()
     # The download found nothing, or left a broken file: the refresh runs.
-    assert nightly.main(["gate", "--status", str(tmp_path / "missing.json"), "--today", "2026-10-22"]) == 0
+    assert nightly.main(["gate", "--status", str(tmp_path / "missing.json"), "--now", "2026-10-22T16:31:05Z"]) == 0
     status.write_text("{not json")
-    assert nightly.main(["gate", "--status", str(status), "--today", "2026-10-22"]) == 0
-    assert nightly.main(["gate", "--status", str(status), "--today", "not a date"]) == 0
-    assert gh.read_text() == "skip=false\nskip=false\nskip=false\n"
+    assert nightly.main(["gate", "--status", str(status), "--now", "2026-10-22T16:31:05Z"]) == 0
+    # A clock that does not read, a date alone (which would read as midnight) or a time without its zone:
+    # the gate cannot decide, and the refresh runs.
+    status.write_text(json.dumps(clean_status()))
+    for odd in ("not a time", "2026-10-22", "2026-10-22T16:31:05", ""):
+        assert nightly.main(["gate", "--status", str(status), "--now", odd]) == 0
+    assert gh.read_text() == "skip=false\n" * 6
+    # Before noon: skip, whatever the file holds.
+    gh.unlink()
+    assert nightly.main(["gate", "--status", str(tmp_path / "missing.json"), "--now", "2026-10-23T01:56:00Z"]) == 0
+    assert gh.read_text() == "skip=true\n"
+    # The old argument is gone: the workflow passes the time.
+    with pytest.raises(SystemExit):
+        nightly.main(["gate", "--status", str(status), "--today", "2026-10-22"])
 
 
 def test_a_status_written_by_a_clean_run_lets_the_gate_skip(tmp_path):
     db = tmp_path / "awardwatch.sqlite"
     connect(db).close()
-    status = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []},
-                                {"restore": "success", "pipeline": "success", "deploy": "success"}, now=NOW,
+    ended = datetime(2026, 10, 22, 14, 48, tzinfo=timezone.utc)
+    status = nightly.run_status(db, STARTED, {"problems": []},
+                                {"restore": "success", "pipeline": "success", "deploy": "success"}, now=ended,
                                 smoke={"verdict": "ok", "detail": "4 pages answered 200"})
-    assert resilience.gate(status, TODAY)[0] is True
-    rolled = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, {"deploy": "success"}, now=NOW,
+    assert status["run_started"] == "2026-10-22T12:44:10+00:00"
+    assert resilience.gate(status, at("16:30"))[0] is True
+    rolled = nightly.run_status(db, STARTED, {"problems": []}, {"deploy": "success"}, now=ended,
                                 smoke={"verdict": "broken", "detail": "/ answered 500 and 500"}, rollback="rolled back")
-    assert resilience.gate(rolled, TODAY)[0] is False
+    assert resilience.gate(rolled, at("16:30"))[0] is False
+    # The same clean status from a run started by hand at 03:00 is not the day's.
+    night = nightly.run_status(db, "2026-10-22T03:08:00Z", {"problems": []},
+                               {"restore": "success", "pipeline": "success", "deploy": "success"},
+                               now=datetime(2026, 10, 22, 5, 15, tzinfo=timezone.utc),
+                               smoke={"verdict": "ok", "detail": "4 pages answered 200"})
+    assert night["ok"] is True and resilience.gate(night, at("12:30"))[0] is False
+
+
+def test_the_status_s_start_reads_in_utc_and_is_null_without_one(tmp_path):
+    db = tmp_path / "awardwatch.sqlite"
+    connect(db).close()
+    for raw, read in (("2026-10-22T12:44:10Z", "2026-10-22T12:44:10+00:00"),
+                      ("2026-10-22T05:44:10-07:00", "2026-10-22T12:44:10+00:00"),
+                      (None, None), ("", None), ("not a time", None)):
+        assert nightly.run_status(db, raw, None, {}, now=NOW)["run_started"] == read, raw
+    # Through the command, from the file the pipeline step writes.
+    started = tmp_path / "run_started.txt"
+    started.write_text("2026-10-22T12:44:10Z\n", encoding="utf-8")
+    out = tmp_path / "status.json"
+    assert nightly.main(["status", "--db", str(db), "--started-file", str(started), "--step", "deploy=success",
+                         "--out", str(out)]) == 0
+    assert json.loads(out.read_text(encoding="utf-8"))["run_started"] == "2026-10-22T12:44:10+00:00"
+    assert nightly.main(["status", "--db", str(db), "--started-file", str(tmp_path / "none.txt"),
+                         "--step", "deploy=success", "--out", str(out)]) == 0
+    assert json.loads(out.read_text(encoding="utf-8"))["run_started"] is None
 
 
 # -- the live version ---------------------------------------------------------
@@ -823,8 +918,12 @@ def test_the_status_carries_the_two_fields_and_neither_changes_ok(tmp_path):
     assert status["accounts_backup"] == "failed"
     assert status["tests"] == {"verdict": "fallback", "failed": ["worker", "pipeline"], "main": MAIN, "ran": LIVE}
     assert len(resilience.attention_items(status)) == 2
-    # A fallback night that deployed is a finished night: the retries skip it.
-    assert status["ok"] is True and resilience.gate(status, TODAY)[0] is True
+    # A fallback night that deployed is a finished night: the later slots skip it.
+    day = nightly.run_status(db, STARTED, {"problems": []}, steps, now=datetime(2026, 10, 22, 14, 48, tzinfo=timezone.utc),
+                             smoke={"verdict": "ok", "detail": "5 pages answered 200"},
+                             tests={"verdict": "fallback", "failed": "worker,pipeline", "main": MAIN, "ran": LIVE})
+    assert status["ok"] is True and day["ok"] is True
+    assert resilience.gate(day, datetime(2026, 10, 22, 16, 30, tzinfo=timezone.utc))[0] is True
     bare = nightly.run_status(db, None, None, {})
     assert bare["accounts_backup"] == "not run"
     assert bare["tests"] == {"verdict": "not run", "failed": [], "main": None, "ran": None}

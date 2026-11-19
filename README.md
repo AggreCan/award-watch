@@ -6,8 +6,10 @@ over $10,000 that a federal department has published, every grant and
 contribution agreement, and the lobbying communications those organizations
 report. Every row links to the government record it came from, and the
 nightly run checks a sample of those links (`docs/link-sampling.md`). The site
-rebuilds itself once a day from the open data files; the scheduled run is the
-only way its data changes.
+rebuilds itself once a day from the open data files; the nightly run, which the
+Worker's own schedule starts (GitHub's schedule is the fallback), is the only
+way its data changes, and no request to the site can start it
+(`docs/site-deploy.md`, "What starts the runs").
 
 ## Layout
 ```
@@ -16,7 +18,7 @@ site/       Cloudflare Worker: pages + JSON API over the pipeline's static JSON
 pipeline/schema.sql   the one schema both halves use
 brand/      the mark and the lockup
 data/       raw downloads and outputs (git-ignored)
-.github/workflows/nightly.yml   the one scheduled run that refreshes data and deploys
+.github/workflows/nightly.yml   the daily run that refreshes data and deploys
 .github/workflows/intraday.yml  the day's new tender notices, read every two hours while a paid plan is live (docs/intraday.md)
 ```
 

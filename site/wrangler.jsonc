@@ -89,7 +89,15 @@
   // 20:00 UTC, after the 12:30 UTC nightly; a run sends only once stats.json's
   // data date is today's, so the later hours cover a late nightly. While
   // ACCOUNTS_ENABLED is not "true" a run returns before reading anything.
-  "triggers": { "crons": ["0 6 * * *", "0 15-20 * * *"] },
+  // The nightly's three slots (12:30, 16:30, 20:30 UTC) and the same-day
+  // job's nine (45 past 1, 3 and every odd hour from 11 to 23 UTC), the times
+  // the two workflows schedule: at each the Worker starts the workflow
+  // through GitHub's API with the secret WORKFLOW_RUN (src/dispatch.ts;
+  // docs/site-deploy.md, "What starts the runs"), and GitHub's own schedules
+  // stay as the fallback. src/index.tsx routes each expression exactly, and
+  // an expression it does not know runs nothing; each is a constant in the
+  // code that a test holds to this line.
+  "triggers": { "crons": ["0 6 * * *", "0 15-20 * * *", "30 12,16,20 * * *", "45 1,3,11,13,15,17,19,21,23 * * *"] },
   // Aggregate counts of the responses the Worker serves (src/views.ts): route,
   // language, edge country, referring host, status, bot or human, device
   // class, and for a human a daily visitor code hashed under the secret
@@ -218,7 +226,9 @@
   // docs/landing.md "The builder's band"): "on", with ACCOUNTS_ENABLED
   // "true", shows it, drawn from National Defence's buyer file; anything else
   // keeps the landing page as it was. It stays "off" until the builder and
-  // the new dashboard it shows are live.
+  // the new dashboard it shows are live. WORKFLOW_REPO is the repository
+  // whose nightly and same-day workflows the Worker's cron starts
+  // (src/dispatch.ts); the token is the secret WORKFLOW_RUN, never a variable.
   "vars": {
     "ALERT_FROM": "alerts@awardwatch.ca",
     "RUN_LOG_URL": "https://github.com/AggreCan/award-watch/actions/workflows/nightly.yml",
@@ -237,7 +247,8 @@
     "PRICE_ULTRA_MONTHLY_CAD": "38.99",
     "PRICE_ULTRA_YEARLY_CAD": "389.99",
     "FOLLOWS_PANEL": "on",
-    "BUILDER_DEMO": "off"
+    "BUILDER_DEMO": "off",
+    "WORKFLOW_REPO": "AggreCan/award-watch"
   },
   // Workers Logs keeps the console lines (which name events and counts, never
   // an address, a code or a token) and not the per-request invocation log,

@@ -396,7 +396,7 @@ def test_status_has_exactly_the_fields_the_site_and_the_gate_read(tmp_path):
     db = tmp_path / "awardwatch.sqlite"
     make_db(db)
     status = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, {"deploy": "success"})
-    assert set(status) == {"run_at", "stages", "steps", "search_sync", "records_sync", "intraday_lookup", "intraday_prune",
+    assert set(status) == {"run_at", "run_started", "stages", "steps", "search_sync", "records_sync", "intraday_lookup", "intraday_prune",
                            "intraday_lookup_bytes", "link_sample", "link_sample_broken", "organization_review",
                            "views_rollup", "search_console", "views_report", "indexnow", "funnel", "accounts_backup",
                            "tests", "interest", "restore", "smoke", "smoke_detail", "version_before", "rollback",
@@ -1430,6 +1430,80 @@ def test_the_accounts_database_is_exported_on_sundays_into_slots_of_its_own():
     for key in ("backups/weekly/accounts-latest.sql.gz", "backups/weekly/accounts-slot-3.sql.gz"):
         assert not resilience.WEEKLY_RE.match(key), key
     assert "--accounts-backup-outcome data/out/accounts_backup/last_outcome.txt" in step(text, "Write the run status")
+
+
+# -- the gate: every schedule and the Worker's dispatch alike, by the runner's clock ------------
+
+
+GATED_LINE = "GATED: ${{ github.event_name == 'schedule' || inputs.gate == 'true' }}"
+GATE_COMMAND = ('python -m awardwatch_pipeline.nightly gate --status data/gate/status.json '
+                '--now "$(date -u +%Y-%m-%dT%H:%M:%SZ)"')
+
+
+def test_the_triggers_are_github_s_three_schedules_and_a_dispatch_with_one_input():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    on = text.split("\non:\n", 1)[1].split("\n\n", 1)[0]
+    assert re.findall(r"^  (\w+):", on, re.M) == ["schedule", "workflow_dispatch"]
+    # The fallback for the Worker's dispatch at the same times (site/test/dispatch.test.ts holds the two equal).
+    assert re.findall(r'^    - cron: "([^"]+)"$', on, re.M) == ["30 12 * * *", "30 16 * * *", "30 20 * * *"]
+    dispatch = code(on.split("  workflow_dispatch:\n", 1)[1]).splitlines()
+    assert dispatch[:2] == ["    inputs:", "      gate:"]
+    fields = dict(line.strip().split(": ", 1) for line in dispatch[2:])
+    assert set(fields) == {"description", "type", "default"}
+    assert fields["type"] == "string" and fields["default"] == '"false"'
+    assert fields["description"].startswith('"true asks the gate first') and "false runs the night" in fields["description"]
+
+
+def test_the_gate_asks_every_gated_trigger_alike_with_the_runner_s_clock():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    plain = code(text)
+    gate = jobs_of(text)["gate"]
+    head = gate.split("\n    steps:\n", 1)[0]
+    assert f"\n      {GATED_LINE}\n" in head
+    # The input reaches the workflow in that one environment line, as a comparison, and nothing tells the
+    # schedules apart by their cron strings any more.
+    assert [line.strip() for line in plain.splitlines() if "inputs." in line] == [GATED_LINE]
+    for gone in ("github.event.schedule", "'30 12 * * *'", "RETRY"):
+        assert gone not in plain, gone
+    assert "--today" not in code(gate)
+    steps = steps_of(gate)
+    # A run started by hand only says so; every other step runs for a gated trigger alone and may fail.
+    assert steps[0].lstrip(" -").startswith("name: A run started by hand") and "if: ${{ env.GATED != 'true' }}" in steps[0]
+    for block in steps[1:]:
+        assert "if: ${{ env.GATED == 'true' }}" in block and "continue-on-error: true" in block, block.splitlines()[0]
+    decide = steps[-1]
+    assert step_id(decide) == "decide"
+    order = ['"$WRANGLER" r2 object get --remote "$BUCKET/status.json" --file data/gate/status.json',
+             "rm -f data/gate/status.json", GATE_COMMAND]
+    places = [decide.index(line) for line in order]
+    assert places == sorted(places)
+    # The time is the runner's clock; no event or dispatcher text reaches the script.
+    script = decide.split("run: |", 1)[1]
+    assert "${{" not in script and "inputs" not in script and "github." not in script
+    # What date -u writes there is what the helper reads, in UTC.
+    written = datetime(2026, 11, 19, 1, 56, 4, tzinfo=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    assert resilience._parse_iso(written) == datetime(2026, 11, 19, 1, 56, 4, tzinfo=timezone.utc)
+    # The gate's one output, and the jobs after it keep their conditions on it.
+    assert "    outputs:\n      skip: ${{ steps.decide.outputs.skip }}\n" in head
+    jobs = jobs_of(text)
+    assert "    if: ${{ !cancelled() && needs.gate.outputs.skip != 'true' }}" in jobs["tests"]
+    assert ("    if: ${{ !cancelled() && needs.gate.outputs.skip != 'true' "
+            "&& needs.tests.outputs.verdict != 'blocked' }}") in jobs["refresh"]
+
+
+def test_the_gate_command_as_the_workflow_runs_it(tmp_path, monkeypatch):
+    gh = tmp_path / "gh_output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(gh))
+    status = tmp_path / "status.json"
+    status.write_text(json.dumps({"run_at": "2026-11-19T14:48:10+00:00", "run_started": "2026-11-19T12:44:10+00:00",
+                                  "ok": True, "stages": [], "steps": {"deploy": "success"}}), encoding="utf-8")
+    for now, skip in (("2026-11-19T13:31:00Z", "true"),   # GitHub's late 12:30 schedule after the Worker's run
+                      ("2026-11-19T20:53:00Z", "true"),   # GitHub's very late one
+                      ("2026-11-20T01:56:00Z", "true"),   # a stray trigger after midnight
+                      ("2026-11-20T12:30:05Z", "false")):  # the next day's slot
+        gh.unlink(missing_ok=True)
+        assert nightly.main(["gate", "--status", str(status), "--now", now]) == 0
+        assert gh.read_text() == f"skip={skip}\n", now
 
 
 def test_every_r2_and_d1_call_in_both_deploying_workflows_carries_remote():

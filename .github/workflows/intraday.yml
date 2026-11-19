@@ -30,6 +30,19 @@
 # changes to every notice) comes once a day and is the nightly's; this job
 # never reads it.
 #
+# What starts it. The Worker's own cron starts it through GitHub's API at
+# the same nine minutes (SAME_DAY_CRON in site/src/dispatch.ts, with the
+# Worker secret WORKFLOW_RUN and no input, so force stays false;
+# docs/site-deploy.md, "What starts the runs"), and the two schedules below
+# stay as the fallback: GitHub starts a scheduled run when it can, and in
+# November 2026 that was hours late or not at all. No request to the site can
+# start a run. A slot is often started twice, and that needs no gate here:
+# the concurrency group below runs the two one after the other (a third start
+# while one waits replaces the waiting one), and the second sends the
+# validators the first recorded, so the host answers 304 and the run records
+# a row of nothing new. The second run costs the gate's count, the installs,
+# that one conditional request and about a minute of runner time.
+#
 # Steps: count the live paid plans (the gate); read the last run's file
 # validators (and the versions the table holds) from D1; fetch the file with
 # a conditional request carrying them, stopping at a 304 with a run row of

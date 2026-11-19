@@ -4,6 +4,7 @@ import { LIVE_PRO_SQL } from "./account/entitlements";
 import { missingTable } from "./account/records_deliveries";
 import { accountsEnabled } from "./account/switch";
 import { loadStats } from "./data";
+import { GITHUB_TIMEOUT_MS, NIGHTLY_WORKFLOW, faultName, githubHeaders, workflowRepo, workflowUrl } from "./github";
 import { faultSummary } from "./search_db";
 
 // A daily check, run by the cron trigger, that emails the operator when the
@@ -68,6 +69,25 @@ import { faultSummary } from "./search_db";
 // at all says nothing (the first Sunday has not come), and neither does a
 // fault reading it, which is a log line: the head of the database backup
 // above already says when the bucket cannot be read.
+//
+// What starts the runs (src/dispatch.ts, docs/site-deploy.md): the Worker's
+// own cron starts the nightly and the same-day job with the GitHub token
+// WORKFLOW_RUN, and GitHub's schedules are the fallback. The check reads the
+// nightly's workflow once with that token (the one other use of it, sent to
+// api.github.com alone): a refusal (401 or 403) is a line of the email, and
+// so is an end date within WORKFLOW_TOKEN_WARN_DAYS, from the answer's
+// github-authentication-token-expiration header. No token set is a quiet
+// note, carried by an email that goes anyway and never the reason to send
+// one; a fault reaching GitHub is a log line. A read that answers proves the
+// token is valid and current, not that it may still start runs (the
+// repository is public, so any valid token reads the workflow). And whatever starts
+// the runs, a nightly whose last refresh started more than LATE_START_HOURS
+// after its day's 12:30 UTC slot is a line of its own, so a night the
+// arrangement failed shows the next morning.
+
+// The daily check's trigger in wrangler.jsonc; src/index.tsx runs the check
+// for this expression alone.
+export const WATCHDOG_CRON = "0 6 * * *";
 
 export const DATA_STALE_HOURS = 36;
 // The backup is uploaded in parts of at most 250 MiB (the nightly pack); the
@@ -84,7 +104,9 @@ const HOUR = 60 * 60 * 1000;
 // this check: a newest run that went through more than 4 hours back means
 // that run did not.
 export const INTRADAY_STALE_HOURS = 4;
-// Failed runs are counted over the day before the check: nine scheduled runs.
+// Failed runs are counted over the day before the check: nine slots, each
+// started by the Worker and, when it comes, by GitHub's schedule too, so up
+// to eighteen run rows.
 export const INTRADAY_WINDOW_HOURS = 24;
 // The buyer lookup the nightly saves for the same-day refresh, gzipped. It was
 // 58,773 bytes on 2026-11-03; each run of the refresh downloads and parses
@@ -102,6 +124,20 @@ export const FIGURES_MAX_DAYS = 2;
 // then printable ASCII on one line. funnel.FIGURES_PATTERN is the same text,
 // and a pipeline test (test_funnel.py) holds the two together.
 const FIGURES_RE = /^(\d{4}-\d{2}-\d{2}) \(UTC\): [ -~]{1,600}$/;
+
+// The token that starts the runs: a line once its end date is this close.
+export const WORKFLOW_TOKEN_WARN_DAYS = 14;
+export type WorkflowToken =
+  | { state: "unset"; missing: "WORKFLOW_RUN" | "WORKFLOW_REPO" }
+  | { state: "refused"; status: number }
+  | { state: "accepted"; expires: Date | null };
+
+// A late night: the nightly's first slot (UTC), and how long after it a
+// refresh may start before the check names it. A status written before the
+// start was recorded is read by its end instead, against LATE_END_UTC.
+export const NIGHTLY_SLOT_UTC = "12:30";
+export const LATE_START_HOURS = 3;
+export const LATE_END_UTC = "17:00";
 
 // The same-day refresh's runs in one statement over intraday_runs
 // (pipeline/intraday_schema.sql): the time of the newest run that went
@@ -201,6 +237,9 @@ export type DeliveryDay = { day: string; runs: DeliveryRun[] };
 
 export type RunStatus = {
   run_at?: string;
+  // When the run's stages started; absent from a status written before the
+  // field existed, which is read by run_at instead.
+  run_started?: string;
   ok?: boolean;
   search_sync?: string;
   // The records database's sync, which the analytics views read ("synced",
@@ -248,6 +287,9 @@ export type Inputs = {
   mailCeiling?: MailCeiling | null;
   // The last finished day's figures (readFigures), or null when there is no current line.
   figures?: string | null;
+  // The token that starts the runs (readWorkflowToken), or null when it
+  // could not be checked (a fault reaching GitHub, an answer of another kind).
+  workflowToken?: WorkflowToken | null;
 };
 
 const count = (v: unknown): number | null => (typeof v === "number" && Number.isSafeInteger(v) && v >= 0 ? v : null);
@@ -265,6 +307,8 @@ export function readStatus(raw: unknown): { status: RunStatus | null; problem: s
   const status: RunStatus = {};
   if (typeof r.run_at === "string" && !Number.isNaN(Date.parse(r.run_at))) status.run_at = r.run_at;
   else unreadable.push("run_at");
+  // Dropped when it does not read, never alerted on: an older status has none.
+  if (typeof r.run_started === "string" && !Number.isNaN(Date.parse(r.run_started))) status.run_started = r.run_started;
   if (typeof r.ok === "boolean") status.ok = r.ok;
   if (typeof r.search_sync === "string") status.search_sync = r.search_sync;
   if (typeof r.records_sync === "string") status.records_sync = r.records_sync;
@@ -395,7 +439,10 @@ export function collectAlerts(i: Inputs): string[] {
     if (bytes !== undefined && bytes > LOOKUP_MAX_BYTES) {
       out.push(`The buyer lookup for the same-day refresh is ${grouped(bytes)} bytes, over the ${grouped(LOOKUP_MAX_BYTES)}-byte bound; every run of the refresh downloads and parses it. Keep only the spellings seen in the last 24 months (docs/intraday.md).`);
     }
+    const late = lateNight(i.status, i.now);
+    if (late) out.push(late);
   }
+  out.push(...tokenAlerts(i.workflowToken ?? null, i.now));
   out.push(...intradayAlerts(i));
   for (const r of i.refundsToCancel ?? []) {
     out.push(`A refund of a first payment pressed on the billing page went through, but its subscription can still bill: account ${r.userId}, subscription ${r.subscriptionId}. Cancel it at once in the operator console (the account's page, Cancel the subscription, At once) or in Stripe's dashboard.`);
@@ -403,6 +450,77 @@ export function collectAlerts(i: Inputs): string[] {
   out.push(...moneyAlerts(i.money ?? null));
   out.push(...deliveryAlerts(i.deliveryDay ?? null, i.mailCeiling ?? null));
   return out;
+}
+
+const minute = (ms: number) => new Date(ms).toISOString().slice(0, 16);
+const LATE_WHY =
+  " Either the slot's run failed and a later slot ran the night, or no run started on time: check the nightly's runs, " +
+  "the Worker's dispatch lines in its logs and the WORKFLOW_RUN token (docs/site-deploy.md, What starts the runs).";
+
+// The line for a night that ran late, or null. Only for a status recent
+// enough to be the last night's: an older one is the stale line above, which
+// already says when it ran.
+export function lateNight(status: RunStatus, now: Date): string | null {
+  const end = status.run_at ? Date.parse(status.run_at) : NaN;
+  const age = (now.getTime() - end) / HOUR;
+  if (!(age >= 0 && age <= DATA_STALE_HOURS)) return null;
+  const start = status.run_started ? Date.parse(status.run_started) : NaN;
+  if (!Number.isNaN(start)) {
+    const slot = Date.parse(`${minute(start).slice(0, 10)}T${NIGHTLY_SLOT_UTC}:00Z`);
+    return start - slot > LATE_START_HOURS * HOUR
+      ? `The last nightly refresh started at ${minute(start)} UTC, more than ${LATE_START_HOURS} hours after its day's ${NIGHTLY_SLOT_UTC} UTC slot.${LATE_WHY}`
+      : null;
+  }
+  const close = Date.parse(`${minute(end).slice(0, 10)}T${LATE_END_UTC}:00Z`);
+  return end > close ? `The last nightly refresh finished at ${minute(end)} UTC, after ${LATE_END_UTC} UTC.${LATE_WHY}` : null;
+}
+
+const TOKEN_HOW = "make a new one and set it with wrangler secret put WORKFLOW_RUN (docs/site-deploy.md, What starts the runs).";
+
+// The token's lines: a refusal, or an end date within WORKFLOW_TOKEN_WARN_DAYS.
+// Its status code and its day, never the token.
+function tokenAlerts(t: WorkflowToken | null, now: Date): string[] {
+  if (t?.state === "refused") {
+    return [
+      `GitHub refused the token that starts the nightly and the same-day job (WORKFLOW_RUN, HTTP ${t.status}); until it is replaced ` +
+      `the runs start on GitHub's own schedule, which can be hours late. To replace it, ${TOKEN_HOW}`,
+    ];
+  }
+  if (t?.state === "accepted" && t.expires && t.expires.getTime() - now.getTime() <= WORKFLOW_TOKEN_WARN_DAYS * 24 * HOUR) {
+    return [
+      `The token that starts the nightly and the same-day job (WORKFLOW_RUN) expires on ${t.expires.toISOString().slice(0, 10)} (UTC); ` +
+      `from then the runs start on GitHub's own schedule alone, which can be hours late. Before that day, ${TOKEN_HOW}`,
+    ];
+  }
+  return [];
+}
+
+// Quiet notes: lines an email carries when it goes anyway, never the reason
+// to send one, never counted in its subject. Today the one note is a Worker
+// without the token or the repository it starts the runs with.
+export function collectNotes(i: Inputs): string[] {
+  const t = i.workflowToken;
+  if (t?.state !== "unset") return [];
+  const what = t.missing === "WORKFLOW_RUN" ? "no WORKFLOW_RUN secret" : "no WORKFLOW_REPO variable";
+  return [`The Worker has ${what}, so the nightly and the same-day job start on GitHub's own schedule alone, which can be hours late (docs/site-deploy.md, What starts the runs).`];
+}
+
+// github-authentication-token-expiration, as GitHub writes it
+// ("2026-12-01 00:00:00 UTC", or with an offset such as -0700), or null.
+const EXPIRY_RE = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})\s*(UTC|Z|[+-]\d{2}:?\d{2})?$/;
+
+export function readTokenExpiry(text: string | null): Date | null {
+  const m = EXPIRY_RE.exec((text ?? "").trim());
+  if (!m) return null;
+  const [y, mo, d, h, mi, s] = m.slice(1, 7).map(Number);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31 || h > 23 || mi > 59 || s > 59) return null;
+  let ms = Date.UTC(y, mo - 1, d, h, mi, s);
+  const zone = m[7];
+  if (zone && zone !== "UTC" && zone !== "Z") {
+    const digits = zone.slice(1).replace(":", "");
+    ms -= (zone[0] === "-" ? -1 : 1) * (Number(digits.slice(0, 2)) * 60 + Number(digits.slice(2))) * 60_000;
+  }
+  return new Date(ms);
 }
 
 // The money items' lines: ids, Stripe's fixed reason and nothing else.
@@ -632,7 +750,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 // is left out.
 export function buildEmail(
   from: string, to: string, alerts: string[], now: Date, notices: string[] = [],
-  links: { runLog?: string; site?: string } = {}, figures: string | null = null,
+  links: { runLog?: string; site?: string } = {}, figures: string | null = null, notes: string[] = [],
 ): string {
   const subject = alerts.length
     ? `Award Watch: ${plural(alerts.length, "item")} need attention${notices.length ? `, ${plural(notices.length, "notice")}` : ""}`
@@ -651,6 +769,8 @@ export function buildEmail(
       : []),
     // Kept in R2 under views/ and published nowhere.
     ...(figures ? ["", "The last finished day (private figures from the nightly run):", "", `- ${figures}`] : []),
+    // Quiet notes (collectNotes): a line each, counted nowhere.
+    ...(notes.length ? ["", ...notes.map((n) => `Note: ${n}`)] : []),
     ...(linkLines.length ? ["", ...linkLines] : []),
     "",
     alerts.length
@@ -734,6 +854,37 @@ async function readMoney(env: Env, now: Date): Promise<MoneyItems | null> {
   }
 }
 
+// The token that starts the runs, read once: one GET of the nightly's
+// workflow with the same headers the dispatch sends, to api.github.com alone.
+// null when GitHub could not be reached or answered something other than a
+// read or a refusal (a 404 for a repository or workflow renamed, a 5xx):
+// one log line with the status or the fault's kind, never the token, the
+// answer's body or the request's headers.
+export async function readWorkflowToken(env: Env): Promise<WorkflowToken | null> {
+  const token = (env.WORKFLOW_RUN ?? "").trim();
+  if (!token) return { state: "unset", missing: "WORKFLOW_RUN" };
+  const repo = workflowRepo(env);
+  if (!repo) return { state: "unset", missing: "WORKFLOW_REPO" };
+  try {
+    const res = await fetch(workflowUrl(repo, NIGHTLY_WORKFLOW), {
+      headers: githubHeaders(token), signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
+    });
+    await res.body?.cancel().catch(() => undefined);
+    if (res.status === 401 || res.status === 403) return { state: "refused", status: res.status };
+    if (!res.ok) {
+      console.log(`watchdog: the WORKFLOW_RUN token not checked (HTTP ${res.status})`);
+      return null;
+    }
+    const raw = res.headers.get("github-authentication-token-expiration");
+    const expires = readTokenExpiry(raw);
+    if (raw && !expires) console.log("watchdog: the WORKFLOW_RUN token's end date did not read");
+    return { state: "accepted", expires };
+  } catch (e) {
+    console.log(`watchdog: the WORKFLOW_RUN token not checked (${faultName(e)})`);
+    return null;
+  }
+}
+
 export async function gatherInputs(env: Env, now: Date): Promise<Inputs> {
   const stats = await loadStats(env).catch(() => null);
   let backupUploaded: Date | null = null;
@@ -782,9 +933,10 @@ export async function gatherInputs(env: Env, now: Date): Promise<Inputs> {
   const refundsToCancel = await readRefunds(env, now);
   const money = await readMoney(env, now);
   const deliveryDay = await readDeliveryRuns(env, now);
+  const workflowToken = await readWorkflowToken(env);
   return {
     now, dataAsOf, backupUploaded, accountsBackupUploaded, status, statusProblem: problems.join(" ") || null, intraday,
-    intradayProblem, livePro, figures, refundsToCancel, money, deliveryDay, mailCeiling: mailCeiling(env),
+    intradayProblem, livePro, figures, refundsToCancel, money, deliveryDay, mailCeiling: mailCeiling(env), workflowToken,
   };
 }
 
@@ -794,6 +946,8 @@ export async function runWatchdog(
   const inputs = await gatherInputs(env, now);
   const alerts = collectAlerts(inputs);
   const notices = collectNotices(inputs);
+  // Carried by an email that goes anyway; never the reason to send one.
+  const notes = collectNotes(inputs);
   const figures = inputs.figures ?? null;
   if (alerts.length === 0 && notices.length === 0 && !figures) return { alerts, notices, sent: false };
   // The log says whether figures went, never what they are.
@@ -807,7 +961,7 @@ export async function runWatchdog(
   try {
     const { EmailMessage } = await import("cloudflare:email");
     const links = { runLog: (env.RUN_LOG_URL ?? "").trim() || undefined, site: (env.SITE_URL ?? "").trim() || undefined };
-    await env.ALERTS.send(new EmailMessage(from, to, buildEmail(from, to, alerts, now, notices, links, figures)));
+    await env.ALERTS.send(new EmailMessage(from, to, buildEmail(from, to, alerts, now, notices, links, figures, notes)));
     console.log(`watchdog: ${counts}, email sent`);
     return { alerts, notices, sent: true };
   } catch (e) {

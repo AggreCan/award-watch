@@ -29,8 +29,10 @@ one, and always leaves a status file the site's daily check can read.
             part's SHA-256 against the manifest (the site-only deploy's
             bundle). Exits 1 when the manifest is missing or does not read,
             or a part is missing or differs; nothing is left at --out then.
-  gate      for a retry trigger: skip=true when today's run already
-            finished clean (resilience.gate).
+  gate      for a gated trigger (a schedule of GitHub's, or the Worker's
+            dispatch): skip=true before 12:00 UTC, or when today's run
+            already finished clean (resilience.gate), by the time the
+            workflow passes.
   live-version
             the Worker version serving traffic, from Wrangler's JSON, kept
             for a rollback.
@@ -677,6 +679,12 @@ def run_status(
     R2; intraday_lookup stays the string it was, so nothing that reads it
     changes. The site's daily check flags a lookup over its bound.
 
+    run_at is when the status was written, the run's end; run_started is
+    when its stages started (the workflow's run_started.txt), in the same
+    form, null when they never started. The gate counts a run as the day's
+    by its start, so a run started by hand in the night is not the day's;
+    the daily check names a night that started late.
+
     The resilience fields: steps (every workflow step's outcome, which the
     retry gate reads), restore (where the database came from), smoke (the
     check of the live site after the deploy), rollback and deploy_rolled_back
@@ -752,6 +760,7 @@ def run_status(
     if verify_result and verify_result.get("problems"):
         stages.append({"source": "checks", "ok": False, "detail": "; ".join(verify_result["problems"])[:200]})
     stamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
+    began = resilience._parse_iso(started)
     verdict = smoke.get("verdict") if isinstance(smoke, dict) else None
     verdict = verdict if verdict in resilience.VERDICTS else "not run"
     if verdict == "broken":
@@ -777,6 +786,8 @@ def run_status(
     review_notice = org_review_notice(org_review, org_review_record)
     return {
         "run_at": stamp,
+        # When the stages started, read by the gate and the daily check.
+        "run_started": began.astimezone(timezone.utc).isoformat(timespec="seconds") if began else None,
         "stages": stages,
         "steps": dict(steps),
         # The site's daily check reads this field; the workflow's "Sync the
@@ -1237,9 +1248,9 @@ def build_parser() -> argparse.ArgumentParser:
     jn.add_argument("--dir", required=True, help="the folder holding <base>.parts and the parts it lists")
     jn.add_argument("--base", required=True, help="the set's name (its manifest is <base>.parts)")
     jn.add_argument("--out", required=True, help="the joined file, written only when every part matches its hash")
-    g = sub.add_parser("gate", help="skip=true when today's run already finished clean")
+    g = sub.add_parser("gate", help="skip=true before 12:00 UTC or when today's run already finished clean")
     g.add_argument("--status", required=True, help="status.json as downloaded from R2 (may be missing)")
-    g.add_argument("--today", required=True, help="today's UTC date, YYYY-MM-DD")
+    g.add_argument("--now", required=True, help="the runner's clock, an ISO time in UTC (date -u +%%Y-%%m-%%dT%%H:%%M:%%SZ)")
     lv = sub.add_parser("live-version", help="the Worker version serving traffic, from Wrangler's JSON")
     lv.add_argument("--file", required=True, help="the output of `wrangler deployments status --json`")
     lv.add_argument("--out", default=None, help="write the version id here as well")
@@ -1468,11 +1479,19 @@ def _status(args: argparse.Namespace) -> int:
     return 0
 
 
+GATE_NOW_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})")
+
+
 def _gate(args: argparse.Namespace) -> int:
     # Any fault here runs the refresh: a needless run costs minutes, a
     # wrongly skipped one costs the day.
     try:
-        skip, reason = resilience.gate(_read_json(args.status), date.fromisoformat(args.today))
+        # A whole instant with its zone, as date -u writes it; a date alone
+        # would read as midnight and skip the day.
+        now = resilience._parse_iso(args.now) if GATE_NOW_RE.fullmatch(args.now or "") else None
+        if now is None:
+            raise ValueError("--now is not an ISO time with its zone")
+        skip, reason = resilience.gate(_read_json(args.status), now)
     except Exception as exc:
         skip, reason = False, f"the gate could not decide ({type(exc).__name__}), so the refresh runs"
     log.info("gate: %s", reason)

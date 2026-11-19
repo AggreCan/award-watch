@@ -39,6 +39,16 @@ export interface Env {
   // is HMAC-SHA-256 of the UTC date under it. Unset: no code is written and
   // the roll-up counts no unique visitors. Set with `wrangler secret put`.
   VIEWS_SALT_KEY?: string;
+  // What starts the runs (src/dispatch.ts; docs/site-deploy.md, "What starts
+  // the runs"): the Worker's own cron starts the nightly and the same-day job
+  // through GitHub's API, and GitHub's schedules are the fallback; no request
+  // to the site can start one. WORKFLOW_RUN is a fine-grained GitHub token
+  // for the one repository with Actions read and write and nothing else, set
+  // with `wrangler secret put WORKFLOW_RUN`, sent to api.github.com alone and
+  // never logged. Unset, nothing is sent and the daily check notes it.
+  // WORKFLOW_REPO is the repository, owner/name, a variable in wrangler.jsonc.
+  WORKFLOW_RUN?: string;
+  WORKFLOW_REPO?: string;
   // A fixed instant ("2026-10-31T16:00:00Z") for the pages' clock, which
   // otherwise reads the time of the request (src/closing.ts). The tests set
   // it so the fixtures' closing states hold; never set in production.

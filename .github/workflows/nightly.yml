@@ -1,20 +1,34 @@
-# Triggers: a scheduled run at 12:30 UTC, two retry schedules at 16:30 and
-# 20:30 UTC, and a manual run (the Actions tab, repository writers only) for
-# re-running a night on the newest code; a re-run of an old run keeps its old
-# commit. Every source is a bulk file fetched with a conditional request, so
-# neither a retry nor a manual run downloads a file that has not changed.
-# There is no push trigger, and nothing on the site can start a run. Code on
-# main ships with the next run that passes its tests (the tests rule below),
-# because the refresh deploys the Worker from the checked-out tree after the
-# data stage.
+# Triggers: three slots a day, 12:30 UTC (the run) and 16:30 and 20:30 UTC
+# (retries), each started twice. The Worker's own cron starts the workflow
+# through GitHub's API at each slot (site/src/dispatch.ts, with the input
+# gate "true" and the token WORKFLOW_RUN; docs/site-deploy.md, "What starts
+# the runs"), and GitHub's own schedules at the same times stay as the
+# fallback: GitHub starts a scheduled run when it can, and in November 2026
+# that was hours late or not at all. A manual run (the Actions tab,
+# repository writers only) re-runs a night on the newest code; a re-run of an
+# old run keeps its old commit. Every source is a bulk file fetched with a
+# conditional request, so neither a second run nor a manual run downloads a
+# file that has not changed. There is no push trigger, and no request to the
+# site can start a run: only the Worker's scheduled handler calls GitHub's
+# API. Code on main ships with the next run that passes its tests (the tests
+# rule below), because the refresh deploys the Worker from the checked-out
+# tree after the data stage.
 #
-# The retry rule (job "gate"): the 12:30 schedule and a manual run always
-# go on to the refresh. At 16:30 and 20:30 the gate downloads status.json from
-# R2 and skips the refresh only when it shows a run that finished today (UTC)
-# with ok true and the deploy step's outcome success; anything else, a status
-# it cannot download or read included, runs the refresh again. So a GitHub
-# delay, a runner fault or a Cloudflare API error is retried the same day with
-# no one involved, and a clean day costs two gate jobs of a minute each.
+# The gate rule (job "gate"): every schedule of GitHub's and every dispatch
+# whose input gate is "true" ask the gate alike; it no longer tells the
+# schedules apart by their cron strings. A manual run leaves gate "false"
+# and always goes on to the refresh. The gate downloads status.json from R2
+# and decides with the runner's clock (date -u, never text from the event):
+# before 12:00 UTC it skips, since nothing is due before the 12:30 slot and a
+# trigger then is a late one from the day before; it skips too when the
+# status shows a run that started at or after 12:00 UTC today (run_started;
+# a status written before that field existed is read by its end, run_at)
+# with ok true and the deploy step's outcome success. Anything else, a status
+# it cannot download or read and a gate that fails included, runs the
+# refresh. So the slot's second start costs a gate job of a minute, a GitHub
+# delay, a runner fault or a Cloudflare API error is retried at the next slot
+# the same day with no one involved, and a run started by hand in the night
+# is not the day's run, so the 12:30 slot still reads the morning's files.
 #
 # The tests rule (job "tests"): the night runs the commit that passes its
 # tests. Before the refresh, main's typecheck, Worker suite, mail suite and
@@ -155,7 +169,9 @@
 # address is masked in this public run log; docs/mail.md). The Worker secret
 # VIEWS_SALT_KEY (the daily visitor code) is set with wrangler, not here; the
 # roll-up counts no unique visitors without it. The Worker secret
-# MAIL_CHECK_TOKEN (the mail-check workflow's bearer token) is set the same way.
+# MAIL_CHECK_TOKEN (the mail-check workflow's bearer token) is set the same way,
+# and so is WORKFLOW_RUN, the GitHub token the Worker's cron starts this
+# workflow and intraday.yml with; this file never reads it.
 # Variables: SITE_URL, CONTACT (the user agent's site and contact page);
 # optional INDEXNOW_ENABLED, set to false to stop the IndexNow submission (it
 # runs unless the variable reads exactly "false"; the key is in the code, so
@@ -176,12 +192,19 @@ on:
     # change, and the site carries them by about 08:30 Ottawa time in winter.
     - cron: "30 12 * * *"
     # Retries, which the gate job skips when today's run finished clean. They
-    # stay inside the same UTC day as the main run because the gate compares
-    # dates. The entry above must stay exactly "30 12 * * *": the gate tells
-    # the schedules apart by that string.
+    # stay inside the same UTC day as the main run because the gate counts a
+    # run started from 12:00 UTC today. These three are the fallback for the
+    # Worker's dispatch at the same times (NIGHTLY_CRON in
+    # site/src/dispatch.ts; site/test/dispatch.test.ts holds the two equal).
     - cron: "30 16 * * *"
     - cron: "30 20 * * *"
   workflow_dispatch:
+    inputs:
+      # Read only by the gate job's environment, as a comparison.
+      gate:
+        description: "true asks the gate first, as the Worker's dispatch does; false runs the night whatever the status says"
+        type: string
+        default: "false"
 
 # contents: write only so a step can record the run date; GitHub pauses a
 # schedule after 60 days without repository activity. issues: write for the
@@ -200,7 +223,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Decides whether this trigger has anything to do (the retry rule in the
+  # Decides whether this trigger has anything to do (the gate rule in the
   # header). Every step that could fail is allowed to: a gate that cannot
   # decide leaves skip unset, and the refresh runs. The download uses the
   # site's pinned Wrangler like every other R2 read.
@@ -214,36 +237,40 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      RETRY: ${{ github.event_name == 'schedule' && github.event.schedule != '30 12 * * *' }}
+      # true for every schedule of GitHub's and for a dispatch whose input
+      # gate is "true" (the Worker's cron); false for a run started by hand.
+      # The input reaches the job here alone, and only as a comparison.
+      GATED: ${{ github.event_name == 'schedule' || inputs.gate == 'true' }}
       WRANGLER: ${{ github.workspace }}/site/node_modules/.bin/wrangler
       BUCKET: awardwatch-data
     steps:
-      - name: Main schedule or manual run, so the refresh goes ahead
-        if: ${{ env.RETRY != 'true' }}
-        run: echo "Not a retry trigger; the refresh runs."
+      - name: A run started by hand, so the refresh goes ahead
+        if: ${{ env.GATED != 'true' }}
+        run: echo "Started by hand without the gate; the refresh runs."
       - uses: actions/checkout@v4
-        if: ${{ env.RETRY == 'true' }}
+        if: ${{ env.GATED == 'true' }}
         continue-on-error: true
       - uses: actions/setup-python@v5
-        if: ${{ env.RETRY == 'true' }}
+        if: ${{ env.GATED == 'true' }}
         continue-on-error: true
         with:
           python-version: "3.13"
       - uses: actions/setup-node@v4
-        if: ${{ env.RETRY == 'true' }}
+        if: ${{ env.GATED == 'true' }}
         continue-on-error: true
         with:
           node-version: "22"
       - name: Install the site's tools
-        if: ${{ env.RETRY == 'true' }}
+        if: ${{ env.GATED == 'true' }}
         continue-on-error: true
         working-directory: site
         run: npm ci
       # nightly.py needs nothing beyond the standard library for the gate,
-      # so the pipeline is not installed here.
-      - name: Read today's run status from R2
+      # so the pipeline is not installed here. The time is the runner's own
+      # clock, read here; nothing from the event reaches the command.
+      - name: Read the run status from R2 and decide
         id: decide
-        if: ${{ env.RETRY == 'true' }}
+        if: ${{ env.GATED == 'true' }}
         continue-on-error: true
         env:
           PYTHONPATH: ${{ github.workspace }}/pipeline
@@ -254,7 +281,7 @@ jobs:
             cat data/gate/get.log
             rm -f data/gate/status.json
           fi
-          python -m awardwatch_pipeline.nightly gate --status data/gate/status.json --today "$(date -u +%Y-%m-%d)"
+          python -m awardwatch_pipeline.nightly gate --status data/gate/status.json --now "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
   # Decides which commit tonight runs (the tests rule in the header). Main's
   # four checks run one after another, each allowed to fail and each with a

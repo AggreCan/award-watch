@@ -12,7 +12,9 @@ import { measure } from "./views";
 import { DEEP_WINDOWS, radarWindowLocked } from "./plan";
 import { accountsEnabled } from "./account/switch";
 import { refreshSessionCookie } from "./account/session";
-import { runWatchdog } from "./watchdog";
+import { WATCHDOG_CRON, runWatchdog } from "./watchdog";
+import { NIGHTLY_CRON, NIGHTLY_INPUTS, SAME_DAY_CRON, startWorkflow } from "./dispatch";
+import { INTRADAY_WORKFLOW, NIGHTLY_WORKFLOW } from "./github";
 import { fmtInt, fmtMoney, langFrom, t, tj } from "./i18n";
 import { clockAt } from "./closing";
 import { Layout, PageHead, page } from "./layout";
@@ -428,12 +430,31 @@ export { app };
 
 export default {
   fetch: app.fetch,
-  // The cron triggers from wrangler.jsonc: the hourly one from 15:00 to 20:00
-  // UTC delivers saved searches (src/account/deliveries.ts, which does
-  // nothing while the accounts switch is off); any other is the daily check,
-  // as every trigger was before deliveries existed.
+  // The cron triggers from wrangler.jsonc, each by its exact expression
+  // (Cloudflare hands the expression as written there): the daily check at
+  // 06:00 UTC; the hourly one from 15:00 to 20:00 UTC delivers saved searches
+  // (src/account/deliveries.ts, which does nothing while the accounts switch
+  // is off); the nightly's three slots and the same-day job's nine start
+  // those workflows through GitHub's API (src/dispatch.ts). This handler is
+  // the only caller of startWorkflow: no request to the site can start a
+  // run. An expression none of these is runs nothing, so a trigger added to
+  // wrangler.jsonc without its job here never runs the daily check.
   scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext): void {
-    if (event.cron === DELIVERY_CRON) ctx.waitUntil(runDeliveries(env).then(() => undefined));
-    else ctx.waitUntil(runWatchdog(env));
+    switch (event.cron) {
+      case DELIVERY_CRON:
+        ctx.waitUntil(runDeliveries(env).then(() => undefined));
+        return;
+      case WATCHDOG_CRON:
+        ctx.waitUntil(runWatchdog(env));
+        return;
+      case NIGHTLY_CRON:
+        ctx.waitUntil(startWorkflow(env, NIGHTLY_WORKFLOW, { ...NIGHTLY_INPUTS }));
+        return;
+      case SAME_DAY_CRON:
+        ctx.waitUntil(startWorkflow(env, INTRADAY_WORKFLOW));
+        return;
+      default:
+        console.log(`scheduled: no job for the cron "${String(event.cron).slice(0, 60)}"; nothing run`);
+    }
   },
 };
