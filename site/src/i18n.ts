@@ -4296,6 +4296,11 @@ const STRINGS = {
     en: "Under each holder's name: its record with the buyer for the same kind of work over the last {years} fiscal years.",
     fr: "Sous le nom de chaque titulaire : ses dossiers auprès de l'acheteur pour le même genre de travail au cours des {years} derniers exercices.",
   },
+  // The same on a profile's contracts ending, whose marks stand under each contract (the profile's own), not under a name.
+  "line.legend_contract": {
+    en: "Under each contract: this organization's record with the contract's buyer for the same kind of work over the last {years} fiscal years.",
+    fr: "Sous chaque contrat : les dossiers de cette organisation auprès de l'acheteur du contrat pour le même genre de travail au cours des {years} derniers exercices.",
+  },
   "line.unavailable": { en: "The holders' records are not available right now.", fr: "Les dossiers des titulaires ne sont pas disponibles pour le moment." },
   "line.pending": {
     en: "Holders' records appear here after the next nightly update.",
@@ -4308,6 +4313,14 @@ const STRINGS = {
   "line.signed_out": {
     en: "Signed-in readers see each holder's record with the buyer under its name. {signin}",
     fr: "Les lecteurs connectés voient, sous le nom de chaque titulaire, ses dossiers auprès de l'acheteur. {signin}",
+  },
+  // The radar's filter by label (pages/expiring.tsx, ?line=), for a reader the labels are shown to: the select's
+  // name and its chip's; its choices are the labels themselves (line.band_*).
+  "line.filter": { en: "Holder's record", fr: "Dossiers du titulaire" },
+  // A records database without the holders' records (or one that cannot answer): the filter is set aside.
+  "line.filter_unavailable": {
+    en: "The holder's record filter is not available right now; the list shows every contract.",
+    fr: "Le filtre des dossiers du titulaire n'est pas offert pour le moment; la liste présente tous les contrats.",
   },
   // -- may follow (src/lines.ts, src/pages/follows.tsx; docs/accounts.md, May follow), shown only while
   // FOLLOWS_PANEL is "on". A match is described as what matched, never as a claim that a notice replaces a contract;
@@ -4363,6 +4376,11 @@ const STRINGS = {
     fr: "Les contrats antérieurs sont rapprochés chaque nuit : un avis vu pour la première fois aujourd'hui l'est après la prochaine mise à jour de nuit.",
   },
   "follow.unavailable": { en: "Earlier contracts are not available right now.", fr: "Les contrats antérieurs ne sont pas disponibles pour le moment." },
+  // Under a notice on /account/matches (account/fit_pages.tsx): the closest earlier contract, its title linking the
+  // notice page's panel, its holder, and its end in follow.ended's or follow.ends's words; without an end, the line
+  // ends at the holder.
+  "follow.matches_line": { en: "May follow {title} ({holder}), {end}", fr: "Pourrait faire suite à {title} ({holder}), {end}" },
+  "follow.matches_line_no_end": { en: "May follow {title} ({holder})", fr: "Pourrait faire suite à {title} ({holder})" },
   // The rail's Analytics item and the index of the analytics views it opens
   // (pages/analytics_index.tsx): the lead, the gate note for a reader whose
   // plan lacks the views, the search box, and the lists' lines.

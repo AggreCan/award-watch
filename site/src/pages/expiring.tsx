@@ -34,6 +34,11 @@
 // radarLines below) for the rows ending within the plan's days, Free the
 // 3-month list's and Pro the 12-month list's; a reader not signed in sees
 // one line saying so. The page is then private, as every signed-in page is.
+// The same reader can narrow a full list to one label (?line=, the holder's
+// record filter), over the rows its plan labels; for anyone else the address's
+// band is not read. The overview's first rows and the "Contracts ending" of a
+// profile and a buyer page carry the same marks (sectionLines), and nothing
+// at all for a reader not signed in.
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
@@ -53,12 +58,13 @@ import type { AppEnv } from "../env";
 import { GuideLine, radarGuides } from "../guide_links";
 import { fmtInt, numberLocale, pick, provinceName, segmentLabel, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import { CompetitiveFlag, Layout, addDays, noDataPage, notFoundPage, page, PageHead, Panel, todayOf, varyOnCookie } from "../layout";
-import { lineKey, parseLine } from "../lines";
-import { RadarLineNotes, RadarMark, type RadarLines, markText } from "../lines_view";
+import { type Band, LINE_BANDS, lineKey, parseLine } from "../lines";
+import { BAND_KEY, RadarLineNotes, RadarMark, type RadarLines, markText } from "../lines_view";
 import { DEEP_WINDOWS, type Plan, allowsRadarDepth, radarWindowLocked, requestPlan } from "../plan";
 import { dollars, num, orgIdOf, orgNumber } from "../records_db";
 import {
-  RADAR_CSV_MAX, RADAR_PAGE_ROWS, type RadarParams, type RadarSort, type Read, type Row, type SortDir, readLines, readRadar, readRadarCsv,
+  LINE_BAND_NUMBER, RADAR_CSV_MAX, RADAR_PAGE_ROWS, type RadarParams, type RadarSort, type Read, type Row, type SortDir, readLines, readRadar,
+  readRadarCsv,
 } from "../records_tables";
 import { csvCell } from "./analytics";
 import { ProNote, ProPanel, ProTag, checkoutPrice, ultraCheckoutPrice } from "../pro";
@@ -164,6 +170,11 @@ export interface ExpiringQuery {
   // "end" the same, set from the table's head; "end-desc" the latest end
   // first; "value" the largest value first; "value-asc" the smallest.
   sort: RadarOrder;
+  // The holder's record filter: one label (src/lines.ts), or none. Never read
+  // from the address by readExpiringQuery: a page sets it (withLine) only for
+  // a reader the labels are shown to, so a saved search, an email list, a
+  // delivery or a dashboard panel never carries it.
+  line?: Band;
 }
 
 // The orders a window offers: the value in the address, the column of the
@@ -239,7 +250,21 @@ const NO_FILTERS: ExpiringQuery = {
 };
 
 export function isFiltered(q: ExpiringQuery): boolean {
-  return FILTER_KEYS.some((k) => q[k] !== "") || !q.fye || !q.sosa;
+  return FILTER_KEYS.some((k) => q[k] !== "") || !q.fye || !q.sosa || !!q.line;
+}
+
+// The band the address asks for (?line=run|earlier|none), or undefined. A
+// page reads it only for a reader the labels are shown to (lineFilterAccess).
+export function readLineFilter(url: URL): Band | undefined {
+  const v = (url.searchParams.get("line") ?? "").trim().toLowerCase();
+  return LINE_BANDS.find((b) => b === v);
+}
+
+// The query with the address's band, for a reader the labels are shown to;
+// as it is otherwise.
+export function withLine(q: ExpiringQuery, url: URL, access: LineAccess | null): ExpiringQuery {
+  const line = access ? readLineFilter(url) : undefined;
+  return line ? { ...q, line } : q;
 }
 
 // The URL of a view: only the values set, in a fixed order, then the page;
@@ -247,6 +272,7 @@ export function isFiltered(q: ExpiringQuery): boolean {
 export function expiringQueryString(q: ExpiringQuery, pageNo = 1): string {
   const p = new URLSearchParams();
   for (const k of FILTER_KEYS) if (q[k]) p.set(k, q[k]);
+  if (q.line) p.set("line", q.line);
   if (q.province && !q.derived) p.set("derived", "0");
   if (!q.fye) p.set("fye", "0");
   if (!q.sosa) p.set("sosa", "0");
@@ -430,7 +456,9 @@ export const ExpiringTable: FC<{
   csv?: CsvWindow | "list";
   sorts?: { end: HeadSort; value: HeadSort };
   // The holder's record of the rows a signed-in reader's plan covers, as the
-  // mark under each holder's name, by row key (radarLines).
+  // mark under each holder's name, by row key (radarLines). A profile's table
+  // has no supplier column (every row is the profile's own), so there the
+  // mark is the contract cell's last line: no column is added.
   marks?: ReadonlyMap<string, string>;
 }> = ({ lang, rows, organization = true, buyer = true, phonePages = false, pages, phoneRows, csv = "12m", sorts, marks }) => {
   const buyerRest: Rest = organization ? "lg" : "md";
@@ -482,6 +510,7 @@ export const ExpiringTable: FC<{
                 {instrument && standingOffer(r) ? <> <span class="tag">{instrument}</span></> : null}
                 {fiscalYearEnd(r) ? <> <span class="tag">{t(lang, "expiring.tag_fye")}</span></> : null}
                 {indigenous ? <> <span class="tag" title={t(lang, "expiring.tag_indigenous_def")}>{t(lang, INDIGENOUS_TAG[indigenous])}</span></> : null}
+                {!organization && mark ? <RadarMark text={mark} /> : null}
               </td>
               {organization ? (
                 <td data-label={t(lang, "col.supplier")}>
@@ -541,9 +570,12 @@ export const ExpiringNote: FC<{ lang: Lang }> = ({ lang }) => (
 // The section on a buyer page or a profile: how many of its contracts end
 // within 12 months, their value, the first rows, and where the rest are.
 // more is said when the part holds fewer rows than it counts; link when given.
+// lines: the rows' holders' records for a signed-in reader (sectionLines),
+// the marks and their lines under the table; absent, the section as it was.
 export const ExpiringSection: FC<{
   lang: Lang; part: ExpiringPart; heading: Key; organization?: boolean; buyer?: boolean; more?: unknown; link?: unknown; phoneRows?: number;
-}> = ({ lang, part, heading, organization, buyer, more, link, phoneRows }) => {
+  lines?: RadarLines;
+}> = ({ lang, part, heading, organization, buyer, more, link, phoneRows, lines }) => {
   const rows = soonestFirst(part.rows);
   return (
     <Panel id="expiring" title={t(lang, heading)} count={fmtInt(part.n, lang)} tools={link}
@@ -553,7 +585,13 @@ export const ExpiringSection: FC<{
       ) : (
         <p>{tn(lang, "expiring.part_one", "expiring.part_many", part.n, { n: fmtInt(part.n, lang), total: money(lang, part.total) })}</p>
       )}
-      {rows.length ? <ExpiringTable lang={lang} rows={rows} organization={organization} buyer={buyer} phoneRows={phoneRows} csv="list" /> : null}
+      {rows.length ? (
+        <>
+          <ExpiringTable lang={lang} rows={rows} organization={organization} buyer={buyer} phoneRows={phoneRows} csv="list"
+            marks={lines?.state === "ready" ? lines.marks : undefined} />
+          {lines ? <RadarLineNotes lang={lang} lines={lines} legend={organization === false ? "line.legend_contract" : undefined} /> : null}
+        </>
+      ) : null}
       {rows.length < part.n ? (
         <p class="more-rows">{t(lang, "expiring.part_shown", { shown: fmtInt(rows.length, lang) })}{more ? <> {more as any}</> : null}</p>
       ) : null}
@@ -608,6 +646,31 @@ export async function radarLines(c: Context<AppEnv>, lang: Lang, rows: readonly 
   return { state: "ready", marks, pending: found.length === 0 };
 }
 
+const OFF: RadarLines = { state: "off" };
+
+// The same marks on a list that has no sign-in line of its own: the
+// overview's first rows, and the "Contracts ending" of a profile and of a
+// buyer page. A reader not signed in reads nothing and gets the list as it
+// was, byte for byte, so those public pages keep their cache.
+export async function sectionLines(c: Context<AppEnv>, lang: Lang, rows: readonly ExpiringRow[]): Promise<RadarLines> {
+  if (!rows.length) return OFF;
+  const lines = await radarLines(c, lang, rows);
+  return lines.state === "signed_out" ? OFF : lines;
+}
+
+// Who may narrow a window to one label (?line=): a signed-in reader while the
+// accounts switch is on, with the days its plan labels (lineDays), the
+// filter reading no row past them, so it never shows by its choice a label
+// the plan does not show; null for anyone else, for whom the address's band
+// is not read at all and the page is as it was.
+export type LineAccess = { days: number };
+
+export async function lineFilterAccess(c: Context<AppEnv>): Promise<LineAccess | null> {
+  if (!accountsEnabled(c.env)) return null;
+  const account = await railAccount(c).catch(() => undefined);
+  return account?.email ? { days: lineDays(account.plan ?? "free") } : null;
+}
+
 // -- pages ----------------------------------------------------------------------------
 
 // Which expiring feeds the feed index lists: the national one (linked, and
@@ -651,6 +714,8 @@ export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
   // Save this search, for a signed-in reader (account/search_control.tsx): the 3-month list the overview opens on.
   const save = await saveControl(c, interest, "/expiring");
   const shown = first ? soonestFirst(first).slice(0, EXPIRING_FIRST) : [];
+  // The holder's record under each named holder of the first rows, for a signed-in reader (sectionLines).
+  const lines = await sectionLines(c, lang, shown);
   const n = (v: number) => fmtInt(v, lang);
   const byBuyerName = (b: (typeof idx.by_buyer)[number]) => pick(lang, b.buyer_en, b.buyer_fr) ?? b.buyer_id ?? t(lang, "common.not_stated");
   const pro = accountsEnabled(c.env);
@@ -697,7 +762,8 @@ export async function expiringPage(c: Context<AppEnv>): Promise<Response> {
         ) : shown.length ? (
           <>
             <p class="muted small">{t(lang, "expiring.first_note_3m", { n: n(shown.length) })}</p>
-            <ExpiringTable lang={lang} rows={shown} csv="3m" />
+            <ExpiringTable lang={lang} rows={shown} csv="3m" marks={lines.state === "ready" ? lines.marks : undefined} />
+            <RadarLineNotes lang={lang} lines={lines} />
           </>
         ) : (
           <p class="muted">{t(lang, "expiring.none_window")}</p>
@@ -833,12 +899,19 @@ const BAND_CENTS: Record<ValueBand, [number, number]> = {
   "over-10m": [1_000_000_000, Number.MAX_SAFE_INTEGER],
 };
 
-export function radarParams(window: ExpiringWindow, today: string, q: ExpiringQuery): RadarParams {
+// lineDays: the days the reader's plan labels (LineAccess). A band is read
+// only with them, and then over the window's rows ending within them alone,
+// so the filter never picks a row by a label the plan does not show; without
+// them the band is left out.
+export function radarParams(window: ExpiringWindow, today: string, q: ExpiringQuery, lineDays?: number): RadarParams {
+  const line = q.line && lineDays !== undefined ? LINE_BAND_NUMBER[q.line] : undefined;
+  const days = line === undefined ? WINDOW_DAYS[window] : Math.min(WINDOW_DAYS[window], lineDays ?? 0);
   return {
-    first: today, last: addDays(today, WINDOW_DAYS[window]), buyer: q.buyer, client: q.client,
+    first: today, last: addDays(today, days), buyer: q.buyer, client: q.client,
     oid: q.supplier ? orgNumber(q.supplier) ?? -1 : -1, segment: q.segment,
     comp: q.competitive ? COMP_NUMBER[q.competitive] : -1, band: q.value ? BAND_CENTS[q.value] : null,
     kind: q.kind ? KIND_NUMBER[q.kind] : 0, fye: q.fye, sosa: q.sosa, prov: q.province, derived: q.derived,
+    ...(line === undefined ? {} : { line }),
   };
 }
 
@@ -860,8 +933,11 @@ export function radarRow(r: Row, today: string): ExpiringRow | null {
 }
 
 // noProvinces: the view named a province and the records database does not
-// hold the province table yet, so the matches are the window's without it.
-type Whole = { rows: ExpiringRow[]; n: number; total: number | null; noValue: number; opts: ReturnType<typeof options>; noProvinces: boolean };
+// hold the province table yet, so the matches are the window's without it;
+// noLines the same for a band and rec_lines.
+type Whole = {
+  rows: ExpiringRow[]; n: number; total: number | null; noValue: number; opts: ReturnType<typeof options>; noProvinces: boolean; noLines: boolean;
+};
 
 // The form's choices from the whole window: the buyers, clients and
 // organizations the window names, and the window's counts by flag, source,
@@ -903,15 +979,15 @@ function wholeOptions(read: Extract<Read, { state: "ready" }>, page: ReturnType<
 // A page of the matches over the whole window, or null when the records
 // database cannot answer (the page then filters its own rows, as before).
 async function wholeWindow(c: Context<AppEnv>, window: ExpiringWindow, today: string, q: ExpiringQuery, pageNo: number,
-  page: ReturnType<typeof options>, lang: Lang): Promise<Whole | null> {
+  page: ReturnType<typeof options>, lang: Lang, lineDays?: number): Promise<Whole | null> {
   const order = radarSortOf(q.sort);
-  const read = await readRadar(c.env, radarParams(window, today, q), order.by, (pageNo - 1) * RADAR_PAGE_ROWS, order.dir);
+  const read = await readRadar(c.env, radarParams(window, today, q, lineDays), order.by, (pageNo - 1) * RADAR_PAGE_ROWS, order.dir);
   if (read.state !== "ready") return null;
   const total = read.rows[1]?.[0] ?? {};
   return {
     rows: (read.rows[0] ?? []).map((r) => radarRow(r, today)).filter((r): r is ExpiringRow => r !== null),
     n: num(total.n) ?? 0, total: dollars(total.cents), noValue: num(total.n_no_value) ?? 0,
-    opts: wholeOptions(read, page, q, lang), noProvinces: !!read.noProvinces,
+    opts: wholeOptions(read, page, q, lang), noProvinces: !!read.noProvinces, noLines: !!read.noLines,
   };
 }
 
@@ -937,9 +1013,12 @@ export async function expiringRowsCsv(c: Context<AppEnv>): Promise<Response> {
   const stats = await loadStats(c.env);
   if (!stats) return noDataPage(c, "expiring.title");
   const today = todayOf(stats.data_as_of);
-  const q = readExpiringQuery(new URL(c.req.url));
+  const url = new URL(c.req.url);
+  // The holder's record filter, as on the page: the file holds the rows the band picks and no label.
+  const access = await lineFilterAccess(c);
+  const q = withLine(readExpiringQuery(url), url, access);
   const order = radarSortOf(q.sort);
-  const read = await readRadarCsv(c.env, radarParams(window, today, q), order.by, order.dir);
+  const read = await readRadarCsv(c.env, radarParams(window, today, q, access?.days), order.by, order.dir);
   if (read.state !== "ready") {
     c.header("Retry-After", "3600");
     c.header("Cache-Control", "no-store");
@@ -1021,7 +1100,10 @@ async function expiringTeaser(c: Context<AppEnv>, window: ExpiringWindow, stats:
   if (!rows) return noDataPage(c, "expiring.title");
   const shown = soonestFirst(rows).slice(0, EXPIRING_TEASER_ROWS);
   const path = `/expiring/${window}`;
-  const asked = isFiltered(readExpiringQuery(new URL(c.req.url))) || c.req.query("page") !== undefined;
+  // The holder's record filter is set aside here as the others are, and said so, for a reader it is offered to.
+  const url = new URL(c.req.url);
+  const asked = isFiltered(readExpiringQuery(url)) || c.req.query("page") !== undefined ||
+    (!!readLineFilter(url) && (await lineFilterAccess(c)) !== null);
   const date = todayOf(stats.data_as_of);
   const months = t(lang, WINDOW_MONTHS[window]);
   const title = t(lang, WINDOW_TITLE[window]);
@@ -1072,7 +1154,10 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
   const path = `/expiring/${window}`;
   const n = pageOf(c);
   const url = new URL(c.req.url);
-  const q = readExpiringQuery(url);
+  // The holder's record filter, for a reader the labels are shown to (lineFilterAccess); for anyone else the
+  // address's band is not read, and the page is the one it was.
+  const lineAccess = await lineFilterAccess(c);
+  const q = withLine(readExpiringQuery(url), url, lineAccess);
   const filtered = isFiltered(q);
   const date = todayOf(stats.data_as_of);
   if (n === null) return notFoundPage(c, stats.data_as_of, "expiring.page_not_found", path, "expiring.back_window");
@@ -1084,7 +1169,7 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
   const first = idx.pages === 0 ? [] : await loadExpiringPage(c.env, window, viewOnly ? 1 : Math.min(n, Math.max(1, idx.pages)));
   if (!first) return noDataPage(c, "expiring.title");
   const pageOpts = options(soonestFirst(first), q, lang);
-  const whole = viewOnly ? await wholeWindow(c, window, date, q, n, pageOpts, lang) : null;
+  const whole = viewOnly ? await wholeWindow(c, window, date, q, n, pageOpts, lang, lineAccess?.days) : null;
   const wholePages = whole ? Math.max(1, Math.ceil(whole.n / RADAR_PAGE_ROWS)) : 0;
   if (whole ? n > wholePages : n > 1 && n > idx.pages) {
     return notFoundPage(c, stats.data_as_of, "expiring.page_not_found", path, "expiring.back_window");
@@ -1109,14 +1194,22 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
   const crumbs = [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "expiring.title"), path: "/expiring" }, { name: title }];
   // A province the records database cannot filter by yet (its nightly has
   // not made rec_expiring_prov) is set aside: the matches are the window's
-  // without it, and the form, the chips and the links say the same.
-  const view: ExpiringQuery = whole?.noProvinces ? { ...q, province: "" } : q;
+  // without it, and the form, the chips and the links say the same. A band
+  // is read over the whole window only, so without the records database, or
+  // with one that holds no rec_lines yet, it is set aside the same way.
+  const lineAside = !!q.line && (!whole || whole.noLines);
+  const view: ExpiringQuery = {
+    ...q, ...(whole?.noProvinces ? { province: "" } : {}), ...(lineAside ? { line: undefined } : {}),
+  };
   const prevPath = n > 1 ? `${path}${expiringQueryString(view, n - 1)}` : null;
   const nextPath = n < pages ? `${path}${expiringQueryString(view, n + 1)}` : null;
   // A filtered, sorted or later view is a view of the window's first page.
   const noindex = viewOnly || c.req.query("page") !== undefined;
   const opts = whole ? whole.opts : viewOnly ? options(sorted, q, lang) : pageOpts;
-  const active = FILTER_KEYS.filter((k) => view[k]).length + (view.fye ? 0 : 1) + (view.sosa ? 0 : 1);
+  const active = FILTER_KEYS.filter((k) => view[k]).length + (view.fye ? 0 : 1) + (view.sosa ? 0 : 1) + (view.line ? 1 : 0);
+  // The band's choices: the labels in their own order, uncounted (counting them would read every row's record for
+  // every view, as counting the provinces would read the province table).
+  const lineOpts: Option[] = LINE_BANDS.map((b) => ({ value: b, label: t(lang, BAND_KEY[b]), n: null }));
   // Unfiltered, the phone pager counts the window's contracts and steps
   // through its server pages; over the whole window, the matches; filtered
   // within a page, the page's matches.
@@ -1167,6 +1260,8 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
           <Select name="competitive" label="col.method" any="tenders.any_f" opts={opts.competitive} value={q.competitive} lang={lang} />
           <Select name="value" label="expiring.filter_value" any="tenders.any_f" opts={opts.value} value={q.value} lang={lang} />
           <Select name="kind" label="col.source" any="tenders.any_f" opts={opts.kind} value={q.kind} lang={lang} />
+          {/* The holder's record filter, only for a reader the labels are shown to (lineFilterAccess). */}
+          {lineAccess ? <Select name="line" label="line.filter" opts={lineOpts} value={view.line ?? ""} lang={lang} /> : null}
           <label class="field">
             <span class="field-label">{t(lang, "tenders.sort")}</span>
             {/* "end", set from the head, is the window's own order and reads as it here. */}
@@ -1211,6 +1306,13 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
                 </a>
               );
             })}
+            {view.line ? (
+              <a class="fchip" href={`${path}${expiringQueryString({ ...view, line: undefined })}`}
+                aria-label={t(lang, "tenders.remove_filter", { name: t(lang, BAND_KEY[view.line]) })}>
+                <span>{t(lang, "line.filter")}</span> <b>{t(lang, BAND_KEY[view.line])}</b>
+                <span class="fchip-x" aria-hidden="true">×</span>
+              </a>
+            ) : null}
             {([["fye", "expiring.chip_fye"], ["sosa", "expiring.chip_sosa"]] as const).filter(([k]) => !view[k]).map(([k, label]) => (
               <a class="fchip" href={`${path}${expiringQueryString({ ...view, [k]: true })}`}
                 aria-label={t(lang, "tenders.remove_filter", { name: t(lang, label) })}>
@@ -1244,10 +1346,12 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
             })}
             {whole.noValue ? <> {t(lang, "expiring.whole_no_value", { n: fmtInt(whole.noValue, lang) })}</> : null}
             {whole.noProvinces ? <> {t(lang, "expiring.province_unavailable")}</> : null}
+            {lineAside ? <> {t(lang, "line.filter_unavailable")}</> : null}
           </p>
         ) : viewOnly ? (
           <p class="muted small" aria-live="polite">
             {t(lang, "expiring.filter_note", { rows: fmtInt(sorted.length, lang), page: fmtInt(n, lang), pages: fmtInt(pages, lang) })}
+            {lineAside ? <> {t(lang, "line.filter_unavailable")}</> : null}
           </p>
         ) : null}
         {whole && whole.n > 0 ? (

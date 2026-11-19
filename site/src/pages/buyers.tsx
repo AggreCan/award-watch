@@ -22,7 +22,7 @@ import { ProTag } from "../pro";
 import { buyerSeo, pageSeo } from "../seo";
 import { newestFirst } from "./awards";
 import { IncumbentsPanel, loadIncumbents } from "./backbone";
-import { ExpiringSection } from "./expiring";
+import { ExpiringSection, sectionLines } from "./expiring";
 import { EXPIRING_EVENT, loadFeedIndex } from "./feeds";
 import { InterestPanel, interestFilter } from "./interest";
 import { holdersPart } from "../instruments";
@@ -222,6 +222,9 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
   const FEED_BUTTON: [string, Key][] = [["tenders", "feeds.button_tenders"], ["awards", "feeds.button_awards"], [EXPIRING_EVENT, "expiring.feed"]];
   const watch = await watchControl(c, "buyer", b.buyer.id);
   const briefing = await briefingControl(c, "buyer", b.buyer.id);
+  // The holder's record under each named holder of the contracts ending, for a signed-in reader
+  // (pages/expiring.tsx sectionLines); nothing is read for anyone else.
+  const lines = b.expiring ? await sectionLines(c, lang, b.expiring.rows) : undefined;
 
   return page(
     c,
@@ -280,7 +283,7 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
         <ExpiringSection lang={lang} part={b.expiring} heading="buyer.expiring" buyer={false} phoneRows={PHONE_ROWS}
           link={<a href={`/expiring/12m?buyer=${b.buyer.id}`}>
             {t(lang, "buyer.expiring_all")}{accountsEnabled(c.env) ? <ProTag lang={lang} /> : null}
-          </a>} />
+          </a>} lines={lines} />
       ) : null}
 
       <IncumbentsPanel lang={lang} inc={incumbents} />

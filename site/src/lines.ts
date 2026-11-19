@@ -184,6 +184,8 @@ export function parseFollow(text: unknown): FollowRecord | null {
 // -- the label -----------------------------------------------------------------------
 
 export type Band = "run" | "earlier" | "none";
+// The bands as the radar's filter offers them (?line=, src/pages/expiring.tsx), the label's own order.
+export const LINE_BANDS: readonly Band[] = ["run", "earlier", "none"];
 
 // The label, its figure and the source that decided it, as the pipeline's
 // lines.label reads them: a long run when one source has LONG_RUN or more

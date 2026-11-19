@@ -24,7 +24,7 @@ import {
 } from "../i18n";
 import { CompetitiveFlag, Layout, PageHead, Panel, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { organizationSeo } from "../seo";
-import { ExpiringSection, MoreInWindow } from "./expiring";
+import { ExpiringSection, MoreInWindow, sectionLines } from "./expiring";
 import {
   PUBLISHED_CORRECTIONS_OLD_SQL, PUBLISHED_CORRECTIONS_SQL, type PublishedCorrection, correctionsColumnMissing, publicCorrections,
 } from "./forms";
@@ -561,6 +561,9 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
 
   // The account's Follow control (account/watch_pages.tsx): nothing while the accounts switch is off.
   const watch = await watchControl(c, "organization", o.id);
+  // The holder's record under each contract ending, for a signed-in reader (pages/expiring.tsx sectionLines);
+  // nothing is read for anyone else.
+  const lines = profile.expiring ? await sectionLines(c, lang, profile.expiring.rows) : undefined;
   return page(
     c,
     <Layout lang={lang} title={o.display_name} dataAsOf={stats.data_as_of} active="/organizations" seo={organizationSeo(profile, lang, crumbs)}>
@@ -632,7 +635,7 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
 
       {profile.expiring ? (
         <ExpiringSection lang={lang} part={profile.expiring} heading="org.expiring" organization={false} phoneRows={PHONE_ROWS}
-          more={<MoreInWindow lang={lang} part={profile.expiring} pro={accountsEnabled(c.env)} />} />
+          more={<MoreInWindow lang={lang} part={profile.expiring} pro={accountsEnabled(c.env)} />} lines={lines} />
       ) : null}
 
       <ProfileInstrumentsPanel lang={lang} part={instruments} today={todayOf(stats.data_as_of)} />

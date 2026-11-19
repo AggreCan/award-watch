@@ -13,8 +13,8 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { orgNumber } from "../src/records_db";
 import { bucketFor } from "../src/limits";
 import {
-  BUYER_INCUMBENTS_SQL, CONTRACT_VERSIONS_MAX, EARLIER_AWARDS_SQL, ORG_FEED_SQL, PUBLISHED_CONTRACT_SQL, RADAR_PAGE_ROWS, RADAR_PROV_SQL,
-  SEGMENT_INCUMBENTS_SQL, TABLE_SQL,
+  BUYER_INCUMBENTS_SQL, CONTRACT_VERSIONS_MAX, EARLIER_AWARDS_SQL, ORG_FEED_SQL, PUBLISHED_CONTRACT_SQL, RADAR_LINE_SQL, RADAR_PAGE_ROWS,
+  RADAR_PROV_SQL, SEGMENT_INCUMBENTS_SQL, TABLE_SQL,
 } from "../src/records_tables";
 import { recordHref, recordTitle, shownReference } from "../src/pages/records";
 import { contractPath } from "../src/pages/shared";
@@ -427,8 +427,9 @@ describe("the radar over its whole window", () => {
   it("reads every statement through the window's index, bounded", async () => {
     for (const sql of TABLE_SQL) expect(sql, sql).toMatch(/LIMIT \d+( OFFSET \?\d+)?$/);
     const binds: (string | number)[] = ["2026-10-31", "2027-10-31", "", "", -1, "", -1, -1, -1, 0, 1, 1, 0];
-    // The province statements bind two values more; their own test reads them.
-    for (const sql of TABLE_SQL.filter((q) => q.includes("FROM rec_expiring") && !RADAR_PROV_SQL.includes(q))) {
+    // The province statements bind two values more, the band's one or three; their own tests read them
+    // (here, and test/lines-places.test.ts).
+    for (const sql of TABLE_SQL.filter((q) => q.includes("FROM rec_expiring") && !RADAR_PROV_SQL.includes(q) && !RADAR_LINE_SQL.includes(q))) {
       const n = Math.max(...[...sql.matchAll(/\?(\d+)/g)].map((m) => Number(m[1])));
       const steps = ((await RECORDS.prepare(`EXPLAIN QUERY PLAN ${sql}`).bind(...binds.slice(0, n)).all()).results ?? [])
         .map((r) => String((r as { detail?: unknown }).detail));

@@ -955,7 +955,9 @@ A press is `POST /account/searches`, the searches page's own Add a Search
 post, with one more field: `next`, the page to return to. The address in
 `url` is rebuilt by `interestFilter` (an address that is not such a page, or
 names nothing the data holds, is refused with the searches page's own line
-and a 400), the insert is held to the cap and stores a filter once
+and a 400; a window's organization, client department and holder's record
+filters are not part of the rebuilt filter, so a saved search never keeps
+them), the insert is held to the cap and stores a filter once
 (`addSearch`), and `search_added` carries the detail `<kind> on its page`
 (a pasted address keeps the kind alone). The answer is a 303 to `next`, held
 by `safeNext` to a path on this site (an unsafe one is dropped for the
@@ -4633,10 +4635,12 @@ the table from `fit.js`'s constants.
 - The page reads the claim (one accounts row), the profile entry, `stats.json`
   and, for a ranking, `tenders/open.json` and `tenders/open-levels.json`
   (both kept parsed while their ETags hold); the buyers index only for a
-  buyer the profile and the open notices do not name. It never reads the
-  records database and never writes: a claim on a retired id is followed to
-  the surviving profile for display and repointed by the organization page.
-  It is `private, no-store` and `noindex`.
+  buyer the profile and the open notices do not name. It never writes: a
+  claim on a retired id is followed to the surviving profile for display and
+  repointed by the organization page. It reads the records database only for
+  may follow's line under each listed notice, while `FOLLOWS_PANEL` is "on"
+  (one statement for the page's notices, *May follow*). It is
+  `private, no-store` and `noindex`.
 - The overview links it beside the claimed organization.
 
 ### On the site's pages
@@ -4788,10 +4792,12 @@ matching notices. The code is `pipeline/awardwatch_pipeline/lines.py` (the
 rules and the nightly stage), `records_db.py` (`rec_lines`),
 `site/src/lines.ts` (the constants, the row's check, the label),
 `site/src/lines_view.tsx` (the radar's mark and its lines),
-`site/src/pages/holders.tsx` (the panel on a contract's page) and
-`radarLines` in `site/src/pages/expiring.tsx`. The tests are
+`site/src/pages/holders.tsx` (the panel on a contract's page), and
+`radarLines`, `sectionLines` and the holder's record filter in
+`site/src/pages/expiring.tsx`. The tests are
 `pipeline/tests/test_lines.py`, `pipeline/tests/test_records_db.py`,
-`site/test/lines.test.ts` and `site/test/lines-pages.test.ts`.
+`site/test/lines.test.ts`, `site/test/lines-pages.test.ts` and
+`site/test/lines-places.test.ts` (the third slice's pages).
 
 ### The rules
 
@@ -4880,6 +4886,38 @@ prints every figure from `lines.ts`.
   not hold (ended, cancelled, beyond 365 days, a twin, an older version of
   a published contract), a supplier withheld as a person, or a row that
   does not read in full.
+- The radar's overview (`/expiring`), on its first 50 rows (the 3-month
+  list's first), and the "Contracts ending" section of a profile and of a
+  buyer page (`sectionLines`): the same mark by the same rules of days, and
+  the same lines under the table (what the mark means, the disclaimer, the
+  licence line; "not available right now" when the database cannot answer;
+  the next night's line when the rows the plan covers have no record yet).
+  On a buyer page the mark is under the holder's name; a profile's table has
+  no supplier column (every row is the profile's own), so there it is the
+  contract cell's last line and no column is added. A reader not signed in
+  gets these three pages byte for byte as before, with no sign-in line, and
+  they keep `public, max-age=300` with `Vary: Cookie`.
+- The holder's record filter on a window's full list (`?line=run`,
+  `earlier` or `none`; "Holder's record", "Dossiers du titulaire", its
+  choices the three labels): only for a signed-in reader while the accounts
+  switch is on, so Free on the 3-month list and Pro and Ultra on every
+  window. It reads the window's rows whose holder is named and whose record,
+  of the form the page reads, carries that label, and only those ending
+  within the plan's days (`radarParams`' `lineDays`), so a filter never
+  picks a row by a label the plan does not show. It works as the window's
+  other filters do: a select in the toolbar (its choices not counted, as the
+  provinces are not, since counting them would read every row's record for
+  every view), a chip, the address in a fixed order kept by the pages, the
+  heads and the window tabs, the matches over the whole window from the
+  records database, the view `noindex` with no canonical address, and the
+  matches' CSV for Pro with the band applied and no label in the file. A
+  deeper window's free view sets it aside with its other filters and says
+  so. For anyone else the address's `line=` is not read at all: the page,
+  its headers and its reads are those of the same address without it. A
+  saved search and an email list never keep it (*Save this search*). A
+  records database without `rec_lines`, or one that cannot answer, sets it
+  aside with "The holder's record filter is not available right now; the
+  list shows every contract."
 - The plan cards: "Holder's record: the 3-month list" on Free, "the
   12-month list" on Pro (`plans.lines`, feature `radar_depth`).
 - Every page showing a record is signed in, so `page()` sends it
@@ -4901,14 +4939,31 @@ prints every figure from `lines.ts`.
   ETag holds) when the record names a class or family.
 - A published contract's page, signed in: the same statement in the page's
   own batch (four statements where it had three).
-- A reader not signed in: no read at all; the contract pages are byte for
-  byte as before, which `lines-pages.test.ts` holds.
+- The overview, a profile and a buyer page, signed in: one statement more
+  (`LINES_BY_KEY_SQL`, one batch with the state row), for the rows the plan
+  covers whose holder is named: at most 50 keys on the overview and 25 on a
+  profile or a buyer page; none when no row qualifies.
+- A window narrowed to one label: the window's one batch as for any filter,
+  its page of matches and their count read by the band's statements
+  (`RADAR_LINE_SQL`), each window row the other conditions keep looking up
+  its record once through `rec_lines`' primary key (its `rec_expiring.k`),
+  so the filter reads no more than the window's rows and needs no index;
+  then the marks' statement as above. A database without `rec_lines` is read
+  once more without the band.
+- The CPU guard (measured 2026-11-15, against the yardstick): a Pro reader's
+  overview with 50 marks 5.13 (bound 16), the profile 4.96 against 5.28
+  signed out (bound 22), the buyer page 2.22 against 1.91 (bound 7), and a
+  3-month list narrowed to one label with 100 matches 8.17 (bound 25).
+- A reader not signed in: no read at all; the contract pages, the overview,
+  the profiles and the buyer pages are byte for byte as before, which
+  `lines-pages.test.ts` and `lines-places.test.ts` hold.
 
 ### Later
 
-The matching notices' line, the mail and the CSV columns are later slices.
+The mail (the Pro weekly briefing's contracts ending, the watch mail's
+`ends_*` events, the matching block) and the CSV columns are later slices.
 May follow, the second slice, is below (*May follow*), behind a switch of its
-own.
+own; its line on the matching notices is there too.
 
 ### Operator steps
 
@@ -5060,6 +5115,23 @@ added. Nothing for a reader not signed in, a notice that is not open, or while
 the switch is off. Nothing reaches a static file, a feed, the open or keyed
 API, a CSV or a sitemap.
 
+On `/account/matches` (the third slice, `FollowLine` in
+`site/src/pages/follows.tsx`), while the switch is on: in the Notice cell of
+each listed notice, under its buyer and notice type, one muted line for the
+closest earlier contract (rank 1), "May follow <title> (<holder>), ended
+2026-10-23" ("Pourrait faire suite à ... terminé le ..."; "ends" for one
+still running on the records' data date; no end, no date), the title cut at
+60 characters (`FOLLOW_LINE_TITLE`) and linking the notice page's panel
+(`/tenders/<reference>#follows`), where it shows with what matched. The
+holder is named as the panel names it, a withheld one "Individual, name
+withheld"; no holder's record here, on any plan. Free gets it on its 5 rows,
+Pro and Ultra on each row of the page they open (50 a page). The page's
+disclaimer block, above the matches, gains may follow's disclaimer beside the
+matches' once a listed notice carries a line; the licence line is the page's
+own. A database that cannot answer: one line under the list; without
+`rec_follows`, or with the switch off, the page is byte for byte as before
+and reads nothing more.
+
 ### Reads and bounds
 
 - A signed-in reader on an open notice with a class, switch on: one statement
@@ -5069,6 +5141,14 @@ API, a CSV or a sitemap.
 - The CPU guard times a Pro reader's notice with three rows at 2.29 times the
   yardstick (bound 10); the same page with the panel off measured 3.25 in the
   next run, inside the machine's noise.
+- `/account/matches`, switch on, a ranking listed: one records statement
+  (`FIRST_FOLLOWS_SQL`, one batch with the state row), rank 1 of the page's
+  notices bound as one JSON list, each found through `rec_follows_tref`, at
+  most `FIRST_FOLLOWS_MAX` (`MATCH_PAGE`, 50) rows with the holder's name:
+  fewer than the design's 200, since a page lists at most 50. Nothing for an
+  account without a claim or a ranking. The CPU guard times a Free account's
+  page with its 5 lines at 4.33 against 4.40 without them in the same run
+  (measured 2026-11-15; bound 21, the page's own).
 - `RULES.follows`: Free 1, Pro 3, Ultra 3 (`followCap`); the plan cards' row
   (`plans.follows_one` or `plans.follows`, after the holder's record) reads
   each plan's figure from it.

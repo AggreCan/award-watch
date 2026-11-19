@@ -157,6 +157,8 @@ const noRail = (page: string) =>
     .replace(/<p class="interest-pro">[\s\S]*?<\/p>/g, "")
     // The one line a window's page gains for a reader not signed in (src/lines_view.tsx): signed-in readers see the holders' records.
     .replace(/<p class="muted small line-signin">[\s\S]*?<\/p>/, "")
+    // The holder's record filter a signed-in reader's full list gains (src/pages/expiring.tsx; test/lines-places.test.ts).
+    .replace(/<label class="field"><span class="field-label">[^<]*<\/span><select name="line">[\s\S]*?<\/select><\/label>/, "")
     // The top bar's same-day timer leads to the tease while the switch is on and to the list while it is off.
     .replace('<a class="refresh" href="/tenders/same-day"', '<a class="refresh" href="/tenders"');
 const pageHead = (page: string) => /<header class="page-head">[\s\S]*?<\/header>/.exec(page)?.[0] ?? "";

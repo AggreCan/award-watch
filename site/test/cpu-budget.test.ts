@@ -11,12 +11,14 @@
 // matching notices' pages are timed for a signed-in account too, its
 // accounts database answered from memory (below).
 import { describe, expect, it } from "vitest";
+import { RULES } from "../src/account/entitlements";
 import { sha256Hex } from "../src/account/secrets";
 import { clearClosingCache } from "../src/closing";
 import { clearParsedCache } from "../src/data";
 import { app } from "../src/index";
 import { FILES, TEST_NOW, testEnv } from "./assets";
 import { PA_BUYER_PAYEES, PA_BUYER_WORKS, PA_FREE_YEARS, PA_PROFILE_ROWS } from "../src/public_accounts";
+import { FIRST_FOLLOWS_SQL, RADAR_PAGE_ROWS } from "../src/records_tables";
 import { homeApp } from "./home";
 import DND from "./fixtures/buyer-dnd-mdn.json";
 
@@ -184,14 +186,30 @@ const FOLLOW_ROWS = [1, 2, 3].map((rank) => ({
     buyer: "dfo-mpo", client: 1, lvl: "class", code: ["821118", "811015"], words: [7, 8], days: -70, from: "start", line: JSON.parse(LINE_J),
   }),
 }));
+// The 3-month window's first page at its production size, under its own ETags.
+const signedInRows = bigExpiringPage(500) as Record<string, unknown>[];
+const signedInBody = JSON.stringify(signedInRows);
+// A page of the whole window as rec_expiring answers a filtered view (the holder's record filter, src/pages/expiring.tsx):
+// RADAR_PAGE_ROWS rows of the page above, each as the table holds it (no days_left).
+const WINDOW_ROWS = signedInRows.slice(0, RADAR_PAGE_ROWS).map((r) => {
+  const { days_left: _, ...row } = r;
+  return { endd: String(r.end).slice(0, 10), j: JSON.stringify(row) };
+});
 const recordsStub = stubDb((sql, params) => {
   if (sql.includes("FROM rec_meta")) return [{ key: "state", value: "ready" }, { key: "as_of", value: "2026-10-31" }];
+  // The window's statements first: a band's carry rec_lines inside them.
+  if (sql.startsWith("SELECT endd, j FROM rec_expiring")) return WINDOW_ROWS;
+  if (sql.startsWith("SELECT COUNT(*) AS n, SUM(cents) AS cents")) return [{ n: 2_400, cents: 123_456_700_00, n_no_value: 12 }];
+  if (sql.startsWith("SELECT COUNT(*) AS n, SUM(comp = 1)")) {
+    return [{ n: 7_184, c1: 4_000, c0: 3_000, c2: 184, k1: 5_000, k2: 100, k3: 2_084, b1: 5_000, b2: 1_500, b3: 600, b4: 84, m31: 900, so: 300 }];
+  }
+  if (sql === FIRST_FOLLOWS_SQL) {
+    return (JSON.parse(String(params[0])) as string[]).map((tref) => ({ tref, j: FOLLOW_ROWS[0].j, holder: FOLLOW_ROWS[0].holder }));
+  }
   if (sql.includes("FROM rec_lines")) return (JSON.parse(String(params[0])) as string[]).map((sk) => ({ sk, j: LINE_J }));
   if (sql.includes("FROM rec_follows")) return FOLLOW_ROWS;
   return [];
 });
-// The 3-month window's first page at its production size, under its own ETags.
-const signedInBody = JSON.stringify(bigExpiringPage(500));
 const signedInAssets = assetsOf({ ...BODIES, "expiring/3m/1.json": signedInBody }, "v1-signed-in");
 
 // -- payments in the Public Accounts ------------------------------------------------------
@@ -440,6 +458,16 @@ const BUDGET: [path: string, bound: number, per: number][] = [
   // contracts read beside the earlier awards and drawn with their holders' marks (measured 2026-11-14 at 2.29; the
   // same page with the panel off measured 3.25 in the next run, so the panel is within the machine's noise).
   ["/tenders/cb-100-10000001 (signed in, may follow on)", 10, 16], // [2.29]
+  // The holder's record where readers already are (slice 3; src/pages/expiring.tsx sectionLines and the band filter):
+  // a Pro reader's overview, its first 50 rows of the page above each with a mark (it parses the 500-row page, as
+  // the landing page does); the profile and the buyer page, their contracts ending each with a mark (4.96 and 2.22
+  // against 5.28 and 1.91 signed out in the same run, so the profile keeps the signed-out bound); and a 3-month list
+  // narrowed to one label, a page of 100 matches read from a records database that answers at once, each with its
+  // mark (measured 2026-11-15).
+  ["/expiring (signed in, 50 rows with records)", 16, 16], // [5.13]
+  ["/organizations/org-a000000001 (signed in, with records)", 22, 8], // [4.96]
+  ["/buyers/pwgsc-tpsgc (signed in, with records)", 7, 16], // [2.22]
+  ["/expiring/3m?line=earlier (signed in, 100 matches with records)", 25, 16], // [8.17]
   // Payments in the Public Accounts (src/public_accounts.tsx; measured 2026-11-11 on a busy machine): the
   // profile above with three fiscal years of 100 rows (8.2 against 5.0 without them in the same run), and the
   // buyer page without and with fourteen classes and fifty payees.
@@ -567,6 +595,10 @@ const SIGNED_IN_BUDGET: [name: string, path: string, claim: boolean, mark: strin
   ["/account/organization, claim", "/account/organization", true, "<h2>Notices Matching ", 21, 8], // [6.7]
   ["/account/matches, claim", "/account/matches", true, "<h2>Open Notices That Match</h2>", 21, 8], // [6.9]
 ];
+// The same page with may follow's line under each listed notice (slice 3): the records database answers its one
+// statement from memory, one earlier contract for each of the page's notices. Measured 2026-11-15 at 4.33 against
+// 4.40 for the page without it in the same run, inside the machine's noise, so it keeps the page's bound.
+const MATCHES_FOLLOWS_BOUND = 21; // [4.33]
 
 // -- an Ultra account's dashboard of twelve tiles ------------------------------------------
 //
@@ -729,6 +761,17 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
     // And on the notice: may follow's three rows, each holder with its mark.
     const notice = await (await app.request("/tenders/cb-100-10000001", { headers: { "sec-fetch-mode": "navigate", cookie: SIGNED_IN } }, signedInEnv)).text();
     expect(notice.match(/class="muted small line-mark"/g)).toHaveLength(3);
+    // The slice 3 entries: the overview's named holders of its first 50 rows, the profile's and the buyer page's
+    // contract ending, and a page of 100 matches narrowed to one label, each named holder with its mark.
+    const markCount = async (path: string) =>
+      (await (await app.request(path, { headers: { "sec-fetch-mode": "navigate", cookie: SIGNED_IN } }, signedInEnv!)).text())
+        .match(/class="muted small line-mark"/g)?.length ?? 0;
+    const named = (rows: Record<string, unknown>[]) => rows.filter((r) => r.organization_id && !r.supplier_withheld).length;
+    expect(await markCount("/expiring")).toBe(named([...signedInRows].sort((a, b) => String(a.end).localeCompare(String(b.end))).slice(0, 50)));
+    expect(await markCount("/expiring")).toBeGreaterThan(25);
+    expect(await markCount("/organizations/org-a000000001")).toBe(1);
+    expect(await markCount("/buyers/pwgsc-tpsgc")).toBe(1);
+    expect(await markCount("/expiring/3m?line=earlier")).toBe(named(signedInRows.slice(0, RADAR_PAGE_ROWS)));
     // What the works entries time: every contract of the three years on the profile, the 25 on the buyer page.
     const worksProfile = await (await app.request("/organizations/org-a000000001", { headers: { "sec-fetch-mode": "navigate" } }, paWorksEnv)).text();
     expect(worksProfile.match(/<td data-label="Amount contracted" class="mono num">/g)?.length).toBe(PA_FREE_YEARS * PA_PROFILE_ROWS);
@@ -779,6 +822,14 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
       seen.push(`${name} ${r.toFixed(2)}`);
       if (r > bound) over.push(`${name}: ${r.toFixed(2)} over ${bound}`);
     }
+    // What the may-follow entry times: a line under each of Free's listed notices.
+    const follows = { RECORDS: recordsStub, FOLLOWS_PANEL: "on" };
+    const page = await app.request("/account/matches", { headers: { "sec-fetch-mode": "navigate", cookie: COOKIE } },
+      { ...env, ASSETS: assetsOf(FIT_BODIES, "v1-fit"), ACCOUNTS: memoryAccounts(hash, true), ACCOUNTS_ENABLED: "true", ...follows });
+    expect((await page.text()).match(/class="muted small follow-line"/g)).toHaveLength(RULES.free.matches);
+    const r = await signedInRatio("/account/matches", 8, memoryAccounts(hash, true), 'class="muted small follow-line"', follows);
+    seen.push(`/account/matches, claim, may follow ${r.toFixed(2)}`);
+    if (r > MATCHES_FOLLOWS_BOUND) over.push(`/account/matches, claim, may follow: ${r.toFixed(2)} over ${MATCHES_FOLLOWS_BOUND}`);
     expect(over, seen.join(", ")).toEqual([]);
   }, 120_000);
 

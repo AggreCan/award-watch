@@ -12,8 +12,9 @@
 // state row and the statements in one batch. site/test/records-tables.test.ts
 // reads each one's plan.
 
+import { MATCH_PAGE } from "./account/entitlements";
 import type { Env } from "./env";
-import { FOLLOW_MAX } from "./lines";
+import { type Band, FOLLOW_MAX, J_VERSION, LONG_RUN } from "./lines";
 import { type Query, type Read, type Row, readRecords } from "./records_db";
 
 // -- a published contract (pages/published.tsx) --------------------------------------
@@ -185,8 +186,55 @@ export const RADAR_PROV_SQL: readonly string[] = [
   RADAR_PROV_TOTAL_SQL, ...Object.values(RADAR_PROV_ORDER).flatMap((o) => Object.values(o).flatMap((s) => [s.rows, s.csv])),
 ];
 
-const radarOrder = (sort: RadarSort, dir?: SortDir, prov = false) =>
-  (prov ? RADAR_PROV_ORDER : RADAR_ORDER)[sort][dir ?? (sort === "value" ? "desc" : "asc")];
+// The holder's record filter (pages/expiring.tsx, ?line=), for a reader the
+// labels are shown to. LINE_BAND_SQL is the label of a rec_lines row l as
+// lineLabel (src/lines.ts) reads it in the page, as a number: 2 a long run
+// (one source with LONG_RUN or more back to back), else 1 earlier records
+// (one source holding two or more, this one included), else 0 no earlier
+// record (every source holding this one alone); NULL for a record with no
+// source (no kind of work), which no band matches. The sources are never
+// added: each figure is one source's, as in the page.
+export const LINE_BAND_NUMBER: Readonly<Record<Band, number>> = { none: 0, earlier: 1, run: 2 };
+export const LINE_BAND_SQL =
+  `(SELECT CASE WHEN MAX(json_extract(s.value, '$.run')) >= ${LONG_RUN} THEN 2 ` +
+  "WHEN MAX(json_extract(s.value, '$.held')) >= 2 THEN 1 WHEN MAX(json_extract(s.value, '$.held')) = 1 THEN 0 END " +
+  "FROM json_each(l.j, '$.s') s)";
+// A window's rows whose holder is named and whose record, of the form the
+// page reads, carries the band ?n: one look-up of rec_lines by its key (the
+// row's rec_expiring.k) for each row the window's other conditions keep, so
+// the filter reads no more than the window's rows. Only a view that names a
+// band reads these statements, so a records database whose nightly has not
+// made rec_lines yet answers every other view as before.
+const lineWhere = (n: number) =>
+  "AND oid IS NOT NULL AND EXISTS (SELECT 1 FROM rec_lines l WHERE l.k = rec_expiring.k " +
+  `AND json_extract(l.j, '$.v') = ${J_VERSION} AND ${LINE_BAND_SQL} = ?${n})`;
+// The band's number is the bind after the window's (?13), or after the
+// province's (?15); the offset of a page follows it.
+type Family = { total: string; order: Record<RadarSort, Record<SortDir, { rows: string; csv: string }>> };
+function lineFamily(where: string, offset: number): Family {
+  const rows = (order: string) => `SELECT endd, j FROM rec_expiring WHERE ${where} ${order} LIMIT ${RADAR_PAGE_ROWS} OFFSET ?${offset}`;
+  const csv = (order: string) => `SELECT endd, j FROM rec_expiring WHERE ${where} ${order} LIMIT ${RADAR_CSV_MAX}`;
+  return {
+    total: `SELECT COUNT(*) AS n, SUM(cents) AS cents, SUM(nv) AS n_no_value FROM rec_expiring WHERE ${where} LIMIT 1`,
+    order: {
+      end: { asc: { rows: rows(BY_END), csv: csv(BY_END) }, desc: { rows: rows(BY_END_DESC), csv: csv(BY_END_DESC) } },
+      value: { desc: { rows: rows(BY_VALUE), csv: csv(BY_VALUE) }, asc: { rows: rows(BY_VALUE_ASC), csv: csv(BY_VALUE_ASC) } },
+    },
+  };
+}
+const RADAR_LINE = lineFamily(`${RADAR_WHERE} ${lineWhere(13)}`, 14);
+const RADAR_PROV_LINE = lineFamily(`${RADAR_PROV_WHERE} ${lineWhere(15)}`, 16);
+export const RADAR_LINE_ROWS_END_SQL = RADAR_LINE.order.end.asc.rows;
+export const RADAR_LINE_TOTAL_SQL = RADAR_LINE.total;
+// Every band statement, with and without a province, for the tests that read their plans and their bounds.
+export const RADAR_LINE_SQL: readonly string[] = [RADAR_LINE, RADAR_PROV_LINE].flatMap((f) => [
+  f.total, ...Object.values(f.order).flatMap((o) => Object.values(o).flatMap((s) => [s.rows, s.csv])),
+]);
+
+const radarOrder = (sort: RadarSort, dir?: SortDir, prov = false, line = false) =>
+  (line ? (prov ? RADAR_PROV_LINE : RADAR_LINE).order : prov ? RADAR_PROV_ORDER : RADAR_ORDER)[sort][dir ?? (sort === "value" ? "desc" : "asc")];
+const radarTotal = (prov: boolean, line: boolean) =>
+  line ? (prov ? RADAR_PROV_LINE : RADAR_LINE).total : prov ? RADAR_PROV_TOTAL_SQL : RADAR_TOTAL_SQL;
 
 // The window's own counts for the form's choices (?1 ?2 the window), the
 // filters set aside: by competitive flag, source, value band (the bands of
@@ -212,10 +260,12 @@ export const RADAR_SUPPLIERS_SQL =
   `LEFT JOIN rec_orgs o ON o.oid = e.oid ORDER BY e.cents DESC, e.n DESC, e.oid LIMIT ${RADAR_OPTIONS_MAX}`;
 
 // prov: a province's code, or '' (or absent) for none; derived: whether a
-// province derived from another field counts, as on the tender list.
+// province derived from another field counts, as on the tender list. line:
+// the holder's record's band as LINE_BAND_SQL numbers it (0, 1 or 2), or
+// absent for none.
 export interface RadarParams {
   first: string; last: string; buyer: string; client: string; oid: number; segment: string; comp: number;
-  band: [number, number] | null; kind: number; fye: boolean; sosa: boolean; prov?: string; derived?: boolean;
+  band: [number, number] | null; kind: number; fye: boolean; sosa: boolean; prov?: string; derived?: boolean; line?: number;
 }
 
 export function radarBinds(p: RadarParams): (string | number)[] {
@@ -228,27 +278,44 @@ export function radarProvBinds(p: RadarParams): (string | number)[] {
   return [...radarBinds(p), p.prov ?? "", p.derived === false ? 0 : 1];
 }
 
+// The binds of a view's statements: the window's, the province's when it
+// names one, then the band's when it names one.
+const viewBinds = (p: RadarParams, prov: boolean, line: boolean): (string | number)[] =>
+  [...(prov ? radarProvBinds(p) : radarBinds(p)), ...(line ? [p.line ?? -1] : [])];
+
 // A read of the window; noProvinces when the view named a province and the
 // records database does not hold rec_expiring_prov yet, so the read was made
 // again without it (the province set aside, as a missing table elsewhere
-// degrades to the page without what it holds).
-export type RadarRead = Read & { noProvinces?: true };
+// degrades to the page without what it holds); noLines the same for a band
+// and rec_lines.
+export type RadarRead = Read & { noProvinces?: true; noLines?: true };
 
-async function withoutMissingProvinces(env: Env, p: RadarParams, queries: (prov: boolean) => Query[]): Promise<RadarRead> {
-  const prov = !!p.prov;
-  const read = await readRecords(env, queries(prov));
-  if (!prov || read.state !== "failed" || !read.noTable) return read;
-  return { ...(await readRecords(env, queries(false))), noProvinces: true };
+async function withoutMissingTables(env: Env, p: RadarParams, queries: (prov: boolean, line: boolean) => Query[]): Promise<RadarRead> {
+  let prov = !!p.prov;
+  let line = p.line !== undefined;
+  const left: { noProvinces?: true; noLines?: true } = {};
+  for (;;) {
+    const read = await readRecords(env, queries(prov, line));
+    if ((!prov && !line) || read.state !== "failed" || !read.noTable) return { ...read, ...left };
+    // The table the error names is set aside; one it does not name, the province first, as before the band.
+    if (line && (read.missing === "rec_lines" || !prov)) {
+      line = false;
+      left.noLines = true;
+    } else {
+      prov = false;
+      left.noProvinces = true;
+    }
+  }
 }
 
 // One batch: the state row, the page of matches, their count and total, and the form's choices.
 export function readRadar(env: Env, p: RadarParams, sort: RadarSort, offset: number, dir?: SortDir): Promise<RadarRead> {
   const span = [p.first, p.last];
-  return withoutMissingProvinces(env, p, (prov) => {
-    const binds = prov ? radarProvBinds(p) : radarBinds(p);
+  return withoutMissingTables(env, p, (prov, line) => {
+    const binds = viewBinds(p, prov, line);
     return [
-      { sql: radarOrder(sort, dir, prov).rows, params: [...binds, offset] },
-      { sql: prov ? RADAR_PROV_TOTAL_SQL : RADAR_TOTAL_SQL, params: binds },
+      { sql: radarOrder(sort, dir, prov, line).rows, params: [...binds, offset] },
+      { sql: radarTotal(prov, line), params: binds },
       { sql: RADAR_FACETS_SQL, params: span },
       { sql: RADAR_BUYERS_SQL, params: span },
       { sql: RADAR_CLIENTS_SQL, params: span },
@@ -258,7 +325,7 @@ export function readRadar(env: Env, p: RadarParams, sort: RadarSort, offset: num
 }
 
 export function readRadarCsv(env: Env, p: RadarParams, sort: RadarSort, dir?: SortDir): Promise<RadarRead> {
-  return withoutMissingProvinces(env, p, (prov) => [{ sql: radarOrder(sort, dir, prov).csv, params: prov ? radarProvBinds(p) : radarBinds(p) }]);
+  return withoutMissingTables(env, p, (prov, line) => [{ sql: radarOrder(sort, dir, prov, line).csv, params: viewBinds(p, prov, line) }]);
 }
 
 // -- the holder's record (src/lines.ts, pages/expiring.tsx, pages/holders.tsx) -----------
@@ -435,6 +502,23 @@ export function readFollows(env: Env, tref: string): Promise<Read> {
   return readRecords(env, [{ sql: FOLLOWS_SQL, params: [tref] }]);
 }
 
+// The closest earlier contract (rank 1) of each notice a page of
+// /account/matches lists (account/fit_pages.tsx), for its line under the
+// notice, with its holder's name: ?1 the notices' URL references in lower
+// case as one JSON list, at most FIRST_FOLLOWS_MAX (a page's rows: MATCH_PAGE
+// on a paid plan, RULES.free.matches on Free), each found through
+// rec_follows_tref. Read only while FOLLOWS_PANEL is "on".
+export const FIRST_FOLLOWS_MAX = MATCH_PAGE;
+export const FIRST_FOLLOWS_SQL =
+  "SELECT f.tref AS tref, f.j AS j, o.name AS holder FROM rec_follows f LEFT JOIN rec_orgs o ON o.oid = json_extract(f.j, '$.oid') " +
+  `WHERE f.tref IN (SELECT value FROM json_each(?1)) AND f.rank = 1 LIMIT ${FIRST_FOLLOWS_MAX}`;
+
+// One statement beside the state row; a records database without rec_follows
+// yet answers failed with noTable, and the page shows what it did before.
+export function readFirstFollows(env: Env, trefs: readonly string[]): Promise<Read> {
+  return readRecords(env, [{ sql: FIRST_FOLLOWS_SQL, params: [JSON.stringify(trefs.slice(0, FIRST_FOLLOWS_MAX))] }]);
+}
+
 // -- the incumbents of a buyer or a segment (pages/incumbents.tsx) ---------------------
 
 // Who holds the contracts ending within 12 months: the radar's window
@@ -489,10 +573,10 @@ export function readContractSitemap(env: Env, first: string, last: string): Prom
 // Every statement here, for the tests that read their plans and their bounds.
 export const TABLE_SQL: readonly string[] = [
   CONTRACT_SITEMAP_SQL, EARLIER_AWARDS_SQL, BUYER_INCUMBENTS_SQL, SEGMENT_INCUMBENTS_SQL, ORG_FEED_SQL,
-  PUBLISHED_CONTRACT_SQL, PUBLISHED_INDIGENOUS_SQL, PUBLISHED_EXCEPTION_SQL, LINES_BY_KEY_SQL, LINE_BY_KEY_SQL, FOLLOWS_SQL, RADAR_ROWS_END_SQL, RADAR_ROWS_VALUE_SQL, RADAR_CSV_END_SQL, RADAR_CSV_VALUE_SQL, RADAR_TOTAL_SQL,
+  PUBLISHED_CONTRACT_SQL, PUBLISHED_INDIGENOUS_SQL, PUBLISHED_EXCEPTION_SQL, LINES_BY_KEY_SQL, LINE_BY_KEY_SQL, FOLLOWS_SQL, FIRST_FOLLOWS_SQL, RADAR_ROWS_END_SQL, RADAR_ROWS_VALUE_SQL, RADAR_CSV_END_SQL, RADAR_CSV_VALUE_SQL, RADAR_TOTAL_SQL,
   RADAR_ROWS_END_DESC_SQL, RADAR_ROWS_VALUE_ASC_SQL, RADAR_CSV_END_DESC_SQL, RADAR_CSV_VALUE_ASC_SQL,
   RADAR_FACETS_SQL, RADAR_BUYERS_SQL, RADAR_CLIENTS_SQL, RADAR_SUPPLIERS_SQL,
-  ...Object.values(RECORDS_SQL.organization), ...Object.values(RECORDS_SQL.buyer), ...RADAR_PROV_SQL,
+  ...Object.values(RECORDS_SQL.organization), ...Object.values(RECORDS_SQL.buyer), ...RADAR_PROV_SQL, ...RADAR_LINE_SQL,
 ];
 
 export type { Query, Read, Row };

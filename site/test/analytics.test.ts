@@ -22,6 +22,7 @@ import {
   ALL_SQL, BUYER_DUE_SQL, BUYER_QUARTERS_SQL, EARLIEST_FY, FREE_YEARS, MAX_RIVALS, MAX_YEARS, ORG_YEARS_SQL, SEGMENT_YEARS_SQL, STATE_SQL, ULTRA_YEARS,
   choosePeriod, fiscalLabel, fiscalYearOf, orgIdOf, orgNumber, planYears, quarterEnd,
 } from "../src/records_db";
+import { LINES_BY_KEY_SQL } from "../src/records_tables";
 import { csvCell } from "../src/pages/analytics";
 import { routeTemplate } from "../src/views";
 import { get, grantPro, grantUltra, newEmail, onEnv, signIn, ultraEnv, useAccountsDb, withoutTiers } from "./accounts-helpers";
@@ -274,9 +275,15 @@ describe("the pages that link a view, switch on", () => {
       }
     }
     // The profile reads nothing; a buyer and a segment page read the state row and
-    // their incumbents (src/pages/backbone.tsx), one batch a page.
-    expect(rec.batches).toHaveLength(6);
-    for (const batch of rec.batches) {
+    // their incumbents (src/pages/backbone.tsx), one batch a page. A signed-in reader
+    // of the buyer page and the profile also reads the holders' records of their
+    // contracts ending (src/pages/expiring.tsx sectionLines; test/lines-places.test.ts),
+    // one batch more each, never for a reader not signed in.
+    const lines = rec.batches.filter((b) => b.includes(LINES_BY_KEY_SQL));
+    expect(lines).toEqual(Array.from({ length: 4 }, () => [STATE_SQL, LINES_BY_KEY_SQL]));
+    const own = rec.batches.filter((b) => !b.includes(LINES_BY_KEY_SQL));
+    expect(own).toHaveLength(6);
+    for (const batch of own) {
       expect(batch[0]).toBe(STATE_SQL);
       expect(batch).toHaveLength(2);
       expect(batch[1]).toMatch(/FROM rec_expiring WHERE (\(buyer = \?1 OR client = \?1\)|instr\(segs, \?1\) > 0)/);

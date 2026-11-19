@@ -4,6 +4,8 @@
 // each night (rec_follows), each with what matched. Free sees the closest
 // one; Pro and Ultra up to FOLLOW_MAX, each with its holder's label and
 // figure under the holder's name (the radar's mark, src/lines_view.tsx).
+// The closest one also stands as a line under each notice the matching
+// notices' page lists (FollowLine, account/fit_pages.tsx).
 //
 // Behind a switch of its own, FOLLOWS_PANEL, which ships "on": anything else
 // leaves the notice page byte for byte as it was for every reader, runs no
@@ -25,6 +27,7 @@ import { type FollowRecord, LINE_SOURCE, followsPanelOn, parseFollow } from "../
 import { RadarMark, markText } from "../lines_view";
 import type { Plan } from "../plan";
 import { orgIdOf } from "../records_db";
+import { clip } from "../seo";
 import type { FollowsRead } from "./backbone";
 import { holderAccess } from "./holders";
 import { recordHref, shownReference } from "./records";
@@ -123,6 +126,35 @@ const Holder: FC<{ lang: Lang; row: FollowRow; records: boolean }> = ({ lang, ro
     <>
       <a href={`/organizations/${id}`}>{row.holder ?? id}</a>
       {mark ? <RadarMark text={mark} /> : null}
+    </>
+  );
+};
+
+// The line's title is cut here: the earlier contract's own title can run to
+// 300 characters, in the Notice cell (216 px from 700 px of window up), where
+// 90 characters took four lines; the notice page's panel gives it whole.
+export const FOLLOW_LINE_TITLE = 60;
+
+const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+
+// The closest earlier contract under a notice on /account/matches, one muted
+// line: "May follow <title> (<holder>), ended <date>", the title linking the
+// notice page's panel (#follows), where it shows with what matched; the
+// holder named as the panel names it, a withheld one by no one. No holder's
+// record here, on any plan. today: the data date, which sets "ended" or "ends".
+export const FollowLine: FC<{ lang: Lang; row: FollowRow; tref: string; today: string }> = ({ lang, row, tref, today }) => {
+  const { j } = row;
+  const title = clip(pick(lang, j.t[0], j.t[1]) ?? (shownReference(j.ref) || t(lang, "common.not_stated")), FOLLOW_LINE_TITLE);
+  const holder = j.wh ? t(lang, "expiring.withheld") : j.oid === null ? t(lang, "common.not_stated") : row.holder ?? orgIdOf(j.oid);
+  const vars = { title: <a href={`/tenders/${tref}#follows`}>{title}</a>, holder };
+  return (
+    <>
+      <br />
+      <span class="muted small follow-line">
+        {j.end
+          ? tj(lang, "follow.matches_line", { ...vars, end: lowerFirst(t(lang, j.end < today ? "follow.ended" : "follow.ends", { date: j.end })) })
+          : tj(lang, "follow.matches_line_no_end", vars)}
+      </span>
     </>
   );
 };

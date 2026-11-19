@@ -48,7 +48,9 @@ export type RadarLines =
   | { state: "off" | "signed_out" | "absent" | "unavailable" }
   | { state: "ready"; marks: ReadonlyMap<string, string>; pending: boolean };
 
-export const RadarLineNotes: FC<{ lang: Lang; lines: RadarLines }> = ({ lang, lines }) => {
+// legend: what the marks are, line.legend under a holder's name; a profile's
+// list, whose marks stand under each contract, names them so (line.legend_contract).
+export const RadarLineNotes: FC<{ lang: Lang; lines: RadarLines; legend?: Key }> = ({ lang, lines, legend = "line.legend" }) => {
   switch (lines.state) {
     case "signed_out":
       return (
@@ -62,7 +64,7 @@ export const RadarLineNotes: FC<{ lang: Lang; lines: RadarLines }> = ({ lang, li
       if (lines.marks.size) {
         return (
           <>
-            <p class="muted small">{t(lang, "line.legend", { years: fmtInt(LINE_YEARS, lang) })}</p>
+            <p class="muted small">{t(lang, legend, { years: fmtInt(LINE_YEARS, lang) })}</p>
             <AdvisoryDisclaimer lang={lang} kind="line" />
             <p class="muted small">{t(lang, "data.credit")}</p>
           </>

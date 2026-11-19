@@ -558,6 +558,18 @@ statement is bounded by the window's end dates through `rec_expiring_end`,
 so none reads more than the 12-month window's rows (about 20,000). Such an
 address is `noindex`.
 
+A signed-in reader can narrow the list to one holder's record label
+(`line=run|earlier|none`, *Holder's record* in `docs/accounts.md`). The
+page of matches and their count are then read by the band's statements
+(`RADAR_LINE_SQL`, with and without a province): each window row the other
+conditions keep, with a named holder, looks up its `rec_lines` row by the
+primary key (`rec_lines.k` is the row's `rec_expiring.k`) and keeps it when
+the record is of the form the site reads and `LINE_BAND_SQL` (the label as
+`lineLabel` reads it, as a number) is the band's. The end dates are held to
+the days the reader's plan labels as well as to the window's. The form's
+other statements are unchanged, and the band's choices are not counted. For
+a reader not signed in the address's `line=` is not read.
+
 `/expiring/<window>/rows.csv` with the same query sends the matches (at most
 10,000, in the order shown) as CSV: Pro's (`export_filtered`, and
 `radar_depth` for a deep window) once the accounts switch is on, the site's
@@ -581,9 +593,11 @@ file's page as before and says so.
 `rec_lines` is written beside them from the lines stage's `expiring_lines`
 (`records_db.lines_rows`), one row per window row whose holder the stage
 counted, keyed as the row is in `rec_expiring` and found by
-`rec_lines_sk (sk)`. The window pages and the record pages read it for a
-signed-in reader only (`readLines`, `readLine`); a database without it shows
-the pages as they were. Like `rec_expiring_prov`, it is a table of its own
+`rec_lines_sk (sk)`. The window pages, the overview, a profile's and a buyer
+page's contracts ending and the record pages read it for a signed-in reader
+only (`readLines`, `readLine`), and a window's holder's record filter joins
+it by `k`; a database without it shows the pages as they were (the filter
+set aside, and said so). Like `rec_expiring_prov`, it is a table of its own
 that the nightly schema creates, so it needs no full reload, and `LAYOUT`
 stays 2.
 
@@ -596,7 +610,10 @@ reads it (`FOLLOWS_SQL`, three rows at most, with the holder's and the
 buyer's names joined) only for a signed-in reader while the Worker's
 `FOLLOWS_PANEL` is "on", in the earlier awards' batch, or in a batch of its
 own for a notice with no class; a database without it shows the page as it
-was. The nightly schema creates it, no full reload, `LAYOUT` stays 2.
+was. `/account/matches` reads rank 1 of the notices it lists, under the same
+switch (`FIRST_FOLLOWS_SQL`, the page's references bound as one JSON list, 50
+rows at most, through `rec_follows_tref`). The nightly schema creates it, no
+full reload, `LAYOUT` stays 2.
 
 ## Earlier awards, incumbents and organization feeds
 

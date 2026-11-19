@@ -6,9 +6,14 @@
 // The page reads the claim (one accounts row), the profile entry, stats.json
 // and, once the block allows a ranking, tenders/open.json and
 // tenders/open-levels.json, both kept parsed while their ETags hold. It never
-// reads the records database and never writes. Free lists the first
-// RULES.free.matches notices; Pro up to RULES.pro.matches, MATCH_PAGE a page;
-// Ultra up to RULES.ultra.matches (matchCap reads the reader's own plan).
+// writes. Free lists the first RULES.free.matches notices; Pro up to
+// RULES.pro.matches, MATCH_PAGE a page; Ultra up to RULES.ultra.matches
+// (matchCap reads the reader's own plan). While FOLLOWS_PANEL is "on", each
+// notice the page lists carries one line more, the earlier contract it may
+// follow most closely (src/pages/follows.tsx FollowLine), read in one records
+// statement for the page's notices (FIRST_FOLLOWS_SQL), with the may-follow
+// disclaimer beside the matches'; any other value reads nothing more and
+// leaves the page as it was.
 //
 // The states, each with the disclaimer: no claim (the page's one filled
 // button leads to the claim), the profile gone from the data, a profile
@@ -26,13 +31,17 @@ import { Table } from "../columns";
 import { type Profile, type TenderRow, loadBuyers, loadOpenLevels, loadOpenList, loadStats, publishedReference } from "../data";
 import type { AppEnv } from "../env";
 import {
-  FitDisclaimer, MatchBand, MatchReasons, type MatchBlock, type ReasonContext, countsText, levelText, matchingWindow, profileMatching,
+  AdvisoryDisclaimer, FitDisclaimer, MatchBand, MatchReasons, type MatchBlock, type ReasonContext, countsText, levelText, matchingWindow,
+  profileMatching,
 } from "../fit";
 import { fmtInt, pick, provinceName, t, tj, tn, type Lang } from "../i18n";
 import { PageHead, Panel } from "../layout";
+import { followsPanelOn, parseFollow } from "../lines";
+import { FollowLine, type FollowRow } from "../pages/follows";
 import { typeLabel } from "../pages/instruments";
 import { TYPE_CODES, type TypeCode } from "../instruments";
 import { fiscalLabel } from "../records_db";
+import { readFirstFollows } from "../records_tables";
 import { MATCH_PAGE, type Plan, RULES, matchCap } from "./entitlements";
 import { checkOrganization, readClaim } from "./org_claim";
 import { ORG_PATH } from "./org_pages";
@@ -45,6 +54,18 @@ export const MATCH_PATH = "/account/matches";
 export const BASIS_SHOWN = 5;
 
 type Ranked = { row: TenderRow; score: Score };
+
+// The earlier contract each notice of the page may follow most closely (rank
+// 1, src/pages/follows.tsx), by the notice's URL reference in lower case.
+// none: nothing shown (the switch off, no notice listed, or no rec_follows
+// yet); unavailable: the records database could not answer; ready: the
+// lines, and today, the records' data date, which sets "ended" or "ends".
+export type MatchFollows =
+  | { state: "none" }
+  | { state: "unavailable" }
+  | { state: "ready"; rows: ReadonlyMap<string, FollowRow>; today: string };
+
+const NO_FOLLOWS: MatchFollows = { state: "none" };
 
 // What the page shows, once read.
 export type MatchesState =
@@ -59,7 +80,21 @@ export type MatchesState =
     // null when the open notices cannot be read.
     list: { matches: Ranked[]; uncoded: number } | null;
     page: number; levels: Parameters<typeof levelText>[2]; buyerNames: Map<string, string>; typeNames: Map<string, string>;
+    follows: MatchFollows;
   };
+
+// The page of the ranking a request lists: the plan's cap (matchCap), a paid
+// plan MATCH_PAGE a page, Free its cap on one page; the page asked for kept
+// within the pages there are.
+function listedPage(matches: readonly Ranked[], plan: Plan, pro: boolean, asked: number) {
+  const total = matches.length;
+  const cap = matchCap(plan);
+  const listed = Math.min(total, cap);
+  const size = pro ? MATCH_PAGE : cap;
+  const pages = Math.max(1, Math.ceil(listed / size));
+  const page = Math.min(Math.max(1, asked), pages);
+  return { total, cap, pages, page, rows: matches.slice((page - 1) * size, Math.min(page * size, listed)) };
+}
 
 const fy = (lang: Lang, block: { fy: [number, number] } | [number, number]) => {
   const [first, last] = Array.isArray(block) ? block : block.fy;
@@ -104,13 +139,8 @@ const BasisPanel: FC<{ lang: Lang; s: Extract<MatchesState, { kind: "ready" }> }
 const ListPanel: FC<{ lang: Lang; s: Extract<MatchesState, { kind: "ready" }> }> = ({ lang, s }) => {
   const n = (v: number) => fmtInt(v, lang);
   if (!s.list) return <Panel title={t(lang, "fit.panel_list")}><p>{t(lang, "fit.unavailable")}</p></Panel>;
-  const total = s.list.matches.length;
-  const cap = matchCap(s.plan);
-  const listed = Math.min(total, cap);
-  const size = s.pro ? MATCH_PAGE : cap;
-  const pages = Math.max(1, Math.ceil(listed / size));
-  const page = Math.min(Math.max(1, s.page), pages);
-  const rows = s.list.matches.slice((page - 1) * size, Math.min(page * size, listed));
+  const { total, cap, pages, page, rows } = listedPage(s.list.matches, s.plan, s.pro, s.page);
+  const follows = s.follows;
   const href = (p: number) => `${MATCH_PATH}?page=${p}${lang === "fr" ? "&lang=fr" : ""}`;
   const pager = pages > 1 ? (
     <nav aria-label={t(lang, "common.pagination")} class="pagination">
@@ -140,6 +170,8 @@ const ListPanel: FC<{ lang: Lang; s: Extract<MatchesState, { kind: "ready" }> }>
                 const ctx: ReasonContext = { name: s.name, notice: row, levels: s.levels };
                 const type = pick(lang, row.notice_type_en, row.notice_type_fr);
                 const buyer = pick(lang, row.buyer_en, row.buyer_fr);
+                const tref = row.reference.toLowerCase();
+                const follow = follows.state === "ready" ? follows.rows.get(tref) : undefined;
                 return (
                   <tr>
                     <td data-label={t(lang, "fit.col_match")}><MatchBand lang={lang} score={score} /></td>
@@ -148,6 +180,7 @@ const ListPanel: FC<{ lang: Lang; s: Extract<MatchesState, { kind: "ready" }> }>
                       {row.closing ? <><br /><span class="small">{t(lang, "tender.lead_closes", { date: closingText(row.closing, lang) })}</span></> : null}
                       <br /><span class="mono id muted">{publishedReference(row)}</span>
                       {buyer || type ? <><br /><span class="muted small">{[buyer, type].filter(Boolean).join(" · ")}</span></> : null}
+                      {follow && follows.state === "ready" ? <FollowLine lang={lang} row={follow} tref={tref} today={follows.today} /> : null}
                     </td>
                     <td data-label={t(lang, "fit.col_common")}><MatchReasons lang={lang} score={score} ctx={ctx} /></td>
                   </tr>
@@ -169,6 +202,7 @@ const ListPanel: FC<{ lang: Lang; s: Extract<MatchesState, { kind: "ready" }> }>
       {s.list.uncoded ? (
         <p class="muted small">{tn(lang, "fit.uncoded_count_one", "fit.uncoded_count_many", s.list.uncoded, { n: n(s.list.uncoded) })}</p>
       ) : null}
+      {follows.state === "unavailable" ? <p class="muted small">{t(lang, "follow.unavailable")}</p> : null}
     </Panel>
   );
 };
@@ -222,8 +256,10 @@ export function matchesView(lang: Lang, s: MatchesState) {
   return (
     <>
       <PageHead lang={lang} title={t(lang, "fit.title")} lead={lead} actions={back} />
-      {/* The disclaimer stands above the matches, where a reader meets it before the first one. */}
+      {/* The disclaimer stands above the matches, where a reader meets it before the first one; the may-follow
+          disclaimer beside it once a listed notice carries its earlier contract. */}
       <FitDisclaimer lang={lang} />
+      {s.kind === "ready" && s.follows.state === "ready" && s.follows.rows.size ? <AdvisoryDisclaimer lang={lang} kind="follow" /> : null}
       {body as any}
       {s.kind === "ready" ? (
         <>
@@ -307,10 +343,34 @@ export async function readMatches(c: Context<AppEnv>, who: Account): Promise<Mat
   const clock = clockOf(c.env);
   const list = open ? rankNotices(block, open.filter((r) => !closingPassed(r.closing, clock)), profile.organization.province) : null;
   const raw = c.req.query("page") ?? "";
+  const page = PAGE_RE.test(raw) ? Number(raw) : 1;
+  const pro = who.plan !== "free";
+  const follows = list ? await matchFollows(c, listedPage(list.matches, who.plan, pro, page).rows) : NO_FOLLOWS;
   return {
-    kind: "ready", id, name, block, profile, plan: who.plan, pro: who.plan !== "free", list, page: PAGE_RE.test(raw) ? Number(raw) : 1, levels,
+    kind: "ready", id, name, block, profile, plan: who.plan, pro, list, page, levels, follows,
     ...(await namesFor(c, lang, block, profile, open)),
   };
+}
+
+const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v : null);
+
+// The closest earlier contract of each notice the page lists, while
+// FOLLOWS_PANEL is "on": one records statement for the page's notices
+// (FIRST_FOLLOWS_SQL), none while it is off or the page lists none. A
+// records database without rec_follows yet leaves the page as it was; one
+// that cannot answer leaves a line saying so. A row that does not read in
+// full is left out, never shown in part.
+async function matchFollows(c: Context<AppEnv>, rows: readonly Ranked[]): Promise<MatchFollows> {
+  if (!followsPanelOn(c.env) || !rows.length) return NO_FOLLOWS;
+  const read = await readFirstFollows(c.env, rows.map((r) => r.row.reference.toLowerCase()));
+  if (read.state === "failed" && read.noTable) return NO_FOLLOWS;
+  if (read.state !== "ready") return { state: "unavailable" };
+  const found = new Map<string, FollowRow>();
+  for (const r of read.rows[0] ?? []) {
+    const j = parseFollow(r.j);
+    if (j && typeof r.tref === "string") found.set(r.tref, { j, holder: str(r.holder), buyer: null });
+  }
+  return { state: "ready", rows: found, today: read.asOf ?? clockOf(c.env).today };
 }
 
 export async function matchesPage(c: Context<AppEnv>, who: Account): Promise<Response> {
