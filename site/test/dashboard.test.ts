@@ -24,7 +24,8 @@ import {
   ADD_PANEL_SQL, ADD_TEXT_SQL, ADD_TILE_SQL, BRIEFING_PANELS_MAX, MOVE_TO_SQL, NEW_BOARD_SQL, NOTE_MAX, PANEL_KINDS, RADAR_TOP_SQL, TEASE_KINDS, analyticAddress,
   analyticRef, isHeading, noteOf, noteText, specOf, startingLayout, viewAddress, viewRef, viewSpan,
 } from "../src/account/dashboard";
-import { analyticFit, analyticPlot, tileFit } from "../src/account/dashboard_fit";
+import { analyticFit, analyticPlot, tileFit, tileWidthPx } from "../src/account/dashboard_fit";
+import { TILE_TIERS } from "../src/chart";
 import { VIEW_TABLES } from "../src/pages/analytics";
 import { DASHBOARDS_MAX, TILES_MAX, boardCap, tileCap } from "../src/account/dashboard_rule";
 import { DASHBOARD_STRINGS } from "../src/account/dashboard_strings";
@@ -852,7 +853,11 @@ describe("a tile's size", () => {
     await send(r, "/account/dashboard/panels", { kind: "view", ref: view });
     const id = (await tileRows(r.id)).find((x) => x.kind === "view")!.id;
     const plot = (html: string) => Number(/<div class="chart-plot" style="height:(\d+)px">/.exec(html)?.[1]);
-    const labels = (html: string) => (html.match(/<div class="chart-x">([\s\S]*?)<\/div>/)?.[1].match(/<span /g) ?? []).length;
+    // The labels a tile of w columns shows at the reference window: those not resting in its width's tier (chart.tsx tileLabels).
+    const labels = (html: string, w: number) => {
+      const tier = TILE_TIERS.reduce((k, at, i) => (tileWidthPx(w) - 2 >= at ? i : k), 0);
+      return (html.match(/<div class="chart-x">([\s\S]*?)<\/div>/)?.[1].match(/<span[^>]*>/g) ?? []).filter((s) => !new RegExp(`\\bx-c${tier}\\b`).test(s)).length;
+    };
     const least = LEAST["analytic:chart"];
     const small = norm(decode(await (await readTile(r, id, `?w=${least.w}&h=${least.hn}`)).text()));
     const big = norm(decode(await (await readTile(r, id, "?w=12&h=16")).text()));
@@ -861,7 +866,7 @@ describe("a tile's size", () => {
     expect(plot(big)).toBe(fit(12, 16).plot);
     expect(plot(big)).toBeGreaterThan(plot(small));
     // A narrow chart's axis keeps fewer of its years' labels; its table lists as many years as its height holds.
-    expect(labels(big)).toBeGreaterThan(labels(small));
+    expect(labels(big, 12)).toBeGreaterThan(labels(small, least.w));
     expect(rowsIn(small)).toBe(fit(least.w, least.hn).rows);
     expect(rowsIn(big)).toBe(fit(12, 16).rows);
     expect(small).toContain(`<span class="dash-count">${fit(least.w, least.hn).rows} of 20</span>`);

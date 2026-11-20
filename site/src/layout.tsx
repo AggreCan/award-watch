@@ -503,7 +503,7 @@ export const ICONS_VERSION = 2;
 
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 75;
+export const STYLES_VERSION = 76;
 
 // The subscript after the wordmark for a signed-in reader, by plan: Ultra's
 // in its sapphire (public/styles.css .brand-plan-ultra), Pro's in the accent.

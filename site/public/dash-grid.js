@@ -57,6 +57,15 @@ export const LEAST = {
   "analytic:two": { w: 7, h: 12, hn: 12, nb: 7 },
   "analytic:share": { w: 4, h: 14, hn: 16, nb: 7 },
   "analytic:table": { w: 4, h: 12, hn: 13, nb: 7 },
+  // A view of the analytics builder (src/account/build_views.tsx): a chart of one, two, or three to five panels over
+  // its table, sorted bars, figures over the table, the table alone; and one figure (kind "number"), which lists no row.
+  "build:chart": { w: 4, h: 10, hn: 13, nb: 7 },
+  "build:two": { w: 4, h: 12, hn: 15, nb: 7 },
+  "build:panels": { w: 8, h: 16, hn: 16, nb: 8 },
+  "build:ranked": { w: 4, h: 8, hn: 13, nb: 7 },
+  "build:number": { w: 4, h: 9, hn: 12, nb: 7 },
+  "build:table": { w: 4, h: 6, hn: 10, nb: 7 },
+  number: { w: 3, h: 5, hn: 5 },
   briefing: { w: 3, h: 4, hn: 4 },
   org: { w: 4, h: 6, hn: 9 },
   "org:share": { w: 4, h: 7, hn: 9 },
@@ -76,7 +85,8 @@ export const LEAST = {
  * @type {Readonly<Record<string, number>>}
  */
 export const START_H = {
-  tenders: 10, radar: 11, records: 9, watches: 11, "analytic:chart": 14, "analytic:two": 12, "analytic:share": 16, "analytic:table": 13, briefing: 6,
+  tenders: 10, radar: 11, records: 9, watches: 11, "analytic:chart": 14, "analytic:two": 12, "analytic:share": 16, "analytic:table": 13,
+  "build:chart": 13, "build:two": 15, "build:panels": 16, "build:ranked": 13, "build:number": 12, "build:table": 10, number: 5, briefing: 6,
   org: 9, "org:share": 8, "org:ending": 11, "org:instruments": 10, matches: 10, api: 9, text: 2, "text:note": 4,
 };
 

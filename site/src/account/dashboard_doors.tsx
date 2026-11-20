@@ -18,7 +18,11 @@
 // runSearch: the hosted search database's one batch of /search's first page),
 // so it names no one /search does not name, a supplier withheld as a person
 // among them; the segments are the site's list of 57, matched here by the
-// search's own rule (lineMatches), no database read. The checklist reads one
+// search's own rule (lineMatches), no database read. While the analytics
+// builder is the reader's (build_views.tsx buildsOn), each match also opens in
+// the builder ("Open in the builder", builder.ts buildLink), so the builder's
+// own fields never need an organization's id typed: its organization field
+// links here. The checklist reads one
 // records batch: the buyer's or the organization's name by its key, and for an
 // organization at a source with segments its largest ones (the share table's
 // choice); each statement is one the dashboard or the analytics view already
@@ -56,6 +60,8 @@ import {
   analyticAddress, analyticRef, asTile, back, boardField, dashPage, hereOf, listPanels, readBoard, readHoldings, shownTiles, sizeKey, starterSpecs,
   startingLayout, writeFirst, writeStarter,
 } from "./dashboard";
+import { buildLink } from "../builder";
+import { buildsOn } from "./build_views";
 import { analyticPanelRef, boardLabels } from "./dashboard_add";
 import { DASHBOARD_PATH, FIND_PATH, TABLES_PATH, boardPath, holdsDashboard, tileCap } from "./dashboard_rule";
 import { BUYER_NAME_SQL, ORG_NAME_SQL } from "./records_deliveries";
@@ -140,10 +146,17 @@ function placeOf(lang: Lang, o: OrgHit): string {
   return [o.city, where].filter(Boolean).join(", ");
 }
 
-type Match = { href: string; name: string; note?: string };
-const MatchList: FC<{ list: readonly Match[] }> = ({ list }) => (
+// A match: its checklist (href), its name and its place or acronym, and, while the analytics builder is the reader's,
+// the same subject's value by fiscal year in the builder (build), its other choice.
+type Match = { href: string; name: string; note?: string; build?: string };
+const MatchList: FC<{ lang: Lang; list: readonly Match[] }> = ({ lang, list }) => (
   <ul class="plain dash-matches">
-    {list.map((m) => <li><a href={m.href}>{m.name}</a>{m.note ? <span class="muted small">{m.note}</span> : null}</li>)}
+    {list.map((m) => (
+      <li>
+        <a href={m.href}>{m.name}</a>{m.note ? <span class="muted small">{m.note}</span> : null}
+        {m.build ? <a href={m.build} class="dash-pick">{t(lang, "build.open")}</a> : null}
+      </li>
+    ))}
   </ul>
 );
 
@@ -165,6 +178,11 @@ export async function findPage(c: Context<AppEnv>, who: Account): Promise<Respon
   const board = boardFor(lang, h, want);
   if (!board.found) return toFirst(c);
   const extra = { board: board.id, all: all ? "1" : null };
+  // Each match's own view in the analytics builder (builder.ts buildLink): its value by fiscal year over the latest
+  // DEFAULT_YEARS, at the source its checklist opens on; only while the builder is the reader's.
+  const current = buildsOn(c.env, who.plan) ? await loadStats(c.env).then((s) => (s?.data_as_of ? fiscalYearOf(todayOf(s.data_as_of)) : null)).catch(() => null) : null;
+  const build = (subject: Parameters<typeof buildLink>[0], source: MoneySource): { build?: string } =>
+    current === null ? {} : { build: buildLink(subject, source, Math.max(EARLIEST_FY, current - DEFAULT_YEARS + 1), current) };
   const searched = terms.terms.length > 0 && kind !== "segment";
   const buyers = kind === "" || kind === "buyer" ? found?.buyers ?? [] : [];
   const orgs = kind === "" || kind === "organization" ? found?.orgs ?? [] : [];
@@ -179,6 +197,7 @@ export async function findPage(c: Context<AppEnv>, who: Account): Promise<Respon
       list: buyers.slice(0, rows).map((b) => ({
         href: tablesHref("buyers", b.id, { source: largestSource(b), years: String(DEFAULT_YEARS), ...extra }),
         name: pick(lang, b.name, b.name_fr) ?? b.name, note: pick(lang, b.acronym_en, b.acronym_fr) ?? undefined,
+        ...build({ buyer: b.id }, largestSource(b)),
       })),
     });
   }
@@ -187,6 +206,7 @@ export async function findPage(c: Context<AppEnv>, who: Account): Promise<Respon
       title: t(lang, "nav.organizations"), total: total(found, "orgTotal"), more: searchPath(q),
       list: orgs.slice(0, rows).map((o) => ({
         href: tablesHref("organizations", o.id, { source: largestSource(o), years: String(DEFAULT_YEARS), ...extra }), name: o.name, note: placeOf(lang, o),
+        ...build({ org: o.id }, largestSource(o)),
       })),
     });
   }
@@ -195,7 +215,10 @@ export async function findPage(c: Context<AppEnv>, who: Account): Promise<Respon
     groups.push({
       title: t(lang, "nav.segments"), total: segments.length,
       more: `${FIND_PATH}?${new URLSearchParams({ q, kind: "segment", ...(board.id ? { board: board.id } : {}), ...(all ? { all: "1" } : {}) }).toString()}`,
-      list: shown.map((code) => ({ href: tablesHref("segments", code, { source: "awards", years: String(DEFAULT_YEARS), ...extra }), name: `${code} ${segmentLabel(lang, code)}` })),
+      list: shown.map((code) => ({
+        href: tablesHref("segments", code, { source: "awards", years: String(DEFAULT_YEARS), ...extra }), name: `${code} ${segmentLabel(lang, code)}`,
+        ...build({ segment: code }, "awards"),
+      })),
     });
   }
   const line = !terms.terms.length && kind !== "segment" ? t(lang, "dash.find_empty")
@@ -225,7 +248,7 @@ export async function findPage(c: Context<AppEnv>, who: Account): Promise<Respon
       {groups.map((g) => (
         <Panel title={g.title} count={g.list.length < g.total ? t(lang, "dash.shown", { n: fmtInt(g.list.length, lang), total: fmtInt(g.total, lang) }) : fmtInt(g.total, lang)}
           foot={g.list.length < g.total ? <a href={g.more}>{t(lang, "dash.find_all_kind")}</a> : undefined}>
-          <MatchList list={g.list} />
+          <MatchList lang={lang} list={g.list} />
         </Panel>
       ))}
     </>

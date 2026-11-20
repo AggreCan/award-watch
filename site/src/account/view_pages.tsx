@@ -28,7 +28,7 @@ import { holdsDashboard } from "./dashboard_rule";
 import { RULES, allowed, savedViewCap } from "./entitlements";
 import type { PoolLine } from "./pool";
 import { PoolLines, PoolMark, poolCount } from "./pool_lines";
-import { VIEW_DELIVERY, type SavedView, type ViewDelivery, type ViewRun, NAME_MAX, viewState } from "./saved_views";
+import { VIEW_DELIVERY, type SavedKind, type SavedView, type ViewDelivery, type ViewRun, NAME_MAX, viewState } from "./saved_views";
 import { type Account, readSession } from "./session";
 import { accountsEnabled } from "./switch";
 
@@ -121,7 +121,7 @@ const ChooseTables: FC<{ lang: Lang; address: string }> = ({ lang, address }) =>
 const DELIVER_KEY: Readonly<Record<ViewDelivery, Key>> = {
   weekly: "views.deliver_weekly", monthly: "views.deliver_monthly", off: "views.deliver_off",
 };
-const KIND_KEY: Readonly<Record<View, Key>> = { buyer: "col.buyer", organization: "col.organization", segment: "col.segment" };
+const KIND_KEY: Readonly<Record<SavedKind, Key>> = { buyer: "col.buyer", organization: "col.organization", segment: "col.segment", build: "rail.builder" };
 
 // "2026-11-03 15:02 UTC", the time of a run.
 const stamp = (iso: string) => `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
@@ -146,6 +146,9 @@ export type ViewsPageState = {
   boards?: readonly BoardChoice[];
   // In a group (pool.ts): the subscription's views, and the account's own past its allowance.
   pool?: { line: PoolLine; past: ReadonlySet<string> };
+  // The analytics builder is the reader's (build_views.tsx buildsOn): a view of it opens in the builder and goes on a
+  // dashboard as a tile of its own. Otherwise its row names it and offers its removal alone.
+  builder?: boolean;
 };
 
 export function viewsView(lang: Lang, account: Account, s: ViewsPageState) {
@@ -176,20 +179,25 @@ export function viewsView(lang: Lang, account: Account, s: ViewsPageState) {
                 { kind: "label", label: t(lang, "views.col_remove") },
               ]}>
                 <tbody>
-                  {s.views.map((v, i) => (
+                  {s.views.map((v, i) => {
+                    // A view of the analytics builder: it opens there and goes on a dashboard as its address, while the
+                    // builder is the reader's; its email is not offered.
+                    const build = v.kind === "build";
+                    const open = !build || !!s.builder;
+                    return (
                     <tr>
                       <td data-label={t(lang, "views.col_view")}>
-                        <a href={v.address}>{v.name}</a>
+                        {open ? <a href={v.address}>{v.name}</a> : v.name}
                         <br /><span class="muted small">{t(lang, KIND_KEY[v.kind])}</span>
                         {pool ? (pool.past.has(v.id) ? <PoolMark lang={lang} /> : null)
                           : i >= cap ? <><br /><span class="muted small">{t(lang, "views.past")}</span></> : null}
-                        {dash ? <AddToDashboard lang={lang} account={account} kind="view" panelRef={v.id} boards={s.boards} /> : null}
-                        {dash ? <ChooseTables lang={lang} address={v.address} /> : null}
+                        {dash && open ? <AddToDashboard lang={lang} account={account} kind={build ? "build" : "view"} panelRef={build ? v.address : v.id} boards={s.boards} /> : null}
+                        {dash && !build ? <ChooseTables lang={lang} address={v.address} /> : null}
                       </td>
                       {s.ultra ? (
                         <td data-label={t(lang, "views.col_email")}>
                           {/* A view past the account's allowance in a group is not sent: no select for it. */}
-                          {pool?.past.has(v.id) ? null : mail ? (
+                          {build ? (open ? <p class="muted small">{t(lang, "build.view_no_mail")}</p> : null) : pool?.past.has(v.id) ? null : mail ? (
                             <>
                               <form method="post" action={`${VIEWS_PATH}/${v.id}`} class="watch-settings">
                                 <Csrf account={account} />
@@ -212,7 +220,8 @@ export function viewsView(lang: Lang, account: Account, s: ViewsPageState) {
                         </form>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </Table>
             </div>
@@ -228,13 +237,14 @@ export function viewsView(lang: Lang, account: Account, s: ViewsPageState) {
 
 // The account's saved views on /analytics, each opening as saved, and the
 // way to the page that manages them; one line on saving one while it holds
-// none. A plan that keeps none and holds none has no panel.
-export const SavedViewsPanel: FC<{ lang: Lang; views: readonly SavedView[]; cap: number }> = ({ lang, views, cap }) =>
+// none. A plan that keeps none and holds none has no panel. A view of the
+// analytics builder opens there only while the builder is the reader's (builder).
+export const SavedViewsPanel: FC<{ lang: Lang; views: readonly SavedView[]; cap: number; builder?: boolean }> = ({ lang, views, cap, builder }) =>
   cap || views.length ? (
     <Panel title={t(lang, "views.title")} count={cap ? t(lang, "views.count", { n: fmtInt(views.length, lang), cap: fmtInt(cap, lang) }) : fmtInt(views.length, lang)}
       tools={<a href={VIEWS_PATH}>{t(lang, "views.manage")}</a>}>
       {views.length ? (
-        <ul class="view-list">{views.map((v) => <li><a href={v.address} rel="nofollow">{v.name}</a></li>)}</ul>
+        <ul class="view-list">{views.map((v) => <li>{v.kind !== "build" || builder ? <a href={v.address} rel="nofollow">{v.name}</a> : v.name}</li>)}</ul>
       ) : <p class="muted">{t(lang, "views.index_none")}</p>}
     </Panel>
   ) : null;

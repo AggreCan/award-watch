@@ -28,9 +28,12 @@ import { accountsEnabled } from "./switch";
 // A dashboard as a choice: its id and the name it goes by.
 export type BoardChoice = { id: string; label: string };
 
+// label: the control's words where one thing offers two tiles (a view of the analytics builder and its latest
+// figure, pages/builder.tsx); "Add to dashboard" otherwise.
 export const AddToDashboard: FC<{
-  lang: Lang; account: Pick<Account, "csrf">; kind: string; panelRef: string; button?: boolean; boards?: readonly BoardChoice[];
-}> = ({ lang, account, kind, panelRef, button, boards }) => {
+  lang: Lang; account: Pick<Account, "csrf">; kind: string; panelRef: string; button?: boolean; boards?: readonly BoardChoice[]; label?: string;
+}> = ({ lang, account, kind, panelRef, button, boards, label }) => {
+  const words = label ?? t(lang, "dash.add_here");
   const fields = <>
     <input type="hidden" name="csrf" value={account.csrf} />
     <input type="hidden" name="kind" value={kind} />
@@ -39,7 +42,7 @@ export const AddToDashboard: FC<{
   if (boards && boards.length > 1) {
     return (
       <details class="dash-add dash-add-menu">
-        <summary class={button ? "btn" : "btn-link"}>{t(lang, "dash.add_here")}</summary>
+        <summary class={button ? "btn" : "btn-link"}>{words}</summary>
         <form method="post" action={`${DASHBOARD_PATH}/panels`} class="dash-add-list">
           {fields}
           {boards.map((b) => <button type="submit" name="board" value={b.id} class="dash-menu-item">{b.label}</button>)}
@@ -50,7 +53,7 @@ export const AddToDashboard: FC<{
   return (
     <form method="post" action={`${DASHBOARD_PATH}/panels`} class="account-inline dash-add">
       {fields}
-      <button type="submit" class={button ? "btn" : "btn-link"}>{t(lang, "dash.add_here")}</button>
+      <button type="submit" class={button ? "btn" : "btn-link"}>{words}</button>
     </form>
   );
 };

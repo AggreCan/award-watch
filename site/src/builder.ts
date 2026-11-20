@@ -122,14 +122,64 @@ export function buildQuery(c: BuildChoice): string {
   return p.toString();
 }
 
-// The builder's address for one buyer or one organization over a source and a period, its value by fiscal year:
-// the link a buyer's or an organization's analytics view gives an Ultra reader (pages/analytics.tsx).
-export function buildLink(subject: { buyer: string } | { org: string }, source: MoneySource, first: number, last: number): string {
-  const buyer = "buyer" in subject;
-  return `${BUILD_PATH}?${buildQuery({
-    subject: buyer ? "buyer" : "organization", buyers: buyer ? [subject.buyer] : [], segment: "", orgs: buyer ? [] : [subject.org], rows: "year",
-    measure: "value", source, first, last, capped: false, show: "bars", top: TOP_DEFAULT,
-  })}`;
+// The builder's address for one buyer, one organization or one segment over a source and a period, its value by
+// fiscal year: the link a buyer's or an organization's analytics view gives an Ultra reader (pages/analytics.tsx),
+// and each match of the dashboard's find page (account/dashboard_doors.tsx).
+export function buildLink(subject: { buyer: string } | { org: string } | { segment: string }, source: MoneySource, first: number, last: number): string {
+  const one: Pick<BuildChoice, "subject" | "buyers" | "segment" | "orgs"> = "buyer" in subject
+    ? { subject: "buyer", buyers: [subject.buyer], segment: "", orgs: [] }
+    : "org" in subject ? { subject: "organization", buyers: [], segment: "", orgs: [subject.org] }
+    : { subject: "segment", buyers: [], segment: subject.segment, orgs: [] };
+  return buildAddress({ ...one, rows: "year", measure: "value", source, first, last, capped: false, show: "bars", top: TOP_DEFAULT });
+}
+
+// A view's address in its one form: the builder's path and buildQuery. A tile of the dashboard keeps it as its ref
+// (kinds "build" and "number", account/build_views.tsx), and a saved view as its address (kind "build").
+export const buildAddress = (c: BuildChoice): string => `${BUILD_PATH}?${buildQuery(c)}`;
+
+// The view a kept address names, read as the page reads its own (readBuild) at the data date's fiscal year: the
+// builder's path and a query, no fragment, at most max characters; null for anything else. canonical: only an address
+// written in its one form (buildAddress of what it reads), as a post must give it; a tile's ref, read back, is read
+// as it stands, then checked (buildProblem), never trusted as stored.
+export function readBuildAddress(raw: unknown, current: number, o: { max: number; canonical?: boolean }): BuildChoice | null {
+  if (typeof raw !== "string" || raw.length > o.max || !raw.startsWith(`${BUILD_PATH}?`)) return null;
+  let url: URL;
+  try {
+    url = new URL(raw, "https://build.invalid");
+  } catch {
+    return null;
+  }
+  if (url.origin !== "https://build.invalid" || url.pathname !== BUILD_PATH || url.hash) return null;
+  const c = readBuild(url, current);
+  return !o.canonical || buildAddress(c) === raw ? c : null;
+}
+
+// A view's one figure a fiscal year: a view of one subject by fiscal year or for the period (rows "none"), but for
+// the contracts ending, which follow no fiscal year. The dashboard's "number" tile draws it.
+export const figureOffered = (c: BuildChoice): boolean =>
+  (c.rows === "year" || c.rows === "none") && c.measure !== "ending" && !isSet(c.subject);
+
+// The view a "number" tile reads: the same subject, figure and source by fiscal year, over the view's last fiscal
+// year and the one before (one when the view starts at the earliest). A view the menus offer gives one they offer:
+// the rows "none" offer every figure the fiscal years do, the contracts ending aside.
+export function figureChoice(c: BuildChoice): BuildChoice {
+  return { ...c, rows: "year", first: Math.max(EARLIEST_FY, c.last - 1), last: c.last, capped: false, show: "bars" };
+}
+
+// How a view is drawn on a tile, which sets its least size (public/dash-grid.js LEAST, account/dashboard_fit.ts
+// buildFit): a chart over its table, with its panels (one a subject of a comparison; or one a series of a figure that
+// has several: the two shares, the three largest shares, the first and newest values; the contracts ending's value
+// and count, each a chart of its own); sorted bars over their table; one number a subject or a series over the
+// table; the table alone. As pages/builder.tsx TimeChart draws them.
+export type BuildShape = "chart" | "ranked" | "number" | "table";
+export function buildShape(c: BuildChoice): { shape: BuildShape; panels: number } {
+  if (c.show === "table") return { shape: "table", panels: 0 };
+  if (c.show === "number") return { shape: "number", panels: 0 };
+  if (c.show === "ranked") return { shape: "ranked", panels: 0 };
+  const subjects = c.subject === "buyers" ? c.buyers.length : c.subject === "organizations" ? c.orgs.length : 1;
+  if (subjects > 1 || isSet(c.subject)) return { shape: "chart", panels: Math.max(1, subjects) };
+  const series = c.measure === "largest" ? 3 : c.measure === "noncompetitive" || c.measure === "amendments" || c.measure === "ending" ? 2 : 1;
+  return { shape: "chart", panels: series };
 }
 
 // Why a view cannot be drawn: a combination the menus do not offer (its rule,

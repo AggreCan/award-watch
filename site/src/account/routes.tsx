@@ -95,7 +95,9 @@
 //   GET  /account/views                saved analytics views, each with its email      (session; the site's 404 until
 //                                      the schema holds saved_views)
 //   POST /account/views                save a view's own address, with a name          (session, CSRF, plan's figure)
-//   POST /account/views/:id            a view's email: weekly, monthly or off          (session, CSRF, Ultra on sale to turn on)
+//                                      (a builder's view: build_views.tsx, Ultra's while BUILDER is on)
+//   POST /account/views/:id            a view's email: weekly, monthly or off          (session, CSRF, Ultra on sale to turn on;
+//                                                                                       a builder's view stays off)
 //   POST /account/views/:id/delete     remove a view                                   (session, CSRF)
 //   GET  /account/stop?v=&t=           a saved view's stop page, from its message      (the link's secret)
 //   POST /account/stop?v=&t=           turn that view's email off; one-click too       (the link's secret)
@@ -164,6 +166,7 @@ import {
 } from "./dashboard";
 import { STEPS, type Step } from "../../public/dash-grid.js";
 import { boardChoices } from "./dashboard_add";
+import { buildsOn, isBuildAddress, saveBuildView } from "./build_views";
 import { type ViewBase, findPage, starterPost, tablesPage, tablesPost } from "./dashboard_doors";
 import { DASHBOARD_PATH, holdsDashboard } from "./dashboard_rule";
 import { type PlanState, RULES, allowed, planFor, savedViewCap, watchCap } from "./entitlements";
@@ -1899,7 +1902,7 @@ async function viewsPage(c: Context<AppEnv>, who: Account): Promise<Response> {
   const m = c.req.query("m") ?? "";
   return accountPage(c, t(lang, "views.title"), viewsView(lang, who, {
     views: views.map((v) => ({ ...v, last: runs.get(v.id) ?? null })), notice: VIEW_NOTICE[m] ? t(lang, VIEW_NOTICE[m]) : null, ultra, cards, boards,
-    ...(line ? { pool: { line, past: pastAllowance(views, line.allowance) } } : {}),
+    ...(line ? { pool: { line, past: pastAllowance(views, line.allowance) } } : {}), builder: buildsOn(c.env, who.plan),
   }));
 }
 
@@ -1923,6 +1926,8 @@ account.post("/views", async (c) => {
   const { account: who, fields } = post;
   const lang = c.get("lang");
   return guarded(c, async () => {
+    // A view of the analytics builder (build_views.tsx), Ultra's while its switch is on.
+    if (isBuildAddress(fields.address)) return saveBuildView(c, who, fields, (address) => c.redirect(inLang(address, lang), 303));
     const stats = await loadStats(c.env).catch(() => null);
     if (!stats?.data_as_of) return unavailable(c);
     const read = readViewAddress(typeof fields.address === "string" ? fields.address : "", {

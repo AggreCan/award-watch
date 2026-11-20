@@ -18,6 +18,7 @@
 // list, never a row cut in half.
 
 import { COLS, GAP_PX, ROW_PX } from "../../public/dash-grid.js";
+import type { BuildShape } from "../builder";
 import type { ClaimBlock } from "./org_claim";
 
 export const ROWS_MIN = 3;
@@ -183,7 +184,10 @@ export const analyticKey = (name: string): string => `analytic:${analyticShape(n
 export type AnalyticFit = Fit & { plot: number; width: number; held: number; unit: number };
 
 export function analyticFit(name: string, w: number, h: number): AnalyticFit {
-  const b = ANALYTIC_BODIES[name] ?? ANALYTIC_BODIES["buyer/records"];
+  return fitOf(ANALYTIC_BODIES[name] ?? ANALYTIC_BODIES["buyer/records"], w, h);
+}
+
+function fitOf(b: AnalyticBody, w: number, h: number): AnalyticFit {
   const body = bodyPx(h, true);
   const inner = tileWidthPx(w) - 2;
   const stacked = inner < b.stack;
@@ -211,9 +215,54 @@ export function analyticFit(name: string, w: number, h: number): AnalyticFit {
 // Each plot's height once the read gives fewer rows than the tile holds: the rows' room left over shared by the
 // plots, up to PLOT_MAX.
 export function analyticPlot(name: string, fit: AnalyticFit, shown: number): number {
-  const plots = ANALYTIC_BODIES[name]?.plots ?? 0;
+  return grownPlot(ANALYTIC_BODIES[name]?.plots ?? 0, fit, shown);
+}
+
+function grownPlot(plots: number, fit: AnalyticFit, shown: number): number {
   if (!plots || shown >= fit.rows) return fit.plot;
   return Math.max(fit.plot, Math.min(PLOT_MAX, fit.plot + Math.floor(((fit.rows - shown) * fit.unit) / plots)));
+}
+
+// -- a view of the analytics builder on a tile (account/build_views.tsx kind "build", pages/builder.tsx buildTileBody) --
+
+// How a view of the builder is built on a tile, by the shape it is drawn in (builder.ts buildShape): a chart over its
+// table, its panels counted apart (one a subject compared, or one a series; the contracts ending's two charts each a
+// stack of its own); sorted bars over their table, a bar a row; the figures, a line each over two lines and the
+// value, over the table; the table alone. The table's row is a fiscal year's or a name's and at most five figures
+// (the page's six columns, src/pages/builder.tsx ResultTable), resting its secondary columns below REST_BELOW and
+// stacking below 540 px, as an analytics view's tables do.
+const BUILD_ROW: Body = { item: true, lead: 0, fixed: 368, chars: 30, under: 0, cells: 88, least: 37 };
+// A figure's three lines (its label, its value in the display face, its note) and their gaps, and the body's margins.
+export const FIGURE_PX = 16 + 4 + 40 + 4 + 2 * 16 + BLOCK_PX;
+export const BUILD_BODIES: Readonly<Record<BuildShape, AnalyticBody>> = {
+  chart: { shape: "chart", lead: NOW_PX, plots: 1, frame: frameOf(1, 1), per: NONE, row: BUILD_ROW, stack: 540 },
+  ranked: { shape: "chart", ...RANKED },
+  number: { shape: "table", lead: FIGURE_PX, plots: 0, frame: 0, per: NONE, row: BUILD_ROW, stack: 540 },
+  table: { shape: "table", lead: 0, plots: 0, frame: 0, per: NONE, row: BUILD_ROW, stack: 540 },
+};
+
+// A builder view's rows and plots on a tile of w by h, its chart of `panels` panels (a single stack, or the
+// contracts ending's stacks of one: stacks equal to panels).
+export function buildFit(shape: BuildShape, w: number, h: number, panels = 1, stacks = 1): AnalyticFit {
+  const b = BUILD_BODIES[shape];
+  const n = shape === "chart" ? Math.max(1, panels) : 0;
+  return fitOf(n ? { ...b, plots: n, frame: frameOf(Math.min(stacks, n), n) } : b, w, h);
+}
+
+// Its plots grown when the read lists fewer rows than the tile holds.
+export const buildPlot = (shape: BuildShape, panels: number, fit: AnalyticFit, shown: number): number =>
+  grownPlot(shape === "chart" ? Math.max(1, panels) : 0, fit, shown);
+
+// The size key of a builder view's tile (public/dash-grid.js LEAST): its shape, a chart by its panels, one ("chart"),
+// two ("two") or three to five ("panels"). A tile of one figure (kind "number") is "number".
+export const buildKey = (shape: BuildShape, panels: number): string =>
+  shape !== "chart" ? `build:${shape}` : panels > 2 ? "build:panels" : panels === 2 ? "build:two" : "build:chart";
+
+// A builder tile's shape, panels and stacks as rowsHeld reads them from a ref of their own ("chart:3", "chart:2:2" for
+// the contracts ending's two charts, "table:0").
+function buildRefOf(ref: string): { shape: BuildShape; panels: number; stacks: number } {
+  const [shape, n, s] = ref.split(":");
+  return { shape: (shape in BUILD_BODIES ? shape : "table") as BuildShape, panels: Number(n) || 0, stacks: Number(s) || 1 };
 }
 
 // The room a tile's list has and the height of one of its rows.
@@ -233,6 +282,10 @@ function measure(kind: string, ref: string, w: number, h: number): { room: numbe
 // its first table's (dashboard.tsx).
 export function tileFit(kind: string, ref: string, w: number, h: number): Fit {
   if (kind === "analytic") return analyticFit(ref, w, h);
+  if (kind === "build") {
+    const b = buildRefOf(ref);
+    return buildFit(b.shape, w, h, b.panels, b.stacks);
+  }
   const m = measure(kind, ref, w, h);
   return { rows: Math.min(ROWS_MAX, Math.max(ROWS_MIN, Math.floor(m.room / m.row))), stacked: m.stacked, body: m.body, chart: null };
 }
@@ -240,10 +293,23 @@ export function tileFit(kind: string, ref: string, w: number, h: number): Fit {
 // How many rows fit before the floor of ROWS_MIN is applied (an analytics
 // table: with its plots at their least height or more): what the least and
 // starting sizes in public/dash-grid.js are held to (test/dash-grid.test.ts).
-// A text tile lists no row, so any size holds it.
+// A text tile lists no row, so any size holds it. A builder view's tile
+// (kind "build") is read from its shape, its panels and its stacks ("chart:3",
+// "chart:2:2"), as buildFit reckons a chart of them. A tile of
+// one figure (kind "number") lists no row either: what it holds is its
+// figure, the whole body under its head and over its foot (figureHeld).
 export function rowsHeld(kind: string, ref: string, w: number, h: number): number {
   if (kind === "text") return ROWS_MAX;
+  if (kind === "number") return figureHeld(h) ? ROWS_MAX : 0;
   if (kind === "analytic") return analyticFit(ref, w, h).held;
+  if (kind === "build") {
+    const b = buildRefOf(ref);
+    return buildFit(b.shape, w, h, b.panels, b.stacks).held;
+  }
   const m = measure(kind, ref, w, h);
   return Math.floor(m.room / m.row);
 }
+
+// Whether a tile of one figure (kind "number") of h rows holds its figure: its label, its value and its note on two
+// lines, under the head with the item's line and over the foot.
+export const figureHeld = (h: number): boolean => bodyPx(h, true) >= FIGURE_PX;

@@ -33,10 +33,14 @@ import { type InGroup, groupIn, pooled } from "./pool";
 import { newId } from "./secrets";
 import { survivorOf } from "./watches";
 
-// The kinds the site saves today; 'build' (the analytics builder, slice 5)
-// is held by the table's CHECK and served by nothing yet.
+// The kinds the site saves: an analytics view's three, and 'build', a view of
+// the analytics builder (build_views.tsx), which the table's CHECK holds too.
+// A builder's view is kept, counted and listed as the others are; it is never
+// sent by email (setViewDelivery below keeps it off).
 export const VIEW_KINDS = ["buyer", "organization", "segment"] as const satisfies readonly View[];
 export const isViewKind = (v: unknown): v is View => typeof v === "string" && (VIEW_KINDS as readonly string[]).includes(v);
+export type SavedKind = View | "build";
+const isSavedKind = (v: unknown): v is SavedKind => v === "build" || isViewKind(v);
 
 export const VIEW_DELIVERY = ["weekly", "monthly", "off"] as const;
 export type ViewDelivery = (typeof VIEW_DELIVERY)[number];
@@ -59,13 +63,13 @@ export const VIEW_GROUP_STOP_SQL =
   "WHERE v.user_id = ? AND v.secret IS NOT NULL AND u.status = 'active' ORDER BY v.created_at, v.id LIMIT ?";
 
 export type SavedView = {
-  id: string; kind: View; address: string; name: string; lang: Lang; deliver: ViewDelivery; created_at: string; last_delivered_at: string | null;
+  id: string; kind: SavedKind; address: string; name: string; lang: Lang; deliver: ViewDelivery; created_at: string; last_delivered_at: string | null;
 };
 
 type ViewRow = Omit<SavedView, "kind" | "lang" | "deliver"> & { kind: string; lang: string; deliver: string };
 
 const toView = (r: ViewRow): SavedView | null =>
-  isViewKind(r.kind)
+  isSavedKind(r.kind)
     ? { ...r, kind: r.kind, lang: r.lang === "fr" ? "fr" : "en", deliver: isViewDelivery(r.deliver) ? r.deliver : "off" }
     : null;
 
@@ -173,7 +177,7 @@ export const ADD_VIEW_GROUP_SQL = addViewSql(`IN ${groupIn(9)}`);
 export type AddViewResult = "added" | "exists" | "full" | "missing";
 
 export async function addView(
-  env: Env, who: { userId: string; plan: Plan } & InGroup, v: { kind: View; address: string; name: string }, lang: Lang, now = new Date(),
+  env: Env, who: { userId: string; plan: Plan } & InGroup, v: { kind: SavedKind; address: string; name: string }, lang: Lang, now = new Date(),
 ): Promise<AddViewResult> {
   const db = env.ACCOUNTS!;
   try {
@@ -215,10 +219,13 @@ export async function viewState(
 }
 
 // Weekly, monthly or off; the caller holds turning it on to Ultra while it
-// is on sale. False when nothing changed, the table missing included.
+// is on sale. A builder's view stays off, held inside the statement: its
+// email is not offered. False when nothing changed, the table missing included.
+export const SET_DELIVERY_SQL = "UPDATE saved_views SET deliver = ?1 WHERE id = ?2 AND user_id = ?3 AND (?1 = 'off' OR kind <> 'build')";
+
 export async function setViewDelivery(env: Env, userId: string, id: string, deliver: ViewDelivery): Promise<boolean> {
   try {
-    const res = await env.ACCOUNTS!.prepare("UPDATE saved_views SET deliver = ? WHERE id = ? AND user_id = ?").bind(deliver, id, userId).run();
+    const res = await env.ACCOUNTS!.prepare(SET_DELIVERY_SQL).bind(deliver, id, userId).run();
     return (res.meta?.changes ?? 0) === 1;
   } catch (e) {
     if (missingViews(e)) return false;

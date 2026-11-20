@@ -654,6 +654,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ink); width: 1
 .dash-body > .table-wrap:not(:last-child) { border-bottom: 1px solid var(--border); }
 .dash-body .table-wrap { overflow: hidden; }
 .dash-counts li { margin: 0 0 4px; }
+/* A builder view's figures on a tile (src/pages/builder.tsx NumberTiles on a tile, figureBody): each figure's
+   label, value and note one under another, the figures side by side while the tile has room for them. */
+.dash-figures { display: flex; flex-wrap: wrap; gap: 12px 24px; }
+.dash-figure { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 /* The foot: the source and period at the left, cut to one line on the grid; the rows shown of all there are, and Open. */
 .dash-foot {
   display: flex; align-items: center; gap: 4px 12px; padding: 8px 16px; border-top: 1px solid var(--border);
@@ -821,6 +825,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ink); width: 1
 }
 /* A saved view's row: its checklist of tables under its Add to dashboard. */
 td > .dash-pick { display: inline-block; margin-top: 4px; font-size: 13px; color: var(--ink-2); }
+/* A find page's match: its view in the analytics builder after its name, as a saved view's checklist is. */
+.dash-matches .dash-pick { font-size: 13px; color: var(--ink-2); }
 /* Add to dashboard stands on its own line under a row's label. */
 td > .dash-add { margin-top: 4px; }
 /* With several dashboards it opens on their names, each a flat menu item: under a row's label in the row's
@@ -1439,6 +1445,16 @@ tr[data-phone-cut] { display: none !important; }
 @media (min-width: 700px) and (max-width: 1199px) { .chart-x .x-tablet-minor { display: none; } }
 /* A yearly chart on a phone labels its first and last years and every fifth. */
 @media (max-width: 699px) { .chart-x .x-phone-minor { display: none; } }
+/* A chart on a dashboard tile (src/chart.tsx tileLabels, TILE_TIERS): each label rests in the tiers of the tile's
+   inside width it was thinned out of, at any layout, so the labels never touch whatever width the tile is drawn at. */
+@container dash-tile (max-width: 299.98px) { .chart-x .x-c0 { display: none; } }
+@container dash-tile (min-width: 300px) and (max-width: 379.98px) { .chart-x .x-c1 { display: none; } }
+@container dash-tile (min-width: 380px) and (max-width: 459.98px) { .chart-x .x-c2 { display: none; } }
+@container dash-tile (min-width: 460px) and (max-width: 559.98px) { .chart-x .x-c3 { display: none; } }
+@container dash-tile (min-width: 560px) and (max-width: 699.98px) { .chart-x .x-c4 { display: none; } }
+@container dash-tile (min-width: 700px) and (max-width: 879.98px) { .chart-x .x-c5 { display: none; } }
+@container dash-tile (min-width: 880px) and (max-width: 1099.98px) { .chart-x .x-c6 { display: none; } }
+@container dash-tile (min-width: 1100px) { .chart-x .x-c7 { display: none; } }
 .chart-x .x-start, .chart-marks .x-start { transform: none; }
 .chart-x .x-end, .chart-marks .x-end { transform: translateX(-100%); }
 .chart-marks { position: relative; height: var(--hn); margin: 0 0 3px; font-size: 11px; }
@@ -1888,6 +1904,8 @@ a.refresh:hover .refresh-line { text-decoration: underline; text-underline-offse
    view's toolbar, ruled off from the period above it like the toolbar's
    other rows: the name and the button, then the hint; or one line. */
 .toolbar > .save-view { margin: 0; border-top: 1px solid var(--border); }
+/* On the analytics builder (src/pages/builder.tsx), the row stands alone under the view's result. */
+.build-save > .save-view:first-child { border-top: 0; }
 
 /* Weekly briefings (src/account/briefing_pages.tsx): the Subscribe control in
    its panel on a segment or buyer page. */

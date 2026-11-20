@@ -160,4 +160,27 @@ export const BUILDER_STRINGS = {
   "build.col_change": { en: "Change", fr: "Variation" },
   "build.col_period": { en: "Fiscal years {first} to {last}", fr: "Exercices {first} à {last}" },
   "build.chart_aria": { en: "Chart of the view", fr: "Graphique de la vue" },
+
+  // -- a view kept on the account (src/account/build_views.tsx), for an Ultra reader while the switch is on ------------
+  // The result's second Add to dashboard (account/dashboard_add.tsx), where the view gives one figure a fiscal year.
+  "build.add_figure": { en: "Add its latest figure to dashboard", fr: "Ajouter son dernier chiffre au tableau de bord" },
+  // Beside the organization's field: the dashboard's find page, whose matches open in the builder.
+  "build.find_org": { en: "Find an organization by name", fr: "Trouver une organisation par son nom" },
+  // A tile of one figure (kind "number", pages/builder.tsx figureBody) of a whole fiscal year: its change from the
+  // fiscal year before ({change} with its sign: "+12%", "-3", "+2 percentage points"; {fy} that year), in words that
+  // say how it moved.
+  "build.change": { en: "{change} from {fy}", fr: "{change} par rapport à {fy}" },
+  "build.change_same": { en: "No change from {fy}", fr: "Aucune variation par rapport à {fy}" },
+  "build.change_none": { en: "No figure for {fy} to compare with", fr: "Aucun chiffre de {fy} auquel comparer" },
+  "build.points_one": { en: "{n} percentage point", fr: "{n} point de pourcentage" },
+  "build.points": { en: "{n} percentage points", fr: "{n} points de pourcentage" },
+  // Under a figure of the year to date, which is never set against a whole year: the year before in full, its own
+  // figure ({figure} in its own form: "$53.5M", "11", "18%"), comparing nothing.
+  "build.full_year": { en: "{fy}, the full year: {figure}", fr: "{fy}, l'exercice complet : {figure}" },
+  "build.full_year_none": { en: "{fy}, the full year: no figure", fr: "{fy}, l'exercice complet : aucun chiffre" },
+  // The site's label of a saved view of the builder, before its source and period (pages/builder.tsx buildLabel):
+  // what it is about, then its title.
+  "build.label_name": { en: "{subject}: {title}", fr: "{subject} : {title}" },
+  // A saved view of the builder on /account/views (account/view_pages.tsx): its email, which is not offered.
+  "build.view_no_mail": { en: "Not sent by email.", fr: "Non envoyée par courriel." },
 } as const;

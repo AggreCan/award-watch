@@ -28,18 +28,32 @@
 // read for one fiscal year a row and never added (builder_sql.ts sumFigures);
 // provinces and segments are never totalled and say why; a supplier withheld
 // as a person counts in every total and is named by no row.
+//
+// An Ultra reader's view also carries Add to dashboard (account/dashboard_add.tsx,
+// the analytics panels' own control and post): the view as a tile of kind
+// "build", and, where it gives one figure a fiscal year (builder.ts
+// figureOffered), its latest figure as a tile of kind "number"; and Save this
+// view (account/view_pages.tsx, the analytics views' own control and post), a
+// saved view of kind "build". Both sit inside the result, so the preview
+// redraws them with the view. The dashboard draws both kinds of tile with the
+// code below (buildTileBody, figureBody, account/build_views.tsx).
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
 import { MEASURES, ROWS, SET_MAX, SOURCES, SUBJECTS, TOPS, topOffered } from "../../public/build-menu.js";
+import { AddToDashboard, type BoardChoice, boardChoices, dashboardAccount } from "../account/dashboard_add";
+import { FIND_PATH } from "../account/dashboard_rule";
+import { LABEL_MAX, cleanName, viewLabel } from "../account/saved_views";
+import type { Account } from "../account/session";
+import { SaveViewRow, type SaveViewState, saveViewControl } from "../account/view_pages";
 import {
   BUILD_CSV_PATH, BUILD_PATH, BUILD_YEARS, FRAGMENT_HEADER, type BuildChoice, type Measure, type Problem, type Rows, type Show, type Subject,
-  buildProblem, buildQuery, isSet, readBuild, usesBuyers, usesOrgs, usesSegment,
+  buildAddress, buildProblem, buildQuery, figureOffered, isSet, readBuild, usesBuyers, usesOrgs, usesSegment,
 } from "../builder";
 import { CUBE_META_SQL, type Figures, type Group, type Line, type LineKey, type Model, type SubjectRef, buildPlan } from "../builder_sql";
 import {
-  ChartStack, RankedBars, ShortMoney, barGap, fiscalAxis, partOf, recordsText, tipHead, tipText, useTips, type AxisLabel, type Panel as ChartPanel,
-  type RankedBar,
+  ChartStack, RankedBars, ShortMoney, barGap, fiscalAxis, partOf, recordsText, tileLabels, tipHead, tipText, useTips, type AxisLabel,
+  type Panel as ChartPanel, type RankedBar,
 } from "../chart";
 import { COLUMN_WIDTHS, MAIN_MIN, SortsHere, Table, type Column, type ColumnKind, type Rest } from "../columns";
 import { SEGMENT_CODES } from "../constants";
@@ -51,7 +65,7 @@ import {
 import { ClientData, Layout, PageHead, Panel, noDataPage, page, todayOf, varyOnCookie } from "../layout";
 import { allowsBuilder, builderOn, requestPlan } from "../plan";
 import { EARLIEST_FY, fiscalLabel, fiscalYearOf, orgIdOf, quarterEnd, readRecords, segmentCode } from "../records_db";
-import { FyCell, averageOf, csvCell } from "./analytics";
+import { FyCell, averageOf, csvCell, type TileFit } from "./analytics";
 import { buyerHasRecords } from "./analytics_index";
 import { growthPct } from "./expiring";
 import { money, shareText } from "./shared";
@@ -110,8 +124,8 @@ async function context(c: Context<AppEnv>): Promise<Ctx | Response> {
 
 const buyerName = (lang: Lang, b: BuyerSummary) => pick(lang, b.name_en, b.name_fr) ?? b.name_en;
 
-type Names = (id: string) => string;
-const namesOf = (lang: Lang, buyers: readonly BuyerSummary[]): Names => {
+export type Names = (id: string) => string;
+export const namesOf = (lang: Lang, buyers: readonly BuyerSummary[]): Names => {
   const byId = new Map(buyers.map((b) => [b.id, buyerName(lang, b)]));
   return (id) => byId.get(id) ?? id;
 };
@@ -133,6 +147,21 @@ async function readView(ctx: Ctx): Promise<Outcome> {
 }
 
 // -- the figures -------------------------------------------------------------------------------
+
+// What an Ultra reader's drawn view carries beside it: the account that adds it to a dashboard and its dashboards to
+// choose from, and the Save control's state (view_pages.tsx saveViewControl: one statement each on the accounts
+// database). Read only once the view is drawn.
+type Keep = { dash: Account | null; boards: BoardChoice[]; save: SaveViewState | null };
+async function keepOf(ctx: Ctx, outcome: Outcome): Promise<Keep | null> {
+  if (!ctx.ultra || !outcome.ok) return null;
+  const { c, lang, choice } = ctx;
+  const dash = await dashboardAccount(c).catch(() => null);
+  const [boards, save] = await Promise.all([
+    dash ? boardChoices(c.env, dash.userId, lang).catch(() => []) : Promise.resolve([]),
+    saveViewControl(c, buildAddress(choice), buildLabel(lang, choice, labelNames(lang, ctx.all, outcome.model))),
+  ]);
+  return { dash, boards, save };
+}
 
 const v = (f: Figures, k: keyof Figures): number | null => (typeof f[k] === "number" ? (f[k] as number) : null);
 const n0 = (f: Figures, k: keyof Figures): number => v(f, k) ?? 0;
@@ -345,16 +374,19 @@ function timePanels(lang: Lang, c: BuildChoice, lines: (g: Group) => Line[], gro
   });
 }
 
-const TimeChart: FC<{ lang: Lang; c: BuildChoice; model: Model; series: Series[]; names: Names; current: number; lines: (g: Group) => Line[] }> = ({
-  lang, c, model, series, names, current, lines,
+// fit: a dashboard tile's sizes (account/dashboard_fit.ts buildFit): each plot's height and its bars at its width,
+// the axis's labels resting by the tile's own width (chart.tsx tileLabels); none on the page.
+const TimeChart: FC<{ lang: Lang; c: BuildChoice; model: Model; series: Series[]; names: Names; current: number; lines: (g: Group) => Line[]; fit?: TileFit }> = ({
+  lang, c, model, series, names, current, lines, fit,
 }) => {
   const axis = timeAxis(lang, c, model);
   const panels = timePanels(lang, c, lines, model.groups, series, names, axis.slot, current);
   const several = model.groups.length > 1 || isSet(c.subject);
   const aria = t(lang, "build.chart_aria");
-  const gap = barGap(axis.slots, 24);
+  const gap = barGap(axis.slots, 24, fit?.width);
+  const labels = fit ? tileLabels(axis.labels) : axis.labels;
   const stack = (list: typeof panels, shared: boolean) => (
-    <ChartStack domain={axis.domain} panels={list.map((p) => p.panel)} height={list.length > 1 ? 110 : 140} xLabels={axis.labels} grid={axis.grid}
+    <ChartStack domain={axis.domain} panels={list.map((p) => p.panel)} height={fit ? fit.plot : list.length > 1 ? 110 : 140} xLabels={labels} grid={axis.grid}
       fmt={list[0].s.axis} aria={aria} shared={shared} gap={gap} />
   );
   // The contracts ending's value and count are two units: two stacks, each on its own scale, as the views draw them.
@@ -385,10 +417,11 @@ const RankedChart: FC<{ lang: Lang; c: BuildChoice; groups: Group[]; lines: (g: 
   );
 };
 
-// One figure: a tile a series for one subject, a tile a subject for a comparison.
-const NumberTiles: FC<{ lang: Lang; c: BuildChoice; groups: Group[]; series: Series[]; names: Names }> = ({ lang, c, groups, series, names }) => {
+// One figure: a tile a series for one subject, a tile a subject for a comparison. On a dashboard's tile (inTile) the
+// same figures, each a block of the tile's body rather than a box of its own (styles.css .dash-figures).
+const NumberTiles: FC<{ lang: Lang; c: BuildChoice; groups: Group[]; series: Series[]; names: Names; inTile?: boolean }> = ({ lang, c, groups, series, names, inTile }) => {
   const tile = (label: string, f: Figures, s: Series, note: string) => (
-    <div class="tile">
+    <div class={inTile ? "dash-figure" : "tile"}>
       <span class="tile-label">{label}</span>
       {s.money && s.get(f) !== null ? <ShortMoney lang={lang} value={s.get(f) as number} class="tile-value" /> : <span class="tile-value">{s.text(f) || t(lang, "common.na")}</span>}
       <span class="tile-note">{note}</span>
@@ -398,7 +431,7 @@ const NumberTiles: FC<{ lang: Lang; c: BuildChoice; groups: Group[]; series: Ser
   const primary = series[primaryOf(c.measure)];
   const shown = c.measure === "largest" || c.measure === "noncompetitive" || c.measure === "amendments" ? series : [series[0]];
   return (
-    <section class="tiles" aria-label={t(lang, MEASURE_KEY[c.measure])}>
+    <section class={inTile ? "dash-figures" : "tiles"} aria-label={t(lang, MEASURE_KEY[c.measure])}>
       {several
         ? groups.map((g) => {
           const f = g.lines[0]?.f ?? {};
@@ -500,8 +533,9 @@ const LABEL_KIND: Readonly<Record<Rows, Exclude<ColumnKind, "main">>> = {
   year: "date", quarter: "date", segment: "text", buyer: "buyer", province: "region", method: "label", competitive: "comp", organization: "org", none: "label",
 };
 
-const ResultTable: FC<{ lang: Lang; c: BuildChoice; groups: Group[]; lines: (g: Group) => Line[]; names: Names; current: number }> = ({
-  lang, c, groups, lines, names, current,
+// limit: a dashboard tile's rows (its rows in the order drawn, the first ones), sorted by no script; none on the page.
+const ResultTable: FC<{ lang: Lang; c: BuildChoice; groups: Group[]; lines: (g: Group) => Line[]; names: Names; current: number; limit?: number }> = ({
+  lang, c, groups, lines, names, current, limit,
 }) => {
   const several = groups.length > 1 || (isSet(c.subject) && c.rows !== "buyer" && c.rows !== "organization");
   const all = groups.flatMap((g) => lines(g));
@@ -523,14 +557,15 @@ const ResultTable: FC<{ lang: Lang; c: BuildChoice; groups: Group[]; lines: (g: 
   }
   const shown = withRests(cols);
   const restOf = (i: number) => (shown[i].rest ? (shown[i].rest === "md" ? "mdh" : "lgh") : "");
-  const rowsOf = groups.flatMap((g) => {
+  const listed = groups.flatMap((g) => {
     const list = lines(g);
     // Newest first by time, as the views' tables list years; the contracts ending soonest first, as theirs do.
     return (time && c.measure !== "ending" ? [...list].reverse() : list).map((l) => ({ g, l }));
   });
+  const rowsOf = limit === undefined ? listed : listed.slice(0, limit);
   return (
     <div class="table-wrap">
-      <Table cols={shown}>
+      <Table cols={shown} sorting={limit === undefined ? undefined : "none"}>
         <tbody>
           {rowsOf.map(({ g, l }) => {
             const label = lineLabel(lang, l.key, names, current);
@@ -558,7 +593,7 @@ const ResultTable: FC<{ lang: Lang; c: BuildChoice; groups: Group[]; lines: (g: 
 // -- the result ---------------------------------------------------------------------------------------
 
 // The view's title: its figure and its rows ("Median value by segment"); the contracts ending by their own words.
-function viewTitle(lang: Lang, c: BuildChoice): string {
+export function viewTitle(lang: Lang, c: BuildChoice): string {
   const key: Key = c.measure === "ending" ? "analytics.chart_due_count" : c.measure === "noncompetitive" ? "build.title_nc"
     : c.measure === "largest" ? "build.title_largest" : MEASURE_KEY[c.measure];
   const measure = t(lang, key);
@@ -585,18 +620,52 @@ const Box: FC<{ children?: unknown; hidden?: boolean }> = ({ children, hidden })
   <div id={RESULT_ID} aria-live="polite" hidden={hidden}>{children as any}</div>
 );
 
-// The result: why there is none, or the view's chart, its table, its notes, the line naming the source, the period
-// and the data date, and its CSV file. The same section is the page's and the preview's.
-const Result: FC<{ lang: Lang; ctx: Ctx; outcome: Outcome | null }> = ({ lang, ctx, outcome }) => {
-  const { choice: c, problem, current } = ctx;
-  if (problem) {
-    const text = problem.kind === "choose" ? t(lang, problem.key)
-      : t(lang, "build.not_offered", {
-        why: problem.key === "build.why_source" ? t(lang, "build.why_source", { source: sourceLabel(lang, c.source) })
-          : problem.key === "build.why_quarters" ? t(lang, "build.why_quarters", { n: problem.n ?? 0 }) : t(lang, problem.key),
-      });
-    return <Box><Panel title={viewTitle(lang, c)}><p>{text}</p></Panel></Box>;
+// Why a view is not drawn, in words: the combination's rule, or the subject still to choose.
+export function problemText(lang: Lang, c: BuildChoice, problem: Problem): string {
+  return problem.kind === "choose" ? t(lang, problem.key)
+    : t(lang, "build.not_offered", {
+      why: problem.key === "build.why_source" ? t(lang, "build.why_source", { source: sourceLabel(lang, c.source) })
+        : problem.key === "build.why_quarters" ? t(lang, "build.why_quarters", { n: problem.n ?? 0 }) : t(lang, problem.key),
+    });
+}
+
+// What a view is about, in words: its subject's name, or the names of the subjects it compares.
+export function subjectsText(lang: Lang, c: BuildChoice, names: { buyer: Names; org: Names }): string {
+  switch (c.subject) {
+    case "all": return t(lang, "build.subject_all");
+    case "buyer":
+    case "buyers": return c.buyers.map(names.buyer).join(", ");
+    case "segment": return segmentText(lang, c.segment);
+    case "buyer_segment": return t(lang, "build.in_segment", { buyer: names.buyer(c.buyers[0] ?? ""), segment: segmentText(lang, c.segment) });
+    case "organization":
+    case "organizations": return c.orgs.map(names.org).join(", ");
   }
+}
+
+// The site's label of a view, the name a saved view takes when its reader types none (account/saved_views.ts
+// viewLabel, at most LABEL_MAX characters): what it is about and its title, then its source and period; the
+// contracts ending, which follow neither, by the first two alone.
+export function buildLabel(lang: Lang, c: BuildChoice, names: { buyer: Names; org: Names }): string {
+  const name = t(lang, "build.label_name", { subject: subjectsText(lang, c, names), title: viewTitle(lang, c) });
+  return c.measure === "ending" ? cleanName(name, LABEL_MAX) : viewLabel(lang, name, c);
+}
+
+// The names a drawn view gives its label: the buyers' by the buyers' list, the organizations' as the view read them.
+export function labelNames(lang: Lang, all: readonly BuyerSummary[], model: Model): { buyer: Names; org: Names } {
+  const orgs = new Map<string, string>();
+  for (const g of model.groups) {
+    if (g.subject.kind === "organization" && g.subject.name) orgs.set(orgIdOf(g.subject.oid), g.subject.name);
+    for (const l of g.lines) if (l.key.kind === "organization" && l.key.name) orgs.set(orgIdOf(l.key.oid), l.key.name);
+  }
+  return { buyer: namesOf(lang, all), org: (id) => orgs.get(id) ?? id };
+}
+
+// The result: why there is none, or the view's chart, its table, its notes, the line naming the source, the period
+// and the data date, and its CSV file; for an Ultra reader (keep) its Add to dashboard beside the CSV link and its
+// Save this view under it. The same section is the page's and the preview's.
+const Result: FC<{ lang: Lang; ctx: Ctx; outcome: Outcome | null; keep?: Keep | null }> = ({ lang, ctx, outcome, keep }) => {
+  const { choice: c, problem, current } = ctx;
+  if (problem) return <Box><Panel title={viewTitle(lang, c)}><p>{problemText(lang, c, problem)}</p></Panel></Box>;
   if (!outcome || !outcome.ok) {
     return <Box><Panel title={t(lang, "build.unavailable_title")}><p>{t(lang, "build.unavailable")}</p></Panel></Box>;
   }
@@ -615,8 +684,14 @@ const Result: FC<{ lang: Lang; ctx: Ctx; outcome: Outcome | null }> = ({ lang, c
   const line = c.measure === "ending" ? t(lang, "build.as_of_ending", { date: asOf })
     : t(lang, "build.as_of", { source: sourceLabel(lang, c.source), first: fiscalLabel(lang, c.first), last: fiscalLabel(lang, c.last), date: asOf });
   const subjects = model.groups.filter((g) => g.subject.kind !== "set").map((g) => subjectLink(lang, g.subject, names));
+  // Add to dashboard: the view as a tile of its own, and its latest figure as a tile where it gives one a year.
+  const address = buildAddress(c);
+  const add = keep?.dash ? <>
+    <AddToDashboard lang={lang} account={keep.dash} kind="build" panelRef={address} boards={keep.boards} />
+    {figureOffered(c) ? <AddToDashboard lang={lang} account={keep.dash} kind="number" panelRef={address} boards={keep.boards} label={t(lang, "build.add_figure")} /> : null}
+  </> : null;
   return (
-    <Box><Panel title={viewTitle(lang, c)} tools={any ? <a href={csv} rel="nofollow">{t(lang, "analytics.csv")}</a> : undefined}
+    <Box><Panel title={viewTitle(lang, c)} tools={any || add ? <>{any ? <a href={csv} rel="nofollow">{t(lang, "analytics.csv")}</a> : null}{add}</> : undefined}
       foot={<span>{line} {tj(lang, "analytics.rules", { methodology: <a href="/methodology#analytics">{t(lang, "analytics.rules_link")}</a> })}</span>}>
       {subjects.length ? <p>{subjects.map((s, i) => <>{i ? ", " : ""}{s as any}</>)}</p> : null}
       {!any ? <p class="muted">{t(lang, "build.none")}</p> : <>
@@ -627,9 +702,107 @@ const Result: FC<{ lang: Lang; ctx: Ctx; outcome: Outcome | null }> = ({ lang, c
         <ResultTable lang={lang} c={c} groups={model.groups} lines={lines} names={names} current={current} />
       </>}
       {notes(lang, c).map((n) => <p class="muted small">{n}</p>)}
-    </Panel></Box>
+    </Panel>
+    {keep?.save ? <div class="toolbar build-save"><SaveViewRow lang={lang} state={keep.save} /></div> : null}
+    </Box>
   );
 };
+
+// -- on a dashboard's tile (account/build_views.tsx) --------------------------------------------------
+
+// A view on a dashboard's tile (kind "build"), drawn with the page's own code: its chart, sorted bars or figures
+// over its table, or the table alone, at the tile's sizes (fit, account/dashboard_fit.ts buildFit: the rows its
+// table lists, each plot's height, the plots grown when the rows read are fewer, and the axis's width), with no note
+// and no link of its own: the tile's foot and its Open carry the source, the period and the page. Sorted bars of a
+// comparison list as many of each subject's rows as the tile's rows share among them, a bar for each row of the
+// table, so the page's script takes a bar off with its row. shown and total: the table's rows drawn and all there are.
+export function buildTileBody(
+  a: { lang: Lang; c: BuildChoice; model: Model; current: number; all: readonly BuyerSummary[] }, fit: TileFit,
+): { body: unknown; shown: number; total: number } {
+  const { lang, c, model, current } = a;
+  const names = namesOf(lang, a.all);
+  const series = seriesOf(lang, c);
+  const primary = series[primaryOf(c.measure)];
+  const memo = new Map<Group, Line[]>();
+  const full = (g: Group) => {
+    let l = memo.get(g);
+    if (!l) memo.set(g, (l = ordered(c, model, g, primary)));
+    return l;
+  };
+  const any = model.groups.some((g) => g.lines.length > 0 && (c.rows !== "none" || n0(g.lines[0].f, "n") > 0));
+  if (!any) return { body: <p class="muted">{t(lang, "build.none")}</p>, shown: 0, total: 0 };
+  const total = model.groups.reduce((n, g) => n + full(g).length, 0);
+  const ranked = c.show === "ranked";
+  const each = Math.max(1, Math.floor(fit.rows / Math.max(1, model.groups.length)));
+  const lines = ranked ? (g: Group) => full(g).slice(0, each) : full;
+  const shown = Math.min(fit.rows, ranked ? model.groups.reduce((n, g) => n + lines(g).length, 0) : total);
+  const sized: TileFit = { ...fit, plot: fit.grow ? fit.grow(shown) : fit.plot };
+  return {
+    shown, total,
+    body: <>
+      {c.show === "number" ? <NumberTiles lang={lang} c={c} groups={model.groups} series={series} names={names} inTile />
+        : ranked ? <RankedChart lang={lang} c={c} groups={model.groups} lines={lines} primary={primary} names={names} current={current} />
+        : c.show === "table" ? null
+        : <TimeChart lang={lang} c={c} model={model} series={series} names={names} current={current} lines={lines} fit={sized} />}
+      <ResultTable lang={lang} c={c} groups={model.groups} lines={lines} names={names} current={current} limit={fit.rows} />
+    </>,
+  };
+}
+
+// How a figure's change from one fiscal year to the next is written: an amount's as a percentage, a count's as a
+// count, a share's (or the change through amendments, itself a percentage) in percentage points.
+const CHANGE_AS: Readonly<Record<Exclude<Measure, "ending">, "pct" | "count" | "points">> = {
+  value: "pct", average: "pct", median: "pct", records: "count", organizations: "count", noncompetitive: "points", largest: "points", amendments: "points",
+};
+
+// A view's latest figure on a dashboard's tile (kind "number"), from the view read by fiscal year over its last
+// fiscal year and the one before (builder.ts figureChoice): the last year's figure (the data date's year "to date"),
+// the view's own figure where it has several (the five largest organizations' share, the change through
+// amendments), and under it the year before. A year to date is part of a year, so it is never set against a whole
+// one: under it the year before stands in full, a figure of its own in its own form, in words that compare
+// nothing. Two whole years give the change from the year before with its sign, or the line that there is none to
+// compare. Each year's own figure, never added: a median, a count of organizations and a largest share are one
+// year's. A year with no record reads as none. The words say how the figure moved and nothing of what that means.
+export function figureBody(a: { lang: Lang; c: BuildChoice; model: Model; current: number }): unknown {
+  const { lang, c, model, current } = a;
+  const s = seriesOf(lang, c)[primaryOf(c.measure)];
+  const lines = model.groups[0]?.lines ?? [];
+  const at = (fy: number): Figures => lines.find((l) => l.key.kind === "year" && l.key.fy === fy)?.f ?? { n: 0 };
+  const now = at(c.last);
+  const value = s.get(now);
+  const before = c.first < c.last ? at(c.first) : null;
+  const was = before ? s.get(before) : null;
+  const prior = fiscalLabel(lang, c.last - 1);
+  const as = c.measure === "ending" ? "count" : CHANGE_AS[c.measure];
+  const sign = (d: number) => (d > 0 ? "+" : "-");
+  let change: string;
+  if (c.last === current) {
+    // The year before in full: an amount in the short form the figure takes, a count, a share in per cent.
+    const full = !before || was === null ? null : s.money ? fmtMoneyShort(was, lang) : s.text(before) || null;
+    change = full === null ? t(lang, "build.full_year_none", { fy: prior }) : t(lang, "build.full_year", { fy: prior, figure: full });
+  } else if (value === null || was === null || (as === "pct" && was <= 0)) {
+    change = t(lang, "build.change_none", { fy: prior });
+  } else if (value === was) {
+    change = t(lang, "build.change_same", { fy: prior });
+  } else if (as === "pct") {
+    change = t(lang, "build.change", { change: growthPct(lang, value / was - 1), fy: prior });
+  } else if (as === "count") {
+    change = t(lang, "build.change", { change: `${sign(value - was)}${fmtInt(Math.abs(value - was), lang)}`, fy: prior });
+  } else {
+    const d = value - was;
+    const whole = Math.round(Math.abs(d));
+    const n = `${sign(d)}${whole === 0 ? (lang === "fr" ? "<\u00a01" : "<1") : fmtInt(whole, lang)}`;
+    change = t(lang, "build.change", { change: tn(lang, "build.points_one", "build.points", Math.max(1, whole), { n }), fy: prior });
+  }
+  const year = c.last === current ? t(lang, "analytics.to_date", { fy: fiscalLabel(lang, c.last) }) : fiscalLabel(lang, c.last);
+  return (
+    <div class="dash-figure">
+      <span class="tile-label">{`${s.label}, ${year}`}</span>
+      {s.money && value !== null ? <ShortMoney lang={lang} value={value} class="tile-value" /> : <span class="tile-value">{s.text(now) || t(lang, "common.na")}</span>}
+      <span class="tile-note">{change}</span>
+    </div>
+  );
+}
 
 // -- the menus ------------------------------------------------------------------------------------------
 
@@ -682,7 +855,8 @@ const Menus: FC<{ lang: Lang; ctx: Ctx }> = ({ lang, ctx }) => {
         <label class="field field-text" data-for="org" hidden={off.org}>
           <span class="field-label">{t(lang, "build.org")}</span>
           <input type="text" name="o" value={c.orgs[0] ?? ""} maxlength={120} autocomplete="off" spellcheck={false} disabled={off.org} />
-          <span class="field-hint">{t(lang, "build.org_hint")}</span>
+          {/* An Ultra reader finds one by name on the dashboard's find page, whose matches open here. */}
+          <span class="field-hint">{t(lang, "build.org_hint")}{ctx.ultra ? <> <a href={`${FIND_PATH}?kind=organization`}>{t(lang, "build.find_org")}</a></> : null}</span>
         </label>
       </div>
       <fieldset class="toolbar-fields" data-for="buyers" hidden={off.buyers}>
@@ -739,7 +913,8 @@ export async function builderPage(c: Context<AppEnv>): Promise<Response> {
   const fragment = c.req.header(FRAGMENT_HEADER) === "1";
   // Nothing is read from the records database for a reader without the builder, nor for a view it does not offer.
   const outcome = ctx.ultra && !ctx.problem ? await readView(ctx) : null;
-  const result = ctx.ultra ? <Result lang={lang} ctx={ctx} outcome={outcome} /> : null;
+  const keep = outcome ? await keepOf(ctx, outcome) : null;
+  const result = ctx.ultra ? <Result lang={lang} ctx={ctx} outcome={outcome} keep={keep} /> : null;
   const failed = !!outcome && !outcome.ok;
   if (fragment) {
     varyOnCookie(c);

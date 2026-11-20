@@ -190,6 +190,8 @@ export interface AxisLabel {
   // Never drawn at any width, but kept in the axis's spacing (clearOfAnchors):
   // every other year of a long fiscal axis (fiscalAxis).
   hidden?: boolean;
+  // On a dashboard tile, the tiers of the tile's width (TILE_TIERS) in which it rests (tileLabels).
+  off?: readonly number[];
 }
 
 // The labels of a chart with one bar a year, from first to last: every other
@@ -244,7 +246,7 @@ function labelClass(l: AxisLabel, anchored: string | undefined): string | undefi
   const rest = l.phone === undefined
     ? [l.minor && !anchored ? "x-minor" : ""]
     : [l.minor && !anchored ? "x-tablet-minor" : "", l.phone ? "" : "x-phone-minor"];
-  return [anchored, ...rest].filter(Boolean).join(" ") || undefined;
+  return [anchored, ...rest, ...(l.off ?? []).map((k) => `x-c${k}`)].filter(Boolean).join(" ") || undefined;
 }
 
 // An anchored label runs inward from its end of the axis, over the next
@@ -490,6 +492,29 @@ export function thinLabels(labels: readonly AxisLabel[], width: number): AxisLab
   const last = labels.length - 1;
   const clear = Math.ceil((1.5 * px) / (width / labels.length));
   return labels.map((l, i) => (i === 0 || i === last || ((last - i) % step === 0 && i >= clear && last - i >= clear) ? l : { ...l, hidden: true }));
+}
+
+// A dashboard tile's chart (pages/analytics.tsx, pages/builder.tsx): the
+// server cannot know the width the tile is drawn at (it depends on the
+// window and the layout: the grid from 1,100 px, two columns from 700, one
+// below), so its labels are thinned for each tier of the tile's inside width
+// in turn, at the tier's narrowest, and a label carries the class x-c<k> of
+// each tier it rests in; the stylesheet's container queries on the tile
+// (styles.css .dash-tile, "chart-x") rest it there. TILE_TIERS are the lower
+// bounds of the tiers in px: the first is a tile of the least chart width
+// (4 columns) at 1,100 px, and below it holds every narrower width; a half
+// of the two columns from 700 px, and a phone, fall in the second. A plot
+// is its tile's inside less TILE_PLOT_LESS: the chart's margins (2 x 16) and
+// the y-axis (78), as account/dashboard_fit.ts reckons a tile's plot width.
+export const TILE_TIERS = [240, 300, 380, 460, 560, 700, 880, 1100] as const;
+export const TILE_PLOT_LESS = 110;
+export function tileLabels(labels: readonly AxisLabel[]): AxisLabel[] {
+  const at = TILE_TIERS.map((w) => thinLabels(labels, w - TILE_PLOT_LESS));
+  return labels.map((l, i) => {
+    if (l.hidden) return l;
+    const off = TILE_TIERS.flatMap((_, k) => (at[k][i].hidden ? [k] : []));
+    return off.length === TILE_TIERS.length ? { ...l, hidden: true } : off.length ? { ...l, off } : l;
+  });
 }
 
 // The gap that keeps a bar near `px` pixels wide on a plot about `plot`

@@ -44,6 +44,15 @@ export const DASHBOARD_STRINGS = {
     fr: "Chaque tableau et chaque graphique d'une vue d'analyse a sa propre commande Ajouter au tableau de bord : ouvrez une vue depuis {link}.",
   },
   "dash.add_text": { en: "Text", fr: "Texte" },
+  // Build a View, the group between Analytics and Text while the analytics builder is the reader's (dashboard.tsx
+  // AddTile), and the Add select's group of the account's saved views of the builder.
+  "dash.add_build": { en: "Build a View", fr: "Créer une vue" },
+  "dash.add_build_open": { en: "Open the analytics builder", fr: "Ouvrir le générateur d'analyses" },
+  "dash.add_build_line": {
+    en: "Choose what to count; the view's page adds it, or its latest figure, to a dashboard.",
+    fr: "Choisissez quoi compter; la page de la vue l'ajoute, ou son dernier chiffre, à un tableau de bord.",
+  },
+  "dash.saved_builds": { en: "Saved Builder Views", fr: "Vues du générateur enregistrées" },
   // The Analytics group's search (dashboard.tsx AddTile), a GET to the find page (dashboard_doors.tsx).
   "dash.find_label": { en: "Buyer, organization or segment", fr: "Acheteur, organisation ou segment" },
   "dash.find": { en: "Find", fr: "Trouver" },
@@ -283,6 +292,9 @@ export const DASHBOARD_STRINGS = {
   "dash.kind_matches": { en: "Matching notices", fr: "Avis correspondants" },
   "dash.kind_api": { en: "API requests today", fr: "Requêtes à l'API aujourd'hui" },
   "dash.kind_text": { en: "Your note", fr: "Votre note" },
+  // The builder's two (account/build_views.tsx): a tile's head where its view cannot be read; a view's own title heads it.
+  "dash.kind_build": { en: "Builder view", fr: "Vue du générateur" },
+  "dash.kind_number": { en: "Latest figure", fr: "Dernier chiffre" },
 
   // -- More Kinds of Tile (dashboard.tsx moreKinds): each kind the account cannot add yet, the one step that
   // gives it what the tile shows, and the page where that is done ({link}, its words the _link key) ----------
@@ -351,6 +363,15 @@ export const DASHBOARD_STRINGS = {
   "dash.what_analytic": {
     en: "A table or chart of a buyer's, an organization's or a segment's analytics, drawn in full at the source and period you chose, as many rows as its size holds.",
     fr: "Un tableau ou un graphique des analyses d'un acheteur, d'une organisation ou d'un segment, tracé en entier avec la source et la période choisies, autant de lignes que sa taille en contient.",
+  },
+  // The builder's two, listed only while its switch is on (dashboard.tsx teaseKinds).
+  "dash.what_build": {
+    en: "A view you make in the analytics builder: its chart, sorted bars or table, as many rows as its size holds.",
+    fr: "Une vue que vous créez dans le générateur d'analyses : son graphique, ses barres triées ou son tableau, autant de lignes que sa taille en contient.",
+  },
+  "dash.what_number": {
+    en: "One figure of a view by fiscal year: the latest year's, with the year before's.",
+    fr: "Un chiffre d'une vue par exercice : celui du dernier exercice, avec celui de l'exercice précédent.",
   },
   "dash.what_briefing": {
     en: "A weekly briefing: this week's new notices, awards, notable amendments and contracts ending next quarter, as counts.",

@@ -40,7 +40,7 @@ import { BUYER_ID_RE, SEGMENT_RE, loadBuyers, loadStats, type BuyerSummary, type
 import type { AppEnv, Env } from "../env";
 import { fmtInt, numberLocale, pick, segmentLabel, t, tj, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, page, todayOf } from "../layout";
-import { analyticsAccess, builderOn } from "../plan";
+import { allowsBuilder, analyticsAccess, builderOn } from "../plan";
 import { ProNote, SUBSCRIBE_PATH } from "../pro";
 import { FREE_YEARS, MAX_YEARS } from "../records_db";
 import {
@@ -147,12 +147,12 @@ async function ownOrganization(c: Context<AppEnv>): Promise<{ id: string; name: 
 // The signed-in account's saved views, oldest first, and its plan's figure.
 // Null without a session and on any fault, the table not yet made included:
 // the panel is then left out.
-async function ownViews(c: Context<AppEnv>): Promise<{ views: SavedView[]; cap: number } | null> {
+async function ownViews(c: Context<AppEnv>): Promise<{ views: SavedView[]; cap: number; builder: boolean } | null> {
   try {
     const read = await readSession(c);
     if (read.state !== "ok") return null;
     const views = await listViews(c.env, read.account.userId);
-    return views ? { views, cap: savedViewCap(read.account.plan) } : null;
+    return views ? { views, cap: savedViewCap(read.account.plan), builder: builderOn(c.env) && allowsBuilder(read.account.plan) } : null;
   } catch {
     return null;
   }
@@ -319,7 +319,7 @@ export async function analyticsIndex(c: Context<AppEnv>): Promise<Response> {
           </ul>
         </Panel>
       ) : null}
-      {saved ? <SavedViewsPanel lang={lang} views={saved.views} cap={saved.cap} /> : null}
+      {saved ? <SavedViewsPanel lang={lang} views={saved.views} cap={saved.cap} builder={saved.builder} /> : null}
       <Panel title={t(lang, "nav.buyers")} count={index ? fmtInt(buyers.length, lang) : undefined}>
         {index ? <BuyerList lang={lang} rows={buyers} /> : <BuyersUnavailable lang={lang} />}
       </Panel>

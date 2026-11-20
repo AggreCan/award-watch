@@ -610,7 +610,10 @@ describe("the page", () => {
     expect(res.headers.get("cache-control")).toBe("private, no-store");
     expect(html.startsWith('<div id="build-result" aria-live="polite"><section class="panel">')).toBe(true);
     expect(html).not.toContain("<html");
-    expect(html).not.toContain("<form");
+    // The menus are the page's, never the fragment's: what it holds of forms is the view's own posts (Add to
+    // dashboard, Save this view, test/builder-tiles.test.ts), redrawn with it.
+    expect(html).not.toContain('<form method="get"');
+    expect([...html.matchAll(/<form method="post" action="([^"]+)"/g)].map((m) => m[1])).toEqual(["/account/dashboard/panels", "/account/dashboard/panels", "/account/views"]);
   });
 
   it("gives the view as a CSV file, private, a download under the per-address limit, its rows and their counts", async () => {
@@ -757,14 +760,15 @@ describe("the form", () => {
     // The organization's hint is beside its own field, and only there.
     const orgs = (await view("?subject=organization&o=org-a000000001&rows=year&measure=value&source=history")).html;
     expect(orgs.match(/class="field-hint"/g)).toHaveLength(1);
-    expect(orgs).toMatch(/<label class="field field-text" data-for="org"><span class="field-label">Organization<\/span><input type="text" name="o"[^>]*><span class="field-hint">Its id \(org- and ten characters\) or the address of its page\.<\/span><\/label>/);
+    // For an Ultra reader, the dashboard's find page, whose matches open here (test/builder-tiles.test.ts).
+    expect(orgs).toMatch(/<label class="field field-text" data-for="org"><span class="field-label">Organization<\/span><input type="text" name="o"[^>]*><span class="field-hint">Its id \(org- and ten characters\) or the address of its page\. <a href="\/account\/dashboard\/find\?kind=organization">Find an organization by name<\/a><\/span><\/label>/);
   });
 
   it("sets each fieldset with no frame and its legend as a field's label, the share chart's too, in a stylesheet whose version moved", () => {
     const styles = (env as unknown as { STYLES_CSS: string }).STYLES_CSS;
     expect(styles).toContain(".toolbar fieldset, .toolbar fieldset.toolbar-row, .toolbar fieldset.toolbar-fields { min-width: 0; margin: 0; padding: 0 0 8px; border: 0; }");
     expect(styles).toMatch(/\.toolbar fieldset > legend \{[^}]*font-size: 12px; line-height: 16px; font-weight: 500;[^}]*text-transform: none; color: var\(--muted\);/);
-    expect(STYLES_VERSION).toBe(75);
+    expect(STYLES_VERSION).toBe(76);
   });
 });
 

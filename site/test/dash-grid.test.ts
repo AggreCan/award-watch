@@ -265,10 +265,15 @@ describe("the grid's rules", () => {
 });
 
 // The size keys of each kind and a ref that gives it (dashboard.tsx sizeKey): every table of the three analytics views
-// under its shape's key (dashboard_fit.ts tileFit takes the table's view and name), and a heading and a note.
+// under its shape's key (dashboard_fit.ts tileFit takes the table's view and name), every shape of a builder's view with
+// the most panels and stacks its key takes (dashboard_fit.ts buildKey: "chart:2:2" is the contracts ending's two
+// charts), a figure, and a heading and a note.
 const SIZED: [string, string, string][] = [
   ["tenders", "tenders", ""], ["radar", "radar", "3m"], ["records", "records", ""], ["watches", "watches", ""],
   ...Object.keys(ANALYTIC_BODIES).map((name): [string, string, string] => [analyticKey(name), "analytic", name]),
+  ["build:chart", "build", "chart:1"], ["build:two", "build", "chart:2"], ["build:two", "build", "chart:2:2"], ["build:panels", "build", "chart:3"],
+  ["build:panels", "build", "chart:4"], ["build:panels", "build", "chart:5"], ["build:ranked", "build", "ranked:0"], ["build:number", "build", "number:0"],
+  ["build:table", "build", "table:0"], ["number", "number", ""],
   ["briefing", "briefing", ""], ["org", "org", "years"], ["org", "org", "segments"],
   ["org", "org", "buyers"], ["org:share", "org", "share"], ["org:ending", "org", "ending"], ["org:instruments", "org", "instruments"], ["matches", "matches", ""],
   ["api", "api", ""], ["text", "text", ""], ["text:note", "text", ""],
@@ -280,10 +285,11 @@ describe("the least and starting sizes", () => {
       for (let w = least(key).w; w <= COLS; w++) {
         expect(rowsHeld(kind, ref, w, least(key, w).h), `${key} ${ref} at ${w} columns`).toBeGreaterThanOrEqual(ROWS_MIN);
       }
-      // A list starts with five rows; an analytics table with three or more under its charts.
+      // A list starts with five rows; an analytics table, and a builder's view, with three or more under its charts.
       const half = startSize(key, false);
-      expect(rowsHeld(kind, ref, half.w, half.h), `${key} ${ref} starting`).toBeGreaterThanOrEqual(kind === "analytic" ? ROWS_MIN : 5);
-      expect(rowsHeld(kind, ref, COLS, startSize(key, true).h), `${key} ${ref} starting wide`).toBeGreaterThanOrEqual(kind === "analytic" ? ROWS_MIN : 5);
+      const starts = kind === "analytic" || kind === "build" ? ROWS_MIN : 5;
+      expect(rowsHeld(kind, ref, half.w, half.h), `${key} ${ref} starting`).toBeGreaterThanOrEqual(starts);
+      expect(rowsHeld(kind, ref, COLS, startSize(key, true).h), `${key} ${ref} starting wide`).toBeGreaterThanOrEqual(starts);
     }
     // Every key the grid lists is one a tile can have.
     expect(new Set(SIZED.map(([k]) => k))).toEqual(new Set(Object.keys(LEAST)));

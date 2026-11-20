@@ -51,7 +51,10 @@
 // address with the table's anchor (analyticAddress). A view's tile from before
 // (kind "view") draws as its view's first table. A text tile (kind "text") is a
 // heading or a note the reader typed, its ref an id of its own and its text in
-// the tile's opts (noteOf).
+// the tile's opts (noteOf). A view of the analytics builder (kind "build") and
+// its latest figure (kind "number") keep the view's address as their ref and
+// are read and drawn by the builder's own code (build_views.tsx), only while
+// the builder is the reader's.
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
@@ -62,13 +65,14 @@ import {
 import { MATCH_MIN, blockState, rankNotices, type Score } from "../../public/fit.js";
 import { templatePieces } from "../../public/refresh.js";
 import { keyQuota } from "../api_keyed_spec";
+import { BUILD_PATH } from "../builder";
 import { recordsText } from "../chart";
 import { type Clock, clockOf, closingPassed } from "../closing";
 import { Table } from "../columns";
 import { MONEY_SOURCES, type MoneySource } from "../constants";
 import {
-  BUYER_ID_RE, EXPIRING_WINDOWS, type ExpiringRow, type ExpiringWindow, ORG_ID_RE, SEGMENT_RE, type Profile, type TenderRow, loadOpenList, loadStats,
-  publishedReference,
+  BUYER_ID_RE, type BuyerSummary, EXPIRING_WINDOWS, type ExpiringRow, type ExpiringWindow, ORG_ID_RE, SEGMENT_RE, type Profile, type TenderRow, loadBuyers,
+  loadOpenList, loadStats, publishedReference,
 } from "../data";
 import type { AppEnv, Env } from "../env";
 import { FitDisclaimer, MatchBand, countsText, profileMatching } from "../fit";
@@ -91,9 +95,10 @@ import { type KeyRow, listKeys } from "./api_keys";
 import { keyUsage, nowOf } from "./api_usage";
 import { briefingLabel } from "./briefing_pages";
 import { type Briefing, briefingPath, listBriefings, readBriefing, weekAnchor } from "./briefings";
+import { buildContext, buildRef, buildSizeKey, buildTile, buildsOn, isBuildKind } from "./build_views";
 import { BOARD_NAME_MAX, anchorOf, boardLabels } from "./dashboard_add";
 import { ANALYTIC_BODIES, ROWS_MAX, analyticFit, analyticKey, analyticPlot, tileFit } from "./dashboard_fit";
-import { DASHBOARD_PATH, FIND_PATH, STARTER_PATH, boardCap, boardPath, holdsDashboard, missingTiles, tileCap } from "./dashboard_rule";
+import { DASHBOARD_PATH, FIND_PATH, OPTS_MAX, STARTER_PATH, boardCap, boardPath, holdsDashboard, missingTiles, tileCap } from "./dashboard_rule";
 import { EVENT_KEY, watchEventLines } from "./digests";
 import { allowed, matchCap, type Plan } from "./entitlements";
 import {
@@ -101,6 +106,7 @@ import {
   type ClaimFrame, checkOrganization, claimFrame, endingParams, isClaimBlock, readClaim, shareBinds, shareSegment,
 } from "./org_claim";
 import { ultraOnSale } from "./payments";
+import { builderOn } from "../plan";
 import { type PoolLine, groupIn, pastAllowance, poolLine, poolOf, pooled } from "./pool";
 import { poolOver } from "./pool_lines";
 import {
@@ -120,7 +126,8 @@ import { type Watch, listWatches } from "./watches";
 // The kinds of tile, in the order the page explains them and the Add select
 // lists them. The tables hold kind as text (no CHECK), so a new kind needs no
 // rebuild of a table; a stored kind the site no longer knows is not shown.
-export const PANEL_KINDS = ["tenders", "radar", "records", "watches", "view", "analytic", "briefing", "org", "matches", "api", "text"] as const;
+// The analytics builder's two (build_views.tsx) are drawn, offered and named only while the builder is the reader's.
+export const PANEL_KINDS = ["tenders", "radar", "records", "watches", "view", "analytic", "build", "number", "briefing", "org", "matches", "api", "text"] as const;
 export type PanelKind = (typeof PANEL_KINDS)[number];
 // The row of dashboard_panels that says an account emptied the layout it
 // wrote there, before the tiles' tables: a kind no tile has (isPanelKind
@@ -139,16 +146,18 @@ export const WATCH_DAYS = 7;
 // these name them only where the table is gone.
 const KIND_KEY: Readonly<Record<PanelKind, Key>> = {
   tenders: "dash.kind_tenders", radar: "dash.kind_radar", records: "dash.kind_records", watches: "dash.kind_watches", view: "dash.kind_view",
-  analytic: "dash.kind_view", briefing: "dash.kind_briefing", org: "dash.kind_org", matches: "dash.kind_matches", api: "dash.kind_api",
-  text: "dash.kind_text",
+  analytic: "dash.kind_view", build: "dash.kind_build", number: "dash.kind_number", briefing: "dash.kind_briefing", org: "dash.kind_org",
+  matches: "dash.kind_matches", api: "dash.kind_api", text: "dash.kind_text",
 };
 const WHAT_KEY: Readonly<Record<PanelKind, Key>> = {
   tenders: "dash.what_tenders", radar: "dash.what_radar", records: "dash.what_records", watches: "dash.what_watches", view: "dash.what_analytic",
-  analytic: "dash.what_analytic", briefing: "dash.what_briefing", org: "dash.what_org", matches: "dash.what_matches", api: "dash.what_api",
-  text: "dash.what_text",
+  analytic: "dash.what_analytic", build: "dash.what_build", number: "dash.what_number", briefing: "dash.what_briefing", org: "dash.what_org",
+  matches: "dash.what_matches", api: "dash.what_api", text: "dash.what_text",
 };
-// What a reader without the dashboard reads it holds, a line a kind: a view's tile is an analytics table's now.
-export const TEASE_KINDS: readonly PanelKind[] = PANEL_KINDS.filter((k) => k !== "view");
+// What a reader without the dashboard reads it holds, a line a kind: a view's tile is an analytics table's now, and
+// the builder's two kinds are named only while the builder's switch is on (teaseKinds).
+export const TEASE_KINDS: readonly PanelKind[] = PANEL_KINDS.filter((k) => k !== "view" && !isBuildKind(k));
+export const teaseKinds = (builder: boolean): readonly PanelKind[] => (builder ? PANEL_KINDS.filter((k) => k !== "view") : TEASE_KINDS);
 // Each block of "Your organization" by its page's own panel title (org_pages.tsx).
 const BLOCK_KEY: Readonly<Record<ClaimBlock, Key>> = {
   years: "orgclaim.panel_years", segments: "orgclaim.panel_segments", share: "orgclaim.panel_share", ending: "orgclaim.panel_ending",
@@ -271,8 +280,8 @@ const firstTable = (v: ViewRef) => VIEW_TABLES[v.view][0];
 // The longest text a reader types on a tile, in characters, and the longest a heading drawn as one may be.
 export const NOTE_MAX = 500;
 export const HEADING_MAX = 80;
-// The longest opts a tile keeps (accounts_schema.sql dashboard_tiles.opts).
-export const OPTS_MAX = 2000;
+// The longest opts a tile keeps (accounts_schema.sql dashboard_tiles.opts): dashboard_rule.ts OPTS_MAX.
+export { OPTS_MAX };
 // Every control character but the line break, and a half of a surrogate pair standing alone.
 const NOTE_CONTROL_RE = /[\u0000-\u0009\u000B-\u001F\u007F-\u009F]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
 
@@ -661,6 +670,7 @@ export function sizeKey(kind: PanelKind, ref: string, views: readonly Pick<Saved
   }
   if (kind === "text") return isHeading(noteOf(opts)) ? "text" : "text:note";
   if (kind === "org" && (ref === "share" || ref === "ending" || ref === "instruments")) return `org:${ref}`;
+  if (isBuildKind(kind)) return buildSizeKey(kind, ref);
   return kind;
 }
 const viewOf = (ref: string, views: readonly Pick<SavedView, "id" | "address">[]) => (ID_RE.test(ref) ? views.find((v) => v.id === ref)?.address ?? "" : ref);
@@ -703,11 +713,22 @@ const SEARCH_KINDS: Readonly<Partial<Record<PanelKind, (kind: string) => boolean
 // or one of the account's saved views by its id (saved_views.ts); an
 // analytics table, a view's address and one of that view's tables
 // (analyticRef). A text tile is named by no post: its ref is made when it is
-// added (addPanelPost).
-export function specOf(kind: unknown, rawRef: unknown, h: Pick<Holdings, "searches" | "briefings"> & { views?: readonly Pick<SavedView, "id">[] }): Spec | null {
+// added (addPanelPost). A builder's view (kinds build and number) only with
+// build, what checks its address (build_views.tsx buildRef: the data date's
+// fiscal year and the buyers' ids), which the post reads only while the
+// builder is the reader's; without it neither kind is taken.
+export function specOf(
+  kind: unknown, rawRef: unknown,
+  h: Pick<Holdings, "searches" | "briefings"> & { views?: readonly Pick<SavedView, "id" | "kind">[] },
+  build: { current: number; buyerIds: ReadonlySet<string> | null } | null = null,
+): Spec | null {
   if (!isPanelKind(kind) || typeof rawRef !== "string") return null;
   const ref = rawRef.trim();
   const spec = (r: string): Spec => ({ kind, ref: r, wide: true });
+  if (isBuildKind(kind)) {
+    const r = build ? buildRef(kind, ref, build.current, build.buyerIds) : null;
+    return r ? spec(r) : null;
+  }
   switch (kind) {
     case "tenders":
     case "records":
@@ -720,7 +741,8 @@ export function specOf(kind: unknown, rawRef: unknown, h: Pick<Holdings, "search
     case "org":
       return isClaimBlock(ref) ? spec(ref) : null;
     case "view": {
-      if (ID_RE.test(ref)) return (h.views ?? []).some((x) => x.id === ref) ? spec(ref) : null;
+      // A saved view of the builder goes on a dashboard as its address (kind build), never by its id.
+      if (ID_RE.test(ref)) return (h.views ?? []).some((x) => x.id === ref && x.kind !== "build") ? spec(ref) : null;
       const v = viewRef(ref);
       return v ? spec(viewAddress(v)) : null;
     }
@@ -749,16 +771,21 @@ type Body = { count?: unknown; body: unknown; item?: string; shown?: number; tot
 // rows become its body; null from draw says the tile cannot be read now.
 type Job = { queries: Query[]; extra?: () => Promise<unknown>; draw: (rows: Row[][] | null, extra: unknown) => Body | null };
 // A tile resolved against what the account holds: its head, its "Open",
-// and its reads; job null when what it showed was removed.
-type Resolved = { shown: Shown; title: string; item: string | null; href: string; job: Job | null };
+// and its reads; job null when what it showed was removed, or, with note,
+// for the reason note gives (a builder's tile while the builder is off).
+type Resolved = { shown: Shown; title: string; item: string | null; href: string; job: Job | null; note?: Key };
 
 // asOf: the records' own date, once the page's records batch is read (an
 // analytics table's contracts ending count from it, as the view's do).
+// builder: the analytics builder is the reader's (build_views.tsx buildsOn);
+// buyers: the buyers' list, read only for a page holding a builder's tile.
 type Ctx = {
   lang: Lang; env: Env; who: Account; h: Holdings; today: string; clock: Clock; frame: ClaimFrame;
   open: () => Promise<TenderRow[] | null>;
   org: { id: string; profile: Profile } | null;
   asOf?: string | null;
+  builder: boolean;
+  buyers: BuyerSummary[] | null;
 };
 
 const int = (v: unknown): number => num(v) ?? 0;
@@ -1293,7 +1320,7 @@ function resolve(ctx: Ctx, s: Shown): Resolved {
   const title = s.kind === "org" && isClaimBlock(s.ref) ? t(lang, "dash.kind_org", { block: t(lang, BLOCK_KEY[s.ref]) }) : t(lang, KIND_KEY[s.kind]);
   const gone = (href: string): Resolved => ({ shown: s, title, item: null, href, job: null });
   const search = (ok: (kind: string) => boolean) => h.searches.find((x) => x.id === s.ref && ok(x.kind));
-  const n = s.kind === "view" || s.kind === "analytic" || s.kind === "text" ? 0 : tileFit(s.kind, s.ref, s.w, s.h).rows;
+  const n = s.kind === "view" || s.kind === "analytic" || s.kind === "text" || isBuildKind(s.kind) ? 0 : tileFit(s.kind, s.ref, s.w, s.h).rows;
   // An analytics table at a view's address: headed by the table's own title, opening its view at the table.
   const analytic = (v: ViewRef, table: string, share: { segment: number; rivals: string[] } | null, item: string | null, href: string, back: string): Resolved => {
     const job = analyticJob(ctx, s, v, table, share);
@@ -1342,6 +1369,12 @@ function resolve(ctx: Ctx, s: Shown): Resolved {
       const a = analyticRef(s.ref);
       return a ? analytic(a.v, a.table, a.segment === null ? null : { segment: a.segment, rivals: a.rivals }, null, analyticAddress(a), "/analytics")
         : gone("/analytics");
+    }
+    case "build":
+    case "number": {
+      // A view of the analytics builder, or its latest figure (build_views.tsx), read in the page's one records batch.
+      const b = buildTile({ lang, kind: s.kind, ref: s.ref, w: s.w, h: s.h, on: ctx.builder, today: ctx.today, asOf: () => ctx.asOf, buyers: ctx.buyers });
+      return { shown: s, title: b.title, item: b.item, href: b.href, job: b.job, ...(b.note ? { note: b.note } : {}) };
     }
     case "text":
       return { shown: s, title, item: null, href: "", job: null };
@@ -1406,9 +1439,13 @@ async function contextOf(c: Context<AppEnv>, who: Account, h: Holdings, list: re
   let openList: Promise<TenderRow[] | null> | null = null;
   const needsOrg = list.some((s) => s.kind === "org" || s.kind === "matches");
   const org = needsOrg && h.claim ? await checkOrganization(c.env, h.claim.organizationId).catch(() => null) : null;
+  // The buyers' list for a builder's tile (its names, and the buyers it names checked against it), only then.
+  const builder = buildsOn(c.env, who.plan);
+  const buyers = builder && list.some((s) => isBuildKind(s.kind)) ? (await loadBuyers(c.env).catch(() => null))?.buyers ?? null : null;
   return {
     lang: c.get("lang"), env: c.env, who, h, today, clock: clockOf(c.env), frame: claimFrame(today), org,
     open: () => (openList ??= loadOpenList(c.env).catch(() => null)),
+    builder, buyers,
   };
 }
 
@@ -1446,8 +1483,10 @@ const countIn = (c: Context<AppEnv>, k: string): number => {
 
 // The Add select's choices: what the account holds that is not on the
 // dashboard shown already, by kind, in PANEL_KINDS order. An analytics view
-// is added from its own page, or here once it is saved.
-function addChoices(lang: Lang, h: Holdings, taken: ReadonlySet<string>): { label: string; options: [string, string][] }[] {
+// is added from its own page, or here once it is saved; a view of the
+// analytics builder from its page, or here once it is saved, while the
+// builder is the reader's (builder), as a tile of its own (kind build).
+function addChoices(lang: Lang, h: Holdings, taken: ReadonlySet<string>, builder = false): { label: string; options: [string, string][] }[] {
   const free = (kind: PanelKind, ref: string) => !taken.has(`${kind}:${ref}`);
   const group = (kind: PanelKind, label: string, options: [string, string][]) => ({ label, options: options.filter(([v]) => free(kind, v.slice(kind.length + 1))) });
   const searches = (ok: (k: string) => boolean, kind: PanelKind): [string, string][] =>
@@ -1459,7 +1498,8 @@ function addChoices(lang: Lang, h: Holdings, taken: ReadonlySet<string>): { labe
     ]),
     group("records", t(lang, "dash.kind_records"), searches(isRecordsKind, "records")),
     group("watches", t(lang, "dash.kind_watches"), [["watches:", t(lang, "dash.kind_watches")]]),
-    group("view", t(lang, "views.title"), h.views.map((v): [string, string] => [`view:${v.id}`, v.name])),
+    group("view", t(lang, "views.title"), h.views.filter((v) => v.kind !== "build").map((v): [string, string] => [`view:${v.id}`, v.name])),
+    group("build", t(lang, "dash.saved_builds"), builder ? h.views.filter((v) => v.kind === "build").map((v): [string, string] => [`build:${v.address}`, v.name]) : []),
     group("briefing", t(lang, "briefing.list_title"), h.briefings.map((b): [string, string] => [`briefing:${b.id}`, briefingLabel(lang, b)])),
     group("org", t(lang, "orgclaim.title_short"), h.claim ? CLAIM_BLOCKS.map((b): [string, string] => [`org:${b}`, t(lang, BLOCK_KEY[b])]) : []),
     group("matches", t(lang, "dash.kind_matches"), h.claim ? [["matches:", t(lang, "dash.kind_matches")]] : []),
@@ -1589,11 +1629,14 @@ const Starters: FC<{ lang: Lang; account: Account; h: Holdings; board: string | 
 // do, with Start From first (starters). Its posts and its search name the
 // dashboard shown once one is stored (board), so the tile goes there. A text
 // tile is kept only with the grid's tables.
+// While the analytics builder is the reader's (builder), a fourth group between
+// Analytics and Text, Build a View: the builder's page, where a view is made
+// and its own Add to dashboard puts it, or its latest figure, on a dashboard.
 const AddTile: FC<{
   lang: Lang; account: Account; h: Holdings; n: number; cap: number; keeping: Keeping; taken: ReadonlySet<string>; more: readonly MoreLine[]; open: boolean;
-  starters?: boolean;
-}> = ({ lang, account, h, n, cap, keeping, taken, more, open, starters }) => {
-  const choices = addChoices(lang, h, taken);
+  starters?: boolean; builder?: boolean;
+}> = ({ lang, account, h, n, cap, keeping, taken, more, open, starters, builder }) => {
+  const choices = addChoices(lang, h, taken, builder);
   const board = keeping === "tiles" ? h.board?.id ?? null : null;
   const lines = more.filter((l) => !l.kinds.includes("view"));
   const part = (id: string, key: Key) => <p class="dash-adder-part" id={id}>{t(lang, key)}</p>;
@@ -1630,6 +1673,11 @@ const AddTile: FC<{
               <button type="submit" class="btn">{t(lang, "dash.find")}</button>
             </form>
             <p class="muted small">{tj(lang, "dash.add_analytics_line", { link: <a href="/analytics">{t(lang, "dash.more_view_link")}</a> }) as any}</p>
+            {builder ? <>
+              {part("dash-add-build", "dash.add_build")}
+              <p><a href={BUILD_PATH} class="btn" aria-describedby="dash-add-build-line">{t(lang, "dash.add_build_open")}</a></p>
+              <p class="muted small" id="dash-add-build-line">{t(lang, "dash.add_build_line")}</p>
+            </> : null}
             {part("dash-add-text", "dash.add_text")}
             {keeping === "panels" ? <p class="muted small">{t(lang, "dash.text_unsaved")}</p> : (
               <form method="post" action={`${DASHBOARD_PATH}/panels`} class="stack" aria-labelledby="dash-add-text">
@@ -1786,7 +1834,7 @@ export const DashTile: FC<{ lang: Lang; account: Account; d: Drawn; offer: Recor
           lead={r.job ? <a href={r.href} class="dash-menu-item">{t(lang, "dash.open")}</a> : null} />
       </div>
       <div class={body?.cls ? `dash-body ${body.cls}` : "dash-body"}>
-        {!r.job ? <p>{t(lang, "dash.gone")}</p>
+        {!r.job ? <p>{t(lang, r.note ?? "dash.gone")}</p>
           : body ? (body.body as any)
           : <p class="muted">{t(lang, "dash.unavailable")}</p>}
       </div>
@@ -1905,7 +1953,7 @@ type BoardPool = { line: PoolLine; past: ReadonlySet<string> };
 
 export function dashboardView(
   lang: Lang, account: Account,
-  s: { drawn: Drawn[]; h: Holdings; starter: boolean; keeping: Keeping; notice: string | null; cap: number; boards: number; pool?: BoardPool },
+  s: { drawn: Drawn[]; h: Holdings; starter: boolean; keeping: Keeping; notice: string | null; cap: number; boards: number; pool?: BoardPool; builder?: boolean },
 ) {
   const n = s.drawn.length;
   const emptied = !s.starter && !n;
@@ -1925,7 +1973,7 @@ export function dashboardView(
           dashboard's open Add a Tile never covers them. */}
       <PageHead lang={lang} title={t(lang, "dash.title")} lead={t(lang, "dash.lead")}
         actions={<AddTile lang={lang} account={account} h={s.h} n={n} cap={s.cap} keeping={s.keeping} taken={taken} more={more} open={emptied}
-          starters={emptied && s.keeping !== "none"} />}>
+          starters={emptied && s.keeping !== "none"} builder={s.builder} />}>
         {tabs.length ? <BoardTabs lang={lang} account={account} tabs={tabs} cap={s.boards} pool={s.pool} /> : null}
       </PageHead>
       {s.notice ? <p class="account-notice" role="status">{s.notice}</p> : null}
@@ -1988,9 +2036,10 @@ function boardPool(h: Pick<Holdings, "board">, pool: Awaited<ReturnType<typeof p
 
 // What a Free or Pro account reads at the address while Ultra is on sale:
 // the head, what the dashboard holds (Ultra's figures, as its plan card
-// states them), the gate line and the plan cards. Ultra's link is the page's
-// filled button, the dashboard being Ultra's.
-export function teaseView(lang: Lang, cards: ReturnType<typeof planCards>) {
+// states them; the builder's two kinds only while its switch is on), the gate
+// line and the plan cards. Ultra's link is the page's filled button, the
+// dashboard being Ultra's.
+export function teaseView(lang: Lang, cards: ReturnType<typeof planCards>, builder = false) {
   const own = cards.map((c) => ({ ...c, actions: c.actions.map((a) => ({ ...a, primary: c.plan === "ultra" && a === c.actions[0] })) }));
   const ultra = dashboardsWording("ultra");
   return (
@@ -1998,7 +2047,7 @@ export function teaseView(lang: Lang, cards: ReturnType<typeof planCards>) {
       <PageHead lang={lang} title={t(lang, "dash.title")} />
       <Panel title={t(lang, "dash.what_title")}>
         <p>{t(lang, "dash.what_lead", { line: t(lang, ultra.key, ultra.vars?.(lang)) })}</p>
-        <ul>{TEASE_KINDS.map((k) => <li>{t(lang, WHAT_KEY[k])}</li>)}</ul>
+        <ul>{teaseKinds(builder).map((k) => <li>{t(lang, WHAT_KEY[k])}</li>)}</ul>
       </Panel>
       <p class="muted">{t(lang, "dash.gate")} <a href="/account/billing">{t(lang, "billing.link_plans")}</a></p>
       <PlanCards lang={lang} plans={own} />
@@ -2039,7 +2088,7 @@ export async function dashboardPage(c: Context<AppEnv>, who: Account, board: str
   if (!holdsDashboard(who.plan)) {
     const [price, ultra] = [checkoutPrice(c.env), await ultraCheckoutPrice(c.env)];
     const cards = planCards(lang, { price, ultra, reader: who.plan === "pro" ? "pro" : "free", place: "tease" });
-    return dashPage(c, teaseView(lang, cards), board ? boardPath(board) : DASHBOARD_PATH);
+    return dashPage(c, teaseView(lang, cards, builderOn(c.env)), board ? boardPath(board) : DASHBOARD_PATH);
   }
   // For an account in a group, the subscription's counts (pool.ts), one statement beside the page's own reads.
   const [h, read] = await Promise.all([readHoldings(c.env, who.userId, { board }), poolOf(c.env, who)]);
@@ -2063,7 +2112,8 @@ export async function dashboardPage(c: Context<AppEnv>, who: Account, board: str
   const { list, starter, keeping } = shownTiles(h);
   const drawn = await drawTiles(c, who, h, list);
   const notice = noticeOf(drawn.length);
-  return dashPage(c, dashboardView(lang, who, { drawn, h, starter, keeping, notice, cap, boards, ...(pool ? { pool } : {}) }), at);
+  const builder = buildsOn(c.env, who.plan);
+  return dashPage(c, dashboardView(lang, who, { drawn, h, starter, keeping, notice, cap, boards, ...(pool ? { pool } : {}), ...(builder ? { builder } : {}) }), at);
 }
 
 // One tile at a size, for the page's script after a resize: the tile's
@@ -2178,7 +2228,9 @@ export async function addPanelPost(c: Context<AppEnv>, who: Account, fields: Rec
     : [fields.kind, fields.ref ?? ""];
   const text = typeof fields.panel !== "string" && kind === "text" ? noteText(fields.text) : null;
   const h = await readHoldings(c.env, who.userId, { board: want });
-  const spec: Spec | null = text !== null ? { kind: "text", ref: newId(), wide: false } : specOf(kind, ref, h);
+  // A builder's view is taken only while the builder is the reader's, its address read at the data date's year.
+  const build = isBuildKind(kind) && buildsOn(c.env, who.plan) ? await buildContext(c.env) : null;
+  const spec: Spec | null = text !== null ? { kind: "text", ref: newId(), wide: false } : specOf(kind, ref, h, build);
   if (!spec) return c.text(t(lang, "form.rejected"), 400);
   // A dashboard deleted meanwhile (another tab): the first, with nothing added.
   if (want && h.board && !h.board.found) return back(c);

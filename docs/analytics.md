@@ -1004,6 +1004,69 @@ answers a view of a cube with "The builder's figures cannot be read right
 now." (503, never a 500), as does a database loading; a view that reads
 records alone still draws.
 
+**A view kept on the account** (`site/src/account/build_views.tsx`; the
+dashboard's side and the saved view's are in `docs/accounts.md`, Dashboard
+and Saved views). An Ultra reader's view carries, beside its CSV link, "Add
+to dashboard": the view as a tile of kind `build`; and, where the view gives
+one figure a fiscal year (one subject, by fiscal year or for the period, not
+the contracts ending: `builder.ts figureOffered`), "Add its latest figure to
+dashboard", a tile of kind `number`. Both are the analytics panels' own
+control and post (`dashboard_add.tsx AddToDashboard`,
+`POST /account/dashboard/panels`), with the account's dashboards to choose
+from when it holds several. Under the result, "Save this view" (the analytics
+views' own control, `view_pages.tsx SaveViewRow`) keeps it as a saved view of
+kind `build`. Both sit inside the result, so the preview redraws them with
+the view; nothing of them is read or drawn for any other reader, nor while
+the switch is off.
+
+The address kept is the view's in its one form (`builder.ts buildAddress`),
+at most 2,000 characters (the bound of a tile's stored options, `OPTS_MAX`).
+A post must give that form, for a view the menus offer and a subject chosen
+in full (each buyer one the buyers' list holds), or it is refused (400).
+Read back on the dashboard, the address is read as the page reads one
+(`readBuild`) and checked again (`buildProblem`), never trusted as stored: a
+combination the menus no longer offer says why, as the page does; a buyer
+the list no longer holds says that what the tile showed was removed.
+
+A tile reads the page's own statements (`builder_sql.ts buildPlan`, with
+`cube_meta` first for a cube) in the dashboard's one records batch, and is
+drawn by the page's own code (`pages/builder.tsx buildTileBody`): the chart,
+the sorted bars or the figures over the table, or the table alone, at the
+tile's size (`account/dashboard_fit.ts buildFit`: the rows its table lists,
+each plot's height, the axis thinned to its width; a comparison's sorted
+bars share the rows among its subjects). A cube the nightly has not filled,
+or a table missing, leaves that tile unreadable and the others as they are.
+
+A tile of one figure (`pages/builder.tsx figureBody`) reads the same view by
+fiscal year over its last fiscal year and the one before
+(`builder.ts figureChoice`), through the same statements, and shows the last
+year's figure. A year to date (the data date's) is part of a year, so it is
+never set against a whole one: under it the year before stands in full, a
+figure of its own in its own form, comparing nothing ("2025-26, the full
+year: $53.5M"; a count, a value, a median, a share in per cent; "no figure"
+when it has none). Two whole years give the change from the year before,
+with its sign: a value, an average or a median as a percentage, a count of
+records or of organizations as a count, a share (or the change through
+amendments) in percentage points; "No change from" the year when they are
+equal, and "No figure for" the year "to compare with" when the year before
+has none. A median, a count of organizations and a largest share are each
+year's own figure, never added. The words say how a figure moved and
+nothing of what that means.
+
+A chart's axis on a tile, a builder view's as an analytics table's, rests
+its labels by the width the tile is drawn at, whatever the layout
+(`site/src/chart.tsx tileLabels`): the labels are thinned for each tier of
+the tile's inside width (`TILE_TIERS`, from a four-column tile at 1,100 px
+up), each label carries the tiers it rests in, and the stylesheet's
+container queries on the tile hide it there, so two labels never touch from
+a phone to the widest grid (`site/test/tile-labels.test.ts`).
+
+The dashboard's find page gives each match "Open in the builder" (its value
+by fiscal year over the latest ten fiscal years, at the source its checklist
+opens on, `builder.ts buildLink`), and the builder's organization field
+links to it ("Find an organization by name"), so a reader never types an
+organization's id. A saved view of the builder is never sent by email.
+
 ## Phase 3
 
 - Price benchmarks from comparable awards. `rec_classes` now carries each

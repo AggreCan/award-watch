@@ -3363,9 +3363,10 @@ analytics table on a tile is drawn by the analytics view's own code in
 dashboard of 24 tiles, the analytics tables and the analytics pages' own
 Add to dashboard, the text tile), `site/test/dashboard-aid.test.ts` (More
 Kinds of Tile), `site/test/dashboard-doors.test.ts` (the find page, the
-checklist and its post, a saved view's link, the starters) and a 12-tile, a
-24-tile, a 24-analytics-table and a checklist entry in
-`site/test/cpu-budget.test.ts`.
+checklist and its post, a saved view's link, the starters),
+`site/test/builder-tiles.test.ts` (the analytics builder's two kinds, *Views
+of the analytics builder*) and a 12-tile, a 24-tile, a 24-analytics-table, a
+24-builder-view and a checklist entry in `site/test/cpu-budget.test.ts`.
 
 ### Several dashboards
 
@@ -3967,6 +3968,80 @@ added from Add a Tile's Text group; an add with no text adds nothing
 (`?m=text_empty`). It is kept only with the grid's tables
 (*The three states of storage*).
 
+### Views of the analytics builder
+
+Two kinds of tile show a view made in the analytics builder
+(`site/src/account/build_views.tsx`; the builder is in `docs/analytics.md`,
+The builder): `build`, the view's chart, sorted bars or figures over its
+table, or its table alone, at the tile's size; and `number`, its latest
+figure, with its change from the fiscal year before. Both, and everything
+below, exist only while the builder's switch (`BUILDER`) is on and the
+reader's plan holds the builder (Ultra): with it off, no page offers either
+kind, no post of either is taken (400), the tease does not name them, every
+page is byte for byte as it was, and a tile kept from before reads nothing
+and says "This tile cannot be read right now."
+
+- **Its ref** is the view's address in the builder's one form
+  (`builder.ts buildAddress`, `/analytics/build?...`), at most 2,000
+  characters (`OPTS_MAX`), so the same view is the same item once on a
+  dashboard (a `build` and a `number` tile of one view are two items). A
+  post (`POST /account/dashboard/panels`, `kind` and `ref`, the dashboard's
+  own post, in its bucket) must give that form for a view the menus offer and
+  a subject chosen in full (each buyer one the buyers' list holds), and a
+  `number` tile a view that gives one figure a fiscal year (one subject, by
+  fiscal year or for the period, never the contracts ending); anything else
+  is 400. Read back, the address is read as the builder reads one and
+  checked again: a combination no longer offered says why, a buyer the list
+  no longer holds says that what the tile showed was removed. No schema
+  change: `kind` has no CHECK.
+- **Its reads** are the builder page's own statements (`builder_sql.ts
+  buildPlan`; a figure's through `builder.ts figureChoice`, the view by
+  fiscal year over its last year and the one before), with `cube_meta` first
+  for a cube, in the page's one records batch: at most three statements a
+  tile. The buyers' list (`buyers/index.json`) is read once for a page that
+  holds such a tile. A cube missing or not filled yet leaves that tile
+  unreadable and the others as they are.
+- **What it shows**: headed by the view's title ("Value by fiscal year"; a
+  figure by its figure, "Median value"), its subject the item, its source and
+  period in the foot ("Contracts ending from" the date for the contracts
+  ending), Open the view in the builder. A figure: the last fiscal year's,
+  in the short form with the exact figure as its tip. When that year is the
+  data date's ("2026-27 (to date)") it is never set against a whole year:
+  under it the year before stands in full as a figure of its own ("2025-26,
+  the full year: $53.5M"). When both years are whole, under it is its change
+  from the year before with its sign (a value, an average or a median as a
+  percentage; records and organizations as a count; a share in percentage
+  points), or "No change from", or "No figure for ... to compare with". The
+  words say how a figure moved and nothing of what that means.
+- **Its chart's axis** rests its labels by the tile's own width at any
+  layout (`site/src/chart.tsx tileLabels`, the container queries on
+  `.dash-tile`), as an analytics table's does.
+- **Its sizes** (`dash-grid.js LEAST` and `START_H`, `dashboard_fit.ts
+  buildFit`): `build:chart` (a chart of one panel) 4 columns by 10 rows from 7
+  columns, 13 narrower, starting at 13; `build:two` (two panels, the
+  contracts ending's two charts among them) 4 by 12, 15 narrower, starting at
+  15; `build:panels` (three to five: a comparison, the three largest shares)
+  8 by 16; `build:ranked` 4 by 8, 13 narrower, starting at 13; `build:number`
+  (the figures over the table) 4 by 9, 12 narrower, starting at 12;
+  `build:table` 4 by 6, 10 narrower, starting at 10; `number` 3 by 5.
+- **Add a Tile** gains a group between Analytics and Text, Build a View: Open
+  the analytics builder, where a view's own Add to dashboard puts it, or its
+  latest figure, on the dashboard the reader chooses. The From Your Lists
+  select lists the account's saved views of the builder as Saved Builder
+  Views, each a `build` tile.
+- **The find page** gives each buyer, organization and segment it lists
+  "Open in the builder" beside its checklist: its value by fiscal year over
+  the latest ten fiscal years, at the source the checklist opens on. The
+  builder's organization field links to the find page ("Find an organization
+  by name").
+
+`site/test/builder-tiles.test.ts` holds the switch (off, absent and another
+value byte for byte, nothing read), the posts' checks, the one records batch,
+the figures worked out from the rows, the tiles that cannot be read, the
+fragment, the third door, the builder page's controls, the saved view and its
+email, the find page and both languages; `site/test/cpu-budget.test.ts` a
+dashboard of 24 builder views (`DASHBOARD_BUILD_BOUND`).
+
 ### Operator step
 
 Apply the schema, as for every earlier table (it adds `dashboards`,
@@ -4033,7 +4108,7 @@ message in `site/test-mail/`.
 
 | Table | Columns | Rule |
 |---|---|---|
-| `saved_views` | `id`, `user_id`, `kind` (`buyer`, `organization`, `segment`; `build` held for the analytics builder), `address` (at most 2,000 characters), `name` (at most 60), `lang`, `deliver` (`weekly`, `monthly`, `off`), `created_at`, `last_delivered_at`, `last_hash`, `secret`; unique on (`user_id`, `address`) | At most the plan's figure per account, held inside the insert (`ADD_VIEW_SQL`), so two posts at once cannot pass it; an address once |
+| `saved_views` | `id`, `user_id`, `kind` (`buyer`, `organization`, `segment`; `build`, a view of the analytics builder), `address` (at most 2,000 characters), `name` (at most 60), `lang`, `deliver` (`weekly`, `monthly`, `off`; always `off` for `build`), `created_at`, `last_delivered_at`, `last_hash`, `secret`; unique on (`user_id`, `address`) | At most the plan's figure per account, every kind counted together, held inside the insert (`ADD_VIEW_SQL`), so two posts at once cannot pass it; an address once |
 | `view_deliveries` | `id`, `view_id`, `sent_at`, `day` (the data date), `status` (`sent`, `failed`, `same`) | One row per run of a view; kept 90 days (`VIEW_DELIVERY_DAYS`, swept by the run) and with the view |
 
 `last_hash` is the SHA-256 of the figures the last message carried (the
@@ -4068,6 +4143,22 @@ Free, Save this view leads to the saved views page, which names the plans
 that keep views. The control is absent while the switch is off, for a reader
 not signed in, and while `saved_views` is not on the database.
 
+A view of the analytics builder (kind `build`, `site/src/account/build_views.tsx`)
+is saved the same way from the builder's page, under its result, for an
+Ultra reader while the builder's switch (`BUILDER`) is on: the post carries
+the view's address in the builder's one form, which must come back the same
+from the builder's own reading, for a view its menus offer and a subject
+chosen in full, or it is refused (400); Pro, Free and every reader while the
+switch is off are refused too. Left unnamed it takes the site's label: what
+it is about and its title, then its source and period ("Public Services and
+Procurement Canada: Value by fiscal year, PSPC contract history, ..."), cut
+as an analytics view's is. It is kept by the same insert, counted with the
+others against the plan's figure (and a group's, `ADD_VIEW_GROUP_SQL`). It is
+never sent by email: its row has no select (it reads "Not sent by email."),
+`POST /account/views/:id` leaves it off (`SET_DELIVERY_SQL` holds a `build`
+view to `off` inside the statement), and the run never takes one up (its
+address is no analytics view's, which the run reads every address as).
+
 ### The page
 
 `/account/views` lists the views in the order they were saved, each with a
@@ -4084,7 +4175,11 @@ an organization's view whose id the nightly merged into another is pointed at
 the surviving id when the page is read, as a watch is; one that would then
 repeat a view the account keeps is merged into it. The analytics index
 (`/analytics`) lists the account's saved views in its Saved Views panel. The
-page is the site's 404 until the schema holds `saved_views`.
+page is the site's 404 until the schema holds `saved_views`. A view of the
+builder is listed as "Analytics builder", its link opening it in the
+builder, with Add to dashboard as a tile of its own (kind `build`) and no
+Choose its tables; while the builder is not the reader's, it is named, not
+linked, with no Add to dashboard, and stays counted and removable.
 
 ### The email
 
@@ -4156,8 +4251,8 @@ a fault), and a send that does not go gives every claim back, with each one's
 | Route | What it does |
 |---|---|
 | `GET /account/views` | the page |
-| `POST /account/views` | save a view: `address` and `name` |
-| `POST /account/views/:id` | its email: `deliver` weekly, monthly or off; on only for Ultra while Ultra is on sale |
+| `POST /account/views` | save a view: `address` and `name` (an analytics view's, or a builder view's while the builder is the reader's) |
+| `POST /account/views/:id` | its email: `deliver` weekly, monthly or off; on only for Ultra while Ultra is on sale, and never for a builder's view |
 | `POST /account/views/:id/delete` | remove it, and its tiles on every dashboard |
 | `GET`, `POST /account/stop?v=&t=` | the view's stop page, and turning its email off (one-click too) |
 

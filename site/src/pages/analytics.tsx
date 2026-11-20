@@ -58,7 +58,7 @@ import type { Context } from "hono";
 import { ProTag, UltraTag } from "../pro";
 import type { FC } from "hono/jsx";
 import {
-  ChartStack, RankedBars, barGap, fiscalAxis, moneyTip, partOf, recordsText, thinLabels, tipHead, tipText, type AxisLabel, type Panel as ChartPanel,
+  ChartStack, RankedBars, barGap, fiscalAxis, moneyTip, partOf, recordsText, tileLabels, tipHead, tipText, type AxisLabel, type Panel as ChartPanel,
   type RankedBar, type YearPoint,
 } from "../chart";
 import { type Sorting, Table } from "../columns";
@@ -134,7 +134,8 @@ export function tableApplies(view: View, table: string, source: MoneySource): bo
 // in the browser.
 export type TileFit = { rows: number; plot: number; width: number; grow?: (shown: number) => number };
 const sortingOf = (fit: TileFit | undefined): Sorting | undefined => (fit ? "none" : undefined);
-const labelsAt = (labels: AxisLabel[], fit: TileFit | undefined): AxisLabel[] => (fit ? thinLabels(labels, fit.width) : labels);
+// A tile's axis labels rest by the tile's own width, whatever the layout (chart.tsx tileLabels).
+const labelsAt = (labels: AxisLabel[], fit: TileFit | undefined): AxisLabel[] => (fit ? tileLabels(labels) : labels);
 const firstRows = <T,>(rows: readonly T[], fit: TileFit | undefined): readonly T[] => (fit ? rows.slice(0, fit.rows) : rows);
 
 // -- the request -------------------------------------------------------------------

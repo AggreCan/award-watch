@@ -18,6 +18,9 @@ export const STARTER_PATH = `${DASHBOARD_PATH}/starter`;
 // own figures are RULES[plan].dashboards and RULES[plan].dashboard_tiles.
 export const DASHBOARDS_MAX = 5;
 export const TILES_MAX = 24;
+// The longest opts a tile keeps (accounts_schema.sql dashboard_tiles.opts), and the longest address a builder view's
+// tile keeps as its ref (build_views.tsx): here, so the tiles of the builder read it without the page.
+export const OPTS_MAX = 2000;
 
 // How many dashboards a plan keeps, and how many tiles each holds: none on Free and Pro.
 export const boardCap = (plan: Plan | null | undefined): number => Math.min(RULES[plan ?? "free"].dashboards, DASHBOARDS_MAX);

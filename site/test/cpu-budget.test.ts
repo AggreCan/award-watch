@@ -19,7 +19,7 @@ import { app } from "../src/index";
 import { FILES, TEST_NOW, testEnv } from "./assets";
 import { PA_BUYER_PAYEES, PA_BUYER_WORKS, PA_FREE_YEARS, PA_PROFILE_ROWS } from "../src/public_accounts";
 import { FIRST_FOLLOWS_SQL, RADAR_PAGE_ROWS } from "../src/records_tables";
-import { BUYERS_SEGMENTS_SQL, CUBE_META_SQL } from "../src/builder_sql";
+import { BUYERS_SEGMENTS_SQL, BUYERS_YEARS_SQL, CELL_YEARS_SQL, CUBE_META_SQL, PLACE_ALL_SQL, SEGMENTS_SQL, TOP_BUYERS_SQL } from "../src/builder_sql";
 import { SEGMENT_CODES } from "../src/constants";
 import { homeApp } from "./home";
 import DND from "./fixtures/buyer-dnd-mdn.json";
@@ -1049,5 +1049,74 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
     expect(batches).toEqual([3]);
     const r = await signedInRatio(path, 8, accounts, '<div id="build-result"', { ...extra, RECORDS: records });
     expect(r, `${path} ${r.toFixed(2)}`).toBeLessThanOrEqual(BUILDER_BOUND);
+  }, 120_000);
+
+  // A dashboard of 24 views of the analytics builder (B4b, 2026-11-20; account/build_views.tsx): twelve views drawn
+  // at their size (charts of one to three panels over 20 fiscal years, sorted bars of 25 of 57 segments and of the
+  // largest buyers, a province list, two buyers' segments, tables, figures) and twelve latest figures, every cube
+  // statement answered with its rows; its records read in one batch. About three times the larger of two ratios
+  // measured then (in brackets), rounded up.
+  const DASHBOARD_BUILD_BOUND = 42; // [14.00, 14.00]
+  it("keeps an Ultra account's dashboard of 24 builder views within its bound, their records read in one batch", async () => {
+    clearParsedCache();
+    clearClosingCache();
+    const v = (q: string) => `/analytics/build?${q}`;
+    const span = "from=2007&to=2026";
+    const views = [
+      v(`subject=all&rows=year&measure=value&source=awards&${span}&show=bars`), v(`subject=all&rows=year&measure=median&source=history&${span}&show=line`),
+      v(`subject=buyer&b=pwgsc-tpsgc&rows=year&measure=value&source=history&${span}&show=bars`),
+      v(`subject=buyers&b=pwgsc-tpsgc&b=dfo-mpo&b=dnd-mdn&rows=year&measure=value&source=awards&${span}&show=line`),
+      v(`subject=buyer&b=pwgsc-tpsgc&rows=year&measure=largest&source=history&${span}&show=line`),
+      v(`subject=all&rows=segment&measure=value&source=history&${span}&show=ranked&top=25`), v(`subject=all&rows=buyer&measure=value&source=awards&${span}&show=ranked&top=25`),
+      v(`subject=all&rows=province&measure=value&source=awards&${span}&show=ranked&top=25`),
+      v("subject=buyers&b=pwgsc-tpsgc&b=dfo-mpo&rows=segment&measure=noncompetitive&source=awards&from=2026&to=2026&show=ranked&top=25"),
+      v(`subject=all&rows=segment&measure=records&source=history&${span}&show=table&top=25`), v(`subject=all&rows=year&measure=noncompetitive&source=history&${span}&show=table`),
+      v(`subject=buyer&b=pwgsc-tpsgc&rows=none&measure=value&source=history&${span}&show=number`),
+    ];
+    const figures = [
+      views[0], views[1], views[2], views[4], views[10], views[11], v(`subject=all&rows=year&measure=records&source=awards&${span}&show=bars`),
+      v(`subject=all&rows=year&measure=average&source=awards&${span}&show=line`), v(`subject=all&rows=year&measure=organizations&source=awards&${span}&show=bars`),
+      v(`subject=all&rows=year&measure=amendments&source=history&${span}&show=line`), v(`subject=segment&s=81&rows=year&measure=value&source=awards&${span}&show=bars`),
+      v(`subject=buyer&b=dfo-mpo&rows=none&measure=records&source=awards&${span}&show=number`),
+    ];
+    const SIZES: readonly [number, number][] = [[12, 16], [8, 14], [6, 15], [12, 16], [8, 16], [6, 13], [12, 14], [4, 13]];
+    const tiles = [
+      ...views.map((ref, i) => ({ id: `${i}`.padStart(32, "a"), kind: "build", ref, opts: "", x: 0, y: i * 16, w: SIZES[i % SIZES.length][0], h: SIZES[i % SIZES.length][1] })),
+      ...figures.map((ref, i) => ({ id: `${i}`.padStart(32, "f"), kind: "number", ref, opts: "", x: (i % 4) * 3, y: 200 + Math.floor(i / 4) * 5, w: 3, h: 5 })),
+    ];
+    const accounts = ultraAccounts(await sha256Hex(SECRET), tiles);
+    const cell = (i: number) => ({
+      n: 40 + i, cents: 9_000_000_000 - i * 1_000_000, n_no_value: 1, n_nc: 7, n_unstated: 2, n_pos: 37, pos: 8_900_000_000 - i * 1_000_000,
+      pos_nc: 1_100_000_000, pos_unstated: 50_000_000, med: 1_234_567 + i, n_orgs: 30 + i, top1: 2_000_000_000, top5: 5_000_000_000, top10: 7_000_000_000,
+      n_amended: 9, n_compared: 8, n_grew: 5, first_cents: 900_000_000, last_cents: 1_000_000_000 + i,
+    });
+    const years = Array.from({ length: 20 }, (_, i) => ({ fy: 2007 + i, ...cell(i) }));
+    const buyerIds = ["pwgsc-tpsgc", "dfo-mpo", "dnd-mdn"];
+    const batches: number[] = [];
+    const records = stubDb((sql) => {
+      if (sql.includes("FROM rec_meta")) return [{ key: "state", value: "ready" }, { key: "as_of", value: "2026-10-31" }];
+      if (sql === CUBE_META_SQL) return [{ as_of: "2026-10-30" }];
+      if (sql === CELL_YEARS_SQL) return years;
+      if (sql === BUYERS_YEARS_SQL) return buyerIds.flatMap((id) => years.map((y) => ({ id, ...y })));
+      if (sql === SEGMENTS_SQL) return SEGMENT_CODES.map((code, i) => ({ sid: Number(code), ...cell(i) }));
+      if (sql === BUYERS_SEGMENTS_SQL) return buyerIds.slice(0, 2).flatMap((id) => SEGMENT_CODES.map((code, i) => ({ id, sid: Number(code), ...cell(i) })));
+      if (sql === TOP_BUYERS_SQL) return Array.from({ length: 25 }, (_, i) => ({ id: `buyer-${i}`, name_en: `Department number ${i}`, name_fr: null, ...cell(i) }));
+      if (sql === PLACE_ALL_SQL) return ["", "AB", "BC", "MB", "NB", "NL", "NS", "NT", "NU", "ON", "PE", "QC", "SK", "YT"].map((prov, i) => ({ prov, ...cell(i) }));
+      return [];
+    });
+    const counted = { ...records, batch: (list: D1PreparedStatement[]) => (batches.push(list.length), records.batch(list)) } as D1Database;
+    const first = await app.request("/account/dashboard", { headers: { "sec-fetch-mode": "navigate", cookie: COOKIE } },
+      { ...env, ASSETS: assetsOf(FIT_BODIES, "v1-fit"), ACCOUNTS: accounts, ACCOUNTS_ENABLED: "true", RECORDS: counted, BUILDER: "on" });
+    const html = await first.text();
+    expect(html.match(/<section class="panel dash-tile/g)).toHaveLength(24);
+    expect(html).not.toContain("This tile cannot be read right now.");
+    expect(html).not.toContain("What this tile showed was removed.");
+    // The twelve figures, and the one-number view's own.
+    expect(html.match(/<div class="dash-figure">/g)).toHaveLength(13);
+    // One batch, and nothing read apart from it: the state row, then each tile's cube_meta and its one or two statements.
+    expect(batches).toHaveLength(1);
+    expect(batches[0]).toBe(1 + 2 * 24);
+    const r = await signedInRatio("/account/dashboard", 8, accounts, '<div class="dash-grid" id="dash-grid">', { RECORDS: records, BUILDER: "on" });
+    expect(r, `/account/dashboard, 24 builder views ${r.toFixed(2)}`).toBeLessThanOrEqual(DASHBOARD_BUILD_BOUND);
   }, 120_000);
 });
