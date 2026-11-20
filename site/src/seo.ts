@@ -302,6 +302,17 @@ function local(lang: Lang, both: Both): string {
   return lang === "fr" ? frTypography(both.fr) : both.en;
 }
 
+// The landing page's description (pages/landing.tsx), what a result list
+// shows for "/": a crawler carries no session, so it always gets the landing
+// page. The app home a signed-in reader gets at the same address, and the
+// pages with no Seo of their own, keep PAGES.home's text. Here the 12-month
+// list is no longer called free (it is Pro's), and no source is called
+// complete (grants to individuals are left out).
+const LANDING_DESCRIPTION: Both = {
+  en: "Federal tenders, who won them and the contracts ending soon, from CanadaBuys and open.canada.ca, read nightly and joined by organization. Free to read.",
+  fr: "Appels d'offres fédéraux, gagnants et fins de contrat d'AchatsCanada et d'ouvert.canada.ca, lus chaque nuit et réunis par organisation. Lecture gratuite.",
+};
+
 // Pages with no Seo of their own (errors, the thank-you page) still carry a
 // description: the home page's.
 export function defaultDescription(lang: Lang): string {
@@ -384,7 +395,9 @@ export function searchUrlTemplate(lang: Lang): string {
   return `${SITE_ORIGIN}/search?q={search_term_string}${lang === "fr" ? "&lang=fr" : ""}`;
 }
 
-export function homeJsonLd(lang: Lang): object {
+// description: the WebSite's description, the home page's unless given (the
+// landing page gives its own, landingSeo).
+export function homeJsonLd(lang: Lang, description: Both = PAGES.home.description): object {
   return {
     "@context": "https://schema.org",
     "@graph": [
@@ -395,7 +408,7 @@ export function homeJsonLd(lang: Lang): object {
         name: SITE_NAME,
         alternateName: [...SITE_ALTERNATE_NAMES],
         url: canonicalUrl("/", lang),
-        description: local(lang, PAGES.home.description),
+        description: local(lang, description),
         inLanguage: ["en-CA", "fr-CA"],
         publisher: { "@id": ORG_ID },
         potentialAction: {
@@ -406,6 +419,13 @@ export function homeJsonLd(lang: Lang): object {
       },
     ],
   };
+}
+
+// The landing page's head: the home page's title, canonical address and
+// markup, with the landing page's own description in the meta tags and the
+// WebSite markup alike.
+export function landingSeo(lang: Lang): Seo {
+  return pageSeo("home", lang, { description: local(lang, LANDING_DESCRIPTION), jsonLd: [homeJsonLd(lang, LANDING_DESCRIPTION)] });
 }
 
 // The licence the Registry of Lobbyists publishes its data under, as its

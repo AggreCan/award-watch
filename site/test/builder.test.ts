@@ -194,13 +194,16 @@ describe("the switch", () => {
     const proFr = nbsp(decode(await (await get("/pro?lang=fr", { env: ultraEnv({ ...ON, RECORDS }) })).text()));
     expect(proFr).toContain("Avec le générateur d’analyses, vous choisissez quoi compter, comment le regrouper, la source et jusqu’à 20 exercices, et comparez jusqu’à 5 acheteurs ou organisations côte à côte.</p>");
     expect(proFr.match(/Générateur d’analyses : graphiques, tableaux/g)?.length).toBe(3);
-    // The landing page's Ultra card: on sale, its rows; before, in place of the planned line.
+    // The landing page's Ultra card: on sale, its rows; before, its last line. With the switch off the card names
+    // no builder at all, not even as planned (the landing pass of 2026-11-20).
     const landing = async (env: object) => decode(await (await app.request("/", { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": nextIp() } }, env)).text());
     expect(await landing(ultraEnv({ ...ON, RECORDS }))).toContain("<span>Analytics builder: your charts and tables</span>");
     const before = await landing(onEnv({ ...ON, RECORDS }));
     expect(before).toContain("<span>Analytics builder: your charts and tables</span>");
     expect(before).not.toContain("Planned: an analytics builder");
-    expect(await landing(onEnv({ RECORDS }))).toContain("Planned: an analytics builder");
+    const off = await landing(onEnv({ RECORDS }));
+    expect(off).not.toContain("Planned: an analytics builder");
+    expect(off).not.toContain("Analytics builder");
     const meth = decode(await (await get("/methodology", { env: onWith() })).text());
     expect(meth).toContain("The analytics builder, part of Ultra, counts by the same rules");
   });

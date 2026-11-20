@@ -14,7 +14,10 @@ import { app } from "../src/index";
 import { LANDING_ORGS, LANDING_ORGS_A, LANDING_ORGS_B, brandfetchLogoUrl } from "../src/landing_orgs";
 import { DISPLAY_FONT, LANDING_VERSION, ULTRA_GLYPH_PATH, ultraRows } from "../src/pages/landing";
 import { PLAN_ROWS, planLine, rowFor } from "../src/pro";
-import { nbsp, newEmail, onEnv, signIn, useAccountsDb } from "./accounts-helpers";
+import { RULES } from "../src/account/entitlements";
+import { GUIDES } from "../src/guides";
+import { DESCRIPTION_MAX } from "../src/seo";
+import { PRO_SALE, ULTRA_VARS, nbsp, newEmail, onEnv, signIn, useAccountsDb } from "./accounts-helpers";
 import { FILES, assetsWithout, emptyAssets, makeFakeAssets, testEnv } from "./assets";
 import { LANDING_SWITCH_PIECES, homeRequest, landingCore } from "./home";
 import STATS_MAP from "./fixtures/stats-map.json";
@@ -44,6 +47,13 @@ const decode = (s: string) => s.replace(/&#39;/g, "'").replace(/&quot;/g, '"').r
 const textOf = (s: string) => decode(s.replace(/<[^>]+>/g, ""));
 const section = (page: string, cls: string) => new RegExp(`<section class="${cls}"[\\s\\S]*?</section>`).exec(page)?.[0] ?? "";
 const PRICE = /"PRICE_MONTHLY_CAD":\s*"([0-9.]+)"[\s\S]*?"PRICE_YEARLY_CAD":\s*"([0-9.]+)"/.exec(wrangler) ?? ["", "", ""];
+// The landing page's description in a result list (src/seo.ts landingSeo), as the head carries it.
+const LANDING_DESCRIPTION = {
+  en: "Federal tenders, who won them and the contracts ending soon, from CanadaBuys and open.canada.ca, read nightly and joined by organization. Free to read.",
+  fr: "Appels d’offres fédéraux, gagnants et fins de contrat d’AchatsCanada et d’ouvert.canada.ca, lus chaque nuit et réunis par organisation. Lecture gratuite.",
+} as const;
+// Every state the page has: the accounts switch off and on, Ultra off sale and on sale.
+const sale = (extra: Record<string, unknown> = {}) => on({ ...PRO_SALE, ...ULTRA_VARS, ...extra });
 
 describe("the route", () => {
   it("serves the landing page to a reader without a session, in English and in French", async () => {
@@ -125,7 +135,7 @@ describe("the route", () => {
     expect((await request("/", off({ ASSETS: makeFakeAssets({}, { "stats.json": '{"counts":[]}' }) }))).status).toBe(503);
   });
 
-  it("carries the app home's head: title, description, canonical, alternates, social card and structured data", async () => {
+  it("carries the app home's head with a description of its own: title, canonical, alternates, social card and structured data", async () => {
     const tags = (page: string) => {
       const head = /<head>[\s\S]*?<\/head>/.exec(page)?.[0] ?? "";
       return [
@@ -135,12 +145,29 @@ describe("the route", () => {
         ...(head.match(/<script type="application\/ld\+json">[\s\S]*?<\/script>/g) ?? []),
       ];
     };
-    for (const path of ["/", "/?lang=fr"]) {
-      const landing = tags(await html(path, on()));
-      const home = tags(await (await homeRequest(path, { headers: { "sec-fetch-mode": "navigate" } }, on())).text());
-      expect(landing, path).toEqual(home);
+    // The tags that carry the description: the three meta tags and the WebSite markup.
+    const describes = (x: string | undefined) => !!x && /name="description"|property="og:description"|name="twitter:description"|application\/ld\+json/.test(x);
+    const meta = (page: string, attr: string) => decode(new RegExp(`<meta ${attr} content="([^"]*)"/>`).exec(page)?.[1] ?? "");
+    const graph = (page: string) => JSON.parse(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(page)?.[1] ?? "{}")["@graph"] as any[];
+    for (const [path, lang] of [["/", "en"], ["/?lang=fr", "fr"]] as const) {
+      const landingPage = await html(path, on());
+      const homePage = await (await homeRequest(path, { headers: { "sec-fetch-mode": "navigate" } }, on())).text();
+      const landing = tags(landingPage);
+      expect(landing.filter((x) => !describes(x)), path).toEqual(tags(homePage).filter((x) => !describes(x)));
       expect(landing.some((x) => x?.startsWith('<link rel="canonical" href="https://awardwatch.ca/'))).toBe(true);
       expect(landing.some((x) => x?.includes('"@type":"WebSite"'))).toBe(true);
+      // The landing page's own description, in the three tags and the WebSite markup, within a result list's length;
+      // the app home a signed-in reader gets keeps the home page's.
+      for (const attr of ['name="description"', 'property="og:description"', 'name="twitter:description"']) {
+        expect(nbsp(meta(landingPage, attr)), `${path} ${attr}`).toBe(LANDING_DESCRIPTION[lang]);
+      }
+      expect(LANDING_DESCRIPTION[lang].length).toBeLessThanOrEqual(DESCRIPTION_MAX);
+      expect(meta(homePage, 'name="description"')).not.toBe(meta(landingPage, 'name="description"'));
+      const [site, home] = [graph(landingPage), graph(homePage)];
+      expect(nbsp(site[1].description)).toBe(LANDING_DESCRIPTION[lang]);
+      expect(home[1].description).toBe(meta(homePage, 'name="description"'));
+      expect({ ...site[1], description: "" }).toEqual({ ...home[1], description: "" });
+      expect(site[0]).toEqual(home[0]);
     }
   });
 
@@ -328,10 +355,12 @@ describe("the two switch states", () => {
     expect(page).toContain('<a class="lp-on" href="/analytics">Analytics</a>');
     expect(page).toContain('<a class="lp-on" href="/pro">Pro</a>');
     expect(page).toContain('<a class="lp-btn lp-btn-sm lp-on" href="/account/sign-in">Sign in</a>');
-    expect(page).toContain('<a class="lp-btn lp-on" href="/pro">See Pro plans</a>');
+    expect(page).toContain('<a class="lp-btn lp-on" href="/pro">See the plans</a>');
     expect(page).toContain('<p class="lp-pro">Pro shows the day&#39;s new notices every 2 hours through the business day.</p>');
     expect(page).toContain('<p class="lp-pro">Pro opens the 6- and 12-month lists and their CSV files.</p>');
-    expect(page).toContain('<p class="lp-pro">Pro charts 10 fiscal years and watches 25 companies by email.</p>');
+    expect(page).toContain('<p class="lp-pro">Pro charts 10 fiscal years and emails each change on 25 watches.</p>');
+    expect(page).toContain('<span class="lp-watch"> Follow 3 of them with a free account and turn on a weekly email of their news.</span>');
+    expect(page).toContain('<span class="lp-note-account"> Free account, no credit card. Cancel a paid plan any time.</span>');
     // The chips sit on the plan cards and nowhere else.
     const pricing = section(page, "lp-pricing");
     expect(page.match(/class="pro-tag"/g)).toHaveLength(1);
@@ -428,13 +457,107 @@ describe("the Ultra card's form", () => {
   it("styles the field, the button and the thanks line in the card's own classes, under a new stylesheet version", () => {
     // 3 brought the card's rules; 4 and 5 the nav with Overview (a wider bar, the short French word; no wrap). 5 is the version once Overview joined them (test/overview.test.ts).
     // 6 brought the matching notices' example card (test/accounts-funnel.test.ts).
-    expect(LANDING_VERSION).toBe(6);
+    // 7 the builder's band brought up to the builder as built: its Show menu, the result's Add to dashboard, the tile's foot (test/landing-builder.test.ts).
+    expect(LANDING_VERSION).toBe(7);
     for (const rule of [".lp-ultra {", ".lp-ultra-form {", ".lp-ultra .hp {", ".lp-ultra-field input {", ".lp-ultra-btn {", ".lp-ultra-error {",
       ".lp-ultra-done {", ".lp-ultra-thanks {", ".lp-ultra-noted {", ".lp-plan-ultra { scroll-margin-top:"]) {
       expect(LANDING_CSS, rule).toContain(rule);
     }
     // The honeypot stays off screen, as on the Console pages.
     expect(LANDING_CSS).toContain(".lp-ultra .hp { position: absolute; left: -9999px; }");
+  });
+});
+
+// The landing pass of 2026-11-20: what the page says of the product as it is that day, each line as a reader reads it,
+// in both languages, with the accounts switch on and Ultra on sale (the page as production serves it).
+describe("what the page says today", () => {
+  const read = async (path: string, environment: object) => nbsp(decode((await html(path, environment)).replace(/<[^>]+>/g, " "))).replace(/\s+/g, " ");
+
+  it("says, line by line, what the records are, who publishes them, what is free and what a plan adds, in English", async () => {
+    const page = await read("/", sale());
+    for (const line of [
+      "Federal tender and award notices, contracts and grants from CanadaBuys and open.canada.ca, collected every night and joined by organization. Free to read.",
+      "See the plans",
+      "No account needed to search. Free account, no credit card. Cancel a paid plan any time.",
+      "854 open tenders by province, on 2026-10-31",
+      `Filter CanadaBuys notices by segment, province and closing date. Open the bid documents from each one. ${GUIDES.length} guides explain the rules behind a federal tender, from the trade agreements to the debrief.`,
+      "Award notices name the supplier and the value. The contracts-ending lists show the contracts that end within 3, 6 or 12 months, with the supplier holding each and the amendments that grew it. The monthly record sums up each complete month by buyer, segment and supplier, ready to cite.",
+      "See the newest awards",
+      "One page per organization: its awards, contracts, grants, lobbying and standing offers, under every name it files under. Follow 3 of them with a free account and turn on a weekly email of their news.",
+      "Pro charts 10 fiscal years and emails each change on 25 watches.",
+      "The Government of Canada publishes these records on CanadaBuys and open.canada.ca under the Open Government Licence. We read them every day at 12:30 UTC. Every row keeps its reference and a link to the original.",
+      "Search an organization or a buyer by name or business number. Award notices, contracts and grants download as CSV files, one a year. No account is needed to read a tender, an award, a contract or a profile. The site reads in English and French.",
+      "Save a search or watch an organization. Any account can turn on a weekly email on what it follows. Pro delivers by email, calendar feed and API, and checks CanadaBuys every 2 hours.",
+      "The record pages are free to read. Pro is for people who bid on federal work or track who wins it.",
+      "3 federal tenders are open.",
+    ]) expect(page, line).toContain(line);
+    // The links the bands gained: the guides beside the tenders, the monthly record beside the contracts ending.
+    const raw = await html("/", sale());
+    expect(section(raw, "lp-feat")).toContain('<a class="lp-link" href="/guides">Guides<svg');
+    expect(raw).toContain('<a class="lp-link" href="/expiring">Contracts ending<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a class="lp-link" href="/monthly">Monthly record<svg');
+    expect(raw).toContain('<a class="lp-btn lp-btn-fill" href="/awards">See the newest awards</a>');
+    // The words the pass took out, because the product does not do what they said.
+    for (const gone of ["Every tender, award, contract and grant", "searchable in one place", "right now", "See this month's awards", "Every page is free to read",
+      "No account needed to read any page", "Watch it and get each change by email", "watches 25 companies", "already in here", "See Pro plans", "Planned:"]) {
+      expect(page, gone).not.toContain(gone);
+    }
+  });
+
+  it("says the same in French", async () => {
+    const page = await read("/?lang=fr", sale());
+    for (const line of [
+      "Avis d’appel d’offres et d’attribution, contrats et subventions fédéraux d’AchatsCanada et d’ouvert.canada.ca, recueillis chaque nuit et réunis par organisation. Consultation gratuite.",
+      "Voir les forfaits",
+      "Aucun compte n’est requis pour chercher. Compte gratuit, sans carte de crédit. Un forfait payant s’annule en tout temps.",
+      "854 appels d’offres ouverts par province, au 2026-10-31",
+      `Filtrez les avis d’AchatsCanada par segment, province et date de clôture. Ouvrez les documents d’appel d’offres de chacun. ${GUIDES.length} guides expliquent les règles d’un appel d’offres fédéral, des accords commerciaux au compte rendu.`,
+      "Les avis d’attribution nomment le fournisseur et la valeur. Les listes des contrats prenant fin montrent les contrats qui se terminent d’ici 3, 6 ou 12 mois, avec le fournisseur qui détient chacun et les modifications qui l’ont fait croître. Le bilan mensuel résume chaque mois complet par acheteur, segment et fournisseur, prêt à citer.",
+      "Voir les attributions récentes",
+      "Une page par organisation : ses attributions, contrats, subventions, activités de lobbying et offres à commandes, sous chaque nom qui figure à ses dossiers. Suivez-en 3 avec un compte gratuit et activez un courriel hebdomadaire de leurs nouvelles.",
+      "Pro trace 10 exercices et envoie par courriel chaque changement de 25 suivis.",
+      "Le gouvernement du Canada publie ces dossiers sur AchatsCanada et ouvert.canada.ca sous la Licence du gouvernement ouvert. Nous les lisons chaque jour à 12 h 30 UTC. Chaque ligne garde sa référence et un lien vers l’original.",
+      "Cherchez une organisation ou un acheteur par son nom ou son numéro d’entreprise. Les avis d’attribution, les contrats et les subventions se téléchargent en fichiers CSV, un par année. Aucun compte n’est requis pour lire un appel d’offres, une attribution, un contrat ou un profil. Le site se lit en français et en anglais.",
+      "Enregistrez une recherche ou suivez une organisation. Tout compte peut activer un courriel hebdomadaire sur ce qu’il suit. Pro envoie par courriel, flux de calendrier et API, et consulte AchatsCanada toutes les 2 heures.",
+      "Les pages des dossiers se lisent gratuitement. Pro s’adresse à qui soumissionne pour des marchés fédéraux ou suit qui les remporte.",
+      "3 appels d’offres fédéraux sont ouverts.",
+    ]) expect(page, line).toContain(line);
+    expect(await html("/?lang=fr", sale())).toContain('<a class="lp-link" href="/monthly">Bilan mensuel<svg');
+  });
+
+  it("names the Registry of Lobbyists in the first step only while its records are loaded", async () => {
+    const withLobbying = { ...stats, sources: [...stats.sources, { source: "lobbying", file: "x.csv", last_read: "2026-10-31", last_modified: null, loaded: true }] };
+    const page = await read("/", on({ ASSETS: withMap({ "stats.json": { ...withLobbying, map: STATS_MAP } }) }));
+    expect(page).toContain("The Government of Canada publishes these records on CanadaBuys and open.canada.ca under the Open Government Licence, and the lobbying records on the Registry of Lobbyists. We read them every day at 12:30 UTC.");
+    expect(await read("/", on())).not.toContain("Registry of Lobbyists. We read");
+  });
+
+  it("reads each figure it states from the night's data or the code, never from a typed number", async () => {
+    // The map's date and the closing band's count follow stats.json: another night, other figures.
+    const night = { ...stats, data_as_of: "2026-11-19", counts: { ...stats.counts, tenders_open: 1 }, map: { ...STATS_MAP, open: { ...STATS_MAP.open, n: 1 } } };
+    for (const [path, words] of [["/", ["1 open tender by province, on 2026-11-19", "1 federal tender is open."]],
+      ["/?lang=fr", ["1 appel d’offres ouvert par province, au 2026-11-19", "1 appel d’offres fédéral est ouvert."]]] as const) {
+      const page = await read(path, on({ ASSETS: makeFakeAssets({}, { "stats.json": night }) }));
+      for (const w of words) expect(page, w).toContain(w);
+    }
+    // Without the open count, the closing band says what to do and names no figure.
+    const counts = { ...stats.counts };
+    delete counts.tenders_open;
+    const bare = await read("/", on({ ASSETS: makeFakeAssets({}, { "stats.json": { ...stats, counts } }) }));
+    expect(bare).toContain("Start with the open federal tenders.");
+    // The guides' count is the guides the site holds; Free's watches are RULES's; the windows are the radar's.
+    expect(await read("/", on())).toContain(`${GUIDES.length} guides explain`);
+    expect(t("en", "landing.f3_watch", { n: String(RULES.free.watchlists) })).toBe(`Follow ${RULES.free.watchlists} of them with a free account and turn on a weekly email of their news.`);
+    expect(await read("/", on())).toContain(`Follow ${RULES.free.watchlists} of them`);
+    expect(await read("/", on())).toContain("end within 3, 6 or 12 months");
+  });
+
+  it("names neither the analytics builder nor seats while their switches are off, in any state of the page", async () => {
+    for (const make of [off, on, sale, () => sale({ SEATS: "off", BUILDER: "off", BUILDER_DEMO: "off" })]) {
+      for (const path of ["/", "/?lang=fr"]) {
+        const page = (await html(path, make())).toLowerCase();
+        for (const word of ["builder", "générateur", "generateur", "seat", "siège", "siege", "/analytics/build"]) expect(page, `${path} ${word}`).not.toContain(word);
+      }
+    }
   });
 });
 

@@ -361,15 +361,15 @@ describe("the landing page's Ultra card", () => {
     expect(off).toContain('<p class="lp-pr lp-pr-unset">Price to be set <span class="lp-soon-tag">Coming soon</span></p>');
     expect(off).toContain('name="kind" value="ultra"');
     // Before it is on sale the card says who Ultra is for and lists Ultra's own lines (the saved views by email among
-    // them since they shipped), then the part still planned.
+    // them since they shipped), and nothing planned: with the builder's switch off the card does not name it (the
+    // landing pass of 2026-11-20).
     expect(off).toContain(`<p class="lp-for">${text(t("en", "plans.ultra_for"))}</p>`);
     const offCard = /<div class="lp-plan lp-plan-ultra" id="ultra">[\s\S]*?<\/ul>/.exec(off)?.[0] ?? "";
     const offRows = [...offCard.matchAll(/<li><svg[^>]*><path[^>]*><\/path><\/svg><span>([^<]*)<\/span><\/li>/g)].map((m) => m[1]);
-    expect(offRows).toEqual([text(t("en", "landing.everything_pro")), ...ultraLines("en").map(text),
-      "Planned: an analytics builder for your own measure, grouping, period and filters"]);
+    expect(offRows).toEqual([text(t("en", "landing.everything_pro")), ...ultraLines("en").map(text)]);
     expect(offRows).toContain("Saved views by email, weekly or monthly");
     expect(offRows).toContain(`${RULES.ultra.saved_views} saved analytics views`);
-    expect(offRows.some((r) => r.startsWith("Planned: saved analytics views"))).toBe(false);
+    expect(offRows.some((r) => r.startsWith("Planned"))).toBe(false);
     // With the two figures set and nothing else of Ultra's, the card shows the price beside the tag and stays the waitlist.
     const planned = text(section(await (await request("/", payEnv({ PRICE_ULTRA_MONTHLY_CAD: "38.99", PRICE_ULTRA_YEARLY_CAD: "389.99" }))).text()));
     expect(planned).toMatch(/<p class="lp-pr">\s*CA\$38\.99 <span class="lp-soon-tag">Coming soon<\/span>\s*<small>a month, or CA\$389\.99 a year<\/small>\s*<\/p>/);

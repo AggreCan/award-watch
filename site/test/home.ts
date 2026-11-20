@@ -35,7 +35,7 @@ export const LANDING_SWITCH_PIECES: readonly { what: string; re: RegExp; to: str
   // The band on matching notices, first so the pieces below find none of theirs inside it: a free account names its organization.
   { what: "the matching notices' band", re: /<section class="lp-feat lp-paper lp-flip lp-fit"[\s\S]*?<\/section>/g, to: "", onOnly: true },
   { what: "the plan cards", re: /<section class="lp-pricing"[\s\S]*?<\/section>/g, to: "", onOnly: true },
-  // The nav's Analytics and Pro links, its sign-in button, and the hero's See Pro plans.
+  // The nav's Analytics and Pro links, its sign-in button, and the hero's See the plans.
   { what: "the links to Pro, Analytics and the sign-in page", re: /<a class="[^"]*\blp-on\b[^"]*" href="[^"]*">[^<]*<\/a>/g, to: "", onOnly: true },
   // Track tenders free: a free account while accounts exist, the Atom feeds while they do not.
   { what: "Track tenders free's address", re: /href="\/account\/sign-in">/g, to: 'href="/feeds">', onOnly: true },

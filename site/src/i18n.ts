@@ -4463,18 +4463,26 @@ const STRINGS = {
   // {last} is landing.h1_last, set in the accent.
   "landing.h1_second": { en: "See who won {last}", fr: "Voyez qui a remporté {last}" },
   "landing.h1_last": { en: "the last one.", fr: "le précédent." },
+  // What the records are and who publishes them: the Government of Canada, on its two sites; the site reads
+  // and joins them. No source is called complete (grants to individuals are left out, persons' names withheld),
+  // and the search box is not said to search the records' text (it finds organizations and buyers).
   "landing.lead": {
-    en: "Every tender, award, contract and grant from CanadaBuys and open.canada.ca, read every night and searchable in one place. {free}",
-    fr: "Chaque appel d'offres, attribution, contrat et subvention d'AchatsCanada et d'ouvert.canada.ca, lus chaque nuit et consultables en un seul endroit. {free}",
+    en: "Federal tender and award notices, contracts and grants from CanadaBuys and open.canada.ca, collected every night and joined by organization. {free}",
+    fr: "Avis d'appel d'offres et d'attribution, contrats et subventions fédéraux d'AchatsCanada et d'ouvert.canada.ca, recueillis chaque nuit et réunis par organisation. {free}",
   },
-  "landing.lead_free": { en: "Free.", fr: "Gratuit." },
-  "landing.cta_plans": { en: "See Pro plans", fr: "Voir les forfaits Pro" },
+  "landing.lead_free": { en: "Free to read.", fr: "Consultation gratuite." },
+  // The hero's link to /pro, which lists every plan.
+  "landing.cta_plans": { en: "See the plans", fr: "Voir les forfaits" },
   "landing.note_search": { en: "No account needed to search.", fr: "Aucun compte n'est requis pour chercher." },
   // With the accounts switch on only.
-  "landing.note_account": { en: "Free account, no credit card. Cancel Pro any time.", fr: "Compte gratuit, sans carte de crédit. Pro s'annule en tout temps." },
+  "landing.note_account": {
+    en: "Free account, no credit card. Cancel a paid plan any time.",
+    fr: "Compte gratuit, sans carte de crédit. Un forfait payant s'annule en tout temps.",
+  },
   "landing.map_head_one": { en: "{n} open tender", fr: "{n} appel d'offres ouvert" },
   "landing.map_head_many": { en: "{n} open tenders", fr: "{n} appels d'offres ouverts" },
-  "landing.map_sub": { en: "right now, by province", fr: "en ce moment, par province" },
+  // {date} is the data date: the map counts the notices open in the night's data.
+  "landing.map_sub": { en: "by province, on {date}", fr: "par province, au {date}" },
   "landing.map_label": { en: "Open tenders by province: {n} in all", fr: "Appels d'offres ouverts par province : {n} en tout" },
   "landing.map_title_one": { en: "{province}: {n} open", fr: "{province} : {n} ouvert" },
   "landing.map_title_many": { en: "{province}: {n} open", fr: "{province} : {n} ouverts" },
@@ -4513,6 +4521,11 @@ const STRINGS = {
     en: "Filter CanadaBuys notices by segment, province and closing date. Open the bid documents from each one.",
     fr: "Filtrez les avis d'AchatsCanada par segment, province et date de clôture. Ouvrez les documents d'appel d'offres de chacun.",
   },
+  // {n} is the count of guides (src/guides.ts GUIDES); the trade agreements and the debrief each have one.
+  "landing.f1_guides": {
+    en: "{n} guides explain the rules behind a federal tender, from the trade agreements to the debrief.",
+    fr: "{n} guides expliquent les règles d'un appel d'offres fédéral, des accords commerciaux au compte rendu.",
+  },
   "landing.f1_button": { en: "Browse {n} open tenders", fr: "Parcourir les {n} appels d'offres ouverts" },
   "landing.browse_open": { en: "Browse open tenders", fr: "Parcourir les appels d'offres ouverts" },
   // The three Pro lines, with the accounts switch on only, each naming its figure.
@@ -4524,27 +4537,38 @@ const STRINGS = {
   "landing.days_many": { en: "{n} days", fr: "{n} jours" },
   "landing.f2_eyebrow": { en: "Awards and contracts", fr: "Attributions et contrats" },
   "landing.f2_heading": { en: "See who won, and what's about to end", fr: "Voyez qui a gagné, et ce qui prend bientôt fin" },
+  // {a}, {b} and {c} are the radar's three windows in months (data.ts EXPIRING_WINDOWS).
   "landing.f2_text": {
-    en: "Every award notice with its winner and value. Every published contract by end date, with the amendments that grew it.",
-    fr: "Chaque avis d'attribution avec son titulaire et sa valeur. Chaque contrat publié par date de fin, avec les modifications qui l'ont fait croître.",
+    en: "Award notices name the supplier and the value. The contracts-ending lists show the contracts that end within {a}, {b} or {c} months, with the supplier holding each and the amendments that grew it.",
+    fr: "Les avis d'attribution nomment le fournisseur et la valeur. Les listes des contrats prenant fin montrent les contrats qui se terminent d'ici {a}, {b} ou {c} mois, avec le fournisseur qui détient chacun et les modifications qui l'ont fait croître.",
   },
-  "landing.f2_button": { en: "See this month's awards", fr: "Voir les attributions du mois" },
+  // The monthly record (pages/monthly.tsx), linked beside it.
+  "landing.f2_monthly": {
+    en: "The monthly record sums up each complete month by buyer, segment and supplier, ready to cite.",
+    fr: "Le bilan mensuel résume chaque mois complet par acheteur, segment et fournisseur, prêt à citer.",
+  },
+  // /awards lists the newest award notices, whatever month they fall in.
+  "landing.f2_button": { en: "See the newest awards", fr: "Voir les attributions récentes" },
   "landing.f2_pro": { en: "Pro opens the {a}- and {b}-month lists and their CSV files.", fr: "Pro ouvre les listes de {a} et de {b} mois et leurs fichiers CSV." },
   "landing.shot_awarded": { en: "Awarded, last 30 days", fr: "Attribués, 30 derniers jours" },
   "landing.f3_eyebrow": { en: "Companies and buyers", fr: "Entreprises et acheteurs" },
   "landing.f3_heading": { en: "Follow any company, or any department", fr: "Suivez une entreprise, ou un ministère" },
   "landing.f3_text": {
-    en: "One page per organization: awards, contracts, grants and lobbying, under every name it files under.",
-    fr: "Une page par organisation : attributions, contrats, subventions et lobbying, sous chaque nom qui figure à ses dossiers.",
+    en: "One page per organization: its awards, contracts, grants, lobbying and standing offers, under every name it files under.",
+    fr: "Une page par organisation : ses attributions, contrats, subventions, activités de lobbying et offres à commandes, sous chaque nom qui figure à ses dossiers.",
   },
-  // With the accounts switch on only.
-  "landing.f3_watch": { en: "Watch it and get each change by email.", fr: "Suivez-la et recevez chaque changement par courriel." },
+  // With the accounts switch on only. {n} is Free's watches (RULES.free.watchlists); the weekly email is any
+  // account's to turn on (account/weekly.ts). Each change by email is Pro's, in landing.f3_pro.
+  "landing.f3_watch": {
+    en: "Follow {n} of them with a free account and turn on a weekly email of their news.",
+    fr: "Suivez-en {n} avec un compte gratuit et activez un courriel hebdomadaire de leurs nouvelles.",
+  },
   "landing.f3_button": { en: "Look up a company", fr: "Chercher une entreprise" },
   "landing.f3_buyers": { en: "All {n} buyers", fr: "Les {n} acheteurs" },
   "landing.f3_buyers_plain": { en: "All buyers", fr: "Tous les acheteurs" },
   "landing.f3_pro": {
-    en: "Pro charts {years} fiscal years and watches {n} companies by email.",
-    fr: "Pro trace {years} exercices et suit {n} entreprises par courriel.",
+    en: "Pro charts {years} fiscal years and emails each change on {n} watches.",
+    fr: "Pro trace {years} exercices et envoie par courriel chaque changement de {n} suivis.",
   },
   "landing.tile_reports": { en: "reports", fr: "rapports" },
   // The matching notices' band, with the accounts switch on only (src/pages/landing.tsx MatchShot): what a
@@ -4568,24 +4592,29 @@ const STRINGS = {
   "landing.how_heading": { en: "Public records, read every night", fr: "Des dossiers publics, lus chaque nuit" },
   "landing.step1_heading": { en: "We read the sources", fr: "Nous lisons les sources" },
   // {time} is the nightly run's start (DAILY_RUNS_UTC in src/refresh.tsx), written by common.time.
+  // Who publishes the records and under what licence (the lobbying records under the registry's own), then the
+  // site's reading of them.
   "landing.step1_text": {
-    en: "CanadaBuys, open.canada.ca and the Registry of Lobbyists, every day at {time} UTC. Every row keeps its reference and a link to the original.",
-    fr: "AchatsCanada, ouvert.canada.ca et le Registre des lobbyistes, chaque jour à {time} UTC. Chaque ligne garde sa référence et un lien vers l'original.",
+    en: "The Government of Canada publishes these records on CanadaBuys and open.canada.ca under the Open Government Licence, and the lobbying records on the Registry of Lobbyists. We read them every day at {time} UTC. Every row keeps its reference and a link to the original.",
+    fr: "Le gouvernement du Canada publie ces dossiers sur AchatsCanada et ouvert.canada.ca sous la Licence du gouvernement ouvert, et les dossiers de lobbying dans le Registre des lobbyistes. Nous les lisons chaque jour à {time} UTC. Chaque ligne garde sa référence et un lien vers l'original.",
   },
   "landing.step1_text_no_lobbying": {
-    en: "CanadaBuys and open.canada.ca, every day at {time} UTC. Every row keeps its reference and a link to the original.",
-    fr: "AchatsCanada et ouvert.canada.ca, chaque jour à {time} UTC. Chaque ligne garde sa référence et un lien vers l'original.",
+    en: "The Government of Canada publishes these records on CanadaBuys and open.canada.ca under the Open Government Licence. We read them every day at {time} UTC. Every row keeps its reference and a link to the original.",
+    fr: "Le gouvernement du Canada publie ces dossiers sur AchatsCanada et ouvert.canada.ca sous la Licence du gouvernement ouvert. Nous les lisons chaque jour à {time} UTC. Chaque ligne garde sa référence et un lien vers l'original.",
   },
   "landing.step2_heading": { en: "You search and filter", fr: "Vous cherchez et filtrez" },
+  // The search box finds organizations and buyers (pages/search.tsx); the Data page's yearly files are the four
+  // sources of data.tsx YEARLY_SOURCES; the record pages named here answer every reader (a plan adds panels to some).
   "landing.step2_text": {
-    en: "By company, buyer, segment, province, closing date or value. No account needed to read any page.",
-    fr: "Par entreprise, acheteur, segment, province, date de clôture ou valeur. Aucun compte n'est requis pour lire une page.",
+    en: "Search an organization or a buyer by name or business number. Award notices, contracts and grants download as CSV files, one a year. No account is needed to read a tender, an award, a contract or a profile. The site reads in English and French.",
+    fr: "Cherchez une organisation ou un acheteur par son nom ou son numéro d'entreprise. Les avis d'attribution, les contrats et les subventions se téléchargent en fichiers CSV, un par année. Aucun compte n'est requis pour lire un appel d'offres, une attribution, un contrat ou un profil. Le site se lit en français et en anglais.",
   },
   "landing.step3_heading": { en: "Changes come to you", fr: "Les changements viennent à vous" },
-  // With the accounts switch on; landing.step3_text_off while it is off, when nothing is Pro.
+  // With the accounts switch on; landing.step3_text_off while it is off, when nothing is Pro. The weekly email is
+  // any account's (account/weekly.ts): the week on what it follows, and its matching notices.
   "landing.step3_text": {
-    en: "Save a search or watch a company. Pro delivers by email, calendar feed and API, and checks CanadaBuys every {h} hours.",
-    fr: "Enregistrez une recherche ou suivez une entreprise. Pro envoie par courriel, flux de calendrier et API, et consulte AchatsCanada toutes les {h} heures.",
+    en: "Save a search or watch an organization. Any account can turn on a weekly email on what it follows. Pro delivers by email, calendar feed and API, and checks CanadaBuys every {h} hours.",
+    fr: "Enregistrez une recherche ou suivez une organisation. Tout compte peut activer un courriel hebdomadaire sur ce qu'il suit. Pro envoie par courriel, flux de calendrier et API, et consulte AchatsCanada toutes les {h} heures.",
   },
   "landing.step3_text_off": {
     en: "Follow new notices by Atom feed, or keep organizations on a watchlist in this browser.",
@@ -4595,8 +4624,8 @@ const STRINGS = {
   "landing.plans_eyebrow": { en: "Plans", fr: "Forfaits" },
   "landing.plans_heading": { en: "Start free. Upgrade when you bid.", fr: "Commencez gratuitement. Passez à Pro quand vous soumissionnez." },
   "landing.plans_sub": {
-    en: "Every page is free to read. Pro is for people who bid on federal work or track who wins it.",
-    fr: "Chaque page se lit gratuitement. Pro s'adresse à qui soumissionne pour des marchés fédéraux ou suit qui les remporte.",
+    en: "The record pages are free to read. Pro is for people who bid on federal work or track who wins it.",
+    fr: "Les pages des dossiers se lisent gratuitement. Pro s'adresse à qui soumissionne pour des marchés fédéraux ou suit qui les remporte.",
   },
   // After the monthly figure: "CA$18.99 a month, or CA$189.99 a year".
   "landing.price_rest": { en: "a month, or {yearly} a year", fr: "par mois, ou {yearly} par année" },
@@ -4606,13 +4635,11 @@ const STRINGS = {
   "ultra.tag_hidden": { en: "(paid plan)", fr: "(forfait payant)" },
   "landing.ultra_price": { en: "Price to be set", fr: "Prix à fixer" },
   "landing.ultra_soon": { en: "Coming soon", fr: "Bientôt offert" },
-  // The part of Ultra still planned, on its card before it is on sale (pages/landing.tsx ULTRA_PLANNED).
-  "landing.ultra_builder": {
-    en: "Planned: an analytics builder for your own measure, grouping, period and filters",
-    fr: "Prévu : un générateur d'analyses pour vos propres mesure, regroupement, période et filtres",
-  },
   "landing.ultra_button": { en: "Tell me when Ultra opens", fr: "M'avertir à l'ouverture d'Ultra" },
-  "landing.close_heading": { en: "Your next federal tender is already in here.", fr: "Votre prochain appel d'offres fédéral est déjà ici." },
+  // The closing band's heading: the open notices' count from stats.json, or, without it, the words alone.
+  "landing.close_one": { en: "{n} federal tender is open.", fr: "{n} appel d'offres fédéral est ouvert." },
+  "landing.close_many": { en: "{n} federal tenders are open.", fr: "{n} appels d'offres fédéraux sont ouverts." },
+  "landing.close_heading": { en: "Start with the open federal tenders.", fr: "Commencez par les appels d'offres fédéraux ouverts." },
   "landing.close_text": { en: "Start free today. No card, no trial clock.", fr: "Commencez gratuitement dès aujourd'hui. Sans carte, sans période d'essai." },
   // The privacy page's line while the landing page shows logos (BRANDFETCH_CLIENT_ID set).
   "privacy.logos": {
@@ -4632,19 +4659,22 @@ const STRINGS = {
   },
   // The landing page's nav: a short word for the overview, so the French bar stays on one line.
   "landing.nav_overview": { en: "Overview", fr: "Aperçu" },
-  // The builder's band, with BUILDER_DEMO and the accounts switch on only (src/pages/landing.tsx BuildBand): the
-  // words at left, then the picture's, which assistive technology skips for landing.build_aria. {line} is the plan
-  // cards' own dashboard line for Ultra (src/pro.tsx PLAN_ROWS); {buyer} is the buyer file's name, {source} the
-  // source's label, {year}, {first} and {last} the years the picture draws, all read when the page is drawn.
+  // The builder's band, with BUILDER_DEMO and the builder's own switch on only (src/pages/landing.tsx BuildBand): the
+  // words at left; the picture's words are the builder's and the dashboard's own keys (build.*, dash.*, analytics.*),
+  // and assistive technology reads landing.build_aria in their place. {line} is the plan cards' own dashboard line for
+  // Ultra (src/pro.tsx PLAN_ROWS); {buyer} the buyer's name, {source} the view's source, {first} and {last} its first
+  // and last fiscal years, all read when the page is drawn.
   "landing.build_eyebrow": { en: "Analytics builder", fr: "Générateur d'analyses" },
   "landing.build_heading": { en: "Build the view you need.", fr: "Composez la vue qu'il vous faut." },
   "landing.build_text": {
     en: "Choose a buyer, what to count and how to group it. The chart draws as you choose. Put it on your dashboard, drag it where you want it and size it.",
     fr: "Choisissez un acheteur, ce qu'il faut compter et comment le regrouper. Le graphique se dessine à mesure. Placez-le sur votre tableau de bord, déplacez-le et donnez-lui sa taille.",
   },
+  // What the builder's menus offer (public/build-menu.js MATRIX): every subject by fiscal year; quarters, provinces
+  // and methods for buyers and segments.
   "landing.build_any": {
-    en: "Any buyer, organization or category, by year, quarter, province or method",
-    fr: "Tout acheteur, toute organisation ou catégorie, par année, trimestre, province ou méthode",
+    en: "Buyers, segments and organizations by fiscal year, and buyers and segments by quarter, province or method",
+    fr: "Acheteurs, segments et organisations par exercice, et acheteurs et segments par trimestre, province ou méthode",
   },
   "landing.build_figures": {
     en: "Counts, values, medians and non-competitive shares, each from one named source",
@@ -4652,36 +4682,9 @@ const STRINGS = {
   },
   "landing.build_plan": { en: "{line} on Ultra", fr: "{line} avec Ultra" },
   "landing.build_more": { en: "See what Ultra holds", fr: "Voir ce que comprend Ultra" },
-  "landing.build_new": { en: "New view", fr: "Nouvelle vue" },
-  "landing.build_about": { en: "About", fr: "Sujet" },
-  "landing.build_choose_buyer": { en: "Choose a buyer", fr: "Choisir un acheteur" },
-  "landing.build_choose": { en: "Choose", fr: "Choisir" },
-  "landing.build_figure": { en: "Figure", fr: "Chiffre" },
-  "landing.build_value": { en: "Value", fr: "Valeur" },
-  "landing.build_rows": { en: "Rows", fr: "Lignes" },
-  // The rows are calendar years: a published contract counts in the year of its contract date (pipeline indicators.py).
-  "landing.build_year": { en: "Calendar year", fr: "Année civile" },
-  "landing.build_show": { en: "Show as", fr: "Afficher" },
-  "landing.build_bars": { en: "Bars", fr: "Barres" },
-  "landing.build_line": { en: "Line", fr: "Courbe" },
-  "landing.build_table": { en: "Table", fr: "Tableau" },
-  "landing.build_add": { en: "Add to dashboard", fr: "Ajouter au tableau de bord" },
-  "landing.build_empty": { en: "Your view appears here", fr: "Votre vue s'affiche ici" },
-  "landing.build_title": { en: "{buyer}, value by year", fr: "{buyer}, valeur par année" },
-  "landing.build_col_year": { en: "Year", fr: "Année" },
-  "landing.build_col_contracts": { en: "Contracts", fr: "Contrats" },
-  // Under the chart when its newest year is the data date's.
-  "landing.build_caption": { en: "{source}. {year} is the year to date.", fr: "{source}. {year} : année en cours." },
-  "landing.build_dashboard": { en: "Dashboard", fr: "Tableau de bord" },
-  "landing.build_saved": { en: "Saved", fr: "Enregistré" },
-  // The dashboard's two other tiles, drawn as placeholders with no figure.
-  "landing.build_open": { en: "Open notices", fr: "Avis ouverts" },
-  "landing.build_ending": { en: "Contracts ending", fr: "Contrats prenant fin" },
-  // The table tile's foot: the rows it shows of the table's rows, as the dashboard's tiles write it (dash.shown).
-  "landing.build_shown": { en: "{n} of {total}", fr: "{n} sur {total}" },
   "landing.build_aria": {
-    en: "An animation. A reader chooses {buyer}, the figure Value and rows by calendar year; a bar chart of the published contracts' value from {first} to {last} draws, changes to a line, then to a table of each year's contracts and value. The reader adds the table to a dashboard, drags it to the top and widens it to the full width.",
-    fr: "Une animation. Une personne choisit {buyer}, le chiffre Valeur et des lignes par année civile; un graphique à barres de la valeur des contrats publiés de {first} à {last} se dessine, devient une courbe, puis un tableau des contrats et de la valeur de chaque année. Elle ajoute ce tableau à un tableau de bord, le fait glisser en haut et l'élargit sur toute la largeur.",
+    en: "An animation of the analytics builder. A reader sets the source to {source} and chooses {buyer}; a bar chart of the value by fiscal year from {first} to {last} draws, changes to a line, then to a table of each fiscal year's value and records. The reader adds the table to a dashboard, drags it to the top and widens it to the full width.",
+    fr: "Une animation du générateur d'analyses. Une personne choisit la source {source} et l'acheteur {buyer}; un graphique à barres de la valeur par exercice de {first} à {last} se dessine, devient une courbe, puis un tableau de la valeur et des dossiers de chaque exercice. Elle ajoute ce tableau à un tableau de bord, le fait glisser en haut et l'élargit sur toute la largeur.",
   },
 
   // -- the guides' frame (src/pages/guides.tsx): the rail's and footer's word, the index's lead and the

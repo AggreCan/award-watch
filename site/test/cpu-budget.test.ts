@@ -156,9 +156,14 @@ function bigBuyerFile(): string {
 }
 const BIG_BUYER = bigBuyerFile();
 const landingOnEnv = { ...landingEnv, ACCOUNTS_ENABLED: "true", ACCOUNTS: stubDb(() => []) };
+// The band reads its figures with the builder's own statements (src/pages/landing.tsx readBand), here from a records
+// database in memory: the state row, cube_meta, and eight fiscal years of the buyer's cells.
+const BAND_CELLS = Array.from({ length: 8 }, (_, i) => ({ id: "dnd-mdn", fy: 2019 + i, n: 9000 + i, cents: 1_160_000_000_000 + i * 90_000_000_000, n_no_value: 12 }));
 const builderEnv = {
-  ...landingOnEnv, BUILDER_DEMO: "on",
+  ...landingOnEnv, BUILDER_DEMO: "on", BUILDER: "on",
   ASSETS: assetsOf({ ...BODIES, "expiring/3m/1.json": JSON.stringify(bigExpiringPage(500)), "buyers/dnd-mdn.json": BIG_BUYER }, "v1-builder"),
+  RECORDS: stubDb((sql) => (sql.includes("FROM rec_meta") ? [{ key: "state", value: "ready" }, { key: "as_of", value: "2026-10-31" }]
+    : sql === CUBE_META_SQL ? [{ as_of: "2026-10-30" }] : sql === BUYERS_YEARS_SQL ? BAND_CELLS : [])),
 };
 
 // -- a signed-in reader's window page, with the holders' records ----------------------------
@@ -467,8 +472,9 @@ const BUDGET: [path: string, bound: number, per: number][] = [
   ["/ (app home)", 10, 16], // [3.2]
   ["/", 9, 16], // [2.8]
   // The landing page with the accounts switch on, and with the builder's band too, which reads National Defence's
-  // buyer file at its production size and draws its picture (src/pages/landing.tsx BuildBand; measured 2026-11-15
-  // in one run: 2.79 and 3.39, "/" 2.50). Both are held to the bound "/" has, which the band stays well inside.
+  // buyer file at its production size and the builder's statements, and draws its picture (src/pages/landing.tsx
+  // BuildBand; measured 2026-11-15 in one run: 2.79 and 3.39, "/" 2.50, before the band read the records database).
+  // Both are held to the bound "/" has, which the band stays well inside.
   ["/ (accounts on)", 9, 16], // [2.79]
   ["/ (accounts on, builder demo on)", 9, 16], // [3.39]
   ["/tenders", 9, 16], // [2.8]
@@ -931,7 +937,7 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
     expect(landingOn).not.toContain("lp-build");
     const builder = await (await app.request("/", { headers: { "sec-fetch-mode": "navigate" } }, builderEnv)).text();
     expect(builder.match(/<section class="lp-feat lp-build"/g)).toHaveLength(1);
-    expect(builder.match(/<div class="tr"><span>20\d\d<\/span>/g)).toHaveLength(12);
+    expect(builder.match(/<div class="tr"><span>20\d\d-\d\d/g)).toHaveLength(12);
     expect(BIG_BUYER.length).toBeGreaterThan(30_000);
     // What the monthly record's entries time: the month's ten largest award notices, ten buyers of each kind and
     // ten segments, and the index's twelve months.

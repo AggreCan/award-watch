@@ -2,10 +2,16 @@
 // (test/seats-switch-fixtures.ts) on main at 23eb47c, before any of the slice's code was written, and pasted here.
 // Never rebuilt from the code under test. Each key is "<environment> <reader> <path>"; body is the first 12 bytes
 // of SHA-256 of the page; cookie is whether the answer sets one (the ?lang= pages set the language cookie).
+//
+// Re-captured on 2026-11-20, four entries alone: the signed-out landing page ("base out /", "base out /?lang=fr",
+// "sale out /", "sale out /?lang=fr"), whose copy was brought up to date on purpose that day. A walk of all 122
+// entries on that tree, with the switch as shipped, found those four bodies differing and nothing else (no status, no
+// cache header, no cookie, no other page); their hashes were then written here by a script from that walk. Every
+// other entry is as first captured.
 
 export const TODAY: Readonly<Record<string, { status: number; cache: string | null; cookie: boolean; body: string }>> = {
-  "base out /": { status: 200, cache: "public, max-age=300", cookie: false, body: "bb3e063d8c967c1fc4920310" },
-  "base out /?lang=fr": { status: 200, cache: "public, max-age=300", cookie: true, body: "abe6b16b06fec39837dbd479" },
+  "base out /": { status: 200, cache: "public, max-age=300", cookie: false, body: "3f561c074a105c0d36b6d505" },
+  "base out /?lang=fr": { status: 200, cache: "public, max-age=300", cookie: true, body: "b939db037423dc829b767ec2" },
   "base out /pro": { status: 200, cache: "public, max-age=300", cookie: false, body: "561592f179a90e3cb0fb121e" },
   "base out /pro?lang=fr": { status: 200, cache: "public, max-age=300", cookie: true, body: "6e69d75bdb939742ae4185dd" },
   "base out /terms": { status: 200, cache: "public, max-age=300", cookie: false, body: "ffb51dfe462cdb57edf62689" },
@@ -65,8 +71,8 @@ export const TODAY: Readonly<Record<string, { status: number; cache: string | nu
   "base ultra /pro": { status: 200, cache: "private, no-store", cookie: false, body: "6be07e1448b3d0070d1c7e2f" },
   "base ultra /terms?lang=fr": { status: 200, cache: "private, no-store", cookie: true, body: "16a60b5f6216d280763d3d0b" },
   "base ultra /privacy": { status: 200, cache: "private, no-store", cookie: false, body: "b523620d6c6faf2cc5e41906" },
-  "sale out /": { status: 200, cache: "public, max-age=300", cookie: false, body: "75ac80f017b9139e3769fa8c" },
-  "sale out /?lang=fr": { status: 200, cache: "public, max-age=300", cookie: true, body: "d27054817f491a67d6732a20" },
+  "sale out /": { status: 200, cache: "public, max-age=300", cookie: false, body: "eea6d9ad119bdcf56d408610" },
+  "sale out /?lang=fr": { status: 200, cache: "public, max-age=300", cookie: true, body: "d04ed8d3c7b2e86c8ff23a6d" },
   "sale out /pro": { status: 200, cache: "public, max-age=300", cookie: false, body: "02cb521eb7cc3e8a6f8c1979" },
   "sale out /pro?lang=fr": { status: 200, cache: "public, max-age=300", cookie: true, body: "d7252e157d8d68bad77da21a" },
   "sale out /terms": { status: 200, cache: "public, max-age=300", cookie: false, body: "5114eca387f78f4347386765" },

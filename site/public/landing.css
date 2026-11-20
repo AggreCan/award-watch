@@ -317,10 +317,12 @@ html.js .theme-toggle { display: inline-flex; }
 /* The picture: one timeline of --dur for every moving part, pure CSS, no
    script; --scrub (seconds) holds it at a moment and .is-paused stops it.
    Sized in its own width (container units), so it is the same picture at
-   every width. Three menus are filled, the bars draw, the reader switches to
-   the line and then the table, adds the table to a dashboard, drags its tile
-   to the top and widens it. Every rule is scoped to .bd, whose class names
-   (.pv, .ln and the others) the map card uses too. */
+   every width. The builder's form in its order (Buyer, Rows, Source, Show):
+   the source is set, the rows kept by fiscal year, the buyer chosen, and the
+   bars draw; Show turns to Line and then to Table; the result's Add to
+   dashboard puts the table on a dashboard, whose tile is dragged to the top
+   and widened. Every rule is scoped to .bd, whose class names (.pv, .ln and
+   the others) the map card uses too. */
 .bd { --dur: 24s; position: relative; width: 100%; aspect-ratio: 100 / 72; container-type: inline-size; overflow: hidden;
   background: var(--paper); border: 1px solid var(--line-2); border-radius: var(--r); }
 .bd * { animation-duration: var(--dur); animation-timing-function: linear; animation-iteration-count: infinite;
@@ -333,7 +335,7 @@ html.js .theme-toggle { display: inline-flex; }
 @keyframes bd-sc-b { 0%, 71% { opacity: 0; } 74%, 97.5% { opacity: 1; } 100% { opacity: 0; } }
 .bd .sc-h { position: absolute; left: 4cqw; top: 3.2cqw; margin: 0; font-family: var(--display); font-weight: 800; font-size: 1.35em; letter-spacing: -.01em; }
 
-/* The menus: the buyer typed, the figure and the rows chosen, the three ways to show it. */
+/* The menus: the source chosen first (8.5%), the rows opened and kept (18.5%), the buyer chosen (24.5%), then Show. */
 .bd .fld { position: absolute; left: 4cqw; width: 34cqw; }
 .bd .fld-l { display: block; height: 3.4cqw; font-size: .74em; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .bd .fld-b { position: relative; height: 6cqw; display: flex; align-items: center; padding: 0 1.6cqw; background: var(--page);
@@ -345,58 +347,65 @@ html.js .theme-toggle { display: inline-flex; }
 .bd .f2 { top: 22.2cqw; }
 .bd .f3 { top: 34.4cqw; }
 .bd .f4 { top: 46.6cqw; }
-.bd .f1 .fld-b { animation-name: bd-focus1; }
+.bd .f3 .fld-b { animation-name: bd-focus1; }
 .bd .f2 .fld-b { animation-name: bd-focus2; }
-.bd .f3 .fld-b { animation-name: bd-focus3; }
+.bd .f1 .fld-b { animation-name: bd-focus3; }
 @keyframes bd-focus1 { 0%, 8% { border-color: var(--line-2); } 8.5%, 15.5% { border-color: var(--em); } 16%, 100% { border-color: var(--line-2); } }
 @keyframes bd-focus2 { 0%, 18% { border-color: var(--line-2); } 18.5%, 21.5% { border-color: var(--em); } 22%, 100% { border-color: var(--line-2); } }
 @keyframes bd-focus3 { 0%, 24% { border-color: var(--line-2); } 24.5%, 27% { border-color: var(--em); } 27.5%, 100% { border-color: var(--line-2); } }
-.bd .f1 .ph { animation-name: bd-ph1; }
-.bd .f2 .ph { animation-name: bd-ph2; }
-.bd .f3 .ph { animation-name: bd-ph3; }
+.bd .f3 .ph { animation-name: bd-ph1; }
+.bd .f1 .ph { animation-name: bd-ph3; }
 @keyframes bd-ph1 { 0%, 8.5% { opacity: 1; } 8.7%, 97.5% { opacity: 0; } 100% { opacity: 1; } }
-@keyframes bd-ph2 { 0%, 18.5% { opacity: 1; } 18.7%, 97.5% { opacity: 0; } 100% { opacity: 1; } }
 @keyframes bd-ph3 { 0%, 24.5% { opacity: 1; } 24.7%, 97.5% { opacity: 0; } 100% { opacity: 1; } }
-.bd .f1 .val { animation-name: bd-type; }
-@keyframes bd-type { 0% { clip-path: inset(0 100% 0 0); } 8.5% { clip-path: inset(0 100% 0 0); animation-timing-function: steps(16, end); }
-  15%, 96.5% { clip-path: inset(0 0 0 0); } 97.5%, 100% { clip-path: inset(0 100% 0 0); } }
-.bd .f2 .val { animation-name: bd-val2; }
-.bd .f3 .val { animation-name: bd-val3; }
-@keyframes bd-val2 { 0%, 18.5% { opacity: 0; } 18.7%, 96.5% { opacity: 1; } 97.5%, 100% { opacity: 0; } }
+.bd .f3 .val { animation-name: bd-val1; }
+.bd .f1 .val { animation-name: bd-val3; }
+@keyframes bd-val1 { 0%, 8.5% { opacity: 0; } 8.7%, 96.5% { opacity: 1; } 97.5%, 100% { opacity: 0; } }
 @keyframes bd-val3 { 0%, 24.5% { opacity: 0; } 24.7%, 96.5% { opacity: 1; } 97.5%, 100% { opacity: 0; } }
-.bd .seg { padding: 0; }
-.bd .seg span { position: relative; z-index: 1; flex: 1; text-align: center; font-size: .92em; }
-/* The highlight is a third of the control with its border inside it, so a move by 100% and 200% of its own width lands inside. */
-.bd .seg i { box-sizing: border-box; position: absolute; left: .5cqw; top: .5cqw; bottom: .5cqw; width: calc((100% - 1cqw) / 3); background: var(--em-soft);
-  border: 1px solid var(--em); border-radius: .8cqw; animation-name: bd-seg; }
-@keyframes bd-seg { 0%, 41.5% { transform: translateX(0); animation-timing-function: ease-in-out; } 43%, 55% { transform: translateX(100%); animation-timing-function: ease-in-out; }
-  56.5%, 96.5% { transform: translateX(200%); } 97.5%, 100% { transform: translateX(0); } }
-.bd .add { position: absolute; left: 4cqw; top: 60.6cqw; width: 34cqw; height: 6.4cqw; display: flex; align-items: center; justify-content: center;
-  background: var(--em); color: var(--em-ink); border-radius: 1.2cqw; font-weight: 600; animation-name: bd-press; }
-@keyframes bd-press { 0%, 67% { transform: scale(1); } 68% { transform: scale(.96); } 69.5%, 100% { transform: scale(1); } }
+/* Show is a menu, as the builder's is: Bars, then Line (43%), then Table (56.5%), each chosen with a click. */
+.bd .sh span:not(.caret) { position: absolute; left: 1.6cqw; }
+.bd .sh .s1 { animation-name: bd-show1; }
+.bd .sh .s2 { animation-name: bd-show2; }
+.bd .sh .s3 { animation-name: bd-show3; }
+@keyframes bd-show1 { 0%, 42.5% { opacity: 1; } 43%, 96.5% { opacity: 0; } 97.5%, 100% { opacity: 1; } }
+@keyframes bd-show2 { 0%, 42.5% { opacity: 0; } 43%, 56% { opacity: 1; } 56.5%, 100% { opacity: 0; } }
+@keyframes bd-show3 { 0%, 56% { opacity: 0; } 56.5%, 96.5% { opacity: 1; } 97.5%, 100% { opacity: 0; } }
+.bd .f4 .fld-b { animation-name: bd-focus4; }
+@keyframes bd-focus4 { 0%, 41% { border-color: var(--line-2); } 41.5%, 43.5% { border-color: var(--em); } 44%, 54.5% { border-color: var(--line-2); }
+  55%, 57% { border-color: var(--em); } 57.5%, 100% { border-color: var(--line-2); } }
+/* The form's own button, filled as the builder's is; the preview needs no press of it. */
+.bd .go { position: absolute; left: 4cqw; top: 60.6cqw; width: 34cqw; height: 6.4cqw; display: flex; align-items: center; justify-content: center;
+  background: var(--em); color: var(--em-ink); border-radius: 1.2cqw; font-weight: 600; }
 
 /* The preview: the bars, then the line over the dimmed bars, then the same figures as a table. */
 .bd .pv { position: absolute; left: 42cqw; top: 10cqw; width: 54cqw; height: 57cqw; background: var(--page); border: 1px solid var(--line-2); border-radius: 1.4cqw; }
-.bd .pv-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); animation-name: bd-pv-empty; }
+.bd .pv-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 0 5cqw; text-align: center;
+  color: var(--muted); animation-name: bd-pv-empty; }
+.bd .pv-empty .pv-t { color: var(--ink); text-align: left; }
 @keyframes bd-pv-empty { 0%, 24.5% { opacity: 1; } 26.5%, 97.5% { opacity: 0; } 100% { opacity: 1; } }
 .bd .pv-chart { position: absolute; inset: 0; animation-name: bd-pv-chart; }
 @keyframes bd-pv-chart { 0%, 25% { opacity: 0; } 27%, 96.5% { opacity: 1; } 97.5%, 100% { opacity: 0; } }
 .bd .pv-t { position: absolute; left: 2.4cqw; right: 2.4cqw; top: 2.2cqw; margin: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bd .pv-c { position: absolute; left: 2.4cqw; right: 2.4cqw; bottom: 1.8cqw; margin: 0; font-size: .78em; color: var(--muted); white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; }
-.bd .pv svg { position: absolute; left: 1.4cqw; top: 7.4cqw; width: 51.2cqw; height: 40cqw; overflow: visible; animation-name: bd-svg; }
+/* Under the title, what the view is about and, at the right, the result's Add to dashboard, which the reader presses. */
+.bd .pv-s { position: absolute; left: 2.4cqw; right: 2.4cqw; top: 5.4cqw; margin: 0; display: flex; justify-content: space-between; gap: 2cqw; font-size: .8em;
+  white-space: nowrap; }
+.bd .pv-s span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ink-2); }
+.bd .add { flex: none; color: var(--em); font-weight: 600; animation-name: bd-press; }
+@keyframes bd-press { 0%, 67% { transform: scale(1); } 68% { transform: scale(.94); } 69.5%, 100% { transform: scale(1); } }
+.bd .pv svg { position: absolute; left: 1.4cqw; top: 9cqw; width: 51.2cqw; height: 40cqw; overflow: visible; animation-name: bd-svg; }
 @keyframes bd-svg { 0%, 55% { opacity: 1; } 57%, 96.5% { opacity: 0; } 97.5%, 100% { opacity: 1; } }
-.bd .pv-table { position: absolute; left: 2.4cqw; right: 2.4cqw; top: 7.6cqw; height: 40cqw; display: grid; grid-template-rows: repeat(9, 1fr); font-size: .84em;
+.bd .pv-table { position: absolute; left: 2.4cqw; right: 2.4cqw; top: 9.4cqw; height: 40cqw; display: grid; grid-template-rows: repeat(9, 1fr); font-size: .78em;
   animation-name: bd-pv-table; }
 @keyframes bd-pv-table { 0%, 56.5% { opacity: 0; } 58.5%, 96.5% { opacity: 1; } 97.5%, 100% { opacity: 0; } }
-.bd .tr { display: grid; grid-template-columns: 1fr 1.3fr 1.2fr; align-items: center; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.bd .tr { display: grid; grid-template-columns: 1.9fr 1.6fr .85fr; gap: .5cqw; align-items: center; border-bottom: 1px solid var(--line);
+  font-variant-numeric: tabular-nums; }
+.bd .tr span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bd .tr span:nth-child(n+2) { text-align: right; }
-.bd .th { font-size: .86em; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); border-bottom-color: var(--line-2); }
+.bd .th { font-size: .86em; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--muted); border-bottom-color: var(--line-2); }
 .bd .gr { stroke: var(--line); stroke-width: 1; }
 .bd .base { stroke: var(--line-2); stroke-width: 1; }
 .bd .tk { fill: var(--muted); font: 500 8.5px var(--body); }
-.bd .dl { fill: var(--ink); font: 600 9px var(--body); animation-name: bd-dl; }
-@keyframes bd-dl { 0%, 35% { opacity: 0; } 36.5%, 40.5% { opacity: 1; } 41.5%, 100% { opacity: 0; } }
 /* Every bar in the one accent; they grow one after another and dim together under the line. */
 .bd .bar { fill: var(--em); transform-box: fill-box; transform-origin: 50% 100%; animation-name: bd-bar; animation-delay: calc(var(--scrub, 0) * -1s + var(--i) * .22s); }
 @keyframes bd-bar { 0%, 26.5% { transform: scaleY(0); animation-timing-function: cubic-bezier(.2, .7, .2, 1); } 29.5%, 96.5% { transform: scaleY(1); }
@@ -419,6 +428,8 @@ html.js .theme-toggle { display: inline-flex; }
 .bd .tile-hd { display: flex; align-items: center; gap: 1.2cqw; height: 5.6cqw; padding: 0 1.8cqw; border-bottom: 1px solid var(--line); font-weight: 600;
   font-size: .9em; white-space: nowrap; }
 .bd .tile-hd span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* What the tile is about, after its title, as the dashboard's tile names it. */
+.bd .tile-hd .it { margin-left: 1.2cqw; font-weight: 500; color: var(--ink-2); }
 .bd .grip { flex: none; width: 1.5cqw; height: 2.3cqw; background-image: radial-gradient(circle, var(--muted) 38%, transparent 42%); background-size: .75cqw .77cqw; }
 .bd .tile-bd { flex: 1; min-height: 0; padding: 1.8cqw; display: grid; align-content: start; gap: 1.5cqw; }
 .bd .sk { height: 1.5cqw; border-radius: .75cqw; background: var(--line); }
@@ -437,7 +448,9 @@ html.js .theme-toggle { display: inline-flex; }
   95.5%, 100% { opacity: 1; transform: scale(1); border-color: var(--line-2); } }
 .bd .tn .tile-bd { padding: .4cqw 1.8cqw 0; display: grid; grid-template-rows: repeat(5, 3.4cqw); gap: 0; align-content: start; font-size: .8em; }
 .bd .tile-ft { display: flex; justify-content: space-between; gap: 1cqw; padding: 0 1.8cqw 1.2cqw; font-size: .74em; color: var(--muted); white-space: nowrap; overflow: hidden; }
-/* Room for the corner handle beside the count. */
+/* The tile's foot as the dashboard's: the source and the period, the rows shown, Open; room for the corner handle. */
+.bd .tile-ft span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.bd .tile-ft .open { color: var(--em); font-weight: 600; }
 .bd .tn .tile-ft { padding-right: 3.6cqw; }
 .bd .corner { position: absolute; right: .9cqw; bottom: .9cqw; width: 1.6cqw; height: 1.6cqw; border-right: .3cqw solid var(--muted); border-bottom: .3cqw solid var(--muted); }
 /* Where the tile will land. Its width changes only while it is hidden (85% to 85.1%, and back at 100%),
@@ -453,12 +466,12 @@ html.js .theme-toggle { display: inline-flex; }
 .bd .cur path { fill: var(--ink); stroke: var(--page); stroke-width: 1.4; stroke-linejoin: round; }
 @keyframes bd-cur {
   0%, 5% { transform: translate(74cqw, 60cqw); animation-timing-function: ease-in-out; }
-  8.5%, 15% { transform: translate(20cqw, 16.6cqw); animation-timing-function: ease-in-out; }
+  8.5%, 15% { transform: translate(20cqw, 41cqw); animation-timing-function: ease-in-out; }
   18.5%, 21% { transform: translate(20cqw, 28.8cqw); animation-timing-function: ease-in-out; }
-  24.5%, 38% { transform: translate(20cqw, 41cqw); animation-timing-function: ease-in-out; }
+  24.5%, 38% { transform: translate(20cqw, 16.6cqw); animation-timing-function: ease-in-out; }
   41.5%, 52% { transform: translate(21cqw, 53.2cqw); animation-timing-function: ease-in-out; }
-  55%, 64% { transform: translate(32.3cqw, 53.2cqw); animation-timing-function: ease-in-out; }
-  67%, 76% { transform: translate(21cqw, 64cqw); animation-timing-function: ease-in-out; }
+  55%, 64% { transform: translate(22cqw, 53.6cqw); animation-timing-function: ease-in-out; }
+  67%, 76% { transform: translate(85cqw, 16cqw); animation-timing-function: ease-in-out; }
   79% { transform: translate(6.2cqw, 43.6cqw); animation-timing-function: ease-in-out; }
   85%, 86.5% { transform: translate(6.2cqw, 13.6cqw); animation-timing-function: ease-in-out; }
   89.5% { transform: translate(47cqw, 36.6cqw); animation-timing-function: ease-in-out; }
