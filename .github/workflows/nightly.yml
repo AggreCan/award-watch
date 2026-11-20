@@ -72,7 +72,8 @@
 # keep the audience counts of the finished days
 # in R2 when the analytics token exists, count the alert sign-ups in the forms database,
 # count the account funnel's day and keep it in R2's private views/ prefix for the
-# operator's email, append Search Console's daily figures when its key exists, write the
+# operator's email, append Search Console's daily figures (with each day's top pages and
+# queries) and inspect a small sample of the site's pages when its key exists, write the
 # monthly audience report on the first run of a month (its figures join the
 # operator's line, never LAST_RUN.md), run the monthly expiry
 # checks on the first of a month, write the run status, record the run in
@@ -111,7 +112,10 @@
 #   caught up the next night; it never stops the run, and a summary that
 #   could not be downloaded is never replaced. The same holds for the Search
 #   Console import (search_console: failed) and its file, and for the monthly
-#   report (views_report: failed), which the next run writes instead.
+#   report (views_report: failed), which the next run writes instead. Search
+#   Console by page and query (search_console_detail: failed) and the index
+#   sample (index_sample: failed, not permitted or rate limited) are notices:
+#   the next run catches up or samples again.
 # - A count of the alert sign-ups that cannot be read sets the status's
 #   interest to "failed" and adds a notice: information, never an item
 #   needing attention and never a failed run. The next run counts again.
@@ -1322,13 +1326,19 @@ jobs:
       # Search Console's figures (docs/search-engines.md, section 6): clicks,
       # impressions, position and the top 50 queries of every final day after
       # the newest in views/search_console.csv, appended to it. Google keeps
-      # 16 months; this keeps them for good. It signs in with the service
-      # account key in GSC_SERVICE_ACCOUNT_JSON (read-only scope); without it
-      # the outcome is "no credentials" and nothing is asked. The file is
-      # downloaded first and appended to, and a download that fails for any
-      # reason but "does not exist" stops the step, so a shorter file never
-      # replaces it. The outcome reads "failed" until the file is in R2. It
-      # never stops the run.
+      # 16 months; this keeps them for good. Beside them the same command
+      # appends each final day's top 250 pages and top 250 queries to
+      # views/search_pages.csv and views/search_queries.csv (from 2026-11-01
+      # on the first night), and inspects tonight's index sample, about 40 of
+      # the site's own pages, appending what Google says of each to
+      # views/index_sample.csv. It signs in with the service account key in
+      # GSC_SERVICE_ACCOUNT_JSON (read-only scope); without it every outcome
+      # is "no credentials" and nothing is asked. Each file is downloaded
+      # first and appended to, and a download that fails for any reason but
+      # "does not exist" stops the step, so a shorter file never replaces
+      # one. Each outcome reads "failed" until its files are in R2; a refused
+      # index sample ("not permitted", "rate limited") is a line in the run
+      # status, and the night goes on. It never stops the run.
       - name: Import the Search Console figures (only when GSC_SERVICE_ACCOUNT_JSON is set)
         id: gsc
         if: ${{ !cancelled() }}
@@ -1341,31 +1351,36 @@ jobs:
           out=data/out/search_console
           mkdir -p "$out"
           echo "failed" > "$out/last_outcome.txt"
+          echo "failed" > "$out/detail_last_outcome.txt"
+          echo "failed" > "$out/index_last_outcome.txt"
           if [ -z "$GSC_SERVICE_ACCOUNT_JSON" ]; then
             echo "Search Console: no credentials"
             echo "no credentials" > "$out/last_outcome.txt"
+            echo "no credentials" > "$out/detail_last_outcome.txt"
+            echo "no credentials" > "$out/index_last_outcome.txt"
             exit 0
           fi
-          rm -f "$out/search_console.csv"
-          got=""
-          for attempt in 1 2 3; do
-            if "$WRANGLER" r2 object get --remote "$BUCKET/views/search_console.csv" --file "$out/search_console.csv" > "$out/get.log" 2>&1; then
-              got=yes
-              break
-            fi
-            if grep -qi "specified key does not exist" "$out/get.log"; then
-              got=missing
-              rm -f "$out/search_console.csv"
-              break
-            fi
-            sleep 20
-          done
-          if [ -z "$got" ]; then
-            echo "views/search_console.csv could not be downloaded; nothing imported"
+          fetch() {
+            # 0 when downloaded, 2 when R2 says it does not exist, 1 otherwise.
+            local attempt
+            for attempt in 1 2 3; do
+              if "$WRANGLER" r2 object get --remote "$BUCKET/views/$1" --file "$out/$1" > "$out/get.log" 2>&1; then return 0; fi
+              if grep -qi "specified key does not exist" "$out/get.log"; then rm -f "$out/$1"; return 2; fi
+              sleep 20
+            done
             cat "$out/get.log"
-            exit 1
-          fi
-          python -m awardwatch_pipeline.nightly import-search-console --out "$out"
+            return 1
+          }
+          for f in search_console.csv search_pages.csv search_queries.csv index_sample.csv; do
+            rm -f "$out/$f"
+            code=0; fetch "$f" || code=$?
+            if [ "$code" = "1" ]; then
+              echo "views/$f could not be downloaded; nothing imported"
+              exit 1
+            fi
+          done
+          status=0
+          python -m awardwatch_pipeline.nightly import-search-console --out "$out" || status=$?
           outcome=$(cat "$out/outcome.txt")
           case "$outcome" in
             imported*)
@@ -1373,12 +1388,31 @@ jobs:
               ;;
           esac
           echo "$outcome" > "$out/last_outcome.txt"
+          detail=$(cat "$out/detail_outcome.txt")
+          case "$detail" in
+            imported*)
+              "$WRANGLER" r2 object put --remote "$BUCKET/views/search_pages.csv" --file "$out/search_pages.csv"
+              "$WRANGLER" r2 object put --remote "$BUCKET/views/search_queries.csv" --file "$out/search_queries.csv"
+              ;;
+          esac
+          echo "$detail" > "$out/detail_last_outcome.txt"
+          sample=$(cat "$out/index_outcome.txt")
+          case "$sample" in
+            inspected*)
+              "$WRANGLER" r2 object put --remote "$BUCKET/views/index_sample.csv" --file "$out/index_sample.csv"
+              ;;
+          esac
+          echo "$sample" > "$out/index_last_outcome.txt"
+          exit "$status"
 
       # The monthly audience report (docs/search-engines.md, section 6): on
       # the first run of a UTC month, views/report-<YYYY-MM>.md for the month
-      # just ended, from the summary and the Search Console file as R2 holds
-      # them after the two steps above, with the three months before it
-      # beside it. Every night this asks R2 whether last month's report
+      # just ended, from the summary and the Search Console files as R2 holds
+      # them after the steps above (with its Search block: the days' clicks,
+      # the pages and queries that lost clicks, the index sample by kind of
+      # page) and the account funnel's record the funnel step left on the
+      # runner, with the three months before it beside it. Every night this
+      # asks R2 whether last month's report
       # exists ("not due" when it does), so a night that fails is made up by
       # the next. The report waits up to a week for the month's last day to
       # be rolled up ("waiting"). LAST_RUN.md, which is public, gets only
@@ -1421,8 +1455,14 @@ jobs:
           if [ "$code" = "1" ]; then exit 1; fi
           code=0; fetch views/search_console.csv "$out/search_console.csv" || code=$?
           if [ "$code" = "1" ]; then exit 1; fi
+          for f in search_pages.csv search_queries.csv index_sample.csv; do
+            code=0; fetch "views/$f" "$out/$f" || code=$?
+            if [ "$code" = "1" ]; then exit 1; fi
+          done
           python -m awardwatch_pipeline.nightly views-report --month "$month" --summary "$out/summary.csv" \
-            --search "$out/search_console.csv" --interest data/out/interest/count.json --out "$out"
+            --search "$out/search_console.csv" --interest data/out/interest/count.json \
+            --funnel data/out/funnel/funnel.csv --search-pages "$out/search_pages.csv" \
+            --search-queries "$out/search_queries.csv" --index-sample "$out/index_sample.csv" --out "$out"
           outcome=$(cat "$out/outcome.txt")
           if [ "$outcome" = "written" ]; then
             "$WRANGLER" r2 object put --remote "$BUCKET/views/report-$month.md" --file "$out/report-$month.md" > /dev/null
@@ -1494,6 +1534,11 @@ jobs:
       # tests job decided (the verdict, the checks that failed, main's commit
       # and the commit the night ran; a fallback is an item needing
       # attention). Neither changes ok, which the retry gate reads.
+      # search_console_detail (Search Console by page and query: "imported
+      # <n> days", "up to date", "no credentials", "failed") and index_sample
+      # ("inspected <n>", "up to date", "no sample", "no credentials", "not
+      # permitted", "rate limited", "failed") are words; a failure or a
+      # refusal is a notice, never an item needing attention.
       # Written whatever happened above. The roll-up,
       # Search Console, report, IndexNow, rollback, the two same-day steps,
       # the link sample, the funnel save and the accounts export write
@@ -1513,6 +1558,8 @@ jobs:
             --org-review-outcome data/out/org_review/last_outcome.txt --org-review-summary data/out/org_review/summary.json \
             --indexnow-outcome data/out/indexnow/last_outcome.txt \
             --search-console-outcome data/out/search_console/last_outcome.txt \
+            --search-detail-outcome data/out/search_console/detail_last_outcome.txt \
+            --index-sample-outcome data/out/search_console/index_last_outcome.txt \
             --views-report-outcome data/out/report/last_outcome.txt \
             --interest data/out/interest/count.json \
             --funnel-outcome data/out/funnel/last_outcome.txt \
@@ -1556,6 +1603,15 @@ jobs:
           if [ -f data/out/search_console/last_outcome.txt ]; then
             echo "" >> LAST_RUN.md
             echo "Search Console: $(cat data/out/search_console/last_outcome.txt)" >> LAST_RUN.md
+          fi
+          # The outcome words of Search Console by page and query and of the index sample, never a figure.
+          if [ -f data/out/search_console/detail_last_outcome.txt ]; then
+            echo "" >> LAST_RUN.md
+            echo "Search Console by page and query: $(cat data/out/search_console/detail_last_outcome.txt)" >> LAST_RUN.md
+          fi
+          if [ -f data/out/search_console/index_last_outcome.txt ]; then
+            echo "" >> LAST_RUN.md
+            echo "Index sample: $(cat data/out/search_console/index_last_outcome.txt)" >> LAST_RUN.md
           fi
           # The monthly report's public line, only on the run that wrote it (or
           # tried and failed): the month and the R2 key, no figure.

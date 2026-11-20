@@ -22,7 +22,7 @@ DAY = date(2026, 11, 10)
 def answer(day: str = "2026-11-10", **counts) -> list[dict]:
     """Wrangler's answer to the statement, as `d1 execute --remote --json` prints it."""
     row = {"day": day, "accounts": 3, "accounts_new": 1, "codes_requested": 4, "sign_ins": 2, "pro": 1,
-           "saved_searches": 5, "watches": 6}
+           "saved_searches": 5, "watches": 6, "first_saves": 2}
     row.update(counts)
     return [{"results": [row], "success": True, "meta": {"served_by": "v3-prod", "rows_read": 40}}]
 
@@ -103,10 +103,17 @@ def test_the_statement_counts_the_day_and_the_levels_in_the_real_schema():
     for i, uid in enumerate(("u1", "u1", "u2")):
         conn.execute("INSERT INTO watches (id, user_id, kind, target, label, events, created_at) "
                      "VALUES (?, ?, 'buyer', ?, 'A buyer', 'all', '2026-11-01T00:00:00.000Z')", (f"w{i}", uid, f"b{i}"))
+    # First saves: u3's first ever on the day counts, as does u5's (deleted since, its search still held); u2's
+    # search on the day is not its first (a watch on 2026-11-01), and u4's first is the next day.
+    for sid, uid, at in (("s2", "u3", "2026-11-10T09:00:00.000Z"), ("s3", "u2", "2026-11-10T10:00:00.000Z"),
+                         ("s4", "u3", "2026-11-10T11:00:00.000Z"), ("s5", "u4", "2026-11-11T00:00:00.000Z"),
+                         ("s6", "u5", "2026-11-10T23:59:59.999Z")):
+        conn.execute("INSERT INTO saved_searches (id, user_id, kind, params, label, lang, created_at) "
+                     "VALUES (?, ?, 'tenders', ?, 'Tenders', 'en', ?)", (sid, uid, f"/tenders?q={sid}", at))
     cur = conn.execute(funnel.accounts_sql(DAY))
     row = dict(zip([d[0] for d in cur.description], cur.fetchone()))
     assert row == {"day": "2026-11-10", "accounts": 5, "accounts_new": 3, "codes_requested": 2, "sign_ins": 1,
-                   "pro": 1, "saved_searches": 1, "watches": 3}
+                   "pro": 1, "saved_searches": 6, "watches": 3, "first_saves": 2}
     # What Wrangler would print for that row reads back as the same counts.
     counts = funnel.account_counts([{"results": [row], "success": True}], DAY)
     assert counts == {k: row[k] for k in funnel.COUNTS}
@@ -134,27 +141,52 @@ def test_pro_is_counted_as_the_operator_console_counts_it():
 
 def test_the_answer_reads_only_counts_for_the_day_asked():
     assert funnel.account_counts(answer(), DAY) == {"accounts": 3, "accounts_new": 1, "codes_requested": 4,
-                                                    "sign_ins": 2, "pro": 1, "saved_searches": 5, "watches": 6}
+                                                    "sign_ins": 2, "pro": 1, "saved_searches": 5, "watches": 6,
+                                                    "first_saves": 2}
     assert funnel.account_counts(answer(day="2026-11-09"), DAY) is None   # another night's answer
     assert funnel.account_counts([{"success": False, "results": []}], DAY) is None
     assert funnel.account_counts([], DAY) is None and funnel.account_counts("x", DAY) is None
     odd = funnel.account_counts(answer(pro=-1, watches="6", sign_ins=True, accounts=None), DAY)
     assert odd == {"accounts": None, "accounts_new": 1, "codes_requested": 4, "sign_ins": None, "pro": None,
-                   "saved_searches": 5, "watches": None}
+                   "saved_searches": 5, "watches": None, "first_saves": 2}
+    # An answer from before first_saves (a statement sent by an older run) reads it as not counted.
+    older = answer()
+    del older[0]["results"][0]["first_saves"]
+    assert funnel.account_counts(older, DAY)["first_saves"] is None
 
 
 def test_the_line_names_each_figure_and_says_n_a_for_one_not_read():
     row = {"date": "2026-11-10", "accounts": "12", "accounts_new": "2", "codes_requested": "3", "sign_ins": "0",
-           "pro": "", "saved_searches": "4", "watches": "1200"}
-    audience = {"human_pages": 120, "engaged_visitors": 7, "search_visitors": None, "phone_visitors": 0}
+           "pro": "", "saved_searches": "4", "watches": "1200", "first_saves": "1"}
+    audience = {"human_pages": 120, "engaged_visitors": 7, "search_visitors": None, "phone_visitors": 0,
+                "plans_pages": 9, "sign_in_pages": 5, "hosted_pages": 70412, "closed_pages": None}
+    # The day's figures as before 2026-11-19, then the steps to an account in their order, then the two classes
+    # counted apart from people.
     assert funnel.line(row, audience) == (
         "2026-11-10 (UTC): accounts 12 (new 2), sign-in codes asked for 3, sign-ins 0, Pro n/a, saved searches 4, "
-        "watches 1,200; page views by people 120, engaged visitors 7, from search n/a, on a phone or tablet 0")
+        "watches 1,200; page views by people 120, engaged visitors 7, from search n/a, on a phone or tablet 0; "
+        "to an account: plans page 9, sign-in page 5, codes 3, accounts 2, first save 1; "
+        "not people: hosted 70,412, closed form n/a")
+    assert funnel.line(row, audience, "crawler pool counted as people 2026-11-13").endswith(
+        "; not people: hosted 70,412, closed form n/a; crawler pool counted as people 2026-11-13")
     blank = dict.fromkeys(funnel.HEADER, "") | {"date": "2026-11-10"}
     text = funnel.line(blank, dict.fromkeys(funnel.AUDIENCE))
-    assert text.count("n/a") == len(funnel.COUNTS) + len(funnel.AUDIENCE)
+    # Every count and figure once, and the codes and the accounts made again among the steps.
+    assert text.count("n/a") == len(funnel.COUNTS) + len(funnel.AUDIENCE) + 2
     for dash in (chr(0x2014), chr(0x2013)):
         assert dash not in text
+
+
+def test_the_line_drops_its_later_parts_before_it_would_fail_the_daily_check():
+    row = {k: "1" * 9 for k in funnel.COUNTS} | {"date": "2026-11-10"}
+    audience = dict.fromkeys(funnel.AUDIENCE, 10 ** 9)
+    note = "crawler pool counted as people " + "x" * 300
+    text = funnel.line(row, audience, note)
+    assert funnel.is_figures_line(text)
+    assert "not people: hosted 1,000,000,000" in text and "crawler pool" not in text
+    # The first two parts are never cut.
+    assert text.startswith("2026-11-10 (UTC): accounts 111,111,111 (new 111,111,111)")
+    assert "on a phone or tablet 1,000,000,000" in text
 
 
 def test_a_night_writes_the_days_row_and_line_and_a_retry_replaces_them(tmp_path):
@@ -162,21 +194,55 @@ def test_a_night_writes_the_days_row_and_line_and_a_retry_replaces_them(tmp_path
     summary = write_summary(tmp_path / "summary.csv")
     out = tmp_path / "out"
     out.mkdir()
-    (out / funnel.FUNNEL).write_text(",".join(funnel.HEADER) + "\n2026-11-09,3,0,1,1,1,5,6\n", encoding="utf-8")
+    # A record written before first_saves: its header lacks the column, and its rows read with it blank.
+    old_header = ",".join(funnel.HEADER[:-1])
+    (out / funnel.FUNNEL).write_text(old_header + "\n2026-11-09,3,0,1,1,1,5,6\n", encoding="utf-8")
     assert funnel.run(out, DAY, counts, summary) == "written"
     lines = (out / funnel.FUNNEL).read_text(encoding="utf-8").splitlines()
-    assert lines == [",".join(funnel.HEADER), "2026-11-09,3,0,1,1,1,5,6", "2026-11-10,3,1,4,2,1,5,6"]
+    assert lines == [",".join(funnel.HEADER), "2026-11-09,3,0,1,1,1,5,6,", "2026-11-10,3,1,4,2,1,5,6,2"]
     assert (out / funnel.LINE).read_text(encoding="utf-8") == (
         "2026-11-10 (UTC): accounts 3 (new 1), sign-in codes asked for 4, sign-ins 2, Pro 1, saved searches 5, "
-        "watches 6; page views by people 120, engaged visitors 7, from search 9, on a phone or tablet 6\n")
+        "watches 6; page views by people 120, engaged visitors 7, from search 9, on a phone or tablet 6; "
+        "to an account: plans page n/a, sign-in page n/a, codes 4, accounts 1, first save 2; "
+        "not people: hosted n/a, closed form n/a\n")
     # A retry the same day whose count was not read keeps the counts the row had; the line says so too.
     assert funnel.run(out, DAY, tmp_path / "missing.json", summary) == "written"
-    assert (out / funnel.FUNNEL).read_text(encoding="utf-8").splitlines()[-1] == "2026-11-10,3,1,4,2,1,5,6"
+    assert (out / funnel.FUNNEL).read_text(encoding="utf-8").splitlines()[-1] == "2026-11-10,3,1,4,2,1,5,6,2"
     assert "accounts 3 (new 1)" in (out / funnel.LINE).read_text(encoding="utf-8")
     # A retry that reads new levels replaces them in place: still one row for the day.
     assert funnel.run(out, DAY, write_answer(tmp_path / "count.json", answer(accounts=4)), summary) == "written"
     rows = (out / funnel.FUNNEL).read_text(encoding="utf-8").splitlines()
-    assert len(rows) == 3 and rows[-1] == "2026-11-10,4,1,4,2,1,5,6"
+    assert len(rows) == 3 and rows[-1] == "2026-11-10,4,1,4,2,1,5,6,2"
+
+
+def test_the_line_names_the_days_that_counted_the_crawler_pool_as_people(tmp_path):
+    rows = []
+    for day in range(10, 22):
+        stamp = f"2026-11-{day:02d}"
+        row = dict.fromkeys(vr.SUMMARY_HEADER, "") | {"date": stamp, "responses": 900, "human_pages": 80000}
+        if day >= 20:  # counted under the Worker's rule from the 20th: the classes filled, people alone in human_pages
+            row |= {"human_pages": 60, "hosted_pages": 70000, "closed_pages": 2890, "hosted_by_country": "{}",
+                    "hosted_by_route": "{}", "plans_pages": 4, "sign_in_pages": 6}
+        rows.append(row)
+    summary = tmp_path / "summary.csv"
+    vr._write_csv(summary, vr.SUMMARY_HEADER, rows)
+    held = vr.read_summary(summary)
+    assert vr.pool_days(held) == [f"2026-11-{d}" for d in range(13, 20)]
+    note = "crawler pool counted as people 2026-11-13 to 2026-11-19 (7 days)"
+    assert funnel.pool_note(held, date(2026, 11, 21)) == note
+    assert funnel.pool_note(held, date(2026, 11, 15)) == note           # the day itself is one of them
+    assert funnel.pool_note(held, date(2026, 12, 17)) == note           # 28 days after the last
+    assert funnel.pool_note(held, date(2026, 12, 18)) == ""             # then no more
+    assert funnel.pool_note(held[:3], date(2026, 11, 12)) == ""         # none before 2026-11-13
+    out = tmp_path / "out"
+    out.mkdir()
+    assert funnel.run(out, date(2026, 11, 21), write_answer(tmp_path / "c.json", answer(day="2026-11-21")),
+                      summary) == "written"
+    text = (out / funnel.LINE).read_text(encoding="utf-8").strip()
+    assert funnel.is_figures_line(text)
+    assert text.endswith("; to an account: plans page 4, sign-in page 6, codes 4, accounts 1, first save 2; "
+                         "not people: hosted 70,000, closed form 2,890; " + note)
+    assert "page views by people 60," in text
 
 
 def test_the_first_night_with_nothing_read_writes_blanks_and_n_a(tmp_path):
@@ -187,9 +253,9 @@ def test_the_first_night_with_nothing_read_writes_blanks_and_n_a(tmp_path):
     for counts, summary in ((None, None), (garbled, tmp_path / "missing.csv"),
                             (tmp_path / "missing.json", write_summary(tmp_path / "other-day.csv", day="2026-11-09"))):
         assert funnel.run(out, DAY, counts, summary) == "written"
-        assert (out / funnel.FUNNEL).read_text(encoding="utf-8").splitlines()[-1] == "2026-11-10" + "," * 7
+        assert (out / funnel.FUNNEL).read_text(encoding="utf-8").splitlines()[-1] == "2026-11-10" + "," * 8
         text = (out / funnel.LINE).read_text(encoding="utf-8")
-        assert text.startswith("2026-11-10 (UTC): accounts n/a (new n/a), ") and text.count("n/a") == 11
+        assert text.startswith("2026-11-10 (UTC): accounts n/a (new n/a), ") and text.count("n/a") == 18
     # Blank audience columns (a day not coded) read n/a, a 0 reads 0.
     summary = write_summary(tmp_path / "summary.csv", engaged_visitors="", search_visitors=0)
     assert funnel.run(out, DAY, None, summary) == "written"
@@ -201,8 +267,8 @@ def test_a_record_that_cannot_be_read_safely_is_never_replaced(tmp_path):
     out = tmp_path / "out"
     out.mkdir()
     for bad in ("date,accounts,email\n2026-11-09,1,someone@example.com\n",
-                ",".join(funnel.HEADER) + "\nnot-a-date,1,0,0,0,0,0,0\n",
-                ",".join(funnel.HEADER) + "\n2026-11-09,1,0,0,0,0,0,0,extra\n"):
+                ",".join(funnel.HEADER) + "\nnot-a-date,1,0,0,0,0,0,0,0\n",
+                ",".join(funnel.HEADER) + "\n2026-11-09,1,0,0,0,0,0,0,0,extra\n"):
         (out / funnel.FUNNEL).write_text(bad, encoding="utf-8")
         assert funnel.run(out, DAY, write_answer(tmp_path / "c.json", answer()), None) == "failed"
         assert (out / funnel.FUNNEL).read_text(encoding="utf-8") == bad
@@ -272,8 +338,11 @@ def test_the_command_joins_the_lines_the_two_steps_left_and_prints_neither(tmp_p
     counts = write_answer(tmp_path / "count.json", answer(
         day="2026-11-30", accounts=7301, accounts_new=7302, codes_requested=7303, sign_ins=7304, pro=7305,
         saved_searches=7306, watches=7307))
+    # A day counted under the Worker's rule of 2026-11-19 (its classes filled), so the line carries no pool note.
     summary = write_summary(tmp_path / "summary.csv", day="2026-11-30", human_pages=7308, unique_visitors=7312,
-                            human_visits=7313, engaged_visitors=7309, search_visitors=7310, phone_visitors=7311)
+                            human_visits=7313, engaged_visitors=7309, search_visitors=7310, phone_visitors=7311,
+                            hosted_pages=7314, closed_pages=7315, plans_pages=7316, sign_in_pages=7317,
+                            hosted_by_country="{}", hosted_by_route="{}")
     funnel_dir, report_dir = tmp_path / "funnel", tmp_path / "report"
     funnel_dir.mkdir()
     assert funnel.run(funnel_dir, REPORT_DAY, counts, summary) == "written"
@@ -286,7 +355,7 @@ def test_the_command_joins_the_lines_the_two_steps_left_and_prints_neither(tmp_p
     assert nightly.main(args) == 0
     printed = capsys.readouterr()
     assert printed.out == "figures-line: the month joined to tonight's line\n"
-    for n in range(7301, 7314):
+    for n in range(7301, 7318):
         for shown in (str(n), f"{n:,}"):
             assert shown not in printed.out + printed.err + caplog.text, n
     day_line = (funnel_dir / funnel.LINE).read_text(encoding="utf-8").strip()
@@ -428,8 +497,12 @@ def test_the_report_step_puts_the_month_on_the_line_and_prints_neither():
     # upload that fails sits inside the if, so the outcome stays "written".
     assert (report.index('if [ "$outcome" = "written" ]; then') < report.index('"$BUCKET/views/report-$month.md"')
             < report.index("figures-line") < report.index('echo "$outcome" > "$out/last_outcome.txt"'))
-    assert "funnel.csv" not in report and "data/out/funnel/" not in report.replace(
-        "data/out/funnel/funnel_line.txt", "").replace("data/out/funnel/day.txt", "")
+    # The record the funnel step left on the runner is read for the report's account rows (since 2026-11-19), as an
+    # argument and nothing else: never downloaded again, never printed, never uploaded from here.
+    assert report.count("data/out/funnel/funnel.csv") == 1 and "--funnel data/out/funnel/funnel.csv" in report
+    assert "views/funnel.csv" not in report and "data/out/funnel/" not in report.replace(
+        "data/out/funnel/funnel_line.txt", "").replace("data/out/funnel/day.txt", "").replace(
+        "data/out/funnel/funnel.csv", "")
     for shown in ("month_line", "figures_line", "funnel_line", "data/out/funnel"):
         assert f"cat {shown}" not in report and f'cat "$out/{shown}' not in report, shown
     assert "$GITHUB_STEP_SUMMARY" not in report

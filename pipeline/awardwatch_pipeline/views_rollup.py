@@ -41,6 +41,23 @@ they are asked as counts, so no code leaves Analytics Engine, and they
 follow the visitor columns' blank rule; a day whose referring hosts fill a
 whole answer leaves search_visitors blank.
 
+The classes counted apart (since 2026-11-19, the Worker's rule "2"): from
+2026-11-13 a crawler pool with browser-shaped headers was counted as people,
+tens of thousands of page views a day. The Worker now writes two more
+classes in blob8 for what it would otherwise call a person: "hosted" (from a
+listed hosting or cloud network) and "closed" (the response form opened from
+anywhere but its profile), and the rule's version in blob12. People's
+figures (human_*, the visitor columns) count the "human" class alone. The
+summary's last six columns (CLASS_COLUMNS) hold the two classes' page views,
+the hosted class's countries and routes, and people's views of the plans
+page and the sign-in page (both "other" before the rule); they are blank on
+any day on which a page view carries no rule version (every day before the
+deploy, and its own day), and a 0 there means none. Days rolled up before
+are never rewritten: their human_* figures hold the pool, which the monthly
+report and the funnel line say (POOL_FIRST_DAY). Two more queries for a
+flagged day: the page views without the rule's version, and for a day with
+none, the hosted class's routes.
+
 Why a day is caught up rather than only yesterday: a night whose query fails
 leaves a gap, and nothing should need a manual step to fill it. Each night
 rolls up every day after the newest one in the summary, back to the three
@@ -120,13 +137,18 @@ SUMMARY_HEADER = ["date", "responses", "pages", "api", "downloads", "forms", "fe
                   "human_pages", "bot_pages", "unique_visitors", "human_visits",
                   "human_by_country", "human_by_device", "human_by_lang", "human_by_route",
                   "organizations", "records",
-                  "engaged_visitors", "search_visitors", "phone_visitors"]
+                  "engaged_visitors", "search_visitors", "phone_visitors",
+                  "hosted_pages", "closed_pages", "hosted_by_country", "hosted_by_route",
+                  "plans_pages", "sign_in_pages"]
 # The distinct counts of codes that behave like readers (since 2026-11-11),
 # which the catch-up fills on days held from before them.
 READER_COLUMNS = ["engaged_visitors", "search_visitors", "phone_visitors"]
 # The columns that are blank on a day counted before the bot flag.
 AUDIENCE_COLUMNS = ["human_pages", "bot_pages", "unique_visitors", "human_visits",
                     "human_by_country", "human_by_device", "human_by_lang", "human_by_route", *READER_COLUMNS]
+# The columns of the classes counted apart from people and bots, and the people's views of the two pages between
+# a visit and an account (since AGENT_RULE "2", 2026-11-19): blank on a day any page view was counted without it.
+CLASS_COLUMNS = ["hosted_pages", "closed_pages", "hosted_by_country", "hosted_by_route", "plans_pages", "sign_in_pages"]
 # Readings taken on the night (not counts of the day), kept when a re-run cannot take them again.
 READINGS = ["organizations", "records"]
 # The stats.json counts added into the records reading.
@@ -134,7 +156,37 @@ RECORD_COUNTS = ("awards", "history", "contracts", "grants", "lobbying")
 # Summary columns by the kind the Worker records; every other kind is "other".
 KIND_COLUMNS = {"page": "pages", "api": "api", "download": "downloads", "form": "forms", "feed": "feeds"}
 KINDS = {"page", "api", "download", "form", "hook", "file", "feed", "other"}
-AGENTS = {"bot", "human"}
+# The classes the Worker writes in blob8 (site/src/views.ts Audience): "hosted" and "closed" since AGENT_RULE "2".
+AGENTS = {"bot", "human", "hosted", "closed"}
+# The version of the Worker's rule written in blob12 (site/src/views.ts AGENT_RULE; a test holds the two equal).
+AGENT_RULE = "2"
+# The two pages between a visit and an account, by the route templates the Worker writes since AGENT_RULE "2".
+PLANS_ROUTE = "/pro"
+SIGN_IN_ROUTE = "/account/sign-in"
+# The first day a crawler pool with browser-shaped headers was counted as people (found in the stored roll-ups:
+# about 82,000 page views on 2026-11-14). Every day from it until the rule's own counts begin (a row whose
+# class columns are filled) holds the pool in its people's figures; the report and the funnel line say so.
+POOL_FIRST_DAY = date(2026, 11, 13)
+
+
+def pool_days(rows: list[dict[str, Any]]) -> list[str]:
+    """The summary's days that counted the crawler pool as people: from POOL_FIRST_DAY, every day whose class
+    columns are blank (counted before the rule, or on the day it was deployed), sorted. Days rolled up before the
+    bot flag are not among them (they count no people at all)."""
+    first = POOL_FIRST_DAY.isoformat()
+    return sorted(r["date"] for r in rows
+                  if r.get("date", "") >= first and str(r.get("human_pages", "")).strip() != ""
+                  and str(r.get("hosted_pages", "")).strip() == "")
+
+
+def day_span(days: list[str]) -> str:
+    """Days as text: "2026-11-13 to 2026-11-19 (7 days)", or one day, or "" for none. A gap is not hidden:
+    the span names its first and last day and how many it holds."""
+    if not days:
+        return ""
+    if len(days) == 1:
+        return days[0]
+    return f"{days[0]} to {days[-1]} ({len(days)} days)"
 DEVICES = {"desktop", "mobile", "tablet"}
 TOP_ROUTES = 5
 TOP_COUNTRIES = 10
@@ -283,6 +335,20 @@ def phone_sql(day: date) -> str:
             f"WHERE {_coded_pages(day)} AND blob9 IN ('mobile', 'tablet') FORMAT JSON")
 
 
+def rule_sql(day: date) -> str:
+    # Page views below 400 written without the current rule's version (blob12): any such view means the day was
+    # counted, at least in part, by a Worker that called the hosted and closed requests people.
+    return (f"SELECT sumIf(_sample_interval, blob12 != '{AGENT_RULE}') AS unruled FROM {DATASET} "
+            f"WHERE blob2 = 'page' AND double1 < 400 AND {_where(day)} FORMAT JSON")
+
+
+def hosted_routes_sql(day: date) -> str:
+    # The routes the hosted class read: where the crawler pool goes, for the decision on it.
+    return (f"SELECT blob1 AS route, SUM(_sample_interval) AS hosted FROM {DATASET} "
+            f"WHERE blob2 = 'page' AND double1 < 400 AND blob8 = 'hosted' AND {_where(day)} "
+            f"GROUP BY route ORDER BY hosted DESC LIMIT {MAX_ROWS} FORMAT JSON")
+
+
 # -- the API ------------------------------------------------------------------
 
 
@@ -376,6 +442,8 @@ class Day:
     engaged: int | None = None    # codes with two or more page views below 400
     search: int | None = None     # codes with a page view below 400 referred by a search engine
     phone: int | None = None      # codes with a page view below 400 from a phone or tablet
+    unruled: int | None = None    # page views below 400 without the rule's version (None: not read)
+    hosted_routes: dict[str, int] = field(default_factory=dict)
 
     @property
     def total(self) -> int:
@@ -391,6 +459,12 @@ class Day:
     def coded(self) -> bool:
         """Every person's request of the day carries a visitor code."""
         return self.flagged and self.visitors is not None and self.uncoded == 0
+
+    @property
+    def ruled(self) -> bool:
+        """Every page view of the day was counted under AGENT_RULE, so the hosted and closed classes and the two
+        pages' counts can be filled; a day the rule was deployed part way through is not."""
+        return self.flagged and self.unruled == 0
 
 
 def clean_kind(value: Any) -> str:
@@ -552,7 +626,8 @@ def _compact(counts: dict[str, int], top: int | None = None) -> str:
 
 
 def audience_columns(d: Day) -> dict[str, Any]:
-    """The people and bot columns of the summary, or blanks when the day cannot fill them."""
+    """The people and bot columns of the summary, or blanks when the day cannot fill them. People are the "human"
+    class alone: "hosted" and "closed" go to class_columns, never to the people's figures."""
     out: dict[str, Any] = dict.fromkeys(AUDIENCE_COLUMNS, "")
     if not d.flagged:
         return out
@@ -563,6 +638,8 @@ def audience_columns(d: Day) -> dict[str, Any]:
     for (agent, country, device, lang), n in d.audience.items():
         if agent == "bot":
             bot += n
+            continue
+        if agent != "human":
             continue
         human += n
         by_country[country or UNKNOWN] = by_country.get(country or UNKNOWN, 0) + n
@@ -577,6 +654,29 @@ def audience_columns(d: Day) -> dict[str, Any]:
         out["unique_visitors"] = d.visitors
         out["human_visits"] = "" if d.visits is None else d.visits
         out.update(reader_columns(d.engaged, d.search, d.phone))
+    return out
+
+
+def class_columns(d: Day) -> dict[str, Any]:
+    """The hosted and closed classes' page views, the hosted class's countries and routes, and people's views of
+    the plans page and the sign-in page; blanks unless every page view of the day was counted under AGENT_RULE
+    (before it, the two classes were counted as people and the two pages under the route "other")."""
+    out: dict[str, Any] = dict.fromkeys(CLASS_COLUMNS, "")
+    if not d.ruled:
+        return out
+    hosted = closed = 0
+    by_country: dict[str, int] = {}
+    for (agent, country, _device, _lang), n in d.audience.items():
+        if agent == "hosted":
+            hosted += n
+            by_country[country or UNKNOWN] = by_country.get(country or UNKNOWN, 0) + n
+        elif agent == "closed":
+            closed += n
+    out.update(
+        hosted_pages=hosted, closed_pages=closed,
+        hosted_by_country=_compact(by_country, TOP_COUNTRIES), hosted_by_route=_compact(d.hosted_routes, TOP_COUNTRIES),
+        plans_pages=d.human_routes.get(PLANS_ROUTE, 0), sign_in_pages=d.human_routes.get(SIGN_IN_ROUTE, 0),
+    )
     return out
 
 
@@ -596,6 +696,7 @@ def summary_row(d: Day, *, site_counts: dict[str, int] | None = None) -> dict[st
     row["feed_subscribers"] = sum(most for name, (_fetches, most) in d.feeds.items() if name)
     row["top_routes"] = top_routes(d)
     row.update(audience_columns(d))
+    row.update(class_columns(d))
     counts = site_counts or {}
     row["organizations"] = counts.get("organizations", "")
     row["records"] = counts.get("records", "")
@@ -741,6 +842,15 @@ def roll_day(http: Any, account: str, token: str, day: date) -> Day | None:
         visitors=query(http, account, token, visitors_sql(day)),
         visits=query(http, account, token, visits_sql(day)),
     )
+    # Only a day whose every page view carries the bot flag can hold the
+    # classes counted apart; only one whose every page view carries the rule's
+    # version fills them, so a day before either costs no further query.
+    if d.flagged:
+        d.unruled = _single(query(http, account, token, rule_sql(day)), "unruled")
+        if d.ruled:
+            for row in query(http, account, token, hosted_routes_sql(day)):
+                route = clean_route(row.get("route"))
+                d.hosted_routes[route] = d.hosted_routes.get(route, 0) + _count(row.get("hosted"))
     # Only a day whose every person's request carries a code can fill them,
     # so the other days cost no further query.
     if d.coded:

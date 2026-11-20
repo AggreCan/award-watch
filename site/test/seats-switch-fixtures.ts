@@ -74,8 +74,30 @@ export async function makeReaders(): Promise<Record<Reader, string | undefined>>
 // (layout.tsx STYLES_VERSION) and changes nothing else in a page's bytes, so the stamp is put back before a page is
 // hashed; a new stamp alone needs no new capture.
 const CAPTURED_STYLES = 74;
+// The capture was made before the counter told four classes of client apart. The privacy page's two sentences about
+// it changed with that (i18n.ts privacy.counting and privacy.visitor, each language), and nothing else on the page
+// did, so each sentence as it reads now is put back as it read at the capture before the page is hashed: [now, at
+// the capture]. A further change to either sentence is added here the same way, and the capture stays as it is.
+const CAPTURED_TEXT: readonly (readonly [string, string])[] = [
+  ["whether a crawler, a person's browser or another program asked, and the device class (computer, phone or tablet). Which of them asked is judged from the browser's identification, the network the request came from and the page asked for; the network itself is not recorded.",
+   "whether a crawler or a person's browser asked, and the device class (computer, phone or tablet)."],
+  ["si la requête vient d'un robot d'indexation, du navigateur d'une personne ou d'un autre programme, et la catégorie d'appareil (ordinateur, téléphone ou tablette). L'origine de la requête est établie d'après l'identification du navigateur, le réseau d'où elle vient et la page demandée; le réseau lui-même n'est pas consigné.",
+   "si la requête vient d'un robot d'indexation ou du navigateur d'une personne, et la catégorie d'appareil (ordinateur, téléphone ou tablette)."],
+  ["A request counted as a person's also gets a visitor code",
+   "A request from a browser also gets a visitor code"],
+  ["Une requête comptée comme celle d'une personne reçoit aussi un code de visiteur",
+   "Une requête venant d'un navigateur reçoit aussi un code de visiteur"],
+];
+// Text as a page carries it: the apostrophe as the page writer escapes it (hono/jsx, &#39;) in English, and as
+// French typography sets it first (i18n.ts, U+2019) in French.
+const DRAWN: readonly ((text: string) => string)[] = [
+  (text) => text.replaceAll("'", "&#39;"),
+  (text) => text.replaceAll("'", "’"),
+];
 export async function shortHash(text: string): Promise<string> {
-  return (await sha256Hex(text.replaceAll(`styles.css?v=${STYLES_VERSION}"`, `styles.css?v=${CAPTURED_STYLES}"`))).slice(0, 24);
+  let page = text.replaceAll(`styles.css?v=${STYLES_VERSION}"`, `styles.css?v=${CAPTURED_STYLES}"`);
+  for (const [now, then] of CAPTURED_TEXT) for (const drawn of DRAWN) page = page.replaceAll(drawn(now), drawn(then));
+  return (await sha256Hex(page)).slice(0, 24);
 }
 
 export type Seen = { status: number; cache: string | null; cookie: boolean; body: string };

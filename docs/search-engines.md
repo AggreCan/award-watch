@@ -234,8 +234,11 @@ on the other.
 The counts are read day to day and kept as a lasting record of the site's
 audience. Cloudflare's dashboards show a window and keep nothing, so the
 nightly run keeps three files in R2: the daily roll-up of the Worker's own
-counts, Search Console's daily figures, and a report per month. Since
-2026-10-30 every count separates people from crawlers. Beside them, for the
+counts, Search Console's daily figures (with each day's top pages and
+queries, and a nightly index sample), and a report per month. Since
+2026-10-30 every count separates people from crawlers, and since 2026-11-19
+browser-shaped requests from hosting networks and the closed response form
+are counted apart from both. Beside them, for the
 operator only, it keeps the account funnel's daily figures (below).
 
 ### What one data point holds
@@ -250,16 +253,18 @@ operator only, it keeps the account funnel's daily figures (below).
 | `blob5` | the referring site's host name, empty when none | `news.google.com` |
 | `blob6` | the request method | `GET` |
 | `blob7` | feeds only: the feed file, empty when no file was served (empty on every other point) | `feeds/canada/tenders.xml` |
-| `blob8` | `bot` or `human` (from 2026-10-30) | `human` |
-| `blob9` | people only: `desktop`, `mobile` or `tablet`, read from the user agent; empty for a bot | `mobile` |
-| `blob10` | people only: the daily visitor code, 16 hex characters; empty for a bot and while `VIEWS_SALT_KEY` is not set | `79b509108f501ba3` |
+| `blob8` | the class: `bot` or `human` (from 2026-10-30), `hosted` or `closed` (from 2026-11-19; below) | `human` |
+| `blob9` | `desktop`, `mobile` or `tablet`, read from the user agent; empty for a bot | `mobile` |
+| `blob10` | people only (`human`): the daily visitor code, 16 hex characters; empty for every other class and while `VIEWS_SALT_KEY` is not set | `79b509108f501ba3` |
 | `blob11` | the verified-bot category Cloudflare's edge gave the request, empty when it gave none (from 2026-11-14) | `Search Engine Crawler` |
+| `blob12` | the version of the rule that set `blob8` (`AGENT_RULE`): `2` from 2026-11-19 | `2` |
 | `double1` | the status code | `200` |
 | `double2` | feeds only: the subscriber count the feed reader stated, 0 when none | `12` |
 
 The positions never move: the roll-up reads older days with the same
 columns, and a point written before 2026-10-30 reads back with empty strings
-in `blob7` to `blob10`, one before 2026-11-14 with an empty `blob11`.
+in `blob7` to `blob10`, one before 2026-11-14 with an empty `blob11`, one
+before 2026-11-19 with an empty `blob12`.
 
 The category is how the Worker tells a search engine's own crawler from a
 request that only writes its name. Googlebot and Bingbot, verified under
@@ -274,6 +279,27 @@ the budget of *AI crawlers* below.
 A path that matches no route is stored as `other`, never as written, since a
 mistyped or pasted address could hold anything. Downloads keep their file
 name (the list is fixed). The dataset is `awardwatch_views`.
+
+Every route the Worker serves has its template (`routeTemplate`). From
+2026-11-19 these are counted by name where they were `other` before: the
+plans page `/pro` and the briefing sample `/pro/briefing-sample` (its framed
+message `/pro/briefing-sample/message/:scheme`, kind `file`, part of that
+page); a published contract `/contracts/:dept/:reference`; the record tables
+`/organizations/:id/records`, `/buyers/:id/records` and their `.csv` files;
+a radar window's `/expiring/:window/rows.csv`; the contract sitemaps
+`/sitemap-contracts-:n.xml`; `/interest/stop`; the directory's old address
+`/organizations/directory` (a redirect, counted before as a profile); the
+operator's console as `/admin` and `/admin/:rest` (kind `other`, so the
+operator's own work is never a reader's page view); and the account's
+addresses by section, never by an id or a secret: `/account`,
+`/account/<section>` and `/account/<section>/:rest` for the sections the
+accounts' routes file lists (`sign-in`, `check`, `stop`, `billing`,
+`searches`, `watches` and the others), `/account/<section>/:file.csv`,
+`/account/calendar/:id.ics` (kind `download`), the dashboard's three reads as
+`/account/dashboard/:read` (kind `file`, fetched by its script), and the
+payment service's notices as `/account/billing/webhook` (kind `hook`).
+`other` now holds only paths that match no route: probes such as
+`/wp-login.php`, mistyped addresses, an unknown section under `/account`.
 
 **Bot or human** (`site/src/views.ts`, `agentClass`). A request is a bot when
 Cloudflare's edge gives it a verified-bot category (`request.cf.verifiedBotCategory`,
@@ -290,6 +316,50 @@ so the few still in use count as bots. Everything else is human: a person's
 browser, or a crawler that copies a browser's headers as well, which no
 header can tell apart. "bot" is not matched inside "Cubot", a phone maker
 whose model names appear in ordinary Android user agents.
+
+**Hosted and closed** (`audienceClass`, from 2026-11-19). A request the rule
+above would count as a person's is counted as `hosted` when Cloudflare's edge
+says it came from one of the largest hosting and cloud networks
+(`request.cf.asn` in `HOSTED_ASNS`), and as `closed` when it opens the
+response form `/organizations/:id/respond`, which `robots.txt` closes to
+every crawler, by GET or HEAD from anywhere but that organization's page (or
+the form itself). Neither is counted as a person or as a bot; each has its
+own count, and the point keeps the class alone, never the network's number
+or name.
+
+Why: from 2026-11-13 a crawler pool with browser-shaped user agents and
+Fetch Metadata headers was counted as people, about 82,000 page views on
+2026-11-14, all "desktop", from the US and Hong Kong, reading organization
+pages, contract history pages and the response form (2,890 times in one
+day). People browse from home, office and mobile networks; programs run in
+data centres. A browser on a page of the site sends that page as `Referer`
+(the site's policy keeps the path on its own pages), so a person reaches the
+form from the profile's link, while a crawler that ignores `robots.txt` asks
+for it directly. `hosted` is decided first, so `closed` counts the form's
+requests the network list does not catch.
+
+The list (`HOSTED_ASNS` in `site/src/views.ts`, dated by
+`HOSTED_ASNS_LISTED`, 2026-11-19): Amazon Web Services 16509 and 14618,
+Microsoft 8075, Google 15169 and Google Cloud 396982, Oracle Cloud 31898,
+Alibaba Cloud 45102 and 37963, Tencent 132203 and 45090, Huawei Cloud 136907
+and 55990, DigitalOcean 14061, Akamai Connected Cloud (Linode) 63949, Vultr
+20473, OVH 16276, Hetzner 24940, Contabo 51167, Scaleway 12876, Zenlayer
+21859; holders as the regional registries (ARIN, RIPE NCC, APNIC) record
+them. Left out on purpose because people's own browsing passes through them:
+Cloudflare 13335 (the WARP app), Akamai 20940 and 36183 and Fastly 54113
+(Apple's iCloud Private Relay), and the commercial VPN hosts M247 9009 and
+Datacamp 60068. To change the list, edit the constant and its date; a test
+holds the left-out networks out.
+
+What it costs a real reader: a person at an office whose traffic leaves
+through a cloud desktop or a cloud proxy on one of those networks (Microsoft
+and Google included) is counted as `hosted`, and a browser or extension that
+drops `Referer` on the site's own pages counts the form as `closed`. A
+person on a home connection, a phone on a mobile network, Private Relay or
+WARP is unaffected. A crawler pool on residential addresses is not caught by
+the list; its form requests still are. The cost on the Worker is a set
+lookup a request and, for the form alone, one parse of `Referer`; no
+statement (`test/cpu-budget.test.ts` holds a counted page to its bound).
 
 **Device** (`deviceClass`): tablet for iPad, Kindle, Silk, PlayBook,
 "Tablet", or Android without "Mobile"; mobile for "Mobi", iPhone, iPod,
@@ -379,9 +449,12 @@ a night that fails is caught up by the next. A day with no data points at all
 is not written and is asked again the next night. Each day costs one query,
 six more when it has data points (counts, feeds, page views by bot flag,
 people's page views by route, distinct visitor codes, distinct codes with a
-page view), and three or four more when every person's request that day
-carried a code (engaged visitors, people's referring hosts, visitors from
-search when a search engine referred anyone, visitors on a phone or tablet).
+page view), one more when every page view carries the bot flag (page views
+without the rule's version, `blob12`) and, for a day with none, one more
+(the `hosted` class's routes), and three or four more when every person's
+request that day carried a code (engaged visitors, people's referring hosts,
+visitors from search when a search engine referred anyone, visitors on a
+phone or tablet).
 Files in the `awardwatch-data` bucket:
 
 | Key | What it is |
@@ -389,6 +462,8 @@ Files in the `awardwatch-data` bucket:
 | `views/YYYY-MM-DD.csv` | one file per day, written once and replaced only if that day is rolled up again |
 | `views/summary.csv` | one row per day, every day kept so far |
 | `views/search_console.csv` | one row per day of Search Console figures (below) |
+| `views/search_pages.csv`, `views/search_queries.csv` | each final day's top 250 pages and top 250 queries in Search Console (below) |
+| `views/index_sample.csv` | each night's index sample, one row per page inspected (below) |
 | `views/report-YYYY-MM.md` | the monthly report (below) |
 | `views/funnel.csv` | the account funnel, one row per day (below); private |
 | `views/funnel_line.txt` | the last finished day's line for the operator's email (below); private |
@@ -414,7 +489,7 @@ named by `section`:
 | `kind` | `kind`, `responses` | the day's responses of one kind |
 | `count` | `route` to `status`, `responses` | responses for one combination of route template, kind, language, country, referring host and status |
 | `feed` | `feed`, `responses`, `subscribers` | one feed file: the day's polls, and the largest subscriber count any reader stated (0 when none did); `feed` is empty for polls of a feed path with no file |
-| `audience` | `agent`, `country`, `device`, `lang`, `responses` | page views below status 400 for one combination of bot flag, country, device and language; `agent` is empty for points written before the flag |
+| `audience` | `agent`, `country`, `device`, `lang`, `responses` | page views below status 400 for one combination of class (`bot`, `human`, and from 2026-11-19 `hosted`, `closed`), country, device and language; `agent` is empty for points written before the flag |
 
 `status` is the HTTP status code; `country` and `referrer` are empty when the
 request carried none. Counts come from `SUM(_sample_interval)`, so they are
@@ -423,7 +498,9 @@ distinct counts of visitor codes would undercount if it ever sampled (this
 site's volume is far below where it starts).
 
 The summary, header
-`date,responses,pages,api,downloads,forms,feeds,other,feed_subscribers,top_routes,human_pages,bot_pages,unique_visitors,human_visits,human_by_country,human_by_device,human_by_lang,human_by_route,organizations,records,engaged_visitors,search_visitors,phone_visitors`:
+`date,responses,pages,api,downloads,forms,feeds,other,feed_subscribers,top_routes,human_pages,bot_pages,unique_visitors,human_visits,human_by_country,human_by_device,human_by_lang,human_by_route,organizations,records,engaged_visitors,search_visitors,phone_visitors,hosted_pages,closed_pages,hosted_by_country,hosted_by_route,plans_pages,sign_in_pages`
+(a summary written before a column existed reads with it blank, and the next
+night writes it back under the whole header, every older value kept):
 
 | Column | Meaning |
 |---|---|
@@ -445,6 +522,21 @@ The summary, header
 | `engaged_visitors` | distinct visitor codes with two or more page views below status 400 (from 2026-11-11, and earlier days by the catch-up below) |
 | `search_visitors` | distinct visitor codes with a page view below status 400 whose referring host is a search engine's |
 | `phone_visitors` | distinct visitor codes with a page view below status 400 from a device read as `mobile` or `tablet` |
+| `hosted_pages` | page views below status 400 of the `hosted` class (from 2026-11-19) |
+| `closed_pages` | page views below status 400 of the `closed` class: the response form opened from anywhere but its profile |
+| `hosted_by_country` | the `hosted` class's page views by country, compact JSON, the top ten then `other` |
+| `hosted_by_route` | the `hosted` class's page views by route template, the top ten then `other` |
+| `plans_pages` | people's page views of `/pro` |
+| `sign_in_pages` | people's page views of `/account/sign-in` |
+
+The `human_*` columns and the visitor columns count the `human` class
+alone: from 2026-11-19 neither `hosted` nor `closed` is in them. The last six
+are blank on any day on which a page view carries no rule version (every day
+before 2026-11-19, and the deploy's own day), and a 0 there means none. Rows
+rolled up before are never rewritten: from 2026-11-13 until the rule, their
+people's figures hold the crawler pool (`pool_days` in `views_rollup.py`,
+from `POOL_FIRST_DAY` 2026-11-13: every day with people counted and the
+class columns blank), and the monthly report and the funnel line say so.
 
 Blanks are deliberate and never mean zero. The eleven people and bot columns
 are blank on any day on which a page view carries no bot flag (every day
@@ -459,7 +551,9 @@ list would undercount. The organization and record readings are taken on the
 night, so a day rolled up again keeps the reading it had.
 
 **Reading the visitor columns.** `human` means a request with a browser's
-headers, and automated browsers that copy those headers pass. In the week to
+headers, and automated browsers that copy those headers pass (from
+2026-11-19 not from a listed hosting network, which takes out a pool in data
+centres; a pool on residential addresses still passes). In the week to
 2026-11-10 such a pool made up most of `unique_visitors`: nearly every code a
 single page view, from many countries a day, in bursts at 02:00 UTC. So
 `unique_visitors` and `human_visits` count every browser-shaped client, and
@@ -554,6 +648,62 @@ is not set; nothing is asked), or `failed` (an attention item and a watchdog
 email; the next night catches up, and the file is never replaced by a shorter
 one).
 
+**By page and by query** (`search_detail.py`, from 2026-11-19). The totals
+cannot say which pages lost the clicks that fell on 2026-11-14, so the same
+command then appends, for each final day after the newest one both files
+hold, its top 250 pages to `views/search_pages.csv` (header
+`date,page,clicks,impressions,position`) and its top 250 queries to
+`views/search_queries.csv` (`date,query,clicks,impressions,position`). On the
+first night neither file exists and the import starts at 2026-11-01. Each
+day costs two requests to the same Search Analytics endpoint (body
+`{"type": "web", "dataState": "final", "startDate": D, "endDate": D,
+"dimensions": ["page"] or ["query"], "rowLimit": 25000}`) after one date
+request for the range, at most 60 days a night. Google sorts by clicks, and
+on a day of a few clicks most rows have none, so the rows are ranked here by
+clicks, then impressions, then the text. A page on another host is left out;
+a query that reads as a person's name (the pipeline's person test) is kept as
+one withheld row. Outcomes, as `search_console_detail` in the run status and
+"Search Console by page and query:" in LAST_RUN.md: `imported <n> days`, `up
+to date`, `no credentials` or `failed` (a notice; the next night catches up).
+
+**The index sample** (`index_sample.py`, from 2026-11-19). Each night the
+same command asks Search Console's URL Inspection API about a small fixed
+sample of the site's own pages and appends one row per page to
+`views/index_sample.csv`, header
+`date,kind,path,verdict,coverage,robots,indexing,fetch,last_crawl,google_canonical`:
+Google's verdict (`PASS` is indexed), its coverage state (the reason given
+when a page is not indexed, for example "Crawled - currently not indexed" or
+"URL is unknown to Google"), the robots, indexing and fetch states, the last
+crawl's date, and Google's canonical (its path, or "another host"). The
+sample is 40 pages: 15 open tender notices published in the 7 days to the
+data date (`tenders/open.json`), 15 organizations with an award notice in
+the 30 days to it (`awards/recent.json`), and 10 published contracts dated
+in the 90 days to it (the pipeline's contracts table, opened read-only),
+each kind ranked by SHA-256 of a fixed seed, the kind and the page's path,
+lowest first. The same pages come back night after night while they stay in
+their windows, so the sample rolls slowly. The addresses are the ones the
+sitemaps list.
+
+One request per page, `POST https://searchconsole.googleapis.com/v1/urlInspection/index:inspect`
+with `{"inspectionUrl": "https://awardwatch.ca/<path>", "siteUrl":
+"sc-domain:awardwatch.ca", "languageCode": "en-US"}`, one at a time, a
+second apart, none after five minutes, and nothing on a night already
+sampled. Google's limits are 2,000 inspections a day and 600 a minute for a
+property, so the sample is 2% of the day's allowance. The token is the
+import's (scope `webmasters.readonly`, which the method accepts). An answer
+of 403 stops the sample at once (`not permitted`), 429 stops it (`rate
+limited`), and any other failure skips that page. Outcomes, as
+`index_sample` in the run status and "Index sample:" in LAST_RUN.md:
+`inspected <n>`, `up to date`, `no sample` (the export or the database was
+not there), `no credentials`, `not permitted`, `rate limited`, `failed`; the
+last three are notices, never an item needing attention, and the night goes
+on.
+
+If the index sample reads `not permitted`: Search Console, the property,
+Settings, Users and permissions, the service account's address, permission
+Full. Restricted is expected to be enough for an inspection, which changes
+nothing; the step's log names Google's own message beside the 403.
+
 #### Setting up the service account
 
 Use the project's Google account (section 3), in the project's browser
@@ -596,11 +746,21 @@ writes with the days there are.
 The report is plain markdown: a table of the month and the three before it
 (days counted, page views by people, unique visitors summed by day, visits,
 engaged visitors, visitors from search and visitors on a phone or tablet
-summed over the days that have all three, Canada's share, the device split,
-search clicks, impressions and position, feed subscribers, organizations and
-records), a paragraph under the table on what each visitor figure can tell
-(as in "Reading the visitor columns" above), the month's top ten pages by
-people, and the definitions of each figure. A figure that was not counted
+summed over the days that have all three, Canada's share, the device split;
+from 2026-11-19 the page views of the `hosted` and `closed` classes and
+people's views of the plans page and the sign-in page, then the account
+steps from the funnel's record: sign-in codes asked for, accounts made,
+accounts with a first saved search or watch; search clicks, impressions and
+position, feed subscribers, organizations and records), a note under the
+table naming the days that counted the crawler pool as people (from
+2026-11-13, until the classes were counted apart; those rows stay as they
+were counted), a paragraph on what each visitor figure can tell (as in
+"Reading the visitor columns" above), the month's top ten pages by people, a
+Search block (clicks and impressions by day for the 28 days to the newest
+final day of the month; the ten pages and the ten queries that lost the most
+clicks over its last 7 days against the 7 before; the month's last index
+sample by kind of page, with the share indexed and Google's reasons for the
+rest), and the definitions of each figure. A figure that was not counted
 reads `n/a`. Unique visitors are summed over the month's days
 ("visitor-days"), since the code changes daily: a person who came on three
 days counts three times.
@@ -623,7 +783,10 @@ Outcomes, as `views_report`: `written`, `not due` (the report
 exists), `waiting`, `no data` (the summary holds no day of the month), or
 `failed` (an attention item and a watchdog email; the next run tries again).
 To write one by hand from downloaded files:
-`python -m awardwatch_pipeline.nightly views-report --month 2026-11 --summary summary.csv --search search_console.csv --out .`
+`python -m awardwatch_pipeline.nightly views-report --month 2026-11 --summary summary.csv --search search_console.csv --funnel funnel.csv --search-pages search_pages.csv --search-queries search_queries.csv --index-sample index_sample.csv --out .`
+(every file but the summary is optional; one left out reads `n/a`). The
+workflow passes the funnel's record the funnel step left on the runner,
+`data/out/funnel/funnel.csv`, and downloads the other files.
 
 ### The account funnel (operator only)
 
@@ -643,7 +806,8 @@ the alert sign-ups":
    uploads `views/funnel.csv` and `views/funnel_line.txt`.
 
 `views/funnel.csv`, header
-`date,accounts,accounts_new,codes_requested,sign_ins,pro,saved_searches,watches`:
+`date,accounts,accounts_new,codes_requested,sign_ins,pro,saved_searches,watches,first_saves`
+(a record written before `first_saves` reads with it blank):
 
 | Column | Meaning |
 |---|---|
@@ -654,6 +818,7 @@ the alert sign-ups":
 | `accounts` | active accounts, read when the nightly ran (the day after `date`) |
 | `pro` | accounts on Pro, read then, counted as the operator console counts them (`admin_ops.ts`, overview: of each active account's live entitlements, the latest by `created_at` then `id`, when its plan is `pro`) |
 | `saved_searches`, `watches` | rows of each table, read then |
+| `first_saves` | accounts whose first saved search or watch (among those they still hold) was made that day (from 2026-11-19) |
 
 The audit trail keeps 90 days, so a day's codes and sign-ins can be counted
 again only within them. A count that cannot be read is blank; a retry the
@@ -661,10 +826,18 @@ same day replaces the day's row, keeping any count it could not read.
 
 `views/funnel_line.txt` is one line for the last finished day: the seven
 counts, then that day's `human_pages`, `engaged_visitors`, `search_visitors`
-and `phone_visitors` from the summary the roll-up step left on the runner,
+and `phone_visitors` from the summary the roll-up step left on the runner;
+from 2026-11-19 then the steps from a visit to an account in their order
+(people's views of the plans page and of the sign-in page, the codes asked
+for, the accounts made, the first saved searches or watches), the page views
+counted apart from people (`hosted`, and `closed form` for the response
+form), and while they are recent (28 days after the last of them, or when
+the line's own day is one) the days that counted the crawler pool as people;
 `n/a` for anything not read. For example
-`2026-11-10 (UTC): accounts 12 (new 2), sign-in codes asked for 3, sign-ins 2, Pro 1, saved searches 4, watches 7; page views by people 120, engaged visitors 7, from search 9, on a phone or tablet 6`
-(the figures here are made up).
+`2026-11-21 (UTC): accounts 12 (new 2), sign-in codes asked for 3, sign-ins 2, Pro 1, saved searches 4, watches 7; page views by people 120, engaged visitors 7, from search 9, on a phone or tablet 6; to an account: plans page 9, sign-in page 5, codes 3, accounts 2, first save 1; not people: hosted 70,412, closed form 2,890; crawler pool counted as people 2026-11-13 to 2026-11-19 (7 days)`
+(the figures here are made up). When a line would pass 600 characters after
+its date, its parts after the people's figures go from the end until it
+fits.
 
 On the night the monthly report is written, the report step puts the line
 again with the month's figures after ` | `, for example
@@ -736,8 +909,8 @@ WHERE blob2 = 'page' AND double1 < 400 AND timestamp > NOW() - INTERVAL '7' DAY
 GROUP BY day, agent ORDER BY day, agent
 ```
 
-(A row of bots shows `codes` 1: every bot point carries the same empty
-code.)
+(A row of `bot`, `hosted` or `closed` shows `codes` 1: every such point
+carries the same empty code.)
 
 Most viewed routes and the language split, last 7 days:
 

@@ -1119,4 +1119,52 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
     const r = await signedInRatio("/account/dashboard", 8, accounts, '<div class="dash-grid" id="dash-grid">', { RECORDS: records, BUILDER: "on" });
     expect(r, `/account/dashboard, 24 builder views ${r.toFixed(2)}`).toBeLessThanOrEqual(DASHBOARD_BUILD_BOUND);
   }, 120_000);
+
+  // The visit counted (src/views.ts) on every request: the class, the point, and for a person the visitor code
+  // (two hashes, the day's salt kept per isolate). /about counted under each class keeps /about's own bound; the
+  // response form, the one page the closed class reads Referer for, its own (measured 2026-11-19, in brackets).
+  it("keeps a page counted under each class of visit within its bound", async () => {
+    const points: unknown[] = [];
+    const VIEWS = { writeDataPoint: (p: unknown) => void points.push(p) } as unknown as AnalyticsEngineDataset;
+    const counted = { ...env, VIEWS, VIEWS_SALT_KEY: "cpu-budget-secret" };
+    const CHROME = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
+    const CASES: [name: string, path: string, cf: object, referer: string | null, cls: string, bound: number][] = [
+      ["/about, a person", "/about", { country: "CA", asn: 812 }, "https://www.google.com/", "human", 4.5], // [1.36]
+      ["/about, hosted", "/about", { country: "HK", asn: 45102 }, null, "hosted", 4.5], // [1.30]
+      ["respond form, closed", "/organizations/org-a000000001/respond", { country: "US", asn: 7922 }, null, "closed", 7], // [2.30]
+      ["respond form, from its profile", "/organizations/org-a000000001/respond", { country: "CA", asn: 812 },
+        "https://awardwatch.ca/organizations/org-a000000001", "human", 7], // [2.30]
+    ];
+    const over: string[] = [];
+    const seen: string[] = [];
+    for (const [name, path, cf, referer, cls, bound] of CASES) {
+      const go = async () => {
+        const req = new Request(`https://awardwatch.ca${path}`, {
+          headers: {
+            "user-agent": CHROME, "sec-fetch-mode": "navigate", "sec-fetch-dest": "document",
+            "cf-connecting-ip": `198.19.${100 + ((address >> 8) % 100)}.${(address++ % 250) + 1}`,
+            ...(referer ? { referer } : {}),
+          },
+        });
+        Object.defineProperty(req, "cf", { value: cf });
+        const res = await app.fetch(req, counted);
+        await res.arrayBuffer();
+        return res.status;
+      };
+      points.length = 0;
+      expect(await go(), name).toBe(200);
+      expect((points[0] as { blobs: string[] }).blobs[7], name).toBe(cls);
+      for (let i = 0; i < 3; i++) await go();
+      const route: number[] = [];
+      const yard: number[] = [];
+      for (let b = 0; b < 5; b++) {
+        yard.push(await batch(yardstick, 16));
+        route.push(await batch(go, 16));
+      }
+      const r = median(route) / median(yard);
+      seen.push(`${name} ${r.toFixed(2)}`);
+      if (r > bound) over.push(`${name}: ${r.toFixed(2)} over ${bound}`);
+    }
+    expect(over, seen.join(", ")).toEqual([]);
+  }, 120_000);
 });

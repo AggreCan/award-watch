@@ -33,6 +33,21 @@ Unique visitors count automated browsers that copy a browser's headers, so
 the report says beside the table which figures to read as people. In the
 private line those three come right after the page views by people.
 
+The crawler pool (since 2026-11-19): from 2026-11-13 a pool of automated
+browsers was counted as people. The Worker now counts it apart (hosted
+networks, the closed response form), the table carries those two figures and
+people's views of the plans and sign-in pages, and a note under the table
+names the days whose people's figures hold the pool (views_rollup.pool_days).
+Those days' rows are never rewritten. The table also carries the account
+steps from views/funnel.csv: codes asked for, accounts made, first saved
+searches or watches.
+
+Search (since 2026-11-19): clicks and impressions by day for the
+SEARCH_DAYS days to the newest final day of the month, the pages and queries
+that lost the most clicks over its last LOSS_DAYS days against the
+LOSS_DAYS before (views/search_pages.csv, views/search_queries.csv), and the
+month's last index sample by kind of page (views/index_sample.csv).
+
 Alert sign-ups: the count the nightly run read from the forms database just
 before the report (rows of the interest table, one per address and saved
 filter, and how many have not unsubscribed; the landing page's Ultra card
@@ -50,8 +65,9 @@ import logging
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
+from urllib.parse import urlsplit
 
-from .views_rollup import READER_COLUMNS, SummaryError, read_summary
+from .views_rollup import POOL_FIRST_DAY, READER_COLUMNS, SummaryError, day_span, pool_days, read_summary
 
 log = logging.getLogger(__name__)
 
@@ -59,6 +75,12 @@ WAIT_DAYS = 7
 MONTHS = 4
 TOP_PAGES = 10
 NA = "n/a"
+# The Search block: clicks and impressions by day for SEARCH_DAYS days, and the pages and queries that lost the
+# most clicks over the last LOSS_DAYS days against the LOSS_DAYS before (TOP_LOSSES of each).
+SEARCH_DAYS = 28
+LOSS_DAYS = 7
+TOP_LOSSES = 10
+INDEXED = "PASS"
 
 # The public line for LAST_RUN.md (no figure) and the private one for the operator's email.
 SUMMARY_LINE = "summary_line.txt"
@@ -137,9 +159,21 @@ class Month:
     clicks: int = 0
     impressions: int = 0
     position_weight: float = 0.0      # sum of position x impressions
+    class_days: int = 0               # days with the classes counted apart (the Worker's rule "2")
+    hosted: int = 0                   # page views from hosted networks
+    closed: int = 0                   # the response form opened from anywhere but its profile
+    plans: int = 0                    # people's views of the plans page
+    sign_in: int = 0                  # people's views of the sign-in page
+    pool: list[str] = field(default_factory=list)  # days whose people's figures hold the crawler pool
+    account_days: int = 0             # days with codes and accounts made read
+    codes: int = 0
+    accounts_new: int = 0
+    first_saves_days: int = 0
+    first_saves: int = 0
 
 
-def gather(month: str, summary: list[dict[str, str]], search: list[dict[str, str]]) -> Month:
+def gather(month: str, summary: list[dict[str, str]], search: list[dict[str, str]],
+           funnel: list[dict[str, str]] | None = None) -> Month:
     first, last = month_bounds(month)
     m = Month(month)
     for row in sorted(summary, key=lambda r: r["date"]):
@@ -177,6 +211,26 @@ def gather(month: str, summary: list[dict[str, str]], search: list[dict[str, str
             value = _int(row.get(column))
             if value is not None:
                 setattr(m, attr, value)  # rows run oldest first, so the last reading stands
+        hosted = _int(row.get("hosted_pages"))
+        if hosted is not None:
+            m.class_days += 1
+            m.hosted += hosted
+            m.closed += _int(row.get("closed_pages")) or 0
+            m.plans += _int(row.get("plans_pages")) or 0
+            m.sign_in += _int(row.get("sign_in_pages")) or 0
+    m.pool = [d for d in pool_days(summary) if first.isoformat() <= d <= last.isoformat()]
+    for row in funnel or []:
+        if not first.isoformat() <= row.get("date", "") <= last.isoformat():
+            continue
+        codes, new = _int(row.get("codes_requested")), _int(row.get("accounts_new"))
+        if codes is not None and new is not None:
+            m.account_days += 1
+            m.codes += codes
+            m.accounts_new += new
+        saves = _int(row.get("first_saves"))
+        if saves is not None:
+            m.first_saves_days += 1
+            m.first_saves += saves
     for row in search:
         if not first.isoformat() <= row["date"] <= last.isoformat():
             continue
@@ -213,6 +267,123 @@ READING = (
 )
 
 
+def pool_text(months: list[Month]) -> str:
+    """The note on the days whose people's figures hold the crawler pool, "" when none of the months has one."""
+    days = sorted({d for m in months for d in m.pool})
+    if not days:
+        return ""
+    return (f"Days that counted a crawler pool as people: {day_span(days)}. From {POOL_FIRST_DAY.isoformat()} a pool "
+            "of automated browsers in data centres was counted as people, tens of thousands of page views a day, until "
+            "the Worker counted hosted networks and the closed response form apart. Those days' page views by people, "
+            "unique visitors, visits and engaged visitors include it, and they stay as they were counted.\n")
+
+
+# -- the Search block -------------------------------------------------------------
+
+
+def _day(text: object) -> date | None:
+    try:
+        return date.fromisoformat(text) if isinstance(text, str) and len(text) == 10 else None
+    except ValueError:
+        return None
+
+
+def _page(url: str) -> str:
+    """A page as the report prints it: its path and query, the host only when it is not the apex."""
+    parts = urlsplit(url)
+    host = parts.hostname or ""
+    shown = (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
+    return shown if not host.startswith("www.") else f"www {shown}"
+
+
+def _cell(text: str) -> str:
+    # A table cell holds no pipe and no line break.
+    return text.replace("|", "/").replace("\n", " ").strip()
+
+
+def losses(rows: list[dict[str, str]], key: str, end: date) -> tuple[list[tuple[str, int, int]], int]:
+    """The keys that lost the most clicks over the LOSS_DAYS days to end against the LOSS_DAYS before, as (key,
+    clicks before, clicks after), most lost first, at most TOP_LOSSES; and how many of the 2 x LOSS_DAYS days the
+    rows hold."""
+    after = {end - timedelta(days=i) for i in range(LOSS_DAYS)}
+    before = {end - timedelta(days=LOSS_DAYS + i) for i in range(LOSS_DAYS)}
+    early: dict[str, int] = {}
+    late: dict[str, int] = {}
+    held: set[date] = set()
+    for row in rows:
+        day = _day(row.get("date"))
+        text = row.get(key) or ""
+        if day is None or not text or (day not in before and day not in after):
+            continue
+        held.add(day)
+        side = early if day in before else late
+        side[text] = side.get(text, 0) + (_int(row.get("clicks")) or 0)
+    lost = [(k, early.get(k, 0), late.get(k, 0)) for k in set(early) | set(late) if early.get(k, 0) > late.get(k, 0)]
+    lost.sort(key=lambda r: (r[2] - r[1], r[0]))
+    return lost[:TOP_LOSSES], len(held)
+
+
+def _loss_table(title: str, rows: list[tuple[str, int, int]], held: int, label: str) -> str:
+    covered = "" if held == 2 * LOSS_DAYS else f" (the file holds {held} of these {2 * LOSS_DAYS} days)"
+    head = f"{title}{covered}:\n\n"
+    if not rows:
+        return head + "None lost clicks.\n"
+    return head + (f"| {label} | Clicks before | Clicks after | Change |\n|---|---:|---:|---:|\n"
+                   + "".join(f"| {_cell(k)} | {b:,} | {a:,} | {a - b:,} |\n" for k, b, a in rows))
+
+
+def index_text(rows: list[dict[str, str]], last: date) -> str:
+    """The newest night's index sample up to last: each kind's pages inspected, indexed (verdict PASS), the share,
+    and the reasons Google gives for the rest."""
+    from .index_sample import SAMPLE
+
+    nights = sorted({r["date"] for r in rows if _day(r.get("date")) is not None and r["date"] <= last.isoformat()})
+    if not nights:
+        return "No index sample was taken by the month's end.\n"
+    night = nights[-1]
+    tonight = [r for r in rows if r["date"] == night]
+    kinds = [k for k, _ in SAMPLE] + sorted({r.get("kind", "") for r in tonight} - {k for k, _ in SAMPLE})
+    lines = []
+    for kind in kinds:
+        pages = [r for r in tonight if r.get("kind") == kind]
+        if not pages:
+            continue
+        indexed = sum(1 for r in pages if r.get("verdict") == INDEXED)
+        reasons: dict[str, int] = {}
+        for r in pages:
+            if r.get("verdict") != INDEXED:
+                why = r.get("coverage") or r.get("verdict") or "no reason given"
+                reasons[why] = reasons.get(why, 0) + 1
+        why = "; ".join(f"{_cell(k)} {n}" for k, n in sorted(reasons.items(), key=lambda kv: (-kv[1], kv[0]))) or "none"
+        lines.append(f"| {kind} | {len(pages)} | {indexed} | {_share(indexed, len(pages))} | {why} |\n")
+    month_nights = [n for n in nights if n[:7] == last.isoformat()[:7]]
+    return (f"The index sample of {night} ({len(month_nights)} nights sampled this month):\n\n"
+            "| Kind of page | Inspected | Indexed | Share indexed | Not indexed, by Google's reason |\n"
+            "|---|---:|---:|---:|---|\n" + "".join(lines))
+
+
+def search_block(month: str, search: list[dict[str, str]], pages: list[dict[str, str]],
+                 queries: list[dict[str, str]], index: list[dict[str, str]]) -> str:
+    _, last = month_bounds(month)
+    held = sorted(d for d in (_day(r.get("date")) for r in search) if d is not None and d <= last)
+    if not held:
+        return "No Search Console figures were imported for this month.\n\n" + index_text(index, last)
+    end = held[-1]
+    by_day = {r["date"]: r for r in search}
+    days = [end - timedelta(days=i) for i in range(SEARCH_DAYS - 1, -1, -1)]
+    table = "| Day | Clicks | Impressions |\n|---|---:|---:|\n" + "".join(
+        f"| {d.isoformat()} | {_n(_int(by_day.get(d.isoformat(), {}).get('clicks')) or 0)} | "
+        f"{_n(_int(by_day.get(d.isoformat(), {}).get('impressions')) or 0)} |\n" for d in days)
+    page_rows, page_days = losses([{**r, "page": _page(r.get("page", ""))} for r in pages], "page", end)
+    query_rows, query_days = losses(queries, "query", end)
+    span = f"the {LOSS_DAYS} days to {end.isoformat()} against the {LOSS_DAYS} before"
+    return (f"Clicks and impressions by day, the {SEARCH_DAYS} days to {end.isoformat()} (the newest final day "
+            "imported):\n\n" + table + "\n"
+            + _loss_table(f"Pages that lost the most clicks, {span}", page_rows, page_days, "Page") + "\n"
+            + _loss_table(f"Queries that lost the most clicks, {span}", query_rows, query_days, "Query") + "\n"
+            + index_text(index, last))
+
+
 def interest_text(interest: dict[str, int] | None) -> str:
     if not interest:
         return "Not counted. The forms database could not be read when this report was written.\n"
@@ -221,7 +392,8 @@ def interest_text(interest: dict[str, int] | None) -> str:
             "counts twice.\n")
 
 
-def render(month: str, months: list[Month], written: date, interest: dict[str, int] | None = None) -> str:
+def render(month: str, months: list[Month], written: date, interest: dict[str, int] | None = None,
+           search: str = "") -> str:
     cols = [m.month for m in months]
     head = "| Figure | " + " | ".join(cols) + " |\n|---|" + "---:|" * len(cols) + "\n"
 
@@ -244,6 +416,17 @@ def render(month: str, months: list[Month], written: date, interest: dict[str, i
         line("Desktop share", [_share(m.devices.get("desktop", 0), sum(m.devices.values())) for m in months]),
         line("Mobile share", [_share(m.devices.get("mobile", 0), sum(m.devices.values())) for m in months]),
         line("Tablet share", [_share(m.devices.get("tablet", 0), sum(m.devices.values())) for m in months]),
+        line("Days with the classes counted apart", [_days(m.class_days, m.month) for m in months]),
+        line("Page views from hosted networks (not people)", [_n(m.hosted) if m.class_days else NA for m in months]),
+        line("Response form opened not from its profile (not people)",
+             [_n(m.closed) if m.class_days else NA for m in months]),
+        line("Plans page views by people", [_n(m.plans) if m.class_days else NA for m in months]),
+        line("Sign-in page views by people", [_n(m.sign_in) if m.class_days else NA for m in months]),
+        line("Days with account counts", [_days(m.account_days, m.month) for m in months]),
+        line("Sign-in codes asked for", [_n(m.codes) if m.account_days else NA for m in months]),
+        line("Accounts made", [_n(m.accounts_new) if m.account_days else NA for m in months]),
+        line("Accounts with a first saved search or watch",
+             [_n(m.first_saves) if m.first_saves_days else NA for m in months]),
         line("Days with search figures", [_days(m.search_days, m.month) for m in months]),
         line("Search clicks", [_n(m.clicks) if m.search_days else NA for m in months]),
         line("Search impressions", [_n(m.impressions) if m.search_days else NA for m in months]),
@@ -263,17 +446,40 @@ def render(month: str, months: list[Month], written: date, interest: dict[str, i
 
     return (
         f"# Award Watch audience report, {month}\n\n"
-        f"Written {written.isoformat()} from views/summary.csv and views/search_console.csv in R2. "
+        f"Written {written.isoformat()} from views/summary.csv, views/search_console.csv and the other files under "
+        "views/ in R2. "
         "Months are UTC calendar months. n/a means not counted.\n\n"
         f"## The month and the three before it\n\n{table}\n"
-        f"{READING}\n"
+        + (f"{pool_text(months)}\n" if pool_text(months) else "")
+        + f"{READING}\n"
         f"## Top pages by people, {month}\n\n{pages}\n"
+        f"## Search\n\n{search or search_block(month, [], [], [], [])}\n"
         f"## Alert sign-ups\n\n{interest_text(interest)}\n"
         "## Definitions\n\n"
         "- Days in the roll-up: days with a row in views/summary.csv (a day the Worker counted nothing has none).\n"
         "- Page views by people: responses to page routes below status 400 that the Worker marked human "
-        "(not a verified bot, not a crawler or script by its user agent, not a feed poll), summed over the days "
-        "with people counted. The bot flag exists from 2026-10-30; earlier days are not counted.\n"
+        "(not a verified bot, not a crawler or script by its user agent, not a feed poll; from 2026-11-19 not from "
+        "a listed hosting network and not the response form opened from anywhere but its profile), summed over the "
+        "days with people counted. The bot flag exists from 2026-10-30; earlier days are not counted.\n"
+        "- Days with the classes counted apart: days on which every page view was counted under the Worker's rule "
+        "of 2026-11-19, which counts two classes apart from people and from bots. Page views from hosted networks: "
+        "requests the Worker would otherwise count as a person's that came from one of the large hosting and cloud "
+        "networks it lists (site/src/views.ts, HOSTED_ASNS). Response form opened not from its profile: the form "
+        "/organizations/:id/respond, which robots.txt closes to every crawler, opened without the organization's "
+        "page as the referring page. Neither is in any people's figure.\n"
+        "- Plans page and sign-in page views by people: people's page views of /pro and /account/sign-in, counted by "
+        "name from 2026-11-19 (before, both were counted under the route \"other\").\n"
+        "- Sign-in codes asked for, accounts made: from views/funnel.csv (the accounts database), summed over the "
+        "days it holds. Accounts with a first saved search or watch: each day's accounts whose first saved search "
+        "or watch, among those they still hold, was made that day (from 2026-11-19).\n"
+        "- Search: Search Console's final days as views/search_console.csv holds them (a day with no impressions has "
+        "no row and reads 0). The pages and queries are each day's 250 with the most clicks, then impressions "
+        "(views/search_pages.csv, views/search_queries.csv, from 2026-11-01); a page or query outside a day's 250 "
+        "counts 0 that day, and a query that reads as a person's name is kept as one withheld row. The index "
+        "sample (views/index_sample.csv) is the night's Search Console URL Inspection of up to 40 of the site's "
+        "pages: open tender notices published in the week, organizations with an award notice in the month, and "
+        "published contracts dated in the 90 days, the same pages night after night while they stay in those "
+        "windows; indexed means Google's verdict PASS.\n"
         "- Unique visitors (visitor-days): each day's count of distinct visitor codes, summed over the month. A code "
         "is a hash of the address and user agent under a key that changes every UTC day, so a person who came on "
         "three days counts three times. Counted only on days when every person's request carried a code.\n"
@@ -340,18 +546,25 @@ def month_line(month: str, m: Month) -> str:
 
 
 def _read_search(path: Path | None) -> list[dict[str, str]]:
+    """The rows of one of the CSV files under views/ (Search Console's, the funnel's, the index sample's), each
+    with a date; none when the file is absent or cannot be read, so a missing file leaves its part n/a."""
     if path is None or not path.exists():
         return []
-    text = path.read_text(encoding="utf-8")
-    return [r for r in csv.DictReader(io.StringIO(text)) if isinstance(r.get("date"), str)]
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return []
+    return [r for r in csv.DictReader(io.StringIO(text)) if isinstance(r.get("date"), str) and None not in r]
 
 
 def run(out_dir: Path, month: str, today: date, summary_path: Path, search_path: Path | None = None,
-        interest: dict[str, int] | None = None) -> str:
+        interest: dict[str, int] | None = None, *, funnel_path: Path | None = None, pages_path: Path | None = None,
+        queries_path: Path | None = None, index_path: Path | None = None) -> str:
     """Write report-<month>.md, summary_line.txt (public, no figure) and month_line.txt (private) in out_dir.
     Returns "written", "waiting" (the month's last day is not rolled up yet), "no data" or "failed"; never
     raises, and never prints or logs a figure. interest is the count of alert sign-ups
-    (nightly.interest_counts), None when it was not read."""
+    (nightly.interest_counts), None when it was not read. funnel_path, pages_path, queries_path and index_path
+    are views/funnel.csv, search_pages.csv, search_queries.csv and index_sample.csv, each optional."""
     try:
         first, last = month_bounds(month)
         if today <= last:
@@ -370,9 +583,12 @@ def run(out_dir: Path, month: str, today: date, summary_path: Path, search_path:
             log.info("views report: %s is not rolled up yet; the report waits", last)
             return "waiting"
         search = _read_search(search_path)
-        months = [gather(m, summary, search) for m in previous_months(month)]
+        funnel = _read_search(funnel_path)
+        months = [gather(m, summary, search, funnel) for m in previous_months(month)]
+        block = search_block(month, search, _read_search(pages_path), _read_search(queries_path),
+                             _read_search(index_path))
         out_dir.mkdir(parents=True, exist_ok=True)
-        report = render(month, months, today, interest)
+        report = render(month, months, today, interest, block)
         (out_dir / f"report-{month}.md").write_text(report, encoding="utf-8", newline="\n")
         (out_dir / SUMMARY_LINE).write_text(summary_line(month) + "\n", encoding="utf-8", newline="\n")
         (out_dir / MONTH_LINE).write_text(month_line(month, months[-1]) + "\n", encoding="utf-8", newline="\n")

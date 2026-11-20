@@ -65,8 +65,10 @@ one, and always leaves a status file the site's daily check can read.
             stops before its deploy or rolls it back after.
   rollup-views, import-search-console, views-report
             the audience roll-up (views_rollup.py), the Search Console import
-            (search_console.py) and the monthly report (views_report.py);
-            each exits 1 only when it failed.
+            (search_console.py, then search_detail.py by page and query and
+            index_sample.py, each with its own outcome file) and the monthly
+            report (views_report.py); each exits 1 only when it failed (the
+            import: only when the daily totals failed).
   funnel-sql, funnel, figures-line
             the account funnel (funnel.py): the count statement, the row
             and line kept in R2's private views/ prefix, and on the night
@@ -168,6 +170,18 @@ INTEREST_NOTICE = "the alert sign-ups were not counted tonight (the D1 query fai
 # to R2. It names no figure: the notices go to the public LAST_RUN.md.
 FUNNEL_NOTICE = ("the account funnel's record and line were not saved to R2 tonight (views/funnel.csv); "
                  "the next run counts its own day")
+
+# The notices for Search Console's figures by page and query (search_detail.py)
+# and the index sample (index_sample.py), when either did not finish. Words
+# only: the notices go to the public LAST_RUN.md.
+SEARCH_DETAIL_NOTICE = ("Search Console's figures by page and by query were not imported tonight "
+                        "(views/search_pages.csv, views/search_queries.csv); the next run catches up")
+INDEX_SAMPLE_NOTICES = {
+    "not permitted": ("the index sample was refused by Search Console (HTTP 403): the service account may inspect "
+                      "no page of the property; docs/search-engines.md, section 6, says what to grant"),
+    "rate limited": "the index sample was stopped by Search Console's limit (HTTP 429); the next run samples again",
+    "failed": "the index sample did not finish tonight (views/index_sample.csv); the next run samples again",
+}
 
 # The notice for a night the records database was not synced because it does
 # not exist yet: wrangler.jsonc still holds the placeholder id (docs/analytics.md).
@@ -643,6 +657,7 @@ def run_status(
     link_sample: str | None = None, link_sample_broken: list[dict[str, Any]] | None = None,
     org_review: str | None = None, org_review_record: dict[str, Any] | None = None,
     funnel: str | None = None, accounts_backup: str | None = None, tests: Any = None,
+    search_detail: str | None = None, index_sample: str | None = None,
 ) -> dict[str, Any]:
     """status.json for the site's daily check. Every input may be missing: the
     status then says what is missing rather than failing to be written.
@@ -731,7 +746,16 @@ def run_status(
     verdict, the checks that failed, main's commit and the commit the night
     ran. A "fallback" night is an item needing attention; "passed" and a
     night without the file say nothing. Like accounts_backup it never marks
-    the run not ok: a fallback night that deployed is a finished night."""
+    the run not ok: a fallback night that deployed is a finished night.
+
+    search_detail is the import of Search Console's figures by page and by
+    query (search_detail.py: "imported <n> days", "up to date", "no
+    credentials", "failed") and index_sample the night's index sample
+    (index_sample.py: "inspected <n>", "up to date", "no sample", "no
+    credentials", "not permitted", "rate limited", "failed"); "not run" when
+    the step did not run. Words only. A failed import, and an index sample
+    refused, limited or failed, are each a notice, never an item needing
+    attention: neither touches what the site publishes."""
     stages: list[dict[str, Any]] = []
     notices: list[dict[str, str]] = []
     for name, result in steps.items():
@@ -807,6 +831,9 @@ def run_status(
         "organization_review": org_review or "not run",
         "views_rollup": views or "not run",
         "search_console": search_console or "not run",
+        # Search Console by page and query, and the index sample: words only.
+        "search_console_detail": search_detail or "not run",
+        "index_sample": index_sample or "not run",
         "views_report": views_report or "not run",
         "indexnow": indexnow_outcome or "not run",
         "funnel": funnel or "not run",
@@ -833,7 +860,10 @@ def run_status(
         + ([{"source": "records_sync", "detail": RECORDS_NOTICE}] if records == "no database" else [])
         + link_notices
         + ([review_notice] if review_notice else [])
-        + ([{"source": "funnel", "detail": FUNNEL_NOTICE}] if funnel == "failed" else []),
+        + ([{"source": "funnel", "detail": FUNNEL_NOTICE}] if funnel == "failed" else [])
+        + ([{"source": "search_console_detail", "detail": SEARCH_DETAIL_NOTICE}] if search_detail == "failed" else [])
+        + ([{"source": "index_sample", "detail": INDEX_SAMPLE_NOTICES[index_sample]}]
+           if index_sample in INDEX_SAMPLE_NOTICES else []),
         "ok": all(s["ok"] for s in stages) and verdict != "broken",
     }
 
@@ -1216,6 +1246,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--views-outcome", default=None, help="the audience roll-up's outcome file")
     s.add_argument("--indexnow-outcome", default=None, help="the IndexNow submission's outcome file")
     s.add_argument("--search-console-outcome", default=None, help="the Search Console import's outcome file")
+    s.add_argument("--search-detail-outcome", default=None,
+                   help="the outcome file of Search Console's figures by page and query")
+    s.add_argument("--index-sample-outcome", default=None, help="the index sample's outcome file")
     s.add_argument("--views-report-outcome", default=None, help="the monthly audience report's outcome file")
     s.add_argument("--interest", default=None,
                    help="Wrangler's JSON answer to the count of alert sign-ups (the status keeps whether it read)")
@@ -1313,14 +1346,28 @@ def build_parser() -> argparse.ArgumentParser:
     # Search Console's figures (search_console.py, docs/search-engines.md
     # section 6): every final day after the newest in search_console.csv.
     # Needs GSC_SERVICE_ACCOUNT_JSON; without it the outcome is "no credentials".
+    # Then, beside it, the days' top pages and queries (search_detail.py) and
+    # the night's index sample (index_sample.py), each with its own outcome.
     gs = sub.add_parser("import-search-console", help="append Search Console's daily figures to search_console.csv")
     gs.add_argument("--out", default=None,
-                    help="folder holding search_console.csv; outcome.txt goes beside it (default data/out/search_console)")
+                    help="folder holding search_console.csv, search_pages.csv, search_queries.csv and "
+                         "index_sample.csv; outcome.txt, detail_outcome.txt and index_outcome.txt go beside them "
+                         "(default data/out/search_console)")
+    gs.add_argument("--static", default=None, help="tonight's export, for the index sample (default data/out/static)")
+    gs.add_argument("--db", default=None, help="the pipeline's database, for the index sample's contracts "
+                                               "(default data/awardwatch.sqlite; opened read-only)")
     # The monthly audience report (views_report.py), from the files in R2.
     vp = sub.add_parser("views-report", help="write the audience report of a finished UTC month")
     vp.add_argument("--month", default=None, help="YYYY-MM (default: the month before today, UTC)")
     vp.add_argument("--summary", required=True, help="views/summary.csv as downloaded from R2")
     vp.add_argument("--search", default=None, help="views/search_console.csv as downloaded from R2, when it exists")
+    vp.add_argument("--funnel", default=None,
+                    help="the account funnel's record (the workflow passes the one its funnel step left on the "
+                         "runner), when it exists")
+    vp.add_argument("--search-pages", default=None, help="views/search_pages.csv as downloaded from R2, when it exists")
+    vp.add_argument("--search-queries", default=None,
+                    help="views/search_queries.csv as downloaded from R2, when it exists")
+    vp.add_argument("--index-sample", default=None, help="views/index_sample.csv as downloaded from R2, when it exists")
     vp.add_argument("--out", required=True,
                     help="folder for report-<month>.md, summary_line.txt, month_line.txt and outcome.txt")
     vp.add_argument("--today", default=None, help="YYYY-MM-DD (default: today, UTC)")
@@ -1473,7 +1520,8 @@ def _status(args: argparse.Namespace) -> int:
                         link_sample_broken=read_broken_links(args.link_sample_broken),
                         org_review=_read(args.org_review_outcome), org_review_record=_read_json(args.org_review_summary),
                         funnel=_read(args.funnel_outcome), accounts_backup=_read(args.accounts_backup_outcome),
-                        tests=_read_json(args.tests))
+                        tests=_read_json(args.tests), search_detail=_read(args.search_detail_outcome),
+                        index_sample=_read(args.index_sample_outcome))
     _write_json(Path(args.out), status)
     print(json.dumps(status, indent=1))
     return 0
@@ -1621,16 +1669,24 @@ def _rollup_views(args: argparse.Namespace) -> int:
 
 
 def _import_search_console(args: argparse.Namespace) -> int:
-    """Exit 1 only when the import failed. outcome.txt holds the outcome for the
-    workflow, which reports it once the file is in R2."""
-    from . import search_console
+    """Exit 1 only when the daily totals' import failed. outcome.txt holds that
+    outcome for the workflow, which reports it once the file is in R2;
+    detail_outcome.txt and index_outcome.txt hold the outcomes of the figures
+    by page and query and of the index sample, which run whatever the totals
+    did and fail soft."""
+    from . import index_sample, search_console, search_detail
 
     folder = Path(args.out) if args.out else config.OUT_DIR / "search_console"
     outcome = search_console.run(folder)
     folder.mkdir(parents=True, exist_ok=True)
-    (folder / "outcome.txt").write_text(outcome + "\n", encoding="utf-8")
-    log.info("import-search-console: %s", outcome)
-    print(f"import-search-console: {outcome}")
+    (folder / "outcome.txt").write_bytes(f"{outcome}\n".encode("utf-8"))
+    detail = search_detail.run(folder)
+    (folder / search_detail.OUTCOME).write_bytes(f"{detail}\n".encode("utf-8"))
+    sample = index_sample.run(folder, static=Path(args.static) if args.static else None,
+                              db=Path(args.db) if args.db else None)
+    (folder / index_sample.OUTCOME).write_bytes(f"{sample}\n".encode("utf-8"))
+    log.info("import-search-console: %s; by page and query: %s; index sample: %s", outcome, detail, sample)
+    print(f"import-search-console: {outcome}; by page and query: {detail}; index sample: {sample}")
     return 1 if outcome == "failed" else 0
 
 
@@ -1641,8 +1697,13 @@ def _views_report(args: argparse.Namespace) -> int:
     today = date.fromisoformat(args.today) if args.today else datetime.now(timezone.utc).date()
     month = args.month or views_report.report_month(today)
     out = Path(args.out)
-    outcome = views_report.run(out, month, today, Path(args.summary), Path(args.search) if args.search else None,
-                               interest=read_interest(args.interest))
+    def given(value: str | None) -> Path | None:
+        return Path(value) if value else None
+
+    outcome = views_report.run(out, month, today, Path(args.summary), given(args.search),
+                               interest=read_interest(args.interest), funnel_path=given(args.funnel),
+                               pages_path=given(args.search_pages), queries_path=given(args.search_queries),
+                               index_path=given(args.index_sample))
     out.mkdir(parents=True, exist_ok=True)
     (out / "outcome.txt").write_text(outcome + "\n", encoding="utf-8")
     log.info("views-report %s: %s", month, outcome)

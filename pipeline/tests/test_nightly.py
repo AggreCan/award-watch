@@ -398,7 +398,8 @@ def test_status_has_exactly_the_fields_the_site_and_the_gate_read(tmp_path):
     status = nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, {"deploy": "success"})
     assert set(status) == {"run_at", "run_started", "stages", "steps", "search_sync", "records_sync", "intraday_lookup", "intraday_prune",
                            "intraday_lookup_bytes", "link_sample", "link_sample_broken", "organization_review",
-                           "views_rollup", "search_console", "views_report", "indexnow", "funnel", "accounts_backup",
+                           "views_rollup", "search_console", "search_console_detail", "index_sample",
+                           "views_report", "indexnow", "funnel", "accounts_backup",
                            "tests", "interest", "restore", "smoke", "smoke_detail", "version_before", "rollback",
                            "deploy_rolled_back", "checks", "notices", "ok"}
     # No outcome file: the search database step did not run. The site's check reads the field.

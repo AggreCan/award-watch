@@ -21,8 +21,18 @@ What a row holds: for the day (UTC), the accounts made, the sign-in codes
 asked for (audit event code_requested) and the sign-ins (signed_in); then
 four levels read when the nightly ran, the day after: active accounts,
 accounts whose plan is Pro (the operator console's count, PRO_SQL), saved
-searches and watches. The audit trail keeps 90 days, so a day's codes and
-sign-ins can be counted again only within them.
+searches and watches; then (since 2026-11-19) the accounts whose first saved
+search or watch was made that day, among those the account still holds. The
+audit trail keeps 90 days, so a day's codes and sign-ins can be counted again
+only within them.
+
+The steps to an account (since 2026-11-19): the line also carries, in their
+order, people's views of the plans page and of the sign-in page (the
+roll-up's plans_pages and sign_in_pages), the codes asked for, the accounts
+made and the first saved searches or watches; then the page views of the two
+classes counted apart from people (hosted_pages, closed_pages); and, while
+they are recent, the days that counted a crawler pool as people
+(views_rollup.pool_days, from 2026-11-13). Earlier rows are never rewritten.
 
 A count that cannot be read is blank in the row and "n/a" in the line,
 never 0. A night run again (a retry the same day) replaces that day's row,
@@ -51,7 +61,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from .views_rollup import SummaryError, _write_csv, read_summary
+from .views_rollup import SummaryError, _write_csv, day_span, pool_days, read_summary
 
 log = logging.getLogger(__name__)
 
@@ -59,11 +69,18 @@ FUNNEL = "funnel.csv"
 LINE = "funnel_line.txt"
 OUTCOME = "outcome.txt"
 
-# New columns go at the end, as in the roll-up's summary.
-HEADER = ["date", "accounts", "accounts_new", "codes_requested", "sign_ins", "pro", "saved_searches", "watches"]
+# New columns go at the end, as in the roll-up's summary. first_saves (since
+# 2026-11-19): accounts whose first saved search or watch was made that day.
+HEADER = ["date", "accounts", "accounts_new", "codes_requested", "sign_ins", "pro", "saved_searches", "watches",
+          "first_saves"]
 COUNTS = HEADER[1:]
-# The day's audience figures the line carries, from the roll-up's summary row.
-AUDIENCE = ["human_pages", "engaged_visitors", "search_visitors", "phone_visitors"]
+# The day's audience figures the line carries, from the roll-up's summary row: people's figures, then (since
+# 2026-11-19) people's views of the plans page and the sign-in page, and the two classes counted apart from people.
+AUDIENCE = ["human_pages", "engaged_visitors", "search_visitors", "phone_visitors",
+            "plans_pages", "sign_in_pages", "hosted_pages", "closed_pages"]
+# The line names the days that counted the crawler pool as people while the last of them is this recent, and
+# always when the line's own day is one of them.
+POOL_NOTE_DAYS = 28
 
 # The line the Worker's daily check accepts (site/src/watchdog.ts, FIGURES_RE,
 # the same text; a test holds the two together): the date, " (UTC): ", then
@@ -111,7 +128,10 @@ def accounts_sql(day: date) -> str:
         f"(SELECT COUNT(*) FROM audit WHERE event = 'signed_in' AND {within('at')}) AS sign_ins, "
         f"({PRO_SQL}) AS pro, "
         "(SELECT COUNT(*) FROM saved_searches) AS saved_searches, "
-        "(SELECT COUNT(*) FROM watches) AS watches"
+        "(SELECT COUNT(*) FROM watches) AS watches, "
+        "(SELECT COUNT(*) FROM (SELECT user_id, MIN(created_at) AS first_at FROM (SELECT user_id, created_at FROM "
+        "saved_searches UNION ALL SELECT user_id, created_at FROM watches) GROUP BY user_id) "
+        f"WHERE {within('first_at')}) AS first_saves"
     )
 
 
@@ -153,16 +173,22 @@ def read_account_counts(path: Path | None, day: date) -> dict[str, int | None] |
     return account_counts(data, day)
 
 
-def day_audience(summary: Path | None, day: date) -> dict[str, int | None]:
-    """The day's audience figures from the roll-up's summary, None for each one it does not hold."""
-    out: dict[str, int | None] = dict.fromkeys(AUDIENCE)
+def summary_rows(summary: Path | None) -> list[dict[str, str]]:
+    """The roll-up's summary rows; none when it is missing or cannot be read (the line then says n/a)."""
     if summary is None:
-        return out
+        return []
     try:
-        rows = read_summary(summary)
+        return read_summary(summary)
     except SummaryError as exc:
         log.warning("funnel: the audience summary cannot be read (%s); the line says n/a for it", exc)
-        return out
+        return []
+
+
+def day_audience(summary: Path | None, day: date, rows: list[dict[str, str]] | None = None) -> dict[str, int | None]:
+    """The day's audience figures from the roll-up's summary, None for each one it does not hold."""
+    out: dict[str, int | None] = dict.fromkeys(AUDIENCE)
+    if rows is None:
+        rows = summary_rows(summary)
     row = next((r for r in rows if r["date"] == day.isoformat()), None)
     for column in AUDIENCE:
         text = (row or {}).get(column, "")
@@ -209,15 +235,47 @@ def _n(value: Any) -> str:
     return f"{int(text):,}" if text.isdigit() else "n/a"
 
 
-def line(row: dict[str, Any], audience: dict[str, int | None]) -> str:
-    """The day's line for the operator's email; n/a for a figure not read."""
-    return (f"{row['date']} (UTC): accounts {_n(row.get('accounts'))} (new {_n(row.get('accounts_new'))}), "
-            f"sign-in codes asked for {_n(row.get('codes_requested'))}, sign-ins {_n(row.get('sign_ins'))}, "
-            f"Pro {_n(row.get('pro'))}, saved searches {_n(row.get('saved_searches'))}, "
-            f"watches {_n(row.get('watches'))}; page views by people {_n(audience.get('human_pages'))}, "
-            f"engaged visitors {_n(audience.get('engaged_visitors'))}, "
-            f"from search {_n(audience.get('search_visitors'))}, "
-            f"on a phone or tablet {_n(audience.get('phone_visitors'))}")
+def pool_note(rows: list[dict[str, str]], day: date) -> str:
+    """The days that counted the crawler pool as people (views_rollup.pool_days), as a part of the line; "" when
+    there are none, or when the last of them is more than POOL_NOTE_DAYS before day and day is not one of them."""
+    days = pool_days(rows)
+    if not days:
+        return ""
+    if day.isoformat() not in days and days[-1] < (day - timedelta(days=POOL_NOTE_DAYS)).isoformat():
+        return ""
+    return f"crawler pool counted as people {day_span(days)}"
+
+
+def line(row: dict[str, Any], audience: dict[str, int | None], note: str = "") -> str:
+    """The day's line for the operator's email; n/a for a figure not read.
+
+    The day's counts and people's figures first, as they were before 2026-11-19; then the steps from a visit to
+    an account in their order (people's views of the plans page and of the sign-in page, the codes asked for, the
+    accounts made, the first saved search or watch), the two classes counted apart from people, and the note on
+    the days that counted the pool as people. When the whole would not pass the daily check, the parts after the
+    first two go from the end until it does."""
+    head = [
+        (f"{row['date']} (UTC): accounts {_n(row.get('accounts'))} (new {_n(row.get('accounts_new'))}), "
+         f"sign-in codes asked for {_n(row.get('codes_requested'))}, sign-ins {_n(row.get('sign_ins'))}, "
+         f"Pro {_n(row.get('pro'))}, saved searches {_n(row.get('saved_searches'))}, "
+         f"watches {_n(row.get('watches'))}"),
+        (f"page views by people {_n(audience.get('human_pages'))}, "
+         f"engaged visitors {_n(audience.get('engaged_visitors'))}, "
+         f"from search {_n(audience.get('search_visitors'))}, "
+         f"on a phone or tablet {_n(audience.get('phone_visitors'))}"),
+    ]
+    # Short words, so the month's figures still fit beside them on a report night (with_month).
+    tail = [
+        (f"to an account: plans page {_n(audience.get('plans_pages'))}, "
+         f"sign-in page {_n(audience.get('sign_in_pages'))}, codes {_n(row.get('codes_requested'))}, "
+         f"accounts {_n(row.get('accounts_new'))}, first save {_n(row.get('first_saves'))}"),
+        (f"not people: hosted {_n(audience.get('hosted_pages'))}, "
+         f"closed form {_n(audience.get('closed_pages'))}"),
+        *([note] if note else []),
+    ]
+    while tail and not is_figures_line("; ".join(head + tail)):
+        tail.pop()
+    return "; ".join(head + tail)
 
 
 def is_figures_line(text: str) -> bool:
@@ -264,13 +322,14 @@ def run(out_dir: Path, day: date, accounts: Path | None, summary: Path | None) -
             log.error("funnel: %s; nothing written, and the record is left as it is", exc)
             return "failed"
         counts = read_account_counts(accounts, day)
-        audience = day_audience(summary, day)
+        held = summary_rows(summary)
+        audience = day_audience(summary, day, held)
         new = {"date": day.isoformat(), **{c: "" if counts is None or counts[c] is None else counts[c]
                                            for c in COUNTS}}
         rows = merge(rows, new)
         _write_csv(record, HEADER, rows)
         today = next(r for r in rows if r["date"] == day.isoformat())
-        (out_dir / LINE).write_text(line(today, audience) + "\n", encoding="utf-8", newline="\n")
+        (out_dir / LINE).write_text(line(today, audience, pool_note(held, day)) + "\n", encoding="utf-8", newline="\n")
         read = 0 if counts is None else sum(v is not None for v in counts.values())
         log.info("funnel: the row and the line for %s are written (%d of %d account counts read, %d of %d "
                  "audience figures)", day, read, len(COUNTS), sum(v is not None for v in audience.values()),

@@ -112,6 +112,12 @@ class FakeHttp:
             kinds, counts, feeds = held[:3]
             extra = held[3] if len(held) > 3 else UNFLAGGED
         extra = {**NO_PEOPLE, **extra}
+        # The rule's question and the hosted class's routes (since 2026-11-19), answered only when the day names
+        # them; otherwise they fall through to the counts, which read as "not counted".
+        if "AS unruled" in sql and "rule" in extra:
+            return answer(extra["rule"])
+        if "AS hosted " in sql and "hosted_routes" in extra:
+            return answer(extra["hosted_routes"])
         if "blob7 AS feed" in sql:
             return answer(feeds)
         if "GROUP BY kind " in sql:
@@ -260,7 +266,9 @@ def test_the_summary_gets_one_row_per_day_and_a_re_run_replaces_it_in_place(tmp_
                                            "human_pages", "bot_pages", "unique_visitors", "human_visits",
                                            "human_by_country", "human_by_device", "human_by_lang", "human_by_route",
                                            "organizations", "records",
-                                           "engaged_visitors", "search_visitors", "phone_visitors"]
+                                           "engaged_visitors", "search_visitors", "phone_visitors",
+                                           "hosted_pages", "closed_pages", "hosted_by_country", "hosted_by_route",
+                                           "plans_pages", "sign_in_pages"]
     assert [r["date"] for r in rows] == ["2026-10-19", "2026-10-20", "2026-10-21"]
     assert rows[0]["top_routes"] == "/ 60"  # earlier rows are kept as they were
     new = rows[-1]
@@ -270,6 +278,8 @@ def test_the_summary_gets_one_row_per_day_and_a_re_run_replaces_it_in_place(tmp_
         "top_routes": "/organizations/:id 70; / 50; /data/feeds/:file 36; /api/stats 30; /downloads/organizations.csv 4",
         # A day before the bot flag: blank, never 0.
         **dict.fromkeys(vr.AUDIENCE_COLUMNS, ""),
+        # Nor any class counted apart: the rule's version came after the flag.
+        **dict.fromkeys(vr.CLASS_COLUMNS, ""),
         # No stats.json in this test.
         "organizations": "", "records": "",
     }
@@ -838,8 +848,9 @@ def test_the_catch_up_is_bounded_to_the_newest_days_a_night(tmp_path):
     assert roll(tmp_path, http) == "rolled up"
     asked = [d for d in held if asked_for(http, d)]
     assert asked == held[:vr.CATCH_UP_DAYS]  # newest first
-    # Yesterday's seven and four, then at most five for each day caught up.
-    assert len(http.posts) <= 11 + 5 * vr.CATCH_UP_DAYS
+    # Yesterday's seven, the rule's question (a day before the rule asks no more) and four, then at most five for
+    # each day caught up.
+    assert len(http.posts) <= 12 + 5 * vr.CATCH_UP_DAYS
     # The rest follow on the next nights.
     http = FakeHttp(catch_up_world(*held))
     assert roll(tmp_path, http) == "rolled up"

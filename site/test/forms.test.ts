@@ -120,7 +120,7 @@ describe("the response form opens in a browser only", () => {
     expect(await res.text()).toBe("This form opens in a web browser. The profile is at https://awardwatch.ca/organizations/org-a000000001.");
     expect(points).toHaveLength(1);
     expect(points[0].blobs?.slice(0, 2)).toEqual(["/organizations/:id/respond", "page"]);
-    expect(points[0].blobs?.slice(7)).toEqual(["bot", "", "", ""]);
+    expect(points[0].blobs?.slice(7)).toEqual(["bot", "", "", "", "2"]);
     expect(points[0].doubles).toEqual([403]);
   });
 
@@ -142,10 +142,15 @@ describe("the response form opens in a browser only", () => {
 
   it("serves a navigation from the site's own pages", async () => {
     const { points, dataset } = recorder();
-    const res = await open(FORM, NAVIGATE, dataset);
+    // A browser following the profile's link names the profile in Referer.
+    const res = await open(FORM, { ...NAVIGATE, referer: "https://awardwatch.ca/organizations/org-a000000001" }, dataset);
     expect(res.status).toBe(200);
     expect(await res.text()).toContain("Respond as This Organization");
     expect(points[0].blobs?.[7]).toBe("human");
+    // The same navigation without the profile as its Referer is served too, and counted apart as "closed" (views.ts).
+    const closed = await open(FORM, NAVIGATE, dataset);
+    expect(closed.status).toBe(200);
+    expect(points[1].blobs?.[7]).toBe("closed");
   });
 
   it("serves any Sec-Fetch-Mode, and a link followed from another site", async () => {
