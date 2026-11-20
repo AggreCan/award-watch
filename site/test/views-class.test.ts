@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { SAMPLE_MESSAGE_PATH, SAMPLE_PATH } from "../src/account/briefing_pages";
 import { app } from "../src/index";
+import { PIPELINE_PARTS } from "../src/sitemaps";
 import indexSource from "../src/index.tsx?raw";
 import accountRoutes from "../src/account/routes.tsx?raw";
 import {
@@ -276,6 +277,19 @@ describe("the routes counted by name", () => {
     expect(indexSource).toContain("for (const window of DEEP_WINDOWS) app.get(`/data/expiring/${window}/*`");
     expect(routeTemplate("GET", "/data/expiring/6m/1.json")).toEqual({ route: "/data/expiring/6m/:file", kind: "file" });
     expect(routeTemplate("GET", "/data/expiring/12m/index.json")).toEqual({ route: "/data/expiring/12m/:file", kind: "file" });
+  });
+
+  it("names each of the pipeline's sitemap parts apart, the index and an older numbered part as before", () => {
+    expect(PIPELINE_PARTS).toEqual(["open-tenders", "pages", "active-organizations", "other-organizations"]);
+    for (const part of PIPELINE_PARTS) {
+      expect(routeTemplate("GET", `/sitemap-${part}-1.xml`)).toEqual({ route: `/sitemap-${part}-:n.xml`, kind: "file" });
+      expect(routeTemplate("GET", `/sitemap-${part}-14.xml`)).toEqual({ route: `/sitemap-${part}-:n.xml`, kind: "file" });
+      // A part's name without its number names no file (sitemaps.ts sitemapAsset), so it is no route.
+      expect(routeTemplate("GET", `/sitemap-${part}.xml`)).toEqual({ route: "other", kind: "other" });
+    }
+    expect(routeTemplate("GET", "/sitemap.xml")).toEqual({ route: "/sitemap.xml", kind: "file" });
+    expect(routeTemplate("GET", "/sitemap-3.xml")).toEqual({ route: "/sitemap.xml", kind: "file" });
+    expect(routeTemplate("GET", "/sitemap-closed-tenders-1.xml")).toEqual({ route: "other", kind: "other" });
   });
 
   it("names every address the accounts' routes file lists, by section, never by id or secret", () => {

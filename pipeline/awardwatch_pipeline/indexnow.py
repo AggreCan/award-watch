@@ -13,14 +13,18 @@ site publish it at its root as `<key>.txt` (site/public, served as a static
 asset), and an engine fetches that file to check a submission. So it lives
 here in the code and the workflow needs no secret.
 
-Which pages: the pages that follow the nightly data (FIXED_PAGES); every
-tender notice with a version first seen during the run, and the category
-pages those notices fall in; every buyer and organization whose row changed
-during the run (organizations.recompute and indicators.compute write
-updated_at only when something on the page changed, and a new row gets the
-stamp of its insert). At most CAP URLs a night, in that order, the most
-recently changed first within each kind; pages beyond the cap wait for the
-sitemap, which lists every one with its date.
+Which pages: first every tender notice open on the data date with a version
+first seen during the run (a new notice or an amendment: a notice earns
+visits only while it is open, and it is the sitemap's first part); then the
+pages that follow the nightly data (FIXED_PAGES); then the other notices with
+a version first seen during the run (closed on the data date) and the
+category pages all those notices fall in; then every buyer and organization
+whose row changed during the run (organizations.recompute and
+indicators.compute write updated_at only when something on the page changed,
+and a new row gets the stamp of its insert). At most CAP URLs a night, in
+that order, the most recently changed first within each kind; pages beyond
+the cap wait for the sitemap, which lists the open notices and every
+organization with its date.
 
 Nothing here raises. Every answer becomes an outcome the run status records:
 "submitted <n> URLs", "rejected (<status>)" (the key file or the payload is
@@ -41,6 +45,7 @@ from typing import Any, Callable, Sequence
 from urllib.parse import urlsplit
 
 from . import config
+from .normalize import tender_status_on
 
 log = logging.getLogger("awardwatch_pipeline.indexnow")
 
@@ -88,12 +93,13 @@ def normalize_since(text: str | None) -> str:
 
 def changed_urls(conn: sqlite3.Connection, since: str, site_url: str, *, cap: int = CAP,
                  pages: Sequence[str] = FIXED_PAGES) -> list[str]:
-    """The fixed pages, then the tender notices with a version first seen on
-    the run's day or later and the categories they fall in, then the buyers
-    the export lists and the organizations changed at or after since (the most recently
-    changed first, ties by id), without repeats and at most cap in all.
-    Raises ValueError for a since that is not ISO, and sqlite3.Error when a
-    table cannot be read."""
+    """The tender notices open on the data date with a version first seen on
+    the run's day or later, then the fixed pages, then the other notices with
+    such a version and the categories all of them fall in, then the buyers the
+    export lists and the organizations changed at or after since (the most
+    recently changed first, ties by id), without repeats and at most cap in
+    all. Raises ValueError for a since that is not ISO, and sqlite3.Error when
+    a table cannot be read."""
     from .export import listed_buyer_ids
     from .export_static import read_segments, url_reference
 
@@ -109,25 +115,36 @@ def changed_urls(conn: sqlite3.Connection, since: str, site_url: str, *, cap: in
             seen.add(url)
             urls.append(url)
 
-    for page in pages:
-        add(page)
-    # first_seen is the run's date (no time), so the day of since is the test.
+    # The export's data date: a notice is open on it (normalize.tender_status_on, the export's own rule), and
+    # only a buyer the export lists has a page (export.LISTED_BUYER).
+    as_of = (conn.execute("SELECT value FROM meta WHERE key = 'data_as_of'").fetchone() or (stamp[:10],))[0]
+    # first_seen is the run's date (no time), so the day of since is the test. The status and closing are the
+    # newest version's. Every such notice is read (no LIMIT), so the cap never drops an open one for a closed one.
     segments = read_segments()
     touched: set[str] = set()
-    for reference, codes in conn.execute(
+    opened: list[str] = []
+    closed: list[str] = []
+    for reference, codes, status, closing in conn.execute(
         "SELECT t.reference, (SELECT group_concat(c.unspsc, ' ') FROM tender_codes c WHERE c.reference = t.reference "
-        "AND c.amendment = t.amendment) FROM tenders t WHERE t.first_seen >= ? "
-        "GROUP BY t.reference ORDER BY MAX(t.first_seen) DESC, t.reference LIMIT ?",
-        (stamp[:10], limit),
+        "AND c.amendment = t.amendment), "
+        "(SELECT y.status FROM tenders y WHERE y.reference = t.reference ORDER BY y.amendment DESC LIMIT 1), "
+        "(SELECT y.closing FROM tenders y WHERE y.reference = t.reference ORDER BY y.amendment DESC LIMIT 1) "
+        "FROM tenders t WHERE t.first_seen >= ? "
+        "GROUP BY t.reference ORDER BY MAX(t.first_seen) DESC, t.reference",
+        (stamp[:10],),
     ):
         ref = url_reference(reference)
         if ref:
-            add(f"/tenders/{ref.lower()}")
+            (opened if tender_status_on(status, closing, as_of) == "open" else closed).append(f"/tenders/{ref.lower()}")
         touched.update(c[:2] for c in (codes or "").split() if c[:2] in segments)
+    for path in opened:
+        add(path)
+    for page in pages:
+        add(page)
+    for path in closed:
+        add(path)
     for code in sorted(touched):
         add(f"/segments/{code}")
-    # Only a buyer the export lists has a page (export.LISTED_BUYER, on the export's data date).
-    as_of = (conn.execute("SELECT value FROM meta WHERE key = 'data_as_of'").fetchone() or (stamp[:10],))[0]
     listed = listed_buyer_ids(conn, as_of)
     for table, prefix in (("buyers", "/buyers/"), ("organizations", "/organizations/")):
         for (rid,) in conn.execute(f"SELECT id FROM {table} WHERE updated_at >= ? ORDER BY updated_at DESC, id LIMIT ?",

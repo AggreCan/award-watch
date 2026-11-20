@@ -1,21 +1,28 @@
 // The sitemaps: the index and the parts the pipeline writes under
-// data/sitemaps/ (export_static.write_sitemaps), and the parts of the
-// published contracts, which the Worker reads from the records database
-// because 1.3 million pages are too many files for the static export, and
-// the guides' part, which the Worker writes from src/guides.ts.
-// Everything is served from the site root (/sitemap.xml, /sitemap-<n>.xml,
+// data/sitemaps/ (export_static.write_sitemaps), the guides' part, which the
+// Worker writes from src/guides.ts, and the parts of the published contracts,
+// which the Worker reads from the records database because 1.3 million pages
+// are too many files for the static export.
+// Everything is served from the site root (/sitemap.xml, /sitemap-<part>-<n>.xml,
 // /sitemap-contracts-<n>.xml, /sitemap-guides.xml) because a sitemap may only list URLs at or
-// below its own directory. docs/seo.md describes the scheme.
+// below its own directory. docs/seo.md and docs/search-engines.md describe the scheme.
+//
+// The index, in the order a search engine reads it (a young site gets few
+// fetches a day, so what comes first is what gets crawled): the open tender
+// notices, the site's own pages, the guides, the organizations with recent
+// activity, the other organizations. The published contracts' parts follow
+// only while CONTRACT_SITEMAPS_LISTED is true.
 //
 // Languages: the pipeline lists each page once, by its English address. The
 // Worker owns the addressing (canonicalUrl in seo.ts: the plain address is
 // the English page, ?lang=fr the French one), so it writes each entry twice,
 // English then French, each carrying the alternates of both and x-default
-// (xhtml:link, the sitemap form of hreflang, as Google reads it).
+// (xhtml:link, the sitemap form of hreflang, as Google reads it), the same
+// three the page's head names (seo.ts alternates).
 
 import type { Context } from "hono";
 import { BUYER_ID_RE, assetResponse } from "./data";
-import type { AppEnv } from "./env";
+import type { AppEnv, Env } from "./env";
 import { GUIDES, guidesChecked } from "./guides";
 import type { Lang } from "./i18n";
 import { REF_MAX } from "./pages/published";
@@ -37,6 +44,22 @@ const XML_DECL = '<?xml version="1.0" encoding="UTF-8"?>';
 // as its alternate.
 export const SITEMAP_URL_MAX = 50_000;
 export const SITEMAP_PART_MAX = 25_000;
+
+// The pipeline's parts, in the index's order, each served at
+// /sitemap-<part>-<n>.xml from data/sitemaps/ (export_static.SITEMAP_PARTS;
+// test/sitemaps.test.ts holds the two equal). An export written before the
+// parts had names numbers them alone (/sitemap-<n>.xml), and those are still
+// served.
+export const PIPELINE_PARTS = ["open-tenders", "pages", "active-organizations", "other-organizations"] as const;
+
+// Whether the index names the published contracts' parts. False since
+// 2026-11-20: they were four fifths of the addresses the index offered (about
+// 2.7 million with French), and a site this young gets few fetches a day from
+// a search engine, so the index leaves them out for the pages that earn
+// searches. The parts still answer at /sitemap-contracts-<n>.xml, the pages
+// stay indexable and linked from the organization and buyer pages; true lists
+// them again after every other part, as before.
+export const CONTRACT_SITEMAPS_LISTED = false;
 
 // The published contracts' parts: the records database's keys are signed
 // 64-bit hashes, spread evenly, so the key space cut into CONTRACT_PARTS equal
@@ -116,14 +139,19 @@ export function guidesSitemap(): Response {
   return new Response(urlset(out), { headers: XML_HEADERS });
 }
 
-// The index with the guides' part after the pipeline's parts, whatever state the records database is in.
+// The index with the guides' part among the site's own pages: right after the
+// last of the pipeline's "pages" parts, or after every part of an index that
+// has none (an export written before the parts had names).
 export function withGuidesPart(xml: string): string {
-  const at = xml.lastIndexOf("</sitemapindex>");
-  if (at < 0) return xml;
+  const end = xml.lastIndexOf("</sitemapindex>");
+  if (end < 0) return xml;
+  const pages = xml.lastIndexOf(`${SITE_ORIGIN}/sitemap-pages-`);
+  const close = pages < 0 ? -1 : xml.indexOf("</sitemap>", pages);
+  const at = close < 0 || close > end ? end : close + "</sitemap>".length;
   return `${xml.slice(0, at)}<sitemap><loc>${SITE_ORIGIN}/${GUIDES_SITEMAP}</loc><lastmod>${guidesChecked()}</lastmod></sitemap>${xml.slice(at)}`;
 }
 
-// The index with the published contracts' parts after the pipeline's, each
+// The index with the published contracts' parts after every other part, each
 // dated by the records database's data date.
 export function withContractParts(xml: string, lastmod: string | null): string {
   const at = xml.lastIndexOf("</sitemapindex>");
@@ -133,6 +161,16 @@ export function withContractParts(xml: string, lastmod: string | null): string {
   return `${xml.slice(0, at)}${parts.join("")}${xml.slice(at)}`;
 }
 
+// The index as served, from the pipeline's: the guides' part added, and the
+// published contracts' parts when listed and the records database is ready
+// (one small read tells). Not listed, nothing is read.
+export async function sitemapIndex(env: Env, xml: string, listContracts: boolean = CONTRACT_SITEMAPS_LISTED): Promise<string> {
+  const index = withGuidesPart(xml);
+  if (!listContracts) return index;
+  const records = await readRecords(env, []);
+  return records.state === "ready" ? withContractParts(index, records.asOf) : index;
+}
+
 // The first and last key of part n (1 to CONTRACT_PARTS), as decimal text.
 export function contractPartKeys(n: number): [string, string] {
   const width = (1n << 64n) / BigInt(CONTRACT_PARTS);
@@ -140,23 +178,32 @@ export function contractPartKeys(n: number): [string, string] {
   return [first.toString(), (first + width - 1n).toString()];
 }
 
-// /sitemap.xml and /sitemap-<n>.xml. The index lists the contracts' parts
-// only while the records database is ready, which one small read tells.
+// /sitemap.xml, /sitemap-<part>-<n>.xml and /sitemap-<n>.xml: the file under
+// data/sitemaps/ the address names, or the site's 404.
+const SITEMAP_FILE_RE = new RegExp(`^sitemap(?:-(${PIPELINE_PARTS.join("|")}))?(?:-([1-9][0-9]{0,3}))?\\.xml$`);
+
+export function sitemapAsset(file: string): string | null {
+  const m = SITEMAP_FILE_RE.exec(file);
+  if (!m) return null;
+  const [, part, n] = m;
+  if (!n) return part ? null : "sitemaps/index.xml";
+  return `sitemaps/sitemap-${part ? `${part}-` : ""}${n}.xml`;
+}
+
 export async function sitemapFile(c: Context<AppEnv>): Promise<Response> {
-  const m = /^sitemap(?:-([0-9]{1,4}))?\.xml$/.exec(c.req.param("file") ?? "");
-  const res = m ? await assetResponse(c.env, `sitemaps/${m[1] ? `sitemap-${m[1]}` : "index"}.xml`) : null;
-  if (!m || !res) return c.notFound();
+  const path = sitemapAsset(c.req.param("file") ?? "");
+  const res = path ? await assetResponse(c.env, path) : null;
+  if (!path || !res) return c.notFound();
   const text = await res.text();
-  if (m[1]) return new Response(withLanguages(text), { headers: XML_HEADERS });
-  const records = await readRecords(c.env, []);
-  const index = withGuidesPart(text);
-  const body = records.state === "ready" ? withContractParts(index, records.asOf) : index;
-  return new Response(body, { headers: XML_HEADERS });
+  if (path !== "sitemaps/index.xml") return new Response(withLanguages(text), { headers: XML_HEADERS });
+  return new Response(await sitemapIndex(c.env, text), { headers: XML_HEADERS });
 }
 
 // /sitemap-contracts-<n>.xml: the published contracts whose key falls in part
 // n, each in both languages. 503 while the records database is missing,
-// loading or failing, so a crawler comes back rather than drop the part.
+// loading or failing, so a crawler comes back rather than drop the part. It
+// answers whether or not the index names it (CONTRACT_SITEMAPS_LISTED): a
+// search engine that holds the address keeps reading it.
 export async function contractSitemap(c: Context<AppEnv>): Promise<Response> {
   const m = /^sitemap-contracts-([1-9][0-9]{0,2})\.xml$/.exec(c.req.param("file") ?? "");
   const n = m ? Number(m[1]) : 0;

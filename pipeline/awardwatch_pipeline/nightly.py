@@ -159,6 +159,8 @@ MAX_FILES = 19_000
 MAX_FILE_BYTES = 25 * 1024 * 1024
 # A file this much older than the run's start is left over from an earlier run.
 CLOCK_SLACK_S = 120
+# A part the export's sitemap index names, by its file name (export_static.write_sitemaps).
+SITEMAP_PART_RE = re.compile(r"<sitemap><loc>[^<]*/(sitemap-[A-Za-z0-9-]+\.xml)</loc>")
 
 # The longest notice part status.json keeps.
 NOTICE_PART_MAX = 1200
@@ -620,8 +622,20 @@ def check_export(static: Path, started: float | None, before_organizations: int 
         problems.append(f"tenders/open.json cannot be read: {exc}"[:200])
     if organizations > 0 and not any((static / "profiles").glob("*.json")):
         problems.append("no profile files were written")
-    if not (static / "sitemaps" / "index.xml").exists():
+    index = static / "sitemaps" / "index.xml"
+    if not index.exists():
         problems.append("sitemaps/index.xml is missing")
+    else:
+        # The site serves each part the index names from this folder (site/src/sitemaps.ts), so a name with no
+        # file would be a 404 the index sends every crawler to.
+        try:
+            named = SITEMAP_PART_RE.findall(index.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            named = []
+            problems.append(f"sitemaps/index.xml cannot be read: {exc}"[:200])
+        missing = [name for name in named if not (static / "sitemaps" / name).is_file()]
+        if missing:
+            problems.append(f"sitemaps/index.xml names {len(missing)} parts with no file, first {missing[0]}")
     files = [p for p in static.rglob("*") if p.is_file()]
     if len(files) > MAX_FILES:
         problems.append(f"{len(files)} files, more than the {MAX_FILES} a deploy can carry")

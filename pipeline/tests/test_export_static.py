@@ -789,7 +789,7 @@ def test_a_failing_section_is_logged_and_left_out_of_the_sitemap(conn, tmp_path,
     failed = conn.execute("SELECT source, ok, detail FROM sources_log WHERE ok = 0").fetchall()
     assert [tuple(r) for r in failed] == [("export_buyers", 0, "RuntimeError: bad buyer")]
     assert not (out / "buyers").exists() and (out / "categories" / "index.json").exists()
-    sitemap = (out / "sitemaps" / "sitemap-1.xml").read_text(encoding="utf-8")
+    sitemap = (out / "sitemaps" / "sitemap-pages-1.xml").read_text(encoding="utf-8")
     assert "/buyers" not in sitemap and f"{BASE}/segments</loc>" in sitemap
 
 
@@ -861,7 +861,7 @@ def test_the_radar_lists_each_contract_once_by_window_with_its_parts(exported):
     acme = profiles[ids[ACME]]["expiring"]
     assert acme["n"] == 3 and acme["total"] == 300_000.0 + 5_000.0 + 1_250_000.0
     assert profiles[ids[FOREIGN]]["expiring"] == {"n": 0, "total": None, "n_no_value": 0, "rows": []}
-    sitemap = (out / "sitemaps" / "sitemap-1.xml").read_text(encoding="utf-8")
+    sitemap = (out / "sitemaps" / "sitemap-pages-1.xml").read_text(encoding="utf-8")
     for path in ("/expiring", "/expiring/3m", "/expiring/6m", "/expiring/12m"):
         assert f"<loc>{BASE}{path}</loc>" in sitemap
 
@@ -938,7 +938,7 @@ def test_a_buyer_with_nothing_in_any_column_is_left_out_and_a_person_is_never_a_
     assert load(out, "stats.json")["counts"]["buyers"] == 2
     for path in (out / "rankings").glob("*.json"):
         assert all(r["id"] in index for rows in load(out, f"rankings/{path.name}")["buyers"].values() for r in rows)
-    sitemap = (out / "sitemaps" / "sitemap-1.xml").read_text(encoding="utf-8")
+    sitemap = (out / "sitemaps" / "sitemap-pages-1.xml").read_text(encoding="utf-8")
     assert "/buyers/closed-only" not in sitemap and "/buyers/pwgsc-tpsgc" in sitemap
 
     details = {}

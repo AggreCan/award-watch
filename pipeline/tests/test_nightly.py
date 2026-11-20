@@ -316,6 +316,25 @@ def test_an_export_without_its_required_files_is_not_deployed(tmp_path):
     assert nightly.check_export(tmp_path / "c", None) == ["stats.json is missing"]
 
 
+def test_an_export_whose_sitemap_index_names_a_part_with_no_file_is_not_deployed(tmp_path):
+    static = tmp_path / "static"
+    write_export(static)
+    parts = ["sitemap-open-tenders-1.xml", "sitemap-pages-1.xml", "sitemap-other-organizations-1.xml"]
+    (static / "sitemaps" / "index.xml").write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        + "\n".join(f"<sitemap><loc>https://awardwatch.ca/{p}</loc><lastmod>2026-10-18</lastmod></sitemap>" for p in parts)
+        + "\n</sitemapindex>\n", encoding="utf-8")
+    for p in parts:
+        (static / "sitemaps" / p).write_text("<urlset/>", encoding="utf-8")
+    assert nightly.check_export(static, None) == []
+    (static / "sitemaps" / parts[1]).unlink()
+    assert nightly.check_export(static, None) == ["sitemaps/index.xml names 1 parts with no file, first sitemap-pages-1.xml"]
+    # The export's own index, read the same way, names files the folder holds.
+    assert nightly.SITEMAP_PART_RE.findall(
+        "<sitemap><loc>https://awardwatch.ca/sitemap-active-organizations-12.xml</loc></sitemap>") == [
+        "sitemap-active-organizations-12.xml"]
+
+
 def test_a_truncated_file_or_too_many_files_is_not_deployed(tmp_path, monkeypatch):
     static = tmp_path / "static"
     write_export(static)

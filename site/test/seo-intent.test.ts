@@ -11,7 +11,11 @@ import { homeRequest } from "./home";
 import { CONTRACT_SITEMAP_SQL } from "../src/records_tables";
 import { proIncludes } from "../src/pages/pro";
 import { DESCRIPTION_MAX, TITLE_MAX, expiringWindowSeo } from "../src/seo";
-import { CONTRACT_PARTS, SITEMAP_PART_MAX, SITEMAP_URL_MAX, contractPartKeys, withGuidesPart, withLanguages } from "../src/sitemaps";
+import {
+  CONTRACT_PARTS, CONTRACT_SITEMAPS_LISTED, SITEMAP_PART_MAX, SITEMAP_URL_MAX, contractPartKeys, sitemapIndex as servedIndex,
+  withContractParts, withGuidesPart, withLanguages,
+} from "../src/sitemaps";
+import type { Env } from "../src/env";
 import { guidesChecked } from "../src/guides";
 import { onEnv, offEnv, useAccountsDb } from "./accounts-helpers";
 import { testEnv } from "./assets";
@@ -533,16 +537,15 @@ describe("the published contracts' sitemaps", () => {
     expect(steps).toMatch(/SEARCH \w+ USING INTEGER PRIMARY KEY \(rowid>\? AND rowid<\?\)/);
   });
 
-  it("are listed in the index after the pipeline's parts and the guides' part while the records database is ready, and not otherwise", async () => {
-    const index = await (await get("/sitemap.xml")).text();
-    const pipelineParts = [...sitemapIndex.matchAll(/<loc>([^<]*)<\/loc>/g)].map((m) => m[1]);
-    const listed = [...index.matchAll(/<loc>([^<]*)<\/loc>/g)].map((m) => m[1]);
-    expect(listed).toEqual([...pipelineParts, `${O}/sitemap-guides.xml`, ...Array.from({ length: CONTRACT_PARTS }, (_, i) => `${O}/sitemap-contracts-${i + 1}.xml`)]);
-    expect(index).toContain(`<sitemap><loc>${O}/sitemap-contracts-1.xml</loc><lastmod>2026-10-31</lastmod></sitemap>`);
-    // Without a ready records database the index is the pipeline's with the guides' part alone added (src/sitemaps.ts).
+  it("are left out of the index while CONTRACT_SITEMAPS_LISTED is false, whatever the records database's state, and still answer", async () => {
+    expect(CONTRACT_SITEMAPS_LISTED).toBe(false);
+    // The index is the pipeline's with the guides' part alone added (src/sitemaps.ts), ready or not.
     const withGuides = withGuidesPart(sitemapIndex);
     expect(withGuides).toBe(sitemapIndex.replace("</sitemapindex>", `<sitemap><loc>${O}/sitemap-guides.xml</loc><lastmod>${guidesChecked()}</lastmod></sitemap></sitemapindex>`));
+    expect(await (await get("/sitemap.xml")).text()).toBe(withGuides);
     expect(await (await get("/sitemap.xml", { ...onEnv(), RECORDS: undefined })).text()).toBe(withGuides);
+    // A part a search engine already holds answers as it did.
+    expect((await get("/sitemap-contracts-1.xml")).status).toBe(200);
     await seedRecords("loading");
     try {
       expect(await (await get("/sitemap.xml")).text()).toBe(withGuides);
@@ -551,6 +554,23 @@ describe("the published contracts' sitemaps", () => {
       expect(part.headers.get("retry-after")).toBe("3600");
       expect(part.headers.get("cache-control")).toBe("no-store");
       expect((await get("/sitemap-contracts-1.xml", { ...onEnv(), RECORDS: undefined })).status).toBe(503);
+    } finally {
+      await seedRecords("ready");
+    }
+  });
+
+  it("are listed again after every other part, while the records database is ready, when the switch is true", async () => {
+    const records = { ...onEnv() } as unknown as Env;
+    const index = await servedIndex(records, sitemapIndex, true);
+    const pipelineParts = [...sitemapIndex.matchAll(/<loc>([^<]*)<\/loc>/g)].map((m) => m[1]);
+    const listed = [...index.matchAll(/<loc>([^<]*)<\/loc>/g)].map((m) => m[1]);
+    expect(listed).toEqual([...pipelineParts, `${O}/sitemap-guides.xml`, ...Array.from({ length: CONTRACT_PARTS }, (_, i) => `${O}/sitemap-contracts-${i + 1}.xml`)]);
+    expect(index).toContain(`<sitemap><loc>${O}/sitemap-contracts-1.xml</loc><lastmod>2026-10-31</lastmod></sitemap>`);
+    expect(index).toBe(withContractParts(withGuidesPart(sitemapIndex), "2026-10-31"));
+    expect(await servedIndex({ ...onEnv(), RECORDS: undefined } as unknown as Env, sitemapIndex, true)).toBe(withGuidesPart(sitemapIndex));
+    await seedRecords("loading");
+    try {
+      expect(await servedIndex(records, sitemapIndex, true)).toBe(withGuidesPart(sitemapIndex));
     } finally {
       await seedRecords("ready");
     }

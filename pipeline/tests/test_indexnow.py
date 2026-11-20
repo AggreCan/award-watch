@@ -71,11 +71,11 @@ def organization(conn, name, stamp):
     return organizations.upsert(conn, name, source="awards", now=stamp)
 
 
-def tender(conn, reference, first_seen, codes=()):
-    conn.execute("INSERT INTO tenders (reference, amendment, status, source_file, first_seen, last_seen) "
-                 "VALUES (?, 0, 'open', 'f.csv', ?, ?)", (reference, first_seen, first_seen))
-    conn.executemany("INSERT INTO tender_codes (reference, amendment, unspsc) VALUES (?, 0, ?)",
-                     [(reference, c) for c in codes])
+def tender(conn, reference, first_seen, codes=(), status="open", closing=None, amendment=0):
+    conn.execute("INSERT INTO tenders (reference, amendment, status, closing, source_file, first_seen, last_seen) "
+                 "VALUES (?, ?, ?, ?, 'f.csv', ?, ?)", (reference, amendment, status, closing, first_seen, first_seen))
+    conn.executemany("INSERT INTO tender_codes (reference, amendment, unspsc) VALUES (?, ?, ?)",
+                     [(reference, amendment, c) for c in codes])
 
 
 def buyer(conn, bid, stamp, n_awards=1):
@@ -114,10 +114,17 @@ def test_the_fixed_pages_then_the_organizations_changed_since_the_start(conn):
     assert f"{BASE}/organizations/{old}" not in urls
 
 
-def test_tenders_first_seen_tonight_their_categories_and_changed_buyers_come_before_organizations(conn):
+def test_open_tenders_first_seen_tonight_come_first_then_the_fixed_pages_then_the_rest(conn):
     tender(conn, "cb-1-OLD", "2026-10-23", ["72101500"])
     tender(conn, "cb-2-NEW", "2026-10-24", ["8111", "43"])
     tender(conn, "SSC-26-1:T", "2026-10-24")
+    # A notice closed on the data date: the file still says open, its closing day has passed.
+    tender(conn, "cb-3-PAST", "2026-10-24", ["72101500"], closing="2026-10-20T14:00:00")
+    tender(conn, "cb-4-GONE", "2026-10-24", status="expired")
+    # An amendment tonight of a notice first seen earlier, still open: its newest version decides.
+    tender(conn, "cb-5-AMEND", "2026-10-20")
+    tender(conn, "cb-5-AMEND", "2026-10-24", amendment=1, closing="2026-11-30T14:00:00")
+    conn.execute("INSERT INTO meta (key, value) VALUES ('data_as_of', '2026-10-24')")
     buyer(conn, "dnd-mdn", START)
     buyer(conn, "pwgsc-tpsgc", BEFORE)
     # A buyer with nothing the export lists has no page to submit.
@@ -125,8 +132,12 @@ def test_tenders_first_seen_tonight_their_categories_and_changed_buyers_come_bef
     org = organization(conn, "New Supply Ltd", START)
     conn.commit()
     urls = indexnow.changed_urls(conn, START, BASE)
-    assert urls == FIXED + [f"{BASE}/tenders/ssc-26-1-t", f"{BASE}/tenders/cb-2-new", f"{BASE}/segments/43",
-                            f"{BASE}/segments/81", f"{BASE}/buyers/dnd-mdn", f"{BASE}/organizations/{org}"]
+    opened = [f"{BASE}/tenders/ssc-26-1-t", f"{BASE}/tenders/cb-2-new", f"{BASE}/tenders/cb-5-amend"]
+    assert urls == opened + FIXED + [f"{BASE}/tenders/cb-3-past", f"{BASE}/tenders/cb-4-gone", f"{BASE}/segments/43",
+                                     f"{BASE}/segments/72", f"{BASE}/segments/81", f"{BASE}/buyers/dnd-mdn",
+                                     f"{BASE}/organizations/{org}"]
+    # The open notices go first even when the cap leaves room for little else.
+    assert indexnow.changed_urls(conn, START, BASE, cap=4) == [*opened, FIXED[0]]
 
 
 def test_the_start_may_be_written_in_any_iso_form(conn):

@@ -131,20 +131,24 @@ python -m awardwatch_pipeline.nightly indexnow --db data/awardwatch.sqlite --sin
   --site-url https://awardwatch.ca
 ```
 
-(`pipeline/awardwatch_pipeline/indexnow.py`). It selects:
+(`pipeline/awardwatch_pipeline/indexnow.py`). It selects, in this order:
 
+- every tender notice open on the data date with a version first seen during
+  the run (a new notice or an amendment), the sitemap's first part;
 - the fixed pages in `FIXED_PAGES` (the home page and the list pages that
   follow the nightly data);
-- every organization page whose row changed during the run, and the buyer,
-  category and recent tender pages the night touched. `--since` is the time
-  in `data/out/run_started.txt`, written as the pipeline step starts. The
-  organizations stage rewrites `organizations.updated_at` only when a value
-  on the profile changed, and a new organization row carries the time it was
-  first written.
+- the other notices with a version first seen during the run (closed on the
+  data date), and the category pages all those notices fall in;
+- every buyer and organization page whose row changed during the run.
+  `--since` is the time in `data/out/run_started.txt`, written as the
+  pipeline step starts. The organizations stage rewrites
+  `organizations.updated_at` only when a value on the profile changed, and a
+  new organization row carries the time it was first written.
 
-At most 20,000 URLs a night, the most recently changed first. A night with
-more (a change to the name rules re-keys every organization) leaves the rest
-to the sitemap, which lists every profile with its `lastmod`. The list
+At most 20,000 URLs a night, in that order, the most recently changed first
+within each kind, so the open notices go first whatever the night's size. A
+night with more (a change to the name rules re-keys every organization)
+leaves the rest to the sitemap, which lists every profile with its `lastmod`. The list
 goes to the shared endpoint, which passes it to every participating engine,
 in batches of at most 10,000 URLs:
 
@@ -287,7 +291,12 @@ message `/pro/briefing-sample/message/:scheme`, kind `file`, part of that
 page); a published contract `/contracts/:dept/:reference`; the record tables
 `/organizations/:id/records`, `/buyers/:id/records` and their `.csv` files;
 a radar window's `/expiring/:window/rows.csv`; the contract sitemaps
-`/sitemap-contracts-:n.xml`; `/interest/stop`; the directory's old address
+`/sitemap-contracts-:n.xml` and each of the pipeline's sitemap parts
+(`/sitemap-open-tenders-:n.xml`, `/sitemap-pages-:n.xml`,
+`/sitemap-active-organizations-:n.xml`, `/sitemap-other-organizations-:n.xml`,
+so the counts say which part a search engine reads; the index, the guides'
+part and an older numbered part stay `/sitemap.xml`); `/interest/stop`; the
+directory's old address
 `/organizations/directory` (a redirect, counted before as a profile); the
 operator's console as `/admin` and `/admin/:rest` (kind `other`, so the
 operator's own work is never a reader's page view); and the account's
@@ -970,6 +979,76 @@ Tens of thousands of organization and notice pages share each engine's crawl
 allowance. The site keeps crawlers off URLs that repeat another page, links
 every profile from an A to Z directory, and lets a crawler that already has
 a page skip it when nothing changed.
+
+### Sitemaps
+
+`/sitemap.xml`, which `robots.txt` names, is an index of parts in the order a
+search engine should read them. A site a few weeks old with no inbound links
+gets few fetches a day (Google's crawl fell to 60 to 80 pages a day on
+2026-11-13 and stayed there), so the parts that come first hold the pages
+readers arrive on from a search: tender notices while they are open, and
+organizations, found by their names.
+
+| Order | Part | Holds | A page's `lastmod` |
+|---|---|---|---|
+| 1 | `/sitemap-open-tenders-<n>.xml` | every tender notice open on the data date, newest first | the night its newest version (the notice, or its latest amendment) first appeared on the site |
+| 2 | `/sitemap-pages-<n>.xml` | the home page, the overview, the lists, the rankings, the buyers, the segments, the award years, the radar's three windows, the directory pages, the standing offers and supply arrangements | below |
+| 3 | `/sitemap-guides.xml` | the guides' index and each guide | the day the guide was last checked against its sources |
+| 4 | `/sitemap-active-organizations-<n>.xml` | the organizations with an award notice, a PSPC contract history record or a published contract dated within 24 months of the data date, the most recent record first | the night a figure on the profile last changed |
+| 5 | `/sitemap-other-organizations-<n>.xml` | every other organization, by id | the same |
+
+The nightly export writes parts 1, 2, 4 and 5 and the index
+(`pipeline/awardwatch_pipeline/export_static.py`, `sitemap_parts`); the
+Worker adds part 3 after the last of part 2 (`site/src/sitemaps.ts`). A
+notice that closes leaves part 1 the next night; its page stays. An
+organization's record date is the newest one its profile counts for
+matching notices: an award notice's or a history record's award date (its
+publication date when the award date falls after the data date), a published
+contract's date; grants and lobbying reports do not count. A
+supplier withheld as a person has no page and is in no part.
+
+**Dates.** A `lastmod` is the date on which the page last changed, so a night
+that leaves a page as it was leaves its date as it was. Each list page, each
+segment, each award year, each window of the radar and the standing offers'
+list carries the data date on which the export files holding what it shows
+last changed: the database's `page_dates` table keeps a hash of those files
+for each page and the date the hash last moved (the data date a file carries
+is left out of the hash; every page shows it in its frame). The pages that
+list the night's runs (the home page, the overview, the Data page), the day's
+new notices and the radar, whose rows count their days left, change every
+night and carry each night's date. A buyer carries the night its figures last
+changed, a directory page the night its rows last changed, a standing offer
+the publication date of the last file that held it. Pages that change only
+with the code (the methodology, the terms) carry none. The index dates each
+part by the night its file last changed, from the same table.
+
+**Published contracts.** Their pages are not listed. The 128 parts
+`/sitemap-contracts-1.xml` to `/sitemap-contracts-128.xml` held about 2.7
+million addresses with French, four fifths of what the index offered, while
+Google had indexed about 10,500 of the 3.25 million addresses it knew and
+readers from search landed on organization and tender pages. The pages are
+unchanged: reachable, linked from organization and buyer pages, indexable,
+with their canonical links, and the parts still answer at their addresses,
+so a search engine that holds them can keep reading them. The constant
+`CONTRACT_SITEMAPS_LISTED` in `site/src/sitemaps.ts` lists them again, after
+every other part, when set to `true` and deployed. A constant rather than a
+Worker variable: a variable changed in the dashboard is replaced by the
+value in `wrangler.jsonc` at the next deploy, so either takes a commit.
+
+**Languages.** Each part lists every page twice, its English address and its
+French one (`?lang=fr`), each entry naming both and `x-default` as alternates
+(`xhtml:link`), the same three the page's own head names. That is the form
+Google documents for pages in several languages: every version its own
+entry, each listing all of them. A part holds 25,000 pages, 50,000 addresses.
+
+**Award notices, history records.** Their pages (`/awards/<reference>`,
+`/history/<reference>`) were never in a sitemap and are not now; the lists,
+profiles and buyer pages link them.
+
+The nightly's check before a deploy refuses an export whose index names a
+part with no file (`nightly.check_export`), and the export's line in the run
+status starts with the counts: `sitemap_files`, `sitemap_urls` (pages, each
+listed once more in French by the Worker) and the pages of each part.
 
 ### robots.txt
 

@@ -11,7 +11,7 @@ from awardwatch_pipeline.db import add_missing_columns, connect
 from export_seed import TODAY, seed
 
 NOW = "2026-10-17T00:00:00Z"
-NEWER_TABLES = ["directory_pages", "organization_aliases", "buyer_years"]
+NEWER_TABLES = ["directory_pages", "organization_aliases", "buyer_years", "page_dates"]
 
 
 def previous_version(path):

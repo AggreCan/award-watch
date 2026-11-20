@@ -194,6 +194,10 @@ export function routeTemplate(method: string, path: string): { route: string; ki
   // The timers' stamps (src/refresh.tsx), which a page asks for while a run is under way.
   if (path === "/robots.txt" || path === "/llms.txt" || path === "/refresh.json") return { route: path, kind: "file" };
   if (/^\/sitemap(?:-[0-9]+|-guides)?\.xml$/.test(path)) return { route: "/sitemap.xml", kind: "file" };
+  // The pipeline's named parts (src/sitemaps.ts PIPELINE_PARTS; a test holds this list equal to it), each counted
+  // apart, so the counts say which part a search engine reads.
+  const part = /^\/sitemap-(open-tenders|pages|active-organizations|other-organizations)-[0-9]+\.xml$/.exec(path);
+  if (part) return { route: `/sitemap-${part[1]}-:n.xml`, kind: "file" };
   // The published contracts' parts (src/sitemaps.ts contractSitemap), apart from the others: their own crawl.
   if (/^\/sitemap-contracts-[0-9]+\.xml$/.test(path)) return { route: "/sitemap-contracts-:n.xml", kind: "file" };
   // One guide at its own address, so the views say which guides are read; any other path under it is one template.

@@ -141,7 +141,9 @@ change there. Output tree (under data/out/static):
   instruments/index.json        the standing offers and supply arrangements with an active holder
                                 (sosa_export.py, which also names what profiles, segment and buyer files and
                                 tender details carry of them: "instruments" and "holders")
-  sitemaps/sitemap-<n>.xml, sitemaps/index.xml
+  sitemaps/index.xml, sitemaps/sitemap-<part>-<n>.xml   the sitemap index and its parts, in SITEMAP_PARTS order
+                                (sitemap_parts: the open notices, the site's own pages, the organizations with
+                                recent activity, the other organizations), dated by page_dates
 
 Open and closed. CanadaBuys' open-notice file keeps listing some notices for
 months after they close. A notice's status in the export is its status on the
@@ -223,6 +225,7 @@ the deploy skips it.
 
 from __future__ import annotations
 
+import calendar
 import csv
 import hashlib
 import heapq
@@ -331,18 +334,51 @@ TEMP_TABLES = ("x_tenders", "x_awards", "x_history", "x_grants", "x_records", "x
 # which site/test/seo-intent.test.ts holds equal to this).
 SITEMAP_MAX_URLS = 25_000
 SITEMAP_NS = "http://www.sitemaps.org/schemas/sitemap/0.9"
+# The parts of the sitemap index, in the order a search engine reads them: the
+# open tender notices, the site's own pages (the Worker adds the guides' part
+# right after them), the organizations with recent activity, then the other
+# organizations. Each part is written as sitemaps/sitemap-<name>-<n>.xml and
+# served at /sitemap-<name>-<n>.xml (site/src/sitemaps.ts PIPELINE_PARTS, held
+# equal to this by site/test/sitemaps.test.ts). The published contracts' pages
+# are in none of them: the Worker can list them from the records database
+# (/sitemap-contracts-<n>.xml) behind its CONTRACT_SITEMAPS_LISTED switch.
+SITEMAP_PARTS = ("open-tenders", "pages", "active-organizations", "other-organizations")
+# An organization is active when the newest record its profile's "matching"
+# block counts (an award notice, a PSPC contract history record or a published
+# contract: profile_matching.matching_block's newest) falls within this many
+# months of the data date.
+ACTIVE_MONTHS = 24
 # /pro, /tenders/same-day and /analytics answer while the site's accounts
-# switch is on, as it is in production; the published contracts' pages are
-# listed by the Worker from the records database (/sitemap-contracts-<n>.xml).
+# switch is on, as it is in production.
 # /overview is the site's app home at its own address, the same page for every
 # reader; "/" is the landing page for a reader without a session.
 SITEMAP_PAGES = ["/", "/overview", "/tenders", "/tenders/new", "/tenders/same-day", "/awards", "/awards/erroneous",
                  "/expiring", "/organizations", "/buyers", "/segments", "/analytics", "/rankings", "/feeds", "/watchlist",
                  "/data", "/methodology", "/cite", "/corrections", "/about", "/terms", "/privacy", "/alerts", "/pro"]
-# Pages whose content follows the nightly data carry its date; the others
+# Pages whose content follows the nightly data carry a date; the others
 # change only with the code, so they carry none rather than a false one.
 SITEMAP_DATED_PAGES = {"/", "/overview", "/tenders", "/tenders/new", "/awards", "/awards/erroneous", "/expiring",
                        "/organizations", "/buyers", "/segments", "/analytics", "/rankings", "/feeds", "/data"}
+# The export files that hold what each dated page shows. Its lastmod is the
+# data date on which their bytes last changed (page_dates), so a page whose
+# files a night left as they were keeps its date. "{day}" is the data date.
+# stats.json carries the night's runs, so the pages listing it change nightly.
+SITEMAP_PAGE_FILES: dict[str, tuple[str, ...]] = {
+    "/": ("stats.json",),
+    "/overview": ("stats.json",),
+    "/tenders": ("tenders/open-first.json", "tenders/open-levels.json"),
+    "/tenders/new": ("tenders/new/{day}.json",),
+    "/awards": ("awards/recent.json",),
+    "/awards/erroneous": ("awards/erroneous.json",),
+    "/expiring": ("expiring/index.json", "expiring/3m/1.json"),
+    "/organizations": ("directory/index.json",),
+    "/buyers": ("buyers/index.json",),
+    "/segments": ("categories/index.json", "tenders/open-levels.json", "expiring/index.json"),
+    "/analytics": ("buyers/index.json",),
+    "/rankings": ("rankings/all.json",),
+    "/feeds": ("feeds/index.json",),
+    "/data": ("stats.json",),
+}
 
 
 # -- small helpers ------------------------------------------------------------------
@@ -630,6 +666,10 @@ class Model:
         # first_seen), else None.
         self.expiring_seen: list[str | None] = []
         self._expiring_by: dict[str, dict[str, list[tuple[dict, float | None]]]] = {}
+        # Each active organization's newest counted record (its profile's matching block, "newest", when on or
+        # after active_since), filled as write_profiles writes the profiles: the sitemap orders the active
+        # organizations by it.
+        self.activity: dict[str, str] = {}
         _materialize(conn, self.as_of)
         # The buyers the export lists (export.LISTED_BUYER): a page, a row in
         # buyers/index.json and the rankings, and a link from a record.
@@ -1860,6 +1900,8 @@ def write_profiles(conn: sqlite3.Connection, out: Path, m: Model) -> dict[str, i
     held_segments = profile_matching.held_instruments(conn)
     family = profile_families(conn, m)
     also = profile_aliases(conn, m)
+    # Only the newest records the sitemap's active part can use are kept (m.activity).
+    since = active_since(m.today)
     written = largest_bytes = 0
     over: list[str] = []
     for key in keys:
@@ -1885,6 +1927,8 @@ def write_profiles(conn: sqlite3.Connection, out: Path, m: Model) -> dict[str, i
                 held_segments.get(oid), as_of=m.as_of, segments=m.segments, link=m.link)
             if block:
                 p["matching"] = block
+                if block["newest"] and block["newest"] >= since:
+                    m.activity[oid] = block["newest"]
             if oid in family:
                 p["family"] = family[oid]
             if oid in also:
@@ -2287,44 +2331,148 @@ def _lastmod(value: str | None) -> str | None:
     return value[:10] if value and _DATE_RE.match(value) else None
 
 
-def sitemap_entries(m: Model, skip: Collection[str] = ()) -> list[tuple[str, str | None]]:
-    """(path, lastmod) for the fixed pages, then the organizations, buyers,
-    categories, open and recent tenders, award years and directory pages.
+def active_since(today: date, months: int = ACTIVE_MONTHS) -> str:
+    """The first day an organization's newest record may fall on for it to count as active: the same day of the
+    month, months before today, or that month's last day when the month is shorter."""
+    year, month = divmod(today.year * 12 + today.month - 1 - months, 12)
+    month += 1
+    return date(year, month, min(today.day, calendar.monthrange(year, month)[1])).isoformat()
 
-    An organization's lastmod is its updated_at, which organizations.recompute
-    rewrites only when something on the profile changed. skip names sections
-    whose files were not written tonight (see _write_static), so their pages
-    are left out rather than listed while they answer "not published".
+
+def _digest(out: Path, files: Iterable[str], extra: str = "") -> str:
+    """SHA-1 of the named export files' bytes, in order, and of extra; a file that is missing counts as missing.
+
+    A file whose top level carries the data date as "as_of" (expiring/index.json, feeds/index.json,
+    instruments/index.json; _dump sorts the keys, so it comes first) is read without it: every page shows the
+    data date in its frame, so the date alone is no change to what the page lists."""
+    h = hashlib.sha1()
+    for name in files:
+        path = out / name
+        data = path.read_bytes() if path.is_file() else b"\0missing"
+        if data.startswith(b'{"as_of":'):
+            doc = json.loads(data)
+            doc.pop("as_of", None)
+            data = json.dumps(doc, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+        h.update(name.encode("utf-8") + b"\0" + data + b"\0")
+    h.update(extra.encode("utf-8"))
+    return h.hexdigest()
+
+
+def page_dates(conn: sqlite3.Connection, digests: dict[str, str], today: str) -> dict[str, str]:
+    """Each address's lastmod: the data date on which the digest of what it shows was first seen (the page_dates
+    table holds the digest and that date), so an address a night leaves as it was keeps its date. An address a
+    night does not list (its section failed) keeps its row, and comes back with its own date."""
+    held = {r[0]: (r[1], r[2]) for r in conn.execute("SELECT path, hash, changed_on FROM page_dates")}
+    dates: dict[str, str] = {}
+    changed: list[tuple[str, str, str]] = []
+    for path, digest in digests.items():
+        old = held.get(path)
+        if old is not None and old[0] == digest:
+            dates[path] = old[1]
+        else:
+            dates[path] = today
+            changed.append((path, digest, today))
+    conn.executemany("INSERT INTO page_dates (path, hash, changed_on) VALUES (?, ?, ?) ON CONFLICT(path) DO UPDATE "
+                     "SET hash = excluded.hash, changed_on = excluded.changed_on", changed)
+    conn.commit()
+    return dates
+
+
+def _award_years(m: Model) -> list[int]:
+    """The years with an award notice page, newest first: FIRST_YEAR to the data date's year."""
+    return sorted({y for (a,) in m.conn.execute("SELECT DISTINCT substr(awarded, 1, 4) FROM x_awards")
+                   if a and a.isdigit() and FIRST_YEAR <= (y := int(a)) <= m.year}, reverse=True)
+
+
+def _site_page_digests(m: Model, out: Path, fixed: Sequence[str], years: Sequence[int],
+                       skip: Collection[str]) -> dict[str, str]:
+    """The digest of what each dated page of the site's own part shows: the fixed pages by SITEMAP_PAGE_FILES, a
+    segment by its own file and its row of the radar's segments, an award year and a window of the radar by their
+    first page and index (the address the sitemap lists), and the instruments' index by its file."""
+    digests = {p: _digest(out, (f.format(day=m.as_of) for f in SITEMAP_PAGE_FILES[p]))
+               for p in fixed if p in SITEMAP_DATED_PAGES}
+    if "categories" not in skip:
+        radar: dict[str, object] = {}
+        path = out / "expiring" / "index.json"
+        if "expiring" not in skip and path.is_file():
+            radar = {r.get("code"): r for r in json.loads(path.read_bytes()).get("by_segment") or [] if isinstance(r, dict)}
+        for code in sorted(m.segments):
+            row = json.dumps(radar.get(code), sort_keys=True)
+            digests[f"/segments/{code}"] = _digest(out, (f"categories/{code}.json",), row)
+    for y in years:
+        digests[f"/awards/{y}"] = _digest(out, (f"awards/{y}/index.json", f"awards/{y}/1.json"))
+    if "expiring" not in skip:
+        for name, _ in expiring.WINDOWS:
+            digests[f"/expiring/{name}"] = _digest(out, (f"expiring/{name}/index.json", f"expiring/{name}/1.json"))
+    if "instruments" not in skip:
+        digests["/instruments"] = _digest(out, ("instruments/index.json",))
+    return digests
+
+
+Entries = list[tuple[str, str | None]]
+
+
+def sitemap_parts(m: Model, out: Path, skip: Collection[str] = ()) -> list[tuple[str, Entries]]:
+    """(name, [(path, lastmod)]) for each part of SITEMAP_PARTS, in that order. Reads the files the export wrote
+    under out (the site's own pages are dated by them) and m.activity, which write_profiles fills.
+
+    open-tenders: every notice open on the data date, the newest first: by the night its newest version (a new
+    notice or an amendment) first appeared, which is its lastmod, then by publication date and reference. A
+    notice that has closed is in no part.
+    pages: the fixed pages, the buyers (dated by updated_at, which indicators.compute moves only when a figure
+    changed), the segments, the award years, the radar's windows, the directory pages (directory_pages) and the
+    standing offers and supply arrangements (sosa_export.sitemap_entries). A fixed page in SITEMAP_DATED_PAGES,
+    a segment, a year, a window and the instruments' index are dated by page_dates.
+    active-organizations: the organizations whose newest counted record (m.activity) falls on or after
+    active_since(data date), the most recent first, ties by id.
+    other-organizations: every other organization, by id.
+    An organization is dated by its updated_at, which organizations.recompute moves only when a figure of its
+    profile changed. A supplier withheld as a person has no organization row, so no part names it.
+
+    skip names sections whose files were not written tonight (see _write_static); their pages are left out
+    rather than listed while they answer "not published".
     """
     conn = m.conn
-    dated = m.as_of
-    entries: list[tuple[str, str | None]] = [
-        (p, dated if p in SITEMAP_DATED_PAGES else None) for p in SITEMAP_PAGES if p.strip("/") not in skip]
-    entries += [(f"/organizations/{r['id']}", _lastmod(r["updated_at"]))
-                for r in conn.execute("SELECT id, updated_at FROM organizations ORDER BY id")]
-    if "buyers" not in skip:
-        entries += [(f"/buyers/{r['id']}", _lastmod(r["updated_at"]))
-                    for r in conn.execute("SELECT id, updated_at FROM buyers ORDER BY id") if r["id"] in m.listed]
-    if "categories" not in skip:
-        entries += [(f"/segments/{code}", dated) for code in sorted(m.segments)]
-    # Open notices and every notice first seen in the last 30 days, each dated
-    # by the night its newest version first appeared.
-    recent = (m.today - timedelta(days=NEW_DAYS - 1)).isoformat()
-    for r in conn.execute("SELECT reference, first_seen FROM x_tenders WHERE shown_status = 'open' OR first_sight >= ? "
-                          "ORDER BY reference", (recent,)):
+    opened: list[tuple[str, str, str, str | None]] = []
+    for r in conn.execute("SELECT reference, first_seen, published FROM x_tenders WHERE shown_status = 'open'"):
         ref = m.refs["tenders"].get(r["reference"])
         if ref:
-            entries.append((f"/tenders/{ref.lower()}", _lastmod(r["first_seen"])))
-    years = sorted({y for (a,) in conn.execute("SELECT DISTINCT substr(awarded, 1, 4) FROM x_awards")
-                    if a and a.isdigit() and FIRST_YEAR <= (y := int(a)) <= m.year}, reverse=True)
-    entries += [(f"/awards/{y}", dated) for y in years]
+            mod = _lastmod(r["first_seen"])
+            opened.append((mod or "", _day(r["published"]) or "", ref.lower(), mod))
+    opened.sort(key=lambda t: t[2])
+    opened.sort(key=lambda t: (t[0], t[1]), reverse=True)
+    tenders: Entries = [(f"/tenders/{ref}", mod) for _, _, ref, mod in opened]
+
+    fixed = [p for p in SITEMAP_PAGES if p.strip("/") not in skip]
+    years = _award_years(m)
+    dates = page_dates(conn, _site_page_digests(m, out, fixed, years, skip), m.as_of)
+    pages: Entries = [(p, dates.get(p)) for p in fixed]
+    if "buyers" not in skip:
+        pages += [(f"/buyers/{r['id']}", _lastmod(r["updated_at"]))
+                  for r in conn.execute("SELECT id, updated_at FROM buyers ORDER BY id") if r["id"] in m.listed]
+    if "categories" not in skip:
+        pages += [(f"/segments/{code}", dates[f"/segments/{code}"]) for code in sorted(m.segments)]
+    pages += [(f"/awards/{y}", dates[f"/awards/{y}"]) for y in years]
     if "expiring" not in skip:
-        entries += [(f"/expiring/{name}", dated) for name, _ in expiring.WINDOWS]
+        pages += [(f"/expiring/{name}", dates[f"/expiring/{name}"]) for name, _ in expiring.WINDOWS]
     if "directory" not in skip:
-        entries += directory.sitemap_entries(conn)
+        pages += directory.sitemap_entries(conn)
     if "instruments" not in skip:
-        entries += sosa_export.sitemap_entries(conn, dated)
-    return entries
+        pages += sosa_export.sitemap_entries(conn, dates["/instruments"])
+
+    since = active_since(m.today)
+    active: list[tuple[str, str, str | None]] = []
+    other: Entries = []
+    for r in conn.execute("SELECT id, updated_at FROM organizations ORDER BY id"):
+        newest = m.activity.get(r["id"])
+        if newest and newest >= since:
+            # A record dated after the data date (a published contract's date ahead) counts as of the data date.
+            active.append((min(newest, m.as_of), r["id"], _lastmod(r["updated_at"])))
+        else:
+            other.append((f"/organizations/{r['id']}", _lastmod(r["updated_at"])))
+    active.sort(key=lambda a: a[0], reverse=True)
+    recent: Entries = [(f"/organizations/{oid}", mod) for _, oid, mod in active]
+    return list(zip(SITEMAP_PARTS, (tenders, pages, recent, other)))
 
 
 def sitemap_chunks(entries: Sequence, max_urls: int = SITEMAP_MAX_URLS) -> list[Sequence]:
@@ -2340,26 +2488,46 @@ def _entry(tag: str, loc: str, lastmod: str | None) -> str:
     return f"<{tag}><loc>{escape(loc)}</loc>{stamp}</{tag}>"
 
 
-def write_sitemaps(entries: Sequence[tuple[str, str | None]], out: Path, base_url: str,
-                   max_urls: int = SITEMAP_MAX_URLS) -> dict[str, int]:
-    """Write sitemaps/sitemap-<n>.xml and the index that lists them.
+def part_file(name: str, n: int) -> str:
+    """The file of part n (from 1) of a named part: sitemaps/<this>, served at /<this>."""
+    return f"sitemap-{name}-{n}.xml"
+
+
+def write_sitemaps(parts: Sequence[tuple[str, Sequence[tuple[str, str | None]]]], out: Path, base_url: str,
+                   max_urls: int = SITEMAP_MAX_URLS, *, conn: sqlite3.Connection | None = None,
+                   today: str | None = None) -> dict[str, int]:
+    """Write each named part as sitemaps/sitemap-<name>-<n>.xml, max_urls entries to a file, and the index that
+    lists them in the parts' order. A part with no entry has no file.
 
     URLs are absolute, as the protocol requires, on base_url. The index names
-    each part at the site root (/sitemap-<n>.xml), where the site serves it,
-    with the newest lastmod inside that part.
+    each file at the site root (/sitemap-<name>-<n>.xml), where the site serves
+    it. Its lastmod: with conn and today, the data date on which the file's
+    bytes last changed (page_dates, keyed by the file's address), so an index
+    entry moves only when its file did; without them, the newest lastmod inside
+    the file.
+
+    Returns sitemap_files and sitemap_urls (the entries, each the English address; the site serves the French
+    one beside it), then sitemap_<name> (underscores for hyphens), the entries of each part.
     """
     base = base_url.rstrip("/")
     folder = out / "sitemaps"
     folder.mkdir(parents=True, exist_ok=True)
-    index: list[str] = []
-    chunks = sitemap_chunks(entries, max_urls)
-    for n, chunk in enumerate(chunks, start=1):
-        lines = [f'<urlset xmlns="{SITEMAP_NS}">', *(_entry("url", base + path, mod) for path, mod in chunk), "</urlset>"]
-        (folder / f"sitemap-{n}.xml").write_bytes(_xml(lines))
-        dates = [mod for _, mod in chunk if mod]
-        index.append(_entry("sitemap", f"{base}/sitemap-{n}.xml", max(dates) if dates else None))
+    files: list[tuple[str, bytes, str | None]] = []
+    sizes: dict[str, int] = {}
+    for name, entries in parts:
+        sizes[f"sitemap_{name.replace('-', '_')}"] = len(entries)
+        for n, chunk in enumerate(sitemap_chunks(entries, max_urls), start=1):
+            lines = [f'<urlset xmlns="{SITEMAP_NS}">', *(_entry("url", base + path, mod) for path, mod in chunk), "</urlset>"]
+            data = _xml(lines)
+            (folder / part_file(name, n)).write_bytes(data)
+            dates = [mod for _, mod in chunk if mod]
+            files.append((part_file(name, n), data, max(dates) if dates else None))
+    changed: dict[str, str] = {}
+    if conn is not None and today:
+        changed = page_dates(conn, {f"/{file}": hashlib.sha1(data).hexdigest() for file, data, _ in files}, today)
+    index = [_entry("sitemap", f"{base}/{file}", changed.get(f"/{file}", newest)) for file, _, newest in files]
     (folder / "index.xml").write_bytes(_xml([f'<sitemapindex xmlns="{SITEMAP_NS}">', *index, "</sitemapindex>"]))
-    return {"sitemap_files": len(chunks), "sitemap_urls": len(entries)}
+    return {"sitemap_files": len(files), "sitemap_urls": sum(sizes.values()), **sizes}
 
 
 # -- the export ---------------------------------------------------------------------
@@ -2409,7 +2577,10 @@ def export_static(conn: sqlite3.Connection, out_dir: Path | None = None, *, toda
     out.rename(final)
     log.info("export: %d files, %d bytes; largest %s", size["files"], size["bytes"],
              ", ".join(f"{name} ({n} bytes)" for n, name in size["largest"]))
-    detail = " ".join(f"{k}={v}" for k, v in counts.items())
+    # The sitemap's counts first: the run status keeps the first 200 characters of a stage's detail
+    # (nightly.run_status), and the log row the first 900.
+    first = [k for k in counts if k.startswith("sitemap_")]
+    detail = " ".join(f"{k}={counts[k]}" for k in [*first, *(k for k in counts if k not in first)])
     log_run(conn, "export", detail=f"static {detail}"[:900], rows_in=counts.get("organizations", 0),
             rows_new=size["files"], notice=notice)
     return counts
@@ -2478,6 +2649,6 @@ def _write_static(conn: sqlite3.Connection, out: Path, today: date, base_url: st
     }
     write_stats(m, out, counts=stats_counts, open_rows=open_rows, new_today=new_today,
                 top_year=top_organizations_year(m, totals), downloads=downloads)
-    counts.update(write_sitemaps(sitemap_entries(m, failed), out, base_url))
+    counts.update(write_sitemaps(sitemap_parts(m, out, failed), out, base_url, conn=conn, today=m.as_of))
     counts["organizations"] = len(m.orgs)
     return counts

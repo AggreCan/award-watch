@@ -773,6 +773,18 @@ CREATE TABLE IF NOT EXISTS directory_pages (
   changed_on TEXT NOT NULL                       -- ISO date: the data date of the export that first wrote this hash
 );
 
+-- The sitemap's dates for the site's own dated pages and for its part files
+-- (export_static.page_dates): each address with a hash of the export files
+-- that hold what it shows (for a part, the file itself) and the data date on
+-- which that hash last changed. The sitemap gives that date as the lastmod, so
+-- an address a night left as it was keeps its date. A row whose address a
+-- night does not list stays, so a section that failed comes back with its date.
+CREATE TABLE IF NOT EXISTS page_dates (
+  path TEXT PRIMARY KEY,                         -- '/segments/43', '/awards/2024', '/sitemap-pages-1.xml'
+  hash TEXT NOT NULL,                            -- SHA-1 (export_static._digest; a part file's own bytes)
+  changed_on TEXT NOT NULL                       -- ISO date: the data date of the export that first saw this hash
+);
+
 -- Organization ids retired by a normalization change (migrate.py) or merged
 -- into another organization (merges.py), each with the id that took over its
 -- records, so a link to an old profile can be sent on. export_static writes

@@ -285,11 +285,14 @@ app.post("/corrections", correctionsSubmit);
 app.get("/refresh.json", refreshStampsRoute);
 app.get("/robots.txt", robotsTxt);
 app.get("/llms.txt", llmsTxt);
-app.get("/:file{sitemap(?:-[0-9]+)?\\.xml}", sitemapFile);
-// The published contracts' parts, read from the records database (src/sitemaps.ts).
-app.get("/:file{sitemap-contracts-[0-9]+\\.xml}", contractSitemap);
 // The guides' part, written from src/guides.ts (src/sitemaps.ts).
 app.get(`/${GUIDES_SITEMAP}`, () => guidesSitemap());
+// The published contracts' parts, read from the records database (src/sitemaps.ts); they answer whether or
+// not the index names them (CONTRACT_SITEMAPS_LISTED).
+app.get("/:file{sitemap-contracts-[0-9]+\\.xml}", contractSitemap);
+// The index and the pipeline's parts (src/sitemaps.ts sitemapAsset says which file an address names). After
+// the two above: this pattern matches their addresses too.
+app.get("/:file{sitemap[a-z0-9-]*\\.xml}", sitemapFile);
 
 // The Atom feeds (feeds.py) are static files, but wrangler.jsonc runs the
 // Worker first for /data/feeds/* so the measure middleware counts each poll

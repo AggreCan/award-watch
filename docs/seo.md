@@ -155,28 +155,44 @@ awards and contracts in Canada"), and the Twitter card is the large-image
 kind. The 512 px square mark stays the publisher's logo in the structured
 data, where a square logo is wanted.
 
-**Sitemaps.** `/sitemap.xml` is an index of two kinds of part:
+**Sitemaps.** Since 2026-11-20 `/sitemap.xml` is an index of parts in the
+order a search engine should read them, because a young site gets few
+fetches a day and what comes first is what gets crawled:
 
-- the export's parts, now 25,000 pages each, served with every page twice,
-  English then French, each entry carrying the alternates of both, so a part
-  holds at most the protocol's 50,000 addresses; the overview, the Pro
-  page, the same-day page and the analytics index are listed with the
-  fixed pages;
-- 128 parts for the published contracts, `/sitemap-contracts-1.xml` to
-  `/sitemap-contracts-128.xml`, read from the records database. Each part is
-  a fixed slice of the record key, so its address never changes and it holds
-  about 10,000 contracts (20,000 addresses with French). The scheme has room
-  for 3.2 million contracts before a part reaches 50,000 addresses. The
-  index lists these parts only while the records database is ready; during a
-  reload a part answers 503 with a retry time, and a crawler comes back;
-- since 2026-11-11, `/sitemap-guides.xml`: the guides' index and each guide,
-  in both languages, each dated by the day it was last checked against its
-  sources. The Worker writes it from the guides themselves, so a new guide
-  is listed without a change to the nightly export, and the index always
-  names it.
+1. `/sitemap-open-tenders-<n>.xml`: every tender notice open on the data
+   date, newest first, each dated by the night its newest version appeared.
+   A notice leaves the part the night after it closes.
+2. `/sitemap-pages-<n>.xml`: the home page, the overview, the lists, the
+   rankings, the buyers, the segments, the award years, the radar's windows,
+   the directory pages and the standing offers and supply arrangements. A
+   list page is dated by the night what it shows last changed; the overview,
+   the Pro page, the same-day page and the analytics index are listed with
+   the fixed pages.
+3. `/sitemap-guides.xml`: the guides' index and each guide, each dated by the
+   day it was last checked against its sources. The site writes it from the
+   guides themselves, so a new guide is listed without a change to the
+   nightly export.
+4. `/sitemap-active-organizations-<n>.xml`: the organizations with an award
+   notice, a contract history record or a published contract dated within
+   the last 24 months, the most recent first.
+5. `/sitemap-other-organizations-<n>.xml`: every other organization.
 
-In all, about 3.4 million addresses: 2.6 million for the published
-contracts and 0.8 million for everything else, each language counted.
+An organization is dated by the night a figure on its profile last changed.
+Each part holds 25,000 pages and serves every page twice, English then
+French, each entry carrying the alternates of both, so a part holds at most
+the protocol's 50,000 addresses.
+
+The published contracts' 128 parts, `/sitemap-contracts-1.xml` to
+`/sitemap-contracts-128.xml`, are no longer in the index: they were about 2.7
+million of the 3.4 million addresses it offered, and readers from a search
+arrive on organization and tender pages. The parts still answer at their
+addresses, read from the records database (503 with a retry time during a
+reload), and the contract pages are unchanged and linked from the
+organization and buyer pages. Listing them again is a one-line change.
+
+In all, about 0.67 million addresses, each language counted: about 2,000 for
+the open notices, 12,000 for the site's own pages and 660,000 for the
+organizations.
 
 **Links into the guides.** The record pages (a tender notice, an award
 notice, a contract history record, a published contract, a standing offer)
