@@ -140,8 +140,13 @@ async function sha(s: string): Promise<string> {
 // the stamp on every page (layout.tsx STYLES_VERSION) and changes nothing else in these pages' bytes. What the
 // monthly record added to every page after the capture is taken out first (seats-switch-fixtures.ts CAPTURED_WITHOUT).
 const CAPTURED_STYLES = 74;
+// The capture was made while Add a Tile's count read "1 tuiles sur 24" in French (dash.count for every number).
+// The count now takes the singular for none and one (dash.count_one), and nothing else on the page changed, so that
+// one line is put back as it read at the capture before a page is compared; the capture stays as it is.
+const CAPTURED_COUNT = /(<p class="muted small">[01]) tuile sur /g;
 const steady = (body: string) =>
-  withoutMonthly(body).replace(/(name="csrf" value="|"csrf":")[0-9a-f]{32}/g, "$1CSRF").replaceAll(`styles.css?v=${STYLES_VERSION}"`, `styles.css?v=${CAPTURED_STYLES}"`);
+  withoutMonthly(body).replace(CAPTURED_COUNT, "$1 tuiles sur ").replace(/(name="csrf" value="|"csrf":")[0-9a-f]{32}/g, "$1CSRF")
+    .replaceAll(`styles.css?v=${STYLES_VERSION}"`, `styles.css?v=${CAPTURED_STYLES}"`);
 
 const PAGES = ["/account/searches", "/account/watches", "/account/views", "/account/keys", "/account/dashboard"];
 const text = (i: number) => STATEMENTS[i];

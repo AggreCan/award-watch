@@ -100,6 +100,7 @@ export const DASHBOARD_STRINGS = {
   // The foot of an analytics table of contracts ending, which follow neither the source nor the period: their first day.
   "dash.meta_due": { en: "Contracts ending from {date}", fr: "Contrats prenant fin à partir du {date}" },
   "dash.added": { en: "Added to the dashboard.", fr: "Ajouté au tableau de bord." },
+  "dash.count_one": { en: "{n} of {cap} tiles", fr: "{n} tuile sur {cap}" },
   "dash.count": { en: "{n} of {cap} tiles", fr: "{n} tuiles sur {cap}" },
   "dash.full": {
     en: "The dashboard holds its {cap} tiles. Remove one to add another.",
@@ -168,7 +169,9 @@ export const DASHBOARD_STRINGS = {
     fr: "Elle n'a aucun dossier dans un segment pour cette source et ces exercices.",
   },
   "dash.tables_unread": { en: "Its segments cannot be read right now.", fr: "Ses segments ne peuvent pas être lus pour le moment." },
-  // {name} the dashboard, {n} its tiles, {cap} its figure.
+  // {name} the dashboard, {n} its tiles, {cap} its figure; the key chosen by {n} (i18n.ts tn: French takes the singular
+  // for 0 and 1).
+  "dash.tables_count_one": { en: "{name} holds {n} of {cap} tiles.", fr: "{name} contient {n} tuile sur {cap}." },
   "dash.tables_count": { en: "{name} holds {n} of {cap} tiles.", fr: "{name} contient {n} tuiles sur {cap}." },
   "dash.tables_pick": { en: "Check a table to add it.", fr: "Cochez un tableau pour l'ajouter." },
   // What the checklist's post says on the dashboard: how many of how many were added, and why the rest were not.
@@ -266,6 +269,10 @@ export const DASHBOARD_STRINGS = {
     fr: "Disposé sur cette page seulement : les positions et les tailles ne peuvent pas encore être enregistrées.",
   },
   "dash.status_undone": { en: "Undone.", fr: "Annulé." },
+  // A save of a dashboard deleted meanwhile (in another tab): the layout post's answer carries both (dashboard.tsx
+  // layoutPost), the line and the link to the account's dashboards, in place of Try again.
+  "dash.status_gone": { en: "This dashboard no longer exists.", fr: "Ce tableau de bord n'existe plus." },
+  "dash.status_gone_link": { en: "Your dashboards", fr: "Vos tableaux de bord" },
   "dash.js_undo": { en: "Undo", fr: "Annuler" },
   "dash.js_retry": { en: "Try again", fr: "Réessayer" },
   "dash.say_picked": {

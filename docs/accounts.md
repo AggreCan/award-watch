@@ -1,11 +1,11 @@
 # Accounts
 
 Accounts let a reader sign in with an email address, keep saved searches and
-hold API keys. The module is built and switched off: until the operator sets
-`ACCOUNTS_ENABLED` to `"true"`, every `/account` route answers the site's own
-404 and no public page changes in any byte. The code is `site/src/account/`;
-the schema is `site/accounts_schema.sql`; the tests are
-`site/test/accounts-*.test.ts`.
+hold API keys. The module is switched on: `ACCOUNTS_ENABLED` is `"true"` in
+`site/wrangler.jsonc`; set to anything else, every `/account` route answers
+the site's own 404 and no public page changes in any byte (*The switch*).
+The code is `site/src/account/`; the schema is `site/accounts_schema.sql`;
+the tests are `site/test/accounts-*.test.ts`.
 
 ## What it does
 
@@ -39,7 +39,7 @@ the schema is `site/accounts_schema.sql`; the tests are
   awards and notable amendments, and the contracts ending next fiscal quarter.
   A public sample is built live at `/pro/briefing-sample`, the message as
   an inbox shows it, light or dark (*Weekly briefings*).
-- **Weekly email.** Any account, Free or Pro, can turn on one message a
+- **Weekly email.** Any account, whatever its plan, can turn on one message a
   week, with a box on the sign-in form or a control on the account page:
   what changed on the pages it follows, or the site's week in figures, and
   one line on what Pro adds for an account without it. No account is
@@ -59,7 +59,7 @@ the schema is `site/accounts_schema.sql`; the tests are
   in use against the daily cap, and each key's requests a day over the 60
   days the counts are kept, as a chart and a table (*The usage page*). A
   plan without the keyed API is sent from it to the keys page.
-- **Plans.** Each account is on a plan, Free or Pro, computed from the
+- **Plans.** Each account is on a plan, Free, Pro or Ultra, computed from the
   entitlements table. The plan sets how many saved searches the account
   keeps and whether delivery, API keys, filtered exports, same-day tender
   notices, the full 6- and 12-month windows of contracts ending
@@ -107,6 +107,14 @@ Every datetime is ISO in UTC.
 | `feeds` | one row per calendar feed: kind (`search`, `watchlist`, `all`), the saved search it follows, the address's secret, created and revocation times, the UTC day a calendar last read it | a time of reading, an address, a user agent |
 | `org_claims` | one row per account that named its organization: the organization id, up to five organization ids to compare it with, the share block's segment, when it was chosen and last changed (*Your organization*) | anything typed, a name, any sign of which other accounts chose the same organization |
 | `saved_views`, `view_deliveries` | the analytics views an account saved: the view's address as the site writes it, the name the reader gave it, its language and email cadence, a hash of the figures its last message carried, its stop link's secret; and each view's runs (*Saved views*) | anything typed but the name, a copy of a message |
+| `entitlement_tiers` | one row per Ultra entitlement: the `entitlements` row and its tier (`ultra`), written in the same batch (*The tier table*) | a price, an address |
+| `payment_customers` | one row per account that has paid: the payment service's customer id, its latest subscription id, that subscription's status, the end of its period and whether it ends then, when the payment service last told the site | card details, an amount, an address |
+| `payment_events` | one row per event of the payment service handled: its event id, its type, when it came | the event's body |
+| `payment_reversals` | one row per refunded or disputed charge: the payment service's charge and customer ids, `refunded` or `disputed`, when | an amount, card details |
+| `account_blocks` | one row per account the operator blocked, while the block stands: the operator's note, when, the operator's own user id, the saved searches whose delivery the block turned off | an address |
+| `delivery_runs` | one row per run of the hourly delivery job (and per console run or seat invitation): when, the data date, how it ended, the messages sent and refused, the items still due, a few words on why it stopped early | an account, an address |
+| `watch_deliveries` | one row per watch mail run of an account: when, the data date, how many items, `sent`, `failed` or `empty` | the message |
+| `dashboards`, `dashboard_tiles`, `dashboard_panels` | an account's dashboards (the name it gave, the order of its tabs) and their tiles (the kind, what each shows, its place and size, a note's text), and the panels of the dashboard before the grid (*Dashboard*) | anything typed but a dashboard's name and a note |
 | `seats` | one row per invitation to a seat and, once taken, the seat it became: the holder's and the member's ids, the invited address and SHA-256 of the link's secret while it is an invitation, the language, when it was sent, expires, was taken and ended, and why it ended (*Seats*) | the link's secret, a plan, a price, a count, a member's address |
 
 Limits: at most 25 saved searches per account on Pro, 100 on Ultra (Free
@@ -256,7 +264,8 @@ the account's language.
 
 ## The switch
 
-`ACCOUNTS_ENABLED` in `site/wrangler.jsonc`, `"false"` as shipped. While it
+`ACCOUNTS_ENABLED` in `site/wrangler.jsonc`, `"true"` as shipped (the test
+suites set `"false"`, `site/vitest.config.ts`). While it
 is anything but `"true"` (or the `ACCOUNTS` binding is missing):
 
 - every `/account` route answers the site's 404 page;
@@ -3863,7 +3872,10 @@ The script (`dashboard.js`, a module loaded on this page only):
   gives the script, so a save goes to the dashboard shown even from a
   script cached before the tabs), one save at a time; the status line
   says "Saving the layout.", then "Saved." with Undo, or "The layout could
-  not be saved." with Try again and Undo.
+  not be saved." with Try again and Undo; for a dashboard deleted meanwhile
+  (in another tab), "This dashboard no longer exists." with a link to Your
+  dashboards and no Try again, and nothing is saved again on that page
+  (`public/dashboard.js goneOf`, `site/test/dashboard-gone.test.ts`).
 - **Undo**: the status line's link, or Ctrl+Z (Cmd+Z) outside a field: the
   layout before the last change, the last 20 of the visit, saved again.
 - **A resize** reads that tile again at its new size
@@ -3918,7 +3930,7 @@ entry measured 14.62 against the 12 tiles' 8.62 (bound 44).
 | `GET /account/dashboard` | the first dashboard's tiles on the grid; `?edit=1` is the same page |
 | `GET /account/dashboard/:id` | a dashboard by its id, the same page; an id the account does not hold, 303 to `/account/dashboard` |
 | `POST /account/dashboard/panels` | add a tile: `kind` and `ref` from a page's Add to dashboard (an analytics table: `kind=analytic`, its ref), `panel` (`kind:ref`) from Add a Tile, or `kind=text` and `text` from Add a Tile's Text group, to the dashboard `board` names (none, the first); it goes under the others at the left, half the row wide (never narrower than its least), at its kind's starting height |
-| `POST /account/dashboard/layout` | the script's save, for the dashboard `?board=` names (none, the first): `layout`, JSON `[{id, x, y, w, h}]` (8,000 characters and 50 tiles at most); only that dashboard's own ids count, a tile the post leaves out keeps its place, the whole goes through `normalize`; answers JSON `{state: "saved", tiles, renamed}`, `{state: "unsaved"}` while the tables are absent, 404 for a dashboard the account does not hold, 400 for anything that is not such a list |
+| `POST /account/dashboard/layout` | the script's save, for the dashboard `?board=` names (none, the first): `layout`, JSON `[{id, x, y, w, h}]` (8,000 characters and 50 tiles at most); only that dashboard's own ids count, a tile the post leaves out keeps its place, the whole goes through `normalize`; answers JSON `{state: "saved", tiles, renamed}`, `{state: "unsaved"}` while the tables are absent, 404 `{state: "gone", line, link, href}` for a dashboard the account does not hold (deleted in another tab: the line and the link to the account's dashboards in the reader's language, for the script), 400 for anything that is not such a list |
 | `POST /account/dashboard/boards` | New dashboard, within the plan's figure; lands on it |
 | `POST /account/dashboard/boards/:id/rename` | `name`; `:id` a dashboard's id, or `first` for the computed first |
 | `POST /account/dashboard/boards/:id/move` | `dir` earlier or later |
@@ -4220,8 +4232,9 @@ and says "This tile cannot be read right now."
   fiscal year or for the period, never the contracts ending); anything else
   is 400. Read back, the address is read as the builder reads one and
   checked again: a combination no longer offered says why, a buyer the list
-  no longer holds says that what the tile showed was removed. No schema
-  change: `kind` has no CHECK.
+  no longer holds says that what the tile showed was removed (unless the
+  nightly merged it into another, *Merged buyers and organizations*). No
+  schema change: `kind` has no CHECK.
 - **Its reads** are the builder page's own statements (`builder_sql.ts
   buildPlan`; a figure's through `builder.ts figureChoice`, the view by
   fiscal year over its last year and the one before), with `cube_meta` first
@@ -4269,6 +4282,29 @@ the figures worked out from the rows, the tiles that cannot be read, the
 fragment, the third door, the builder page's controls, the saved view and its
 email, the find page and both languages; `site/test/cpu-budget.test.ts` a
 dashboard of 24 builder views (`DASHBOARD_BUILD_BOUND`).
+
+### Merged buyers and organizations
+
+A tile that names a buyer or an organization the nightly merged into another
+(the alias files the retired id's page redirects through,
+`buyers/aliases.json` and `aliases/<ab>.json`) is drawn at the id that took
+over, and its Open leads there; the stored ref stays as it was saved, since
+a page view writes nothing. An analytics table (`analytic`), a saved view's
+tile (`view`, by the view's id or its address) and a builder's view of
+organizations (`build`, `number`) ask only when the page's records batch
+holds no name for their subject (`BUYER_NAME_SQL`, `ORG_NAME_SQL`,
+`ORG_NAMES_SQL`): then the alias file is read (`watches.ts survivorOf`) and,
+when it names an id, the tile's statements are read again at that id in one
+more records batch for every such tile of the page. A builder's view of
+buyers asks before the batch, for a buyer the buyers' list does not hold
+(`build_views.tsx movedBuyers`), and needs no batch more. A page whose
+subjects are all named reads no alias file and one batch; an id no alias
+names reads its alias file on each view and draws as it did (an analytics
+table with no rows, a builder's buyer as removed). The saved views page moves
+a saved view's own address as before (`followViewAliases`).
+`site/test/dashboard-aliases.test.ts` holds each kind against the same tile
+at the surviving id, an id that was never anything, the stored refs, the
+reads and the tile's fragment.
 
 ### Operator step
 
@@ -4697,7 +4733,7 @@ order; no parameter's text reaches the SQL.
 | Parameter | Values |
 |---|---|
 | `q` | The start of an address, read lower-cased; `%` and `_` match only themselves. |
-| `plan` | `free`, `pro` |
+| `plan` | `free`, `pro`, `ultra` |
 | `status` | `active`, `deleted` |
 | `blocked` | `yes`, `no` |
 | `delivery` | `on` (at least one saved search has delivery on), `off` |
@@ -6066,7 +6102,7 @@ against the cap alone.
 
 ## Weekly email
 
-One message a week to any account, Free or Pro, that turned it on: what
+One message a week to any account, whatever its plan, that turned it on: what
 changed in the week on the pages it follows, or, when it follows nothing or
 nothing changed, the site's week in figures; and, for an account that names
 its organization, the week's matching notices. It is the only list mail a Free
@@ -6208,7 +6244,8 @@ when it was turned off, the week of the last message and whether it was
 sent, the week a message was refused, and the link's secret; the message
 names public records and figures only, and no copy is kept. The privacy page
 says so. 5 lines of watches a message, 4 figures, 3 matching notices on
-Free and 10 on Pro, 100 messages a run, 1,000 accounts read a run.
+Free, 10 on Pro and 25 on Ultra, 100 messages a run, 1,000 accounts read a
+run.
 
 ### Operator steps
 

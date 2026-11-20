@@ -32,8 +32,9 @@ figures, for the analytics views of buyers, organizations and segments
 (`docs/analytics.md`); another holds only what visitors submit; object
 storage holds the downloads.
 
-Accounts (sign-in by an emailed code, saved searches, API keys) are built but
-not yet open; the switch `ACCOUNTS_ENABLED` keeps them off (`docs/accounts.md`).
+Accounts (sign-in by an emailed code, saved searches, API keys) are open: the
+switch `ACCOUNTS_ENABLED` is `"true"` in `site/wrangler.jsonc`, and anything
+else turns them off (`docs/accounts.md`).
 The mail they send is checked twice, apart from the deploy: a local suite
 renders every message in both languages (`npm run test:mail`), and a weekly
 workflow has the live site send one message of each template to the

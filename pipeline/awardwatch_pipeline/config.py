@@ -115,8 +115,9 @@ SOSA_CA_PEM = PACKAGE_DATA / "sosa_intermediate.pem"
 SOSA_RELEASE = PACKAGE_DATA / "sosa_release.txt"
 
 # The Public Accounts of Canada (sources/public_accounts.py): PSPC's yearly
-# files, Open Government Licence. Slice 1 reads the professional and special
-# services; the works and the contractual obligations come with later slices.
+# files, Open Government Licence. The stage reads the professional and special
+# services and the works (land, buildings and works); the contractual
+# obligations' dataset is named here and read by nothing yet.
 PA_SERVICES_DATASET = "ac597ff8-ee13-48c3-b315-42e528090af2"
 PA_WORKS_DATASET = "8776785b-445c-42bb-bb53-c29a1bff44dd"
 PA_OBLIGATIONS_DATASET = "02986ea0-3ab7-4a13-b391-209e535726d9"

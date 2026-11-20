@@ -15,6 +15,7 @@ import { WATCHLIST_CLIENT_KEYS } from "../src/pages/watchlist";
 import { emptyAssets, testEnv } from "./assets";
 
 const EM_DASH = String.fromCharCode(0x2014);
+const EN_DASH = String.fromCharCode(0x2013);
 const nbsp = (s: string) => s.replace(/[\u00a0\u202f]/g, " ");
 
 // A browser's navigation: the response form's GET answers browsers only (forms.tsx).
@@ -138,11 +139,17 @@ describe("dictionary", () => {
     }
   });
 
-  it("has no em-dash in either language", () => {
+  // Every string of the dictionary, each area's spread in, in both languages, as written and as French typography
+  // sets it: a comma, a colon or "to" where a dash would go.
+  it("has no em dash and no en dash in either language", () => {
+    expect(EM_DASH.charCodeAt(0)).toBe(0x2014);
+    expect(EN_DASH.charCodeAt(0)).toBe(0x2013);
     for (const key of allKeys()) {
       const { en, fr } = rawEntry(key);
-      expect(en, key).not.toContain(EM_DASH);
-      expect(fr, key).not.toContain(EM_DASH);
+      for (const [lang, s] of [["en", en], ["fr", fr], ["fr typeset", t("fr", key)]] as const) {
+        expect(s, `${key} (${lang})`).not.toContain(EM_DASH);
+        expect(s, `${key} (${lang})`).not.toContain(EN_DASH);
+      }
     }
   });
 

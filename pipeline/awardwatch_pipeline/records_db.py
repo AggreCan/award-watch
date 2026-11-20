@@ -87,7 +87,8 @@ records table is about a hundred times larger:
 
 A full reload is made on an empty ledger, when asked (`records-sync --full`)
 and after a count read back disagreed, but not within RELOAD_MIN_DAYS of the
-last one: a full load of the twelve tables writes about 25 million rows. It is
+last one: a full load of the twelve tables TABLES held when this was measured
+wrote about 25 million rows (TABLES holds twenty-three now). It is
 also made, whatever the days, when the tables changed form (LAYOUT differs
 from the one the last full load recorded): D1 creates a table only when it is
 missing, so the new columns reach it only by dropping the old tables.
@@ -221,9 +222,10 @@ TITLE_CHARS = 120
 REF_CHARS = 120
 # The fiscal quarters rec_due covers, the data date's first.
 DUE_QUARTERS = 8
-# A full load of all twelve tables writes about 25 million rows, half of the
-# 50 million a month the paid plan includes, so one forced by a count that
-# disagreed waits this long after the last.
+# A full load of the twelve tables TABLES held when this was measured wrote
+# about 25 million rows (it holds twenty-three now), half of the 50 million a
+# month the paid plan includes, so one forced by a count that disagreed waits
+# this long after the last.
 RELOAD_MIN_DAYS = 28
 
 META_RELOAD = "records_reload_due"      # the date records-check found a count disagreeing

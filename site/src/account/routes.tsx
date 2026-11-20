@@ -133,7 +133,7 @@ import { getCookie } from "hono/cookie";
 import { addDays } from "../../public/closing.js";
 import { fromOwnPage, isOwnAddress } from "../api";
 import { readForm } from "../body";
-import { FEED_EVENTS_MAX, ICS_TYPE, closingStart } from "../calendar";
+import { FEED_EVENTS_MAX, ICS_TYPE } from "../calendar";
 import { type Clock, clockOf, tenderState } from "../closing";
 import { loadBuyer, loadContract, loadOpenList, loadProfile, loadStats, loadTender } from "../data";
 import type { AppEnv } from "../env";
@@ -172,7 +172,7 @@ import { DASHBOARD_PATH, holdsDashboard } from "./dashboard_rule";
 import { type PlanState, RULES, allowed, planFor, savedViewCap, watchCap } from "./entitlements";
 import {
   FEEDS_MAX, FEED_SEARCH_KIND, type FeedKind, type FeedRead, type FeedRow, createFeed, deleteFeeds, feedAddress, feedCalendar, feedName,
-  feedSize, feedWatches, isFeedKind, listFeeds, readFeed, removeFeed, rotateFeed, searchMatches,
+  feedSize, feedWatches, indexMatches, isFeedKind, listFeeds, openIndex, readFeed, removeFeed, rotateFeed,
 } from "./feeds";
 import {
   type CalendarRow, type CalendarView, accountPage, codeView, deleteView, deletedView, keysView, linkView, overviewView, searchesView,
@@ -730,11 +730,14 @@ async function calendarView(
   served: { pool: Pool; searchesPast: ReadonlySet<string> } | null = null,
 ): Promise<CalendarView> {
   const tenders = searches.filter((s) => s.kind === FEED_SEARCH_KIND);
-  const open = tenders.length ? await loadOpenList(c.env).catch(() => null) : null;
+  // A search's count shows only beside its feed: the open list is read, once (feeds.ts openIndex), for the
+  // searches that have one, and each is counted as its feed's file counts it (indexMatches: searchMatches' rows
+  // that make an event). One clock for the page, the "all" feed's count included.
+  const counted = tenders.filter((s) => feeds.some((f) => f.kind === "search" && f.search_id === s.id));
+  const open = counted.length ? await loadOpenList(c.env).catch(() => null) : null;
   const clock = clockOf(c.env);
-  const matches = new Map(tenders.map((s) => [
-    s.id, open ? searchMatches(open, s.params, clock).filter((r) => closingStart(r.closing)).length : null,
-  ]));
+  const index = open ? openIndex(open, clock) : null;
+  const matches = new Map(counted.map((s) => [s.id, index ? indexMatches(index, s.params).length : null]));
   const base = siteBase(c);
   const feedLine = served ? poolLine(served.pool, who, "feeds", FEEDS_MAX) : null;
   const feedsPast = feedLine ? pastAllowance(feeds, feedLine.allowance) : null;
@@ -753,9 +756,10 @@ async function calendarView(
     const watchesCap = served ? poolLine(served.pool, who, "watches", watchCap(who.plan)).allowance : undefined;
     const watches = allFeed ? await feedWatches(c.env, who.userId, who.plan, watchesCap).catch(() => null) : null;
     const listed = served ? tenders.filter((s) => !served.searchesPast.has(s.id)) : tenders;
+    // Read at the page's one clock, with the open list's index when the searches' counts made one.
     const n = watches ? await feedSize(c.env, {
       kind: "all", searches: listed.map(({ id, params, label, lang: l }) => ({ id, params, label, lang: l })), watches,
-    }, await eventContext(c, lang)) : null;
+    }, { ...(await eventContext(c, lang)), clock }, index) : null;
     rows.push({ kind: "all", searchId: null, label: t(lang, "calfeed.kind_all"), href: null, feed: cell(allFeed, n) });
   }
   return { rows, live: feeds.length, ...(feedLine ? { pool: { line: feedLine, past: feedsPast!.size } } : {}) };

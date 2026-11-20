@@ -39,7 +39,7 @@ export function onEnv(extra: Record<string, unknown> = {}) {
   return { ...testEnv(), ACCOUNTS_ENABLED: "true", MAIL_SENDER: "log", MAIL: undefined, ...extra };
 }
 
-// The switch as wrangler.jsonc ships it ("false").
+// The switch off, as the test pool sets it (vitest.config.ts, "false"; wrangler.jsonc ships "true").
 export const offEnv = () => testEnv();
 
 let address = 0;

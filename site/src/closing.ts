@@ -94,6 +94,13 @@ function stateFast(value: string, now: number, d: Days): "closed" | "closing" | 
   return day !== null && day <= d.limit ? "closing" : "open";
 }
 
+// public/closing.js closingInstant, each value's worked out once per isolate
+// as the states' are: a calendar event's start (calendar.ts closingStart),
+// which a feed's count reads for every open notice on each request.
+export function closingAt(value: string | null | undefined): number | null {
+  return value ? instantOf(value) : null;
+}
+
 // For the tests: start from nothing, as a new isolate does.
 export function clearClosingCache(): void {
   known.clear();

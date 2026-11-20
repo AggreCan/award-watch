@@ -47,6 +47,7 @@ import { buildFit, buildKey, buildPlot } from "./dashboard_fit";
 import { OPTS_MAX } from "./dashboard_rule";
 import { addView, cleanName, subjectName } from "./saved_views";
 import type { Account } from "./session";
+import { survivorOf } from "./watches";
 
 // The two kinds of tile, in the order the dashboard lists its kinds (dashboard.tsx PANEL_KINDS).
 export const BUILD_KINDS = ["build", "number"] as const;
@@ -93,10 +94,23 @@ export function buildSizeKey(kind: BuildKind, ref: string): string {
 // What the dashboard draws of a body once read (dashboard.tsx Body).
 type Drawn = { body: unknown; item?: string; meta?: unknown; shown?: number; total?: number; cls?: string };
 // A tile resolved: its head, its Open, its reads (dashboard.tsx Job), or none and the line that says why (note).
-export type BuildTile = {
-  title: string; item: string | null; href: string; note?: Key;
-  job: { queries: Query[]; draw: (rows: Row[][] | null) => Drawn | null } | null;
+// moved: as dashboard.tsx Job.moved, for a view of organizations whose names the rows do not hold.
+type BuildJob = {
+  queries: Query[]; draw: (rows: Row[][] | null) => Drawn | null;
+  moved?: (rows: Row[][]) => Promise<{ job: BuildJob; href: string } | null> | null;
 };
+export type BuildTile = { title: string; item: string | null; href: string; note?: Key; job: BuildJob | null };
+
+// Each id once, in the order given (a merge can make two of a set's ids one).
+const once = (ids: readonly string[]): string[] => ids.filter((id, i) => ids.indexOf(id) === i);
+
+// The ids of buyers a page's builder tiles name that the buyers' list does not hold, by the id each was merged into
+// (the alias file, read only when there is such a buyer): what buildTile reads such a tile at. Empty when none moved.
+export async function movedBuyers(env: Env, refs: readonly string[], current: number, listed: ReadonlySet<string>): Promise<ReadonlyMap<string, string>> {
+  const missing = once(refs.flatMap((ref) => readBuildAddress(ref, current, { max: OPTS_MAX })?.buyers ?? []).filter((id) => !listed.has(id)));
+  const next = await Promise.all(missing.map((id) => survivorOf(env, "buyer", id)));
+  return new Map(missing.flatMap((id, i): [string, string][] => (next[i] ? [[id, next[i]!]] : [])));
+}
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const KIND_KEY: Readonly<Record<BuildKind, Key>> = { build: "dash.kind_build", number: "dash.kind_number" };
@@ -105,16 +119,21 @@ const KIND_KEY: Readonly<Record<BuildKind, Key>> = { build: "dash.kind_build", n
 // reader's now (buildsOn); off, it reads nothing and says it cannot be read now. today: the data date, which the
 // period and the contracts ending count from; asOf: the records' own date once the page's batch is read. buyers:
 // the buyers' list (dashboard.tsx contextOf reads it once a page that holds such a tile), for the names and the check.
+// A buyer or an organization the nightly merged into another is read at the id that took over, the stored ref left as
+// saved: a buyer the list no longer holds by moves (movedBuyers, read before the page's batch), an organization whose
+// name the rows do not hold through the job's moved (env: the alias files, read only then). Open leads to the view at
+// the ids read.
 export function buildTile(o: {
   lang: Lang; kind: BuildKind; ref: string; w: number; h: number; on: boolean; today: string; asOf: () => string | null | undefined;
-  buyers: readonly BuyerSummary[] | null;
+  buyers: readonly BuyerSummary[] | null; moves?: ReadonlyMap<string, string> | null; env?: Env;
 }): BuildTile {
   const { lang, kind } = o;
   const plain = t(lang, KIND_KEY[kind]);
   if (!o.on) return { title: plain, item: null, href: "", job: null, note: "dash.unavailable" };
   const current = fiscalYearOf(o.today);
-  const view = readBuildAddress(o.ref, current, { max: OPTS_MAX });
-  if (!view) return { title: plain, item: null, href: BUILD_PATH, job: null };
+  const read = readBuildAddress(o.ref, current, { max: OPTS_MAX });
+  if (!read) return { title: plain, item: null, href: BUILD_PATH, job: null };
+  const view = o.moves?.size && read.buyers.some((b) => o.moves!.has(b)) ? { ...read, buyers: once(read.buyers.map((b) => o.moves!.get(b) ?? b)) } : read;
   const href = buildAddress(view);
   // A figure is headed by the view's figure alone ("Median value"), the period's one.
   const title = viewTitle(lang, kind === "number" ? { ...view, rows: "none" } : view);
@@ -151,8 +170,31 @@ export function buildTile(o: {
         );
         return { item, meta, body: drawn.body, shown: drawn.shown, total: drawn.total, cls: "dash-rest dash-stack-540" };
       },
+      ...(o.env && usesOrgs(view.subject) ? { moved: (rows: Row[][]) => movedOrgs(o, view, plan, rows) } : {}),
     },
   };
+}
+
+// A view of organizations at the ids the alias files say took over from those whose names its rows do not hold; null,
+// reading nothing more, when each is named, and when no alias names one.
+function movedOrgs(
+  o: Parameters<typeof buildTile>[0], view: BuildChoice, plan: ReturnType<typeof buildPlan>, rows: Row[][],
+): Promise<{ job: BuildJob; href: string } | null> | null {
+  let named: (id: string) => string;
+  try {
+    named = labelNames(o.lang, [], plan.read(plan.cubes ? rows.slice(1) : rows)).org;
+  } catch {
+    return null;
+  }
+  const missing = view.orgs.filter((id) => named(id) === id);
+  if (!missing.length || !o.env) return null;
+  const env = o.env;
+  return Promise.all(missing.map((id) => survivorOf(env, "organization", id))).then((next) => {
+    const moves = new Map(missing.flatMap((id, i): [string, string][] => (next[i] ? [[id, next[i]!]] : [])));
+    if (!moves.size) return null;
+    const tile = buildTile({ ...o, ref: buildAddress({ ...view, orgs: once(view.orgs.map((id) => moves.get(id) ?? id)) }), env: undefined });
+    return tile.job ? { job: tile.job, href: tile.href } : null;
+  });
 }
 
 // -- a saved view of the builder --------------------------------------------------------------------

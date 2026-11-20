@@ -95,7 +95,7 @@ import { KEYS_MAX, type KeyRow, listKeys } from "./api_keys";
 import { keyUsage, nowOf } from "./api_usage";
 import { briefingLabel } from "./briefing_pages";
 import { type Briefing, briefingPath, listBriefings, readBriefing, sharedCap, weekAnchor } from "./briefings";
-import { buildContext, buildRef, buildSizeKey, buildTile, buildsOn, isBuildKind } from "./build_views";
+import { buildContext, buildRef, buildSizeKey, buildTile, buildsOn, isBuildKind, movedBuyers } from "./build_views";
 import { BOARD_NAME_MAX, anchorOf, boardLabels } from "./dashboard_add";
 import { ANALYTIC_BODIES, ROWS_MAX, analyticFit, analyticKey, analyticPlot, tileFit } from "./dashboard_fit";
 import { DASHBOARD_PATH, FIND_PATH, OPTS_MAX, STARTER_PATH, boardCap, boardPath, holdsDashboard, missingTiles, tileCap } from "./dashboard_rule";
@@ -120,7 +120,7 @@ import { newId } from "./secrets";
 import { type Account, csrfValid } from "./session";
 import { type EventKind, type EventRow, type EventsRead, eventIdentity, foundKey, listed, readEvents } from "./watch_events";
 import { watchLabel } from "./watch_mail";
-import { type Watch, listWatches, withinCap } from "./watches";
+import { type Watch, listWatches, survivorOf, withinCap } from "./watches";
 
 // -- the kinds and the rules ------------------------------------------------------------
 
@@ -766,11 +766,22 @@ export function specOf(
 // differ), the muted line its foot carries (a source and a period), and the
 // classes its body takes (an analytics table's: where its secondary columns
 // rest and where it stacks, public/styles.css).
-type Body = { count?: unknown; body: unknown; item?: string; shown?: number; total?: number; meta?: unknown; cls?: string };
+// href: where Open leads, for a tile drawn at the id its subject was merged into (moved, below).
+type Body = { count?: unknown; body: unknown; item?: string; shown?: number; total?: number; meta?: unknown; cls?: string; href?: string };
 // A tile's reads: its statements for the page's records batch, any other
 // read (a static file, the watches' or a briefing's own batch), and how the
 // rows become its body; null from draw says the tile cannot be read now.
-type Job = { queries: Query[]; extra?: () => Promise<unknown>; draw: (rows: Row[][] | null, extra: unknown) => Body | null };
+// moved: a tile that names a buyer or an organization, asked once the page's
+// batch is read; when its rows do not hold that subject (an id the nightly may
+// have merged into another), it reads the alias files (watches.ts survivorOf)
+// and answers its job at the id that took over, with the address its Open then
+// leads to; null, reading nothing, when the subject is there, and when no alias
+// names the id (the tile draws as it did). The stored ref is never rewritten.
+type Job = {
+  queries: Query[]; extra?: () => Promise<unknown>; draw: (rows: Row[][] | null, extra: unknown) => Body | null;
+  moved?: (rows: Row[][]) => Promise<Moved | null> | null;
+};
+type Moved = { job: Job; href: string };
 // A tile resolved against what the account holds: its head, its "Open",
 // and its reads; job null when what it showed was removed, or, with note,
 // for the reason note gives (a builder's tile while the builder is off).
@@ -779,7 +790,9 @@ type Resolved = { shown: Shown; title: string; item: string | null; href: string
 // asOf: the records' own date, once the page's records batch is read (an
 // analytics table's contracts ending count from it, as the view's do).
 // builder: the analytics builder is the reader's (build_views.tsx buildsOn);
-// buyers: the buyers' list, read only for a page holding a builder's tile.
+// buyers: the buyers' list, read only for a page holding a builder's tile;
+// buyerMoves: the buyers those tiles name that the list does not hold, by the
+// id each was merged into (build_views.tsx movedBuyers), read only then.
 // pool: for an account in a group only (tilePool).
 type Ctx = {
   lang: Lang; env: Env; who: Account; h: Holdings; today: string; clock: Clock; frame: ClaimFrame;
@@ -788,6 +801,7 @@ type Ctx = {
   asOf?: string | null;
   builder: boolean;
   buyers: BuyerSummary[] | null;
+  buyerMoves?: ReadonlyMap<string, string> | null;
   pool?: TilePool;
 };
 
@@ -1008,8 +1022,12 @@ function watchesJob(ctx: Ctx, n: number, watches: readonly Watch[]): Job {
 // code at the tile's size (dashboard_fit.ts analyticFit): the rows its height
 // holds, its charts to its width and height. The source and period go in the
 // foot (the contracts ending, which follow neither, their date), the classes
-// on its body say where its table rests and stacks.
-function analyticJob(ctx: Ctx, s: Shown, v: ViewRef, table: string, share: { segment: number; rivals: string[] } | null): Job | null {
+// on its body say where its table rests and stacks. A buyer's or an
+// organization's view whose name the records do not hold is moved to the id
+// the alias files say took over (Job.moved); hrefAt gives the moved tile's Open.
+function analyticJob(
+  ctx: Ctx, s: Shown, v: ViewRef, table: string, share: { segment: number; rivals: string[] } | null, hrefAt?: (at: ViewRef) => string,
+): Job | null {
   const { lang } = ctx;
   const span = viewSpan(v, ctx.today);
   if (!span) return null;
@@ -1044,6 +1062,17 @@ function analyticJob(ctx: Ctx, s: Shown, v: ViewRef, table: string, share: { seg
       }, { rows: fit.rows, plot: fit.plot, width: fit.width, grow: (shown) => analyticPlot(name, fit, shown) });
       return { item, meta, body: drawn.body, shown: drawn.shown, total: drawn.total, cls };
     },
+    ...(hrefAt && v.view !== "segment" ? {
+      moved: (rows: Row[][]) => {
+        if (rows[names.length]?.[0]) return null;
+        const kind = v.view === "buyer" ? "buyer" : "organization";
+        return survivorOf(ctx.env, kind, v.id).then((next) => {
+          const at: ViewRef | null = next ? { ...v, id: next } : null;
+          const job = at ? analyticJob(ctx, s, at, table, share) : null;
+          return at && job ? { job, href: hrefAt(at) } : null;
+        });
+      },
+    } : {}),
   };
 }
 
@@ -1355,9 +1384,13 @@ function resolve(ctx: Ctx, s: Shown): Resolved {
   const pastTile = (item: string | null, href: string, head = title): Resolved => ({ shown: s, title: head, item, href, job: null, note: "pool.mark" });
   const search = (ok: (kind: string) => boolean) => h.searches.find((x) => x.id === s.ref && ok(x.kind));
   const n = s.kind === "view" || s.kind === "analytic" || s.kind === "text" || isBuildKind(s.kind) ? 0 : tileFit(s.kind, s.ref, s.w, s.h).rows;
-  // An analytics table at a view's address: headed by the table's own title, opening its view at the table.
-  const analytic = (v: ViewRef, table: string, share: { segment: number; rivals: string[] } | null, item: string | null, href: string, back: string): Resolved => {
-    const job = analyticJob(ctx, s, v, table, share);
+  // An analytics table at a view's address: headed by the table's own title, opening its view at the table (hrefAt:
+  // where it opens once moved to the id a merged buyer or organization took).
+  const analytic = (
+    v: ViewRef, table: string, share: { segment: number; rivals: string[] } | null, item: string | null, href: string, back: string,
+    hrefAt: (at: ViewRef) => string,
+  ): Resolved => {
+    const job = analyticJob(ctx, s, v, table, share, hrefAt);
     const head = t(lang, TABLE_TITLES[v.view][table]);
     return job ? { shown: s, title: head, item, href, job } : { shown: s, title: head, item: null, href: back, job: null };
   };
@@ -1398,24 +1431,38 @@ function resolve(ctx: Ctx, s: Shown): Resolved {
         const v = saved ? viewRef(saved.address) : null;
         if (!saved || !v) return gone("/account/views");
         if (past(saved.id)) return pastTile(saved.name, saved.address, t(lang, TABLE_TITLES[v.view][firstTable(v)]));
-        const r = analytic(v, firstTable(v), null, saved.name, `${saved.address}#${anchorOf(firstTable(v))}`, "/account/views");
-        // The reader's name for the view heads the tile, in place of the buyer's or organization's the read gives.
-        const read = r.job;
-        return read ? { ...r, job: { ...read, draw: (rows, extra) => { const b = read.draw(rows, extra); return b ? { ...b, item: undefined } : null; } } } : r;
+        const atView = (at: ViewRef) => `${viewAddress(at)}#${anchorOf(firstTable(at))}`;
+        const r = analytic(v, firstTable(v), null, saved.name, `${saved.address}#${anchorOf(firstTable(v))}`, "/account/views", atView);
+        // The reader's name for the view heads the tile, in place of the buyer's or organization's the read gives
+        // (at the id a merged subject took too).
+        const unnamed = (job: Job): Job => ({
+          ...job,
+          draw: (rows, extra) => {
+            const b = job.draw(rows, extra);
+            return b ? { ...b, item: undefined } : null;
+          },
+          ...(job.moved ? { moved: (rows: Row[][]) => job.moved!(rows)?.then((m) => (m ? { ...m, job: unnamed(m.job) } : null)) ?? null } : {}),
+        });
+        return r.job ? { ...r, job: unnamed(r.job) } : r;
       }
       const v = viewRef(s.ref);
-      return v ? analytic(v, firstTable(v), null, null, `${viewAddress(v)}#${anchorOf(firstTable(v))}`, "/analytics") : gone("/analytics");
+      const atView = (at: ViewRef) => `${viewAddress(at)}#${anchorOf(firstTable(at))}`;
+      return v ? analytic(v, firstTable(v), null, null, atView(v), "/analytics", atView) : gone("/analytics");
     }
     case "analytic": {
       const a = analyticRef(s.ref);
-      return a ? analytic(a.v, a.table, a.segment === null ? null : { segment: a.segment, rivals: a.rivals }, null, analyticAddress(a), "/analytics")
+      return a ? analytic(a.v, a.table, a.segment === null ? null : { segment: a.segment, rivals: a.rivals }, null, analyticAddress(a), "/analytics",
+        (at) => analyticAddress({ ...a, v: at }))
         : gone("/analytics");
     }
     case "build":
     case "number": {
       // A view of the analytics builder, or its latest figure (build_views.tsx), read in the page's one records batch.
       // Its ref is the view's address, not a saved view's id: no counted item, so a group's allowance never touches it.
-      const b = buildTile({ lang, kind: s.kind, ref: s.ref, w: s.w, h: s.h, on: ctx.builder, today: ctx.today, asOf: () => ctx.asOf, buyers: ctx.buyers });
+      const b = buildTile({
+        lang, kind: s.kind, ref: s.ref, w: s.w, h: s.h, on: ctx.builder, today: ctx.today, asOf: () => ctx.asOf, buyers: ctx.buyers, moves: ctx.buyerMoves,
+        env: ctx.env,
+      });
       return { shown: s, title: b.title, item: b.item, href: b.href, job: b.job, ...(b.note ? { note: b.note } : {}) };
     }
     case "text":
@@ -1464,10 +1511,34 @@ async function readAll(ctx: Ctx, list: readonly Resolved[]): Promise<Map<Resolve
       rows.set(r, one?.state === "ready" ? one.rows : null);
     });
   }
+  // A tile whose rows do not hold the buyer or organization it names asks the alias files, and only then (Job.moved);
+  // the tiles moved to the ids that took over read their statements in one batch more. That read failing, they draw
+  // as they would have.
+  const moves = new Map<Resolved, Moved>();
+  await Promise.all(jobs.map(async (r) => {
+    const got = rows.get(r);
+    const asked = got && r.job!.moved ? r.job!.moved(got) : null;
+    const m = asked ? await asked.catch(() => null) : null;
+    if (m) moves.set(r, m);
+  }));
+  if (moves.size) {
+    const moved = [...moves];
+    const queries = moved.flatMap(([, m]) => m.job.queries);
+    const again = queries.length ? await readRecords(ctx.env, queries) : null;
+    if (!again || again.state === "ready") {
+      let at = 0;
+      for (const [r, m] of moved) {
+        rows.set(r, again?.state === "ready" ? again.rows.slice(at, at + m.job.queries.length) : []);
+        at += m.job.queries.length;
+      }
+    } else moves.clear();
+  }
   const out = new Map<Resolved, Body | null>();
   jobs.forEach((r, i) => {
+    const m = moves.get(r);
     try {
-      out.set(r, r.job!.draw(rows.get(r) ?? null, extra[i]));
+      const b = (m?.job ?? r.job!).draw(rows.get(r) ?? null, extra[i]);
+      out.set(r, b && m ? { ...b, href: m.href } : b);
     } catch {
       out.set(r, null);
     }
@@ -1485,10 +1556,13 @@ async function contextOf(c: Context<AppEnv>, who: Account, h: Holdings, list: re
   // The buyers' list for a builder's tile (its names, and the buyers it names checked against it), only then.
   const builder = buildsOn(c.env, who.plan);
   const buyers = builder && list.some((s) => isBuildKind(s.kind)) ? (await loadBuyers(c.env).catch(() => null))?.buyers ?? null : null;
+  const buyerMoves = buyers
+    ? await movedBuyers(c.env, list.filter((s) => isBuildKind(s.kind)).map((s) => s.ref), fiscalYearOf(today), new Set(buyers.map((b) => b.id))).catch(() => null)
+    : null;
   return {
     lang: c.get("lang"), env: c.env, who, h, today, clock: clockOf(c.env), frame: claimFrame(today), org,
     open: () => (openList ??= loadOpenList(c.env).catch(() => null)),
-    builder, buyers, ...(pool ? { pool } : {}),
+    builder, buyers, ...(buyerMoves?.size ? { buyerMoves } : {}), ...(pool ? { pool } : {}),
   };
 }
 
@@ -1699,7 +1773,7 @@ const AddTile: FC<{
     <details class="dash-adder" id={ADD_ANCHOR} open={open || undefined}>
       <summary class="btn btn-primary">{t(lang, "dash.add_tile")}</summary>
       <div class="dash-adder-body">
-        <p class="muted small">{t(lang, "dash.count", { n: fmtInt(n, lang), cap: fmtInt(cap, lang) })}</p>
+        <p class="muted small">{tn(lang, "dash.count_one", "dash.count", n, { n: fmtInt(n, lang), cap: fmtInt(cap, lang) })}</p>
         {keeping === "none" ? <p class="muted">{t(lang, "dash.unsaved")}</p>
           : n >= cap ? <p>{t(lang, "dash.full", { cap: fmtInt(cap, lang) })}</p>
           : <>
@@ -1886,7 +1960,7 @@ export const DashTile: FC<{ lang: Lang; account: Account; d: Drawn; offer: Recor
         <button type="button" class="dash-grip" aria-label={t(lang, "dash.grip", { title: label })} aria-describedby="dash-keys-move">{GRIP}</button>
         <h2 id={head} class="dash-title" title={label}>{r.title}{item ? <span class="dash-item">{item}</span> : null}</h2>
         <TileMenu lang={lang} account={account} id={s.id} label={label} offer={offer} moves={moves}
-          lead={r.job ? <a href={r.href} class="dash-menu-item">{t(lang, "dash.open")}</a> : null} />
+          lead={r.job ? <a href={body?.href ?? r.href} class="dash-menu-item">{t(lang, "dash.open")}</a> : null} />
       </div>
       <div class={body?.cls ? `dash-body ${body.cls}` : "dash-body"}>
         {!r.job ? <p>{t(lang, r.note ?? "dash.gone")}</p>
@@ -1896,7 +1970,7 @@ export const DashTile: FC<{ lang: Lang; account: Account; d: Drawn; offer: Recor
       <div class="dash-foot">
         <span class="dash-meta" title={typeof body?.meta === "string" ? body.meta : undefined}>{(body?.meta ?? null) as any}</span>
         {count !== null && count !== undefined ? <span class="dash-count">{count as any}</span> : null}
-        {r.job ? <a href={r.href}>{t(lang, "dash.open")}</a> : null}
+        {r.job ? <a href={body?.href ?? r.href}>{t(lang, "dash.open")}</a> : null}
       </div>
       <button type="button" class="dash-corner" aria-label={t(lang, "dash.corner", { title: label })} aria-describedby="dash-keys-size"></button>
     </section>
@@ -2512,7 +2586,10 @@ export const LAYOUT_CHARS_MAX = 8000;
 // (dash-grid.js normalize) before it is kept, and the answer is the layout as
 // kept, with the ids the first change gave a starter's tiles. While the
 // grid's tables are absent nothing is kept, and the answer says so; a
-// dashboard the account no longer holds is refused.
+// dashboard the account no longer holds (deleted in another tab) answers 404,
+// state gone, with the line the script shows in place of Try again and the
+// link to the account's dashboards, in the reader's language: the page's own
+// data block stays as it was.
 export async function layoutPost(c: Context<AppEnv>, who: Account, fields: Record<string, string>): Promise<Response> {
   if (!holdsDashboard(who.plan)) return c.json({ state: "refused" }, 403);
   const want = boardField(c.req.query("board") ?? fields.board);
@@ -2527,7 +2604,10 @@ export async function layoutPost(c: Context<AppEnv>, who: Account, fields: Recor
   const h = await readHoldings(c.env, who.userId, { board: want });
   const { list, keeping } = shownTiles(h);
   if (keeping === "none" || keeping === "panels") return c.json({ state: "unsaved" });
-  if (!h.board!.found) return c.json({ state: "refused" }, 404);
+  if (!h.board!.found) {
+    const lang = c.get("lang");
+    return c.json({ state: "gone", line: t(lang, "dash.status_gone"), link: t(lang, "dash.status_gone_link"), href: inLang(c, DASHBOARD_PATH) }, 404);
+  }
   const asked = new Map<string, Record<string, unknown>>();
   for (const p of posted) {
     if (p && typeof p === "object" && typeof (p as { id?: unknown }).id === "string") asked.set((p as { id: string }).id, p as Record<string, unknown>);

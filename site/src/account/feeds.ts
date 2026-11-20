@@ -49,14 +49,14 @@
 import { addDays } from "../../public/closing.js";
 import { closingPassed, type Clock } from "../closing";
 import {
-  type CalEvent, FEED_EVENTS_MAX, type MoreKind, UID_HOST, capped, cappedLength, contractEvent, detailFacts, expiringFacts, instrumentEvent,
-  instrumentFacts, noticeEvent, publishedFacts, writeCalendar,
+  type CalEvent, FEED_EVENTS_MAX, type MoreKind, UID_HOST, capped, cappedLength, contractEvent, detailFacts, expiringFacts, hasNoticeEvent,
+  instrumentEvent, instrumentFacts, noticeEvent, noticeUid, publishedFacts, writeCalendar,
 } from "../calendar";
 import { BUYER_ID_RE, loadContract, loadOpenList, type TenderRow } from "../data";
 import type { Env } from "../env";
 import { t, type Lang } from "../i18n";
 import { WINDOW_DAYS, radarRow } from "../pages/expiring";
-import { filterTenders, readTenderQuery } from "../pages/tenders";
+import { filterTenders, readTenderQuery, tenderTest, tenderText } from "../pages/tenders";
 import { type Query, type Row, num, orgNumber, readRecords } from "../records_db";
 import { PUBLISHED_CONTRACT_SQL } from "../records_tables";
 import { isBlocked } from "./admin_ops";
@@ -363,6 +363,36 @@ export function searchMatches(rows: readonly TenderRow[], params: string, clock:
   return filterTenders(rows, q, clock).filter((r) => r.closing && !closingPassed(r.closing, clock));
 }
 
+// The open notices as many saved searches read them at once (the searches
+// page's feeds panel, a feed's count): the notices that make a feed's event
+// (a closing still to come that a calendar can place: searchMatches' test,
+// then noticeEvent's), found once, and each one's folded text kept the first
+// time a search's words ask for it, so a notice is folded once however many
+// searches read it. A search then runs filterTenders' own test over them.
+// Kept for one request: the clock is the request's.
+export type OpenIndex = { listed: readonly TenderRow[]; text: (r: TenderRow) => string; clock: Clock };
+export function openIndex(rows: readonly TenderRow[], clock: Clock): OpenIndex {
+  const texts = new Map<TenderRow, string>();
+  return {
+    listed: rows.filter((r) => !closingPassed(r.closing, clock) && hasNoticeEvent(r.closing)),
+    text: (r) => {
+      let s = texts.get(r);
+      if (s === undefined) texts.set(r, (s = tenderText(r)));
+      return s;
+    },
+    clock,
+  };
+}
+
+// The notices a saved tender search makes events of, in the list's order:
+// searchMatches' rows that noticeEvent writes. Their count is the feed's.
+// among: the listed notices to test, all of them unless a caller taking the
+// union of several searches leaves out those an earlier one matched.
+export function indexMatches(index: OpenIndex, params: string, among: readonly TenderRow[] = index.listed): TenderRow[] {
+  if (!among.length) return [];
+  return among.filter(tenderTest(readTenderQuery(new URL(params, READ_BASE)), index.clock, index.text));
+}
+
 export class FeedFault extends Error {}
 
 export type FeedContext = { lang: Lang; base: string; clock: Clock; dataDate: string; alarm: boolean; name: string };
@@ -610,6 +640,25 @@ export async function feedEvents(env: Env, feed: Pick<FeedState, "kind" | "searc
   const add = (e: CalEvent | null) => {
     if (e && !events.has(e.uid)) events.set(e.uid, e);
   };
+  const beyond = await walkFeed(env, feed, ctx, {
+    matches: (open, params) => searchMatches(open, params, ctx.clock),
+    notice: (r) => add(noticeEvent(ctx.lang, r, ctx.base)),
+    event: add,
+  });
+  return { events: [...events.values()], beyond };
+}
+
+// What a feed reads, each part handed on in the order its file adds it: the
+// open notices each saved search matches (matches), the watches' contract
+// ends (event), then the followed open notices (notice). feedEvents makes
+// the events of them and feedSize counts them, so the two read the same
+// parts. Answers how many of the watches' ends were past the ones read.
+type FeedWalk = {
+  matches: (open: readonly TenderRow[], params: string) => Iterable<TenderRow>;
+  notice: (r: TenderRow) => void;
+  event: (e: CalEvent) => void;
+};
+async function walkFeed(env: Env, feed: Pick<FeedState, "kind" | "searches" | "watches">, ctx: EventContext, walk: FeedWalk): Promise<number> {
   const watches = feed.kind === "search" ? [] : feed.watches;
   const notices = new Set(watches.filter((w) => w.kind === "tender").map((w) => w.target.slice(w.target.indexOf(":") + 1)));
   let open: TenderRow[] = [];
@@ -618,24 +667,56 @@ export async function feedEvents(env: Env, feed: Pick<FeedState, "kind" | "searc
     if (!list) throw new FeedFault("tenders/open.json could not be read");
     open = list;
   }
-  for (const s of feed.searches) for (const r of searchMatches(open, s.params, ctx.clock)) add(noticeEvent(ctx.lang, r, ctx.base));
+  for (const s of feed.searches) for (const r of walk.matches(open, s.params)) walk.notice(r);
   const ends = watches.length ? await watchEnds(env, watches, ctx) : { events: [], beyond: 0 };
-  for (const e of ends.events) add(e);
+  for (const e of ends.events) walk.event(e);
   // A followed notice leaves the open list when it closes or is cancelled,
   // and its event leaves the feed, as a search's does.
   for (const r of open) {
-    if (notices.has(r.reference.toLowerCase()) && r.closing && !closingPassed(r.closing, ctx.clock)) add(noticeEvent(ctx.lang, r, ctx.base));
+    if (notices.has(r.reference.toLowerCase()) && r.closing && !closingPassed(r.closing, ctx.clock)) walk.notice(r);
   }
-  return { events: [...events.values()], beyond: ends.beyond };
+  return ends.beyond;
 }
 
 // How many events a feed holds now, as its file counts them (the cap's last
 // event among them), for the pages' rows; null when what it reads does not
-// answer.
-export async function feedSize(env: Env, feed: Pick<FeedState, "kind" | "searches" | "watches">, ctx: EventContext): Promise<number | null> {
+// answer. The events are not made: each is counted by its uid, which is what
+// keeps one event of each in the file (feedEvents' add), a notice's by
+// noticeUid when noticeEvent would write it. The searches read the open list
+// through one OpenIndex (the page's own when it has one, read from the same
+// file at the same clock), so a notice is folded once however many searches
+// the feed holds, and a notice one search matched is not tested by the next
+// (the same row gives the same event, which add keeps once: rest holds the
+// listed notices no search has matched yet); the order they come in, which
+// the file sorts away, does not change a count of uids.
+export async function feedSize(
+  env: Env, feed: Pick<FeedState, "kind" | "searches" | "watches">, ctx: EventContext, given: OpenIndex | null = null,
+): Promise<number | null> {
   try {
-    const { events, beyond } = await feedEvents(env, feed, ctx);
-    return cappedLength(events.length, beyond);
+    const uids = new Set<string>();
+    const seen = new Set<TenderRow>();
+    let index = given && given.clock.now === ctx.clock.now ? given : null;
+    let rest: readonly TenderRow[] | null = null;
+    const union = (open: readonly TenderRow[], params: string): TenderRow[] => {
+      const read = (index ??= openIndex(open, ctx.clock));
+      const among = rest ?? read.listed;
+      const found = indexMatches(read, params, among);
+      if (found.length) {
+        const hit = new Set(found);
+        rest = among.filter((r) => !hit.has(r));
+      } else rest = among;
+      return found;
+    };
+    const beyond = await walkFeed(env, feed, ctx, {
+      matches: union,
+      notice: (r) => {
+        if (seen.has(r)) return;
+        seen.add(r);
+        if (hasNoticeEvent(r.closing)) uids.add(noticeUid(r.reference));
+      },
+      event: (e) => uids.add(e.uid),
+    });
+    return cappedLength(uids.size, beyond);
   } catch {
     return null;
   }

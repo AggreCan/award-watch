@@ -1578,6 +1578,11 @@ tr[data-phone-cut] { display: none !important; }
   dl.stack { display: block; }
   dl.stack dt { padding-bottom: 0; }
   dl.stack dd { border-top: 0; padding-top: 2px; }
+  /* A label that is an address (.mono: the keyed API's endpoints on the keys page) is wider than the label column
+     and left its words a letter wide at 320 px: each address takes a row of its own above its words, as dl.stack. */
+  dt.mono, dt.mono + dd { grid-column: 1 / -1; }
+  dt.mono { padding-bottom: 0; }
+  dt.mono + dd { border-top: 0; padding-top: 2px; }
   .chart-row { grid-template-columns: 3.6rem minmax(0, 1fr); column-gap: 6px; }
   .keys { display: none; }
   html.js .table-wrap[data-phone-page]:not(.paged) tbody > tr:nth-child(n+51) { display: none; }

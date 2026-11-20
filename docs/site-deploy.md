@@ -7,9 +7,12 @@ the data the site already serves, and it is built so that it cannot write,
 delete or change that data. The data here means the R2 bucket
 `awardwatch-data` (backups, the static bundle `static.tar.gz.parts` and its
 parts, `downloads/`, `review/`, `views/`, `status.json`), the D1 databases
-`award-watch` (the forms) and `awardwatch-search` (the hosted search
-database, which only the nightly sync writes; `docs/hosted-search.md`), and
-the data files the Worker serves as assets (`site/public/data`).
+`award-watch` (the forms), `awardwatch-search` (the hosted search
+database, which only the nightly sync writes; `docs/hosted-search.md`),
+`awardwatch-records` (the records database, which only the nightly sync
+writes; `docs/analytics.md`) and `awardwatch-accounts` (what an account
+keeps, written by the Worker; `docs/accounts.md`), and the data files the
+Worker serves as assets (`site/public/data`).
 
 ## What it is for
 
@@ -204,7 +207,7 @@ to roll back.
    |---|---|---|---|
    | Account | Workers Scripts | Edit | the deploy, the version reads and the rollback |
    | Account | Workers R2 Storage | Read | reading the static bundle's manifest and parts; the Worker's R2 binding |
-   | Account | D1 | Read | the Worker's two D1 bindings |
+   | Account | D1 | Read | the Worker's four D1 bindings (`DB`, `SEARCH`, `ACCOUNTS`, `RECORDS`) |
    | Account | Account Settings | Read | Wrangler's account lookups |
    | User | User Details | Read | Wrangler's user lookups |
    | Zone | Workers Routes | Edit | the two custom domains in `site/wrangler.jsonc`, sent with every deploy |

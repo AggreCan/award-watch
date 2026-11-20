@@ -20,7 +20,8 @@
 // arrangement's expiry is an all-day event too, one per instrument and
 // holder organization, for the watches' feed alone.
 
-import { addDays, closingInstant, closingParts } from "../public/closing.js";
+import { addDays, closingParts } from "../public/closing.js";
+import { closingAt } from "./closing";
 import { DAY_RE, publishedReference, type ContractDetail, type ExpiringKind, type ExpiringRow, type TenderRow } from "./data";
 import type { Env } from "./env";
 import { fmtInt, pick, segmentShort, sourceLabel, t, tn, type Key, type Lang } from "./i18n";
@@ -205,7 +206,7 @@ export type NoticeFacts = Pick<
 // When a closing happens: its instant, or its day when it was published with
 // no time; null for a value that is not a date.
 export function closingStart(closing: string | null | undefined): CalStart | null {
-  const at = closingInstant(closing);
+  const at = closingAt(closing);
   if (at !== null) return { at };
   const day = closingParts(closing)?.day;
   return day && DAY_RE.test(day) ? { day } : null;
@@ -222,6 +223,12 @@ function closingAsPublished(lang: Lang, closing: string): { v: string; zone: str
 }
 
 const line = (ok: unknown, text: () => string): string | null => (ok ? text() : null);
+
+// A notice's event's uid (noticeEvent), and whether a notice has an event at
+// all: a closing a calendar can place. A feed's count reads both
+// (account/feeds.ts feedSize) without making the events.
+export const noticeUid = (reference: string): string => `notice-${uidPart(reference)}@${UID_HOST}`;
+export const hasNoticeEvent = (closing: string | null | undefined): boolean => !!closing && closingStart(closing) !== null;
 
 export function noticeEvent(lang: Lang, n: NoticeFacts, base: string): CalEvent | null {
   const start = closingStart(n.closing);
@@ -246,7 +253,7 @@ export function noticeEvent(lang: Lang, n: NoticeFacts, base: string): CalEvent 
     t(lang, "cal.d_canadabuys", { v: tenderNoticeUrl(ref, lang) }),
   ].filter((x): x is string => x !== null);
   return {
-    uid: `notice-${uidPart(n.reference)}@${UID_HOST}`,
+    uid: noticeUid(n.reference),
     sequence: n.amendment,
     start,
     summary: buyer ? t(lang, "cal.closes", { title, buyer }) : t(lang, "cal.closes_alone", { title }),

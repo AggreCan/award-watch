@@ -132,19 +132,20 @@ export function fold(s: string): string {
   return s.normalize("NFD").replace(/\p{Mn}/gu, "").toLowerCase();
 }
 
-// The rows that pass every filter, in the order asked for, at the page's
-// clock. Each of category, segment and province keeps a notice that carries
-// any one of its values. The text filter reads the title and the start of
-// the description in both languages and the reference, as published too. A
-// province reads a notice's stated provinces and, unless derived is off, its
-// derived ones; it keeps the notices that have none unless national is off. The code filter is a
-// prefix of any of a notice's UNSPSC codes. The closing window counts from
-// the Eastern date and leaves out a notice whose closing time has passed.
-// By closing date, such a notice goes after the ones still open.
-export function filterTenders(rows: readonly TenderRow[], q: TenderQuery, clock: Clock): TenderRow[] {
+// The text the text filter reads in a notice, folded: its title and the start
+// of its description in both languages, its reference and its reference as
+// published.
+export const tenderText = (r: TenderRow): string =>
+  fold(`${r.title_en ?? ""} ${r.title_fr ?? ""} ${r.excerpt_en ?? ""} ${r.excerpt_fr ?? ""} ${r.reference} ${r.reference_published ?? ""}`);
+
+// Whether one notice passes every filter of the query (filterTenders' test,
+// its rules below). text gives a notice's folded text, tenderText unless the
+// caller keeps it: a list tested against many queries at once folds each
+// notice once (account/feeds.ts openIndex).
+export function tenderTest(q: TenderQuery, clock: Clock, text: (r: TenderRow) => string = tenderText): (r: TenderRow) => boolean {
   const words = fold(q.q).split(/\s+/).filter(Boolean);
   const until = q.closing ? addDays(clock.today, Number(q.closing)) : "";
-  const out = rows.filter((r) => {
+  return (r) => {
     if (q.category.length && !q.category.some((v) => r.category.includes(v))) return false;
     if (q.segment.length && !q.segment.some((v) => r.segments.includes(v))) return false;
     if (q.code && !(r.codes ?? []).some((c) => c.startsWith(q.code))) return false;
@@ -157,11 +158,24 @@ export function filterTenders(rows: readonly TenderRow[], q: TenderQuery, clock:
       if (!day || day > until || closingPassed(r.closing, clock)) return false;
     }
     if (words.length) {
-      const text = fold(`${r.title_en ?? ""} ${r.title_fr ?? ""} ${r.excerpt_en ?? ""} ${r.excerpt_fr ?? ""} ${r.reference} ${r.reference_published ?? ""}`);
-      if (!words.every((w) => text.includes(w))) return false;
+      const folded = text(r);
+      if (!words.every((w) => folded.includes(w))) return false;
     }
     return true;
-  });
+  };
+}
+
+// The rows that pass every filter, in the order asked for, at the page's
+// clock. Each of category, segment and province keeps a notice that carries
+// any one of its values. The text filter reads the title and the start of
+// the description in both languages and the reference, as published too. A
+// province reads a notice's stated provinces and, unless derived is off, its
+// derived ones; it keeps the notices that have none unless national is off. The code filter is a
+// prefix of any of a notice's UNSPSC codes. The closing window counts from
+// the Eastern date and leaves out a notice whose closing time has passed.
+// By closing date, such a notice goes after the ones still open.
+export function filterTenders(rows: readonly TenderRow[], q: TenderQuery, clock: Clock): TenderRow[] {
+  const out = rows.filter(tenderTest(q, clock));
   // Ties fall back to the reference so the order never depends on the file's.
   const byRef = (a: TenderRow, b: TenderRow) => (a.reference < b.reference ? -1 : a.reference > b.reference ? 1 : 0);
   if (q.sort === "published" || q.sort === "published-asc") {

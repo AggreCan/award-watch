@@ -44,7 +44,7 @@ import { placeAll, startSize, type Tile } from "../../public/dash-grid.js";
 import { MONEY_SOURCES, type MoneySource, SEGMENTS, SEGMENT_CODES, SEGMENT_SHORT } from "../constants";
 import { loadStats } from "../data";
 import type { AppEnv } from "../env";
-import { fmtInt, pick, provinceName, segmentLabel, sourceLabel, t, type Key, type Lang } from "../i18n";
+import { fmtInt, pick, provinceName, segmentLabel, sourceLabel, t, tn, type Key, type Lang } from "../i18n";
 import { PageHead, Panel, todayOf } from "../layout";
 import { TABLE_TITLES, VIEW_TABLES, tableApplies } from "../pages/analytics";
 import { directoryName } from "../pages/organization";
@@ -413,7 +413,7 @@ export async function tablesPage(c: Context<AppEnv>, who: Account, base: ViewBas
         </fieldset>
       </form>
       <Panel title={t(lang, "dash.tables_legend")} id="dash-tables-head"
-        count={t(lang, "dash.tables_count", { name: board.label, n: fmtInt(list.length, lang), cap: fmtInt(cap, lang) })}>
+        count={tn(lang, "dash.tables_count_one", "dash.tables_count", list.length, { name: board.label, n: fmtInt(list.length, lang), cap: fmtInt(cap, lang) })}>
         <form method="post" action={path} class="dash-checklist">
           <Csrf account={who} />
           <input type="hidden" name="lang" value={lang} />

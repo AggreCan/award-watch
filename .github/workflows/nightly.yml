@@ -56,11 +56,13 @@
 # pipeline stage (the buyers, the CanadaBuys tender and award notices and contract
 # history, the published contracts, the grants and contributions, the
 # lobbying communications, the federal corporations registry, then the
-# organizations, the standing offers and supply arrangements, the corporate
-# families, the yearly figures and the export), check the database and
-# the export, sync the hosted search database (D1, the changed rows only),
-# sync the records database the analytics views read (D1, the changed rows
-# only), record the Worker version serving traffic, deploy the Worker
+# organizations, the standing offers and supply arrangements, the Public
+# Accounts' services and works, the Indigenous procurement target, the
+# corporate families, the yearly figures, the contracts ending, the holders'
+# records, the analytics builder's cubes and the export: cli.STAGES), check
+# the database and the export, sync the hosted search database (D1, the
+# changed rows only), sync the records database the analytics views read
+# (D1, the changed rows only), record the Worker version serving traffic, deploy the Worker
 # with that data as its assets, check the live site and roll the Worker back
 # when the deploy broke it, save the buyer lookup the same-day refresh reads
 # and prune that refresh's old rows (docs/intraday.md), tell IndexNow which

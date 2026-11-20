@@ -187,8 +187,9 @@ and keep their own tests.
   neither, since Email Sending takes https links only.
 - No em-dash in the subject, the text or the HTML.
 - A message that carries matching notices (the weekly email, the watch
-  mail) lists its plan's figure of them (`RULES.free.match_mail`, 3, or
-  `RULES.pro.match_mail`, 10), counts the rest with its link to
+  mail) lists its plan's figure of them (`RULES.free.match_mail`, 3,
+  `RULES.pro.match_mail`, 10, or `RULES.ultra.match_mail`, 25), counts the
+  rest with its link to
   `/account/matches`, gives a Free account the line with Pro's own figures,
   and carries, in both parts, the disclaimer with the Terms' No Warranty
   section as a full https address and the licence line.
@@ -206,7 +207,7 @@ and keep their own tests.
 | Messages in one delivery run (saved searches, then watch mail, then briefings, then the weekly email, then saved views, then the seat notices) | `RUN_MESSAGES_MAX`, 300 | `roomAfter`: each part gets the cap less what the parts before it sent or tried, never below zero (a part that did not run counts as none), and the six never pass 300 together |
 | Weekly emails in one delivery run | `WEEKLY_RUN_MAX`, 100 | the weekly email's room is the shared room held to 100; the run stops there and the next hour (or the next data date of the week) goes on |
 | Watches one weekly email names | `WEEKLY_LINES`, 5 | eight watches with news name five, one line each, and count three more on a line to the watches page |
-| Matching notices one message lists | `RULES.free.match_mail`, 3; `RULES.pro.match_mail`, 10 | 2, 3 and 25 matches on Free list 2, 3 and 3; 9, 10 and 25 on Pro list 9, 10 and 10; the rest is counted in both parts only when there is one, and the subject counts every match |
+| Matching notices one message lists | `RULES.free.match_mail`, 3; `RULES.pro.match_mail`, 10; `RULES.ultra.match_mail`, 25 | 2, 3 and 25 matches on Free list 2, 3 and 3; 9, 10 and 25 on Pro list 9, 10 and 10; the rest is counted in both parts only when there is one, and the subject counts every match |
 | Rows in one delivery message | `ROWS_MAX`, 50 | a search with 120 notices lists 50 and counts 70 more in both parts; a segment's counts come first; the watch mail's 50 run across every watch, each kind's rest on its own line, and the watches reached once the 50 are listed are one line to the watches page (`test-mail/watch-size.test.ts`: 100 busy watches stay under 100,000 characters of HTML, the footer's stop link kept) |
 | An account's saved searches with news sent one message each | `GROUP_OVER`, 5 | five go as five messages, six as one (`site/test/recs-group.test.ts`, the default suite) |
 | An account's briefings with news, and its saved views with new figures, sent one message each | `GROUP_OVER`, 5, each kind on its own | five go as five messages, six as one; counted after the plan's figure and a seat's allowance, so eight briefings of which five are in service go as five; five or fewer go as they always went, statement for statement and byte for byte (`site/test/mail-group.test.ts`, the default suite) |

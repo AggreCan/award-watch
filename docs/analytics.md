@@ -207,8 +207,9 @@ A full reload drops the tables, applies the schema, sets `state` to
 `loading`, and sends every row. The pages answer "being loaded" until
 `finish.sql` sets it back, so no reader sees half a load. The sync makes one
 by itself on an empty ledger and after a count read back disagreed, but not
-within 28 days of the last one (a full load of the twelve tables writes
-about 25 million rows, half of the plan's monthly allowance).
+within 28 days of the last one (a full load of the twelve tables `TABLES`
+held when this was measured wrote about 25 million rows, half of the plan's
+monthly allowance; `TABLES` holds 23 now).
 
 It also makes one, whatever the days, when the tables changed form. D1
 creates a table only when it is missing, so a new column reaches a database
@@ -238,7 +239,7 @@ the measured figures.
 
 | | Estimate |
 |---|---|
-| A first load or full reload | about 500 MB of SQL in about 100 batches for the analytics tables (phase 1: 290 MB in about 60); about 3.2 million rows and 9 million index entries written. The record tables and the published contracts' pages add about 1.1 GB in about 230 batches and 5.3 million rows, sent as ordinary changes on their first night; a full reload after that sends both, about 1.6 GB in about 330 batches. Counted as D1 bills it, a full reload of all twelve tables is about 25 million row writes, half of the 50 million a month the paid plan includes, which is why a LAYOUT change waits for room in the month |
+| A first load or full reload | about 500 MB of SQL in about 100 batches for the analytics tables (phase 1: 290 MB in about 60); about 3.2 million rows and 9 million index entries written. The record tables and the published contracts' pages add about 1.1 GB in about 230 batches and 5.3 million rows, sent as ordinary changes on their first night; a full reload after that sends both, about 1.6 GB in about 330 batches. Counted as D1 bills it, a full reload of the twelve tables then held was about 25 million row writes (`TABLES` holds 23 now), half of the 50 million a month the paid plan includes, which is why a LAYOUT change waits for room in the month |
 | A night | the records whose figures, organization, buyer, flag, reference or title changed, the `rec_due` rows that moved, and the record-table, radar-window and published-contract rows that changed: thousands to tens of thousands of rows, one or two batches |
 | A night with buyer merges | the same, plus every record of each retired buyer id in `records` and the record tables, and its summary rows: the first night of the buyer de-duplication (2026-11) moves the former Status of Women Canada's published contracts and grants, three CKAN organizations listed twice, and the made buyers for National Defence and Parks Canada spellings, an estimated 10,000 to 30,000 rows, a few batches; later nights merge only what is new |
 | The count check | one count of each table: about 3.2 million rows read a night for the analytics tables, about 8.5 million with the rest |
@@ -364,7 +365,8 @@ holds all of this.
 
 ## Bounds
 
-- At most ten fiscal years in any statement, at most 40 quarter rows, top
+- At most twenty fiscal years in any statement (`ULTRA_YEARS`), at most 80
+  quarter rows (`BUYER_QUARTERS_SQL`), top
   lists of 10, the competitor list of 25, the share chart 6 organizations.
   Every statement is a constant in `site/src/records_db.ts` with `?`
   placeholders; nothing typed reaches SQL (there is no free-text parameter).
@@ -379,7 +381,8 @@ holds all of this.
   the two after it (`DUE_YEARS`), at most 12 quarter rows, of which the page
   shows eight.
 - A chosen period never starts before 2000 nor ends after the data date's
-  fiscal year, and never spans more than ten, so the `fy BETWEEN ?3 AND ?4`
+  fiscal year, and never spans more than the reader's plan's years
+  (`planYears`: 3 on Free, 10 on Pro, 20 on Ultra), so the `fy BETWEEN ?3 AND ?4`
   of every statement but the contracts ending keeps its bound.
 
 ## Free readers and the switch

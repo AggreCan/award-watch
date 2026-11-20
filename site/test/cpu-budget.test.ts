@@ -802,6 +802,66 @@ function groupAccounts(tokenHash: string, inGroup: boolean): D1Database {
     batch: async (list: unknown[]) => list.map(() => ({ results: [], success: true, meta: { changes: 0 } })),
   } as unknown as D1Database;
 }
+// An Ultra account alone with `n` saved tender searches (FEED_SEARCH_PARAMS in turn: text that matches some notices,
+// every one or none, segments, provinces, a category, a buyer, a closing window, a code prefix, a notice type, two at
+// once), and the given calendar feeds and watches, answered from memory: the saved searches page's feeds panel counts
+// each search's open notices and, with an "all" feed, the feed's events. Every other statement reads nothing.
+const FEED_SEARCH_PARAMS = [
+  "/tenders", "/tenders?q=translation", "/tenders?q=services", "/tenders?q=inspection%20repair", "/tenders?q=nothing-matches-this",
+  "/tenders?segment=82", "/tenders?segment=72&segment=43", "/tenders?province=ON", "/tenders?province=BC&national=0", "/tenders?category=SRV",
+  "/tenders?buyer=dnd-mdn", "/tenders?closing=30", "/tenders?code=4321", "/tenders?type=Request%20for%20Proposal", "/tenders?q=laptops&category=GD",
+  "/tenders?q=traduction&province=QC", "/tenders?q=coques", "/tenders?closing=7&segment=82", "/tenders?method=Competitive%20-%20Traditional",
+  "/tenders?q=services&segment=72",
+];
+const FEED_AT = new Date().toISOString();
+function feedAccounts(tokenHash: string, n: number, feeds: readonly { kind: string; search: number | null }[], watches: number): D1Database {
+  const session = {
+    id: FIT_SESSION_ID, token_hash: tokenHash, expires_at: "2999-01-01T00:00:00.000Z", revoked_at: null, last_seen_at: FEED_AT, user_id: "budget-feeds",
+    email: "feeds@example.com", lang: "en", status: "active", plan: "pro", plan_until: null, created_at: FEED_AT,
+  };
+  const searchId = (i: number) => `${i}`.padStart(32, "d");
+  const searches = Array.from({ length: n }, (_, i) => ({
+    id: searchId(i), kind: "tenders", params: FEED_SEARCH_PARAMS[i % FEED_SEARCH_PARAMS.length], label: `Search ${i + 1}`, lang: "en",
+    created_at: `2026-02-01T00:${String(Math.floor(i / 60)).padStart(2, "0")}:${String(i % 60).padStart(2, "0")}.000Z`, deliver: "off",
+  }));
+  const feedRows = feeds.map((f, i) => ({
+    id: `${i}`.padStart(32, "f"), kind: f.kind, search_id: f.search === null ? null : searchId(f.search), secret: `${i}`.padStart(64, "e"),
+    created_at: `2026-03-01T00:00:0${i}.000Z`, revoked_at: null, last_read_day: null,
+  }));
+  const BUYERS = ["pwgsc-tpsgc", "dfo-mpo", "dnd-mdn"];
+  const watchRows = Array.from({ length: watches }, (_, i) => ({
+    id: `${i}`.padStart(32, "a"), kind: "buyer", target: BUYERS[i % 3], segment: i % 2 ? "81" : "", label: `Watch ${i + 1}`,
+    events: i % 2 ? "award,ends_12m" : "award", cadence: "daily", created_at: `2026-04-01T00:${String(Math.floor(i / 60)).padStart(2, "0")}:${String(i % 60).padStart(2, "0")}.000Z`,
+    last_sent_day: null,
+  }));
+  const all = (sql: string): Record<string, unknown>[] => {
+    if (sql.includes("FROM sessions s JOIN users u")) return [session];
+    if (sql.includes("FROM entitlements e LEFT JOIN entitlement_tiers")) {
+      return [{ via: "own", id: "e-feeds", plan: "ultra", starts_at: "2026-01-01T00:00:00.000Z", ends_at: null, created_at: "2026-01-01T00:00:00.000Z", revoked_at: null }];
+    }
+    if (sql.startsWith("SELECT id, kind, params, label, lang, created_at, deliver FROM saved_searches")) return searches;
+    if (sql.startsWith("SELECT id, kind, search_id, secret, created_at, revoked_at, last_read_day FROM feeds")) return feedRows;
+    if (sql.startsWith("SELECT id, kind, target, segment, label, events, cadence, created_at, last_sent_day FROM watches")) return watchRows;
+    return [];
+  };
+  const statement = (sql: string) => {
+    const st = {
+      bind: () => st,
+      first: async () => all(sql)[0] ?? null,
+      all: async () => ({ results: all(sql), success: true, meta: {} }),
+      raw: async () => [],
+      run: async () => ({ results: [], success: true, meta: { changes: 0 } }),
+    };
+    return st;
+  };
+  return {
+    prepare: statement,
+    batch: async (list: unknown[]) => list.map(() => ({ results: [], success: true, meta: { changes: 0 } })),
+  } as unknown as D1Database;
+}
+// A records database at its data date that holds no row: the "all" feed's watches read their contract ends from it.
+const feedRecords = stubDb((sql) => (sql.includes("FROM rec_meta") ? [{ key: "state", value: "ready" }, { key: "as_of", value: "2026-10-31" }] : []));
+
 // A row or two for each records statement a panel reads: the state, a radar row, a year's counts, an event.
 const RADAR_J = JSON.stringify({
   kind: "award", reference: "EN578-000001", title_en: "A contract", title_fr: "Un contrat", organization_id: "org-a000000001", organization: "Exemplar",
@@ -1023,6 +1083,51 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
     const inGroup = await timed(member);
     const solo = await timed(alone);
     expect(inGroup, `/account/searches, a member of a group ${inGroup.toFixed(2)}; alone ${solo.toFixed(2)}`).toBeLessThanOrEqual(GROUP_LIST_BOUND);
+  }, 120_000);
+
+  // The saved searches page's feeds panel over the open list's 900 notices (account/routes.tsx calendarView): an Ultra
+  // account with 60 tender searches and no feed, and one at its figures, 100 tender searches with the 5 feeds (four
+  // searches' and the "all" feed, whose count reads every search and the 100 watches). Until 2026-11-20 the panel
+  // counted every tender search over the whole list on each view, feed or none, and the "all" feed's count made each
+  // matched notice's event once a search: measured then at 328.47 and 1,534.77 on these fixtures. Now the list is read
+  // once for the page (account/feeds.ts openIndex), a search is counted only beside its feed, and the "all" feed counts
+  // uids, each notice once. About three times the larger of the ratios measured after (in brackets), rounded up; the
+  // same page with 100 searches and no feed measured 7.11 in that run.
+  const FEEDS_60_BOUND = 18; // [3.43, 5.89]
+  const FEEDS_CAPS_BOUND = 44; // [14.22, 14.44]
+  it("keeps the saved searches page's feeds panel within its bound, for 60 tender searches and for an account at its figures", async () => {
+    clearParsedCache();
+    clearClosingCache();
+    const hash = await sha256Hex(SECRET);
+    const request = (accounts: D1Database) => app.request("/account/searches", {
+      headers: { "sec-fetch-mode": "navigate", cookie: COOKIE, "cf-connecting-ip": `198.18.${100 + ((address >> 8) % 100)}.${(address++ % 250) + 1}` },
+    }, { ...env, ASSETS: assetsOf(FIT_BODIES, "v1-fit"), ACCOUNTS: accounts, ACCOUNTS_ENABLED: "true", DB: stubDb(() => []), RECORDS: feedRecords });
+    const sixty = feedAccounts(hash, 60, [], 0);
+    const caps = feedAccounts(hash, RULES.ultra.saved_searches, [
+      { kind: "all", search: null }, { kind: "search", search: 0 }, { kind: "search", search: 1 }, { kind: "search", search: 4 }, { kind: "search", search: 5 },
+    ], RULES.ultra.watchlists);
+    // What the entry times: the 60 searches drawn with no count, and at the figures the five feeds' counts (the
+    // first search and the "all" feed hold more than a file keeps, 500).
+    const first = await (await request(sixty)).text();
+    expect(first).toContain("Search 60");
+    expect(first).not.toMatch(/ events? today/);
+    const full = await (await request(caps)).text();
+    expect(full.match(/[0-9,]+ events? today/g)).toEqual(["500 events today", "300 events today", "0 events today", "300 events today", "500 events today"]);
+    const timed = async (accounts: D1Database) => {
+      const go = async () => (await request(accounts)).arrayBuffer();
+      for (let i = 0; i < 3; i++) await go();
+      const route: number[] = [];
+      const yard: number[] = [];
+      for (let b = 0; b < 5; b++) {
+        yard.push(await batch(yardstick, 16));
+        route.push(await batch(go, 4));
+      }
+      return median(route) / median(yard);
+    };
+    const r60 = await timed(sixty);
+    const rCaps = await timed(caps);
+    expect(r60, `/account/searches, 60 tender searches ${r60.toFixed(2)}`).toBeLessThanOrEqual(FEEDS_60_BOUND);
+    expect(rCaps, `/account/searches, 100 tender searches, 5 feeds and 100 watches ${rCaps.toFixed(2)}`).toBeLessThanOrEqual(FEEDS_CAPS_BOUND);
   }, 120_000);
 
   // An organization's checklist of analytics tables (B3b, 2026-11-16; account/dashboard_doors.tsx tablesPage): the

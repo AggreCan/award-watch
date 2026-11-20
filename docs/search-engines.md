@@ -324,7 +324,9 @@ for old Opera, `Opera/`), when the user agent holds one of the crawler words
 the site's own `awardwatch`, and a few more listed in the code), when a
 browser-shaped user agent comes with none of the Fetch Metadata headers
 (`Sec-Fetch-Mode`, `Sec-Fetch-Dest`, `Sec-Fetch-Site`) that every current
-browser sends, and always for a feed poll or the payment hook. Browsers
+browser sends, and always for a feed poll. The payment hook counts as a bot
+by its sender's user agent, which is not shaped like a browser's; nothing
+forces it by its kind. Browsers
 older than Chrome 76, Firefox 90 and Safari 16.4 send none of those headers,
 so the few still in use count as bots. Everything else is human: a person's
 browser, or a crawler that copies a browser's headers as well, which no

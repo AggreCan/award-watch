@@ -16,7 +16,9 @@
    rather than posted, so it joins Undo.
 
    Each change is saved by itself (DELAY_MS after the last), the status line
-   saying so; a save that fails says so and offers to try again. Undo (the
+   saying so; a save that fails says so and offers to try again, but a save
+   of a dashboard deleted meanwhile says it no longer exists, with a link to
+   the account's dashboards, and nothing is saved again (goneOf). Undo (the
    status line's link, and Ctrl+Z or Cmd+Z outside a field) goes back a
    change, the last UNDO_MAX of the visit. A tile resized is read again at
    its new size (the Worker's fragment, from this site only, parsed and its
@@ -43,6 +45,18 @@ export function fill(pieces, vars) {
 /** A layout as the Worker takes it: the id, the place and the size of each tile. @param {readonly Tile[]} tiles */
 export function layoutJson(tiles) {
   return JSON.stringify(tiles.map((t) => ({ id: t.id, x: t.x, y: t.y, w: t.w, h: t.h })));
+}
+
+/**
+ * What a save's answer says when its dashboard no longer exists (the layout post's 404 with state gone, a dashboard
+ * deleted in another tab): the line, the link's words and the address of the account's dashboards, as the Worker
+ * wrote them in the reader's language; null for any other answer, which the status line meets with Try again.
+ * @param {number} status @param {any} answer @returns {{ line: string, link: string, href: string } | null}
+ */
+export function goneOf(status, answer) {
+  if (status !== 404 || !answer || typeof answer !== "object" || answer.state !== "gone") return null;
+  const href = typeof answer.href === "string" && /^\/account\/dashboard(\?lang=fr)?$/.test(answer.href) ? answer.href : "/account/dashboard";
+  return { line: typeof answer.line === "string" ? answer.line : "", link: typeof answer.link === "string" ? answer.link : "", href };
 }
 
 /** The arrow keys' steps, for the grip and for the corner. */
@@ -192,6 +206,19 @@ function start() {
   let timer = 0;
   let sending = false;
   let again = false;
+  /** The dashboard was deleted meanwhile (in another tab): the layout post's own words for it, and nothing is saved again. @type {{ line: string, link: string, href: string } | null} */
+  let gone = null;
+
+  /** The line in place of Try again: the dashboard no longer exists, and a link to the account's dashboards. */
+  function goneLine() {
+    if (!status || !gone) return;
+    status.textContent = gone.line ? `${gone.line} ` : "";
+    const a = document.createElement("a");
+    a.href = gone.href;
+    a.textContent = gone.link;
+    status.appendChild(a);
+    announce(gone.line);
+  }
 
   /** A change made: the layout before it goes on the undo list, and the layout is saved. @param {readonly Tile[]} before */
   function changed(before) {
@@ -200,6 +227,10 @@ function start() {
     order();
     offer();
     trimAll();
+    if (gone) {
+      goneLine();
+      return;
+    }
     if (!data.save) {
       line(words.local || "", { undo: true });
       return;
@@ -242,11 +273,22 @@ function start() {
       const res = await fetch(data.layout || "", {
         method: "POST", body, credentials: "same-origin", redirect: "error", headers: { accept: "application/json" },
       });
-      const answer = res.ok && (res.headers.get("content-type") || "").includes("json") ? await res.json() : null;
-      if (answer && answer.state === "saved") {
+      const json = (res.headers.get("content-type") || "").includes("json");
+      const answer = (res.ok || res.status === 404) && json ? await res.json() : null;
+      const said = goneOf(res.status, answer);
+      if (said) {
+        // Saving again can never work: the line says so, with the link, and no Try again.
+        gone = said;
+        window.clearTimeout(timer);
+        again = false;
+        sending = false;
+        goneLine();
+        return;
+      }
+      if (res.ok && answer && answer.state === "saved") {
         ok = true;
         if (answer.renamed && typeof answer.renamed === "object") rename(answer.renamed);
-      } else if (answer && answer.state === "unsaved") {
+      } else if (res.ok && answer && answer.state === "unsaved") {
         data.save = false;
         sending = false;
         line(words.local || "", { undo: true });
@@ -278,6 +320,10 @@ function start() {
     }
     trimAll();
     announce(words.undone || "");
+    if (gone) {
+      goneLine();
+      return;
+    }
     if (!data.save) {
       line(words.undone || "", { undo: true });
       return;
