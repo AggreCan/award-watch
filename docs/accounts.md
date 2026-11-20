@@ -389,9 +389,9 @@ cause "Daily sending quota reached". Sends to the account's verified
 destination addresses are not counted. So that a busy day of deliveries
 cannot spend the quota and leave sign-in codes refused, the delivery job
 holds itself to a ceiling of its own: `MAIL_DAILY_QUOTA` less
-`MAIL_DAILY_RESERVE`, two variables in `site/wrangler.jsonc` (`"200"` and
-`"40"` as shipped: the quota the dashboard showed on 2026-11-14, and a
-reserve of 40 sign-in codes). It counts its sends for the UTC day from its
+`MAIL_DAILY_RESERVE`, two variables in `site/wrangler.jsonc` (`"1000"` and
+`"40"` as shipped: the quota Cloudflare raised from 200 to 1,000 on
+2026-11-20, and a reserve of 40 sign-in codes, so a ceiling of 960). It counts its sends for the UTC day from its
 run log (`delivery_runs`, one query at the start of each run) plus what the
 run sends, and once they reach the ceiling the run stops as a sending
 limit's refusal stops it (`limited`), before claiming anything, and the rest
@@ -509,7 +509,8 @@ account's verified destination addresses, and any other address gets the
    asked for through Cloudflare's limit increase form.
 
    Keep `MAIL_DAILY_QUOTA` in `site/wrangler.jsonc` at the figure the
-   dashboard shows (200 on 2026-11-14) and deploy when it changes; the
+   dashboard shows (200 on 2026-11-14, 1,000 since 2026-11-20) and deploy
+   when it changes; the
    delivery job stops for the UTC day at that figure less
    `MAIL_DAILY_RESERVE` (40), which stays for sign-in codes (*Sending
    mail*). When the daily check says "The delivery job reached the day's
@@ -1268,11 +1269,11 @@ so it covers both days.
   `E_RATE_LIMIT_EXCEEDED` stops the run with no row for that search, and
   the next hour goes on from there. Any other refusal is a `failed` row.
 - At most the day's ceiling in a UTC day, across every part and every run:
-  `MAIL_DAILY_QUOTA` less `MAIL_DAILY_RESERVE` (160 as shipped; *Sending
+  `MAIL_DAILY_QUOTA` less `MAIL_DAILY_RESERVE` (960 as shipped; *Sending
   mail*). The run reads the day's sends from `delivery_runs` once
   (`DAY_SENT_SQL`), adds its own, and stops before the next claim once they
   reach it, as a sending limit's refusal stops it (`limited`, the reason
-  "the day's sending ceiling of 160 messages (MAIL_DAILY_QUOTA 200 less
+  "the day's sending ceiling of 960 messages (MAIL_DAILY_QUOTA 1000 less
   MAIL_DAILY_RESERVE 40)"). Nothing is claimed and left unsent; the later
   runs that day stop at their first message, and the next UTC day goes on.
 - At most 850 database queries a run (`RUN_QUERY_BUDGET`, counted on the
@@ -1714,8 +1715,8 @@ run writes the audit row `operator_announced` with no user id and the
 detail `by <operator's user id>, <n> sent, <n> not sent, <n> holding an
 account, <n> left` (and ", stopped at the day's ceiling" when it did), and
 the page shows the same figures after it, with the ceiling's line when the
-run stopped there: "The run stopped at the day's sending ceiling of 160
-messages (MAIL_DAILY_QUOTA 200 less MAIL_DAILY_RESERVE 40, the rest kept for
+run stopped there: "The run stopped at the day's sending ceiling of 960
+messages (MAIL_DAILY_QUOTA 1000 less MAIL_DAILY_RESERVE 40, the rest kept for
 sign-in codes), shared with the delivery job; the addresses left wait for
 the next UTC day." Its sends are a `console` row of the run log (*Sending
 mail*).

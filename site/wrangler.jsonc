@@ -224,7 +224,8 @@
   // codes, which go through the same MAIL binding: the job stops for the UTC
   // day once its sends reach the quota less the reserve (src/env.ts
   // mailCeiling, src/account/deliveries.ts). Raise MAIL_DAILY_QUOTA when
-  // Cloudflare raises the quota; empty, there is no ceiling. BUILDER_DEMO is
+  // Cloudflare raises the quota (it was 200 until Cloudflare raised it to
+  // 1,000 on 2026-11-20); empty, there is no ceiling. BUILDER_DEMO is
   // the landing page's band on the analytics builder (src/pages/landing.tsx,
   // docs/landing.md "The builder's band"): "on", with ACCOUNTS_ENABLED
   // "true", shows it, drawn from National Defence's buyer file; anything else
@@ -251,7 +252,7 @@
     "SITE_URL": "https://awardwatch.ca",
     "ACCOUNTS_ENABLED": "true",
     "MAIL_FROM": "alerts@awardwatch.ca",
-    "MAIL_DAILY_QUOTA": "200",
+    "MAIL_DAILY_QUOTA": "1000",
     "MAIL_DAILY_RESERVE": "40",
     "STRIPE_PRICE_MONTHLY": "price_1UXstXIP2lpoGRa5hXTTSm4A",
     "STRIPE_PRICE_YEARLY": "price_1UXstXIP2lpoGRa5H1NF6Od3",

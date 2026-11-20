@@ -535,9 +535,10 @@ describe("the day's sending ceiling", () => {
     for (const reserve of ["-1", "4.5", "x", "200", "300"]) {
       expect(mailCeiling({ MAIL_DAILY_QUOTA: "200", MAIL_DAILY_RESERVE: reserve }), reserve).toBeNull();
     }
-    // As wrangler.jsonc ships them.
-    expect(wranglerConfig).toContain('"MAIL_DAILY_QUOTA": "200"');
+    // As wrangler.jsonc ships them: the quota Cloudflare raised to 1,000 on 2026-11-20, 40 of it kept for sign-in codes.
+    expect(wranglerConfig).toContain('"MAIL_DAILY_QUOTA": "1000"');
     expect(wranglerConfig).toContain('"MAIL_DAILY_RESERVE": "40"');
+    expect(mailCeiling({ MAIL_DAILY_QUOTA: "1000", MAIL_DAILY_RESERVE: "40" })).toEqual({ quota: 1000, reserve: 40, ceiling: 960 });
   });
 
   it("stops the run as limited at the quota less the reserve, counting the day's earlier runs, with nothing claimed and unsent", async () => {
