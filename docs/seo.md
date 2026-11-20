@@ -226,6 +226,21 @@ counted; they are meant as pages a reader cites and links, different each
 month. The footer links the index on every page, and the Data page and the
 home page's lines link it too.
 
+An Atom feed of the record, `/data/feeds/canada/monthly.xml`, lets a feed
+reader or a search engine's feed fetcher learn of each new month on its own.
+It holds one entry a month the record holds, newest first: the month's page
+in both languages, its title, and one sentence of the page's own lead with
+the month's tender notices, award notices and the value the award notices
+state. An entry's date is the night its month's figures last changed, the
+date the sitemap gives the month's page, and the feed's date is the newest
+of them, so a night that changes no month leaves the file as it was and a
+reader sees a month again only when its figures move. The pipeline's monthly
+section writes it after the record's files; the monthly index names it when
+it was written, and only then do the index and each month announce it in
+their head (`rel="alternate"`), the index link it as "Follow by feed" beside
+its CSV file, and the Atom Feeds page list it with the national feeds. Its
+polls are counted with the other feeds'.
+
 ## Profile titles
 
 The first Search Console reading (2026-11-01 to 2026-11-13: 70 clicks, 3,719

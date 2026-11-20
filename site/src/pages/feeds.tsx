@@ -1,6 +1,6 @@
 import type { Context } from "hono";
 import { type Column, Table } from "../columns";
-import { loadJson, loadStats } from "../data";
+import { loadJson, loadMonthlyIndex, loadStats, monthlyFeed } from "../data";
 import type { AppEnv } from "../env";
 import { numberLocale, pick, provinceName, segmentLabel, t, tj, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, page } from "../layout";
@@ -12,7 +12,9 @@ import { SITE_ORIGIN, pageSeo } from "../seo";
 // reads only the small index of what was written: scoped feeds come and go
 // with the data, the two national feeds are always there. The feeds of
 // contracts ending soon (event "expiring", national, per buyer and per
-// segment) are listed when the index names them.
+// segment) are listed when the index names them. The monthly record's feed
+// is written with the record's own files, after this index, so the page
+// lists it when the monthly index names it (data.ts monthlyFeed).
 
 export const FEED_EVENTS = ["tenders", "awards"] as const;
 export const EXPIRING_EVENT = "expiring";
@@ -54,6 +56,11 @@ export const FeedLinks = ({ lang }: { lang: Lang }) => (
   </>
 );
 
+// Atom autodiscovery for the monthly record's feed, for the head of /monthly and of each month's page.
+export const MonthlyFeedLink = ({ lang, path }: { lang: Lang; path: string }) => (
+  <link rel="alternate" type="application/atom+xml" title={t(lang, "feeds.link_title", { event: t(lang, "feeds.ev.monthly") })} href={`/data/${path}`} />
+);
+
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 
 // A missing or malformed index reads as "no scoped feeds yet", never an error.
@@ -75,6 +82,7 @@ export async function feedsPage(c: Context<AppEnv>): Promise<Response> {
   const lang = c.get("lang");
   const stats = await loadStats(c.env).catch(() => null);
   const index = await loadFeedIndex(c);
+  const monthly = monthlyFeed(await loadMonthlyIndex(c.env).catch(() => null));
   const feeds = index?.feeds ?? [];
   const label = (f: FeedRow): string => {
     if (f.scope === "segment") return `${f.key} ${segmentLabel(lang, f.key)}`;
@@ -167,6 +175,11 @@ export async function feedsPage(c: Context<AppEnv>): Promise<Response> {
                 <strong>{t(lang, EVENT_KEY[e])}</strong>{lang === "fr" ? "\u202f: " : ": "}{t(lang, ABOUT_KEY[e])}
               </li>
             ))}
+            {monthly ? (
+              <li id="monthly">
+                <strong>{t(lang, "feeds.ev.monthly")}</strong>{lang === "fr" ? "\u202f: " : ": "}{t(lang, "feeds.about.monthly")}
+              </li>
+            ) : null}
           </ul>
 
           <h2 id="subscribe">{t(lang, "feeds.toc_subscribe")}</h2>
@@ -197,6 +210,12 @@ export async function feedsPage(c: Context<AppEnv>): Promise<Response> {
                   <tr>
                     <td data-label={t(lang, "feeds.col_feed")}>{t(lang, EVENT_KEY.expiring)}</td>
                     <td data-label={t(lang, "feeds.col_address")}><Address path={nationalExpiring.path} /></td>
+                  </tr>
+                ) : null}
+                {monthly ? (
+                  <tr>
+                    <td data-label={t(lang, "feeds.col_feed")}>{t(lang, "feeds.ev.monthly")}</td>
+                    <td data-label={t(lang, "feeds.col_address")}><Address path={monthly} /></td>
                   </tr>
                 ) : null}
               </tbody>

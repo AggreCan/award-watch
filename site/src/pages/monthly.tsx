@@ -15,14 +15,15 @@ import { styleDate } from "../cite";
 import { clockOf } from "../closing";
 import { Table } from "../columns";
 import {
-  MONTH_RE, loadMonth, loadMonthlyIndex, loadStats, type AwardRow, type MonthAwardFigure, type MonthBuyer, type MonthFigures,
-  type MonthlyIndex, publishedReference,
+  MONTH_RE, loadMonth, loadMonthlyIndex, loadStats, monthlyFeed, type AwardRow, type MonthAwardFigure, type MonthBuyer,
+  type MonthFigures, type MonthlyIndex, publishedReference,
 } from "../data";
 import type { AppEnv } from "../env";
 import { fmtInt, fmtMoney, fmtPct, numberLocale, pick, segmentLabel, t, tj, tn, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, noDataPage, page } from "../layout";
 import { SITE_NAME, canonicalUrl, pageSeo, sectionSeo } from "../seo";
 import { csvCell } from "./analytics";
+import { MonthlyFeedLink } from "./feeds";
 import { AwardTable, BuyerLink, money, shareText } from "./shared";
 
 // "October 2026", "octobre 2026": one formatter a language, made on first use.
@@ -38,6 +39,9 @@ type MonthTable = (typeof MONTH_TABLES)[number];
 
 const csvHref = (month: string, table: MonthTable) => `/monthly/${month}/${table}.csv`;
 const CsvLink: FC<{ lang: Lang; href: string }> = ({ lang, href }) => <a href={href} rel="nofollow">{t(lang, "analytics.csv")}</a>;
+// The record's Atom feed (pipeline feeds.write_monthly_feed), announced in the head of the index and of each month
+// and linked beside the index's CSV file, while the index names it.
+const feedHead = (lang: Lang, feed: string | null) => (feed ? <MonthlyFeedLink lang={lang} path={feed} /> : undefined);
 const Rule: FC<{ text: unknown }> = ({ text }) => <span>{text as any}</span>;
 
 // -- the index ---------------------------------------------------------------------------------------------------------
@@ -73,9 +77,10 @@ export async function monthlyIndexPage(c: Context<AppEnv>): Promise<Response> {
   const lang = c.get("lang");
   const [stats, index] = await Promise.all([loadStats(c.env), loadMonthlyIndex(c.env)]);
   if (!stats || !index) return noDataPage(c, "monthly.title");
+  const feed = monthlyFeed(index);
   return page(
     c,
-    <Layout lang={lang} title={t(lang, "monthly.title")} dataAsOf={stats.data_as_of} seo={pageSeo("monthly", lang)}>
+    <Layout lang={lang} title={t(lang, "monthly.title")} dataAsOf={stats.data_as_of} seo={pageSeo("monthly", lang)} head={feedHead(lang, feed)}>
       <PageHead lang={lang} title={t(lang, "monthly.title")} lead={t(lang, "monthly.lead")}>
         <p class="page-note">{t(lang, "monthly.as_of", { date: index.as_of })}</p>
       </PageHead>
@@ -84,7 +89,8 @@ export async function monthlyIndexPage(c: Context<AppEnv>): Promise<Response> {
           <Panel title={t(lang, "monthly.chart_heading")}>
             <MonthsChart lang={lang} index={index} />
           </Panel>
-          <Panel title={t(lang, "monthly.months_heading")} tools={<CsvLink lang={lang} href="/monthly/months.csv" />}
+          <Panel title={t(lang, "monthly.months_heading")}
+            tools={<><CsvLink lang={lang} href="/monthly/months.csv" />{feed ? <a href={`/data/${feed}`}>{t(lang, "monthly.follow_feed")}</a> : null}</>}
             foot={<Rule text={t(lang, "monthly.index_rule")} />}>
             <div class="table-wrap bordered">
               <Table cols={[
@@ -253,7 +259,7 @@ export async function monthlyPage(c: Context<AppEnv>): Promise<Response> {
     t(lang, "monthly.description", { month: name, tenders: fmtInt(tn_.n, lang), awards: fmtInt(a.n, lang) }), crumbs);
   return page(
     c,
-    <Layout lang={lang} title={title} dataAsOf={stats.data_as_of} seo={seo}>
+    <Layout lang={lang} title={title} dataAsOf={stats.data_as_of} seo={seo} head={feedHead(lang, monthlyFeed(index))}>
       <PageHead lang={lang} crumbs={crumbs} title={title} lead={monthLead(lang, f).join(" ")}>
         <p class="page-note">{t(lang, "monthly.as_of", { date: f.as_of })}</p>
       </PageHead>

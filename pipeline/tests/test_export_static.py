@@ -365,6 +365,8 @@ def test_every_file_passes_the_site_checks(exported):
             assert every(page["rows"], lambda r: ORG_ID.match(r["id"]) and s(r["name"]) and count(r["n_records"]))
     monthly = load(out, "monthly/index.json")
     assert DAY.match(monthly["as_of"]) and len(monthly["months"]) == 12 and every(monthly["months"], month_headline)
+    # The record's feed as the site's monthlyFeed reads it, and written where it says.
+    assert re.match(r"^feeds/[A-Za-z0-9/_-]+\.xml$", monthly["feed"]) and (out / monthly["feed"]).is_file()
     for row in monthly["months"]:
         assert month_doc(load(out, f"monthly/{row['month']}.json"), row["month"], es.read_segments()), row["month"]
 

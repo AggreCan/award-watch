@@ -142,7 +142,9 @@ change there. Output tree (under data/out/static):
                                 (sosa_export.py, which also names what profiles, segment and buyer files and
                                 tender details carry of them: "instruments" and "holders")
   monthly/index.json, monthly/<YYYY-MM>.json   the monthly record: each complete month of the last 12 in
-                                figures, tender notices and award notices by publication date (monthly.py)
+                                figures, tender notices and award notices by publication date (monthly.py); the
+                                index names the record's Atom feed as "feed" when the same section wrote it
+                                (feeds/canada/monthly.xml, feeds.write_monthly_feed)
   sitemaps/index.xml, sitemaps/sitemap-<part>-<n>.xml   the sitemap index and its parts, in SITEMAP_PARTS order
                                 (sitemap_parts: the open notices, the site's own pages, the organizations with
                                 recent activity, the other organizations), dated by page_dates
@@ -247,7 +249,7 @@ from xml.sax.saxutils import escape
 from . import config, directory, expiring, indicators, monthly, organizations, profile_matching, sosa_export, value_checks
 from .db import get_meta, log_run, set_meta
 from .export import SUMS, listed_buyer_ids, register_functions, scrub, scrub_doc
-from .feeds import write_feeds
+from .feeds import MONTHLY_FEED, write_feeds
 from .normalize import INDIGENOUS_MARKS, PROVINCE_CODES, closing_day, employee_count, norm_name, org_id, tender_status_on
 from .sources import buyers as buyer_rules
 from .sources import indigenous_target, public_accounts
@@ -2362,10 +2364,12 @@ def _digest(out: Path, files: Iterable[str], extra: str = "") -> str:
     return h.hexdigest()
 
 
-def page_dates(conn: sqlite3.Connection, digests: dict[str, str], today: str) -> dict[str, str]:
-    """Each address's lastmod: the data date on which the digest of what it shows was first seen (the page_dates
-    table holds the digest and that date), so an address a night leaves as it was keeps its date. An address a
-    night does not list (its section failed) keeps its row, and comes back with its own date."""
+def ledger_dates(conn: sqlite3.Connection, digests: dict[str, str],
+                 today: str) -> tuple[dict[str, str], list[tuple[str, str, str]]]:
+    """Each address's date as the page_dates ledger gives it tonight, read without writing: the date held when the
+    digest is the one held, else today; and the rows page_dates writes for the addresses whose digest moved. The
+    monthly record's feed dates its entries with it before the sitemap writes the ledger (monthly.write_feed), so
+    the two give a month the same date."""
     held = {r[0]: (r[1], r[2]) for r in conn.execute("SELECT path, hash, changed_on FROM page_dates")}
     dates: dict[str, str] = {}
     changed: list[tuple[str, str, str]] = []
@@ -2376,6 +2380,14 @@ def page_dates(conn: sqlite3.Connection, digests: dict[str, str], today: str) ->
         else:
             dates[path] = today
             changed.append((path, digest, today))
+    return dates, changed
+
+
+def page_dates(conn: sqlite3.Connection, digests: dict[str, str], today: str) -> dict[str, str]:
+    """Each address's lastmod: the data date on which the digest of what it shows was first seen (the page_dates
+    table holds the digest and that date), so an address a night leaves as it was keeps its date. An address a
+    night does not list (its section failed) keeps its row, and comes back with its own date."""
+    dates, changed = ledger_dates(conn, digests, today)
     conn.executemany("INSERT INTO page_dates (path, hash, changed_on) VALUES (?, ?, ?) ON CONFLICT(path) DO UPDATE "
                      "SET hash = excluded.hash, changed_on = excluded.changed_on", changed)
     conn.commit()
@@ -2395,6 +2407,11 @@ def _site_page_digests(m: Model, out: Path, fixed: Sequence[str], years: Sequenc
     first page and index (the address the sitemap lists), and the instruments' index by its file."""
     digests = {p: _digest(out, (f.format(day=m.as_of) for f in SITEMAP_PAGE_FILES[p]))
                for p in fixed if p in SITEMAP_DATED_PAGES}
+    # /feeds lists the monthly record's feed beside the feeds of feeds/index.json when the monthly section wrote it
+    # (its file is in no index of the feeds section), so whether it was written is part of what the page shows. A
+    # night without it digests exactly as before the feed existed.
+    if "/feeds" in digests and (out / MONTHLY_FEED).is_file():
+        digests["/feeds"] = _digest(out, SITEMAP_PAGE_FILES["/feeds"], MONTHLY_FEED)
     if "categories" not in skip:
         radar: dict[str, object] = {}
         path = out / "expiring" / "index.json"
@@ -2411,8 +2428,7 @@ def _site_page_digests(m: Model, out: Path, fixed: Sequence[str], years: Sequenc
     if "instruments" not in skip:
         digests["/instruments"] = _digest(out, ("instruments/index.json",))
     if "monthly" not in skip:
-        for month in monthly.months_written(out):
-            digests[f"/monthly/{month}"] = _digest(out, monthly.page_files(month))
+        digests.update(monthly.page_digests(out, monthly.months_written(out)))
     return digests
 
 
@@ -2627,7 +2643,8 @@ def _write_static(conn: sqlite3.Connection, out: Path, today: date, base_url: st
         ("aliases", lambda: write_aliases(conn, out)),
         ("directory", lambda: directory.write_all(conn, out, m.as_of)),
         ("instruments", lambda: write_instruments(m, out)),
-        ("monthly", lambda: monthly.write_all(m, out)),
+        # Also writes the monthly record's feed, after the record's files (monthly.write_all).
+        ("monthly", lambda: monthly.write_all(m, out, base_url=base_url)),
     )
     for name, write in sections:
         try:

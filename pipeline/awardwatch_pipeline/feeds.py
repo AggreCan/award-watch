@@ -45,6 +45,20 @@ Output (under data/out/static/feeds):
   segment/<nn>/<event>.xml
   prov/<pp>/tenders.xml            pp in lower case (the key in index.json is the upper-case code)
   buyer/<id>/<event>.xml
+  canada/monthly.xml               the monthly record's feed (below), written by the export's monthly section
+
+The monthly record's feed (write_monthly_feed) holds one entry for each month
+the monthly record holds (monthly.py, at most twelve), the newest month first.
+monthly.write_all writes it with the record's own files, after them, so it is
+not in index.json (that file belongs to this module's section, which runs
+first): the monthly index names it as "feed" when it was written, and the
+site's /monthly and /feeds pages read it there. An entry's id is its month's.
+Its updated is the data date on which the month's figures last changed, the
+date the sitemap gives the month's page (export_static.ledger_dates), and the
+feed's own updated is the newest of those, so a night that changed no month
+leaves the file's bytes as they were. Its title and summary are the page's own
+words (PAGE_STRINGS) filled with the three figures the index holds for the
+month, formatted as the site formats them (month_name, int_text, money_text).
 
 Every file is written deterministically (no wall-clock time), so a feed with
 no new entry keeps its bytes and the deploy skips it.
@@ -59,6 +73,7 @@ import xml.etree.ElementTree as ET
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from urllib.parse import quote
 
@@ -98,12 +113,72 @@ PROVINCE_NAME = {
     "YT": ("Yukon", "Yukon"),
 }
 
+# The monthly record's feed: its event, and its file under the static folder (the site reads it from the
+# monthly index's "feed").
+MONTHLY_EVENT = "monthly"
+MONTHLY_FEED = "feeds/canada/monthly.xml"
+
+# The site's own words for the monthly record's feed, as site/src/i18n.ts holds them: French with straight
+# apostrophes and plain spaces, set by fr_typography as the site's t() sets them. pipeline/tests/test_monthly_feed.py
+# reads i18n.ts and holds each pair equal to its key there.
+PAGE_STRINGS: dict[str, tuple[str, str]] = {
+    "feeds.ev.monthly": ("Monthly record of federal procurement", "Bilan mensuel des marchés publics fédéraux"),
+    "monthly.lead": (
+        "Each complete month of the last twelve in figures: the tender notices and award notices federal buyers "
+        "published on CanadaBuys, by buyer, segment and supplier. Rebuilt every night from the data as they stand.",
+        "Chaque mois complet des douze derniers en chiffres : les avis d'appel d'offres et d'attribution que les "
+        "acheteurs fédéraux ont publiés sur AchatsCanada, par acheteur, segment et fournisseur. Refait chaque nuit "
+        "d'après les données telles qu'elles sont.",
+    ),
+    "monthly.page_title": ("Federal Procurement in {month}", "Marchés publics fédéraux en {month}"),
+    "monthly.lead_published": (
+        "In {month}, federal buyers published {tenders} and {awards} on CanadaBuys.",
+        "En {month}, les acheteurs fédéraux ont publié {tenders} et {awards} sur AchatsCanada.",
+    ),
+    "monthly.feed_summary": (
+        "In {month}, federal buyers published {tenders} and {awards} on CanadaBuys; the award notices state {value} "
+        "in Canadian dollars in total.",
+        "En {month}, les acheteurs fédéraux ont publié {tenders} et {awards} sur AchatsCanada; les avis d'attribution "
+        "indiquent {value} en dollars canadiens au total.",
+    ),
+    "monthly.lead_tenders_one": ("{n} tender notice", "{n} avis d'appel d'offres"),
+    "monthly.lead_tenders_many": ("{n} tender notices", "{n} avis d'appel d'offres"),
+    "monthly.lead_tenders_none": ("no tender notice", "aucun avis d'appel d'offres"),
+    "monthly.lead_awards_one": ("{n} award notice", "{n} avis d'attribution"),
+    "monthly.lead_awards_many": ("{n} award notices", "{n} avis d'attribution"),
+    "monthly.lead_awards_none": ("no award notice", "aucun avis d'attribution"),
+}
+
+
+# The no-break space (U+00A0) the site's French typography sets and fr-CA groups digits with.
+NBSP = "\N{NO-BREAK SPACE}"
+
+
+def fr_typography(text: str) -> str:
+    """site/src/i18n.ts frTypography: the curly apostrophe, a no-break space before : % $ and », after «."""
+    text = re.sub(" ([:%$»])", lambda m: NBSP + m.group(1), text.replace("'", "’"))
+    return text.replace("« ", "«" + NBSP).replace("$ US", "$" + NBSP + "US")
+
+
+def page_text(key: str, lang: str, **values: object) -> str:
+    """The site's t(lang, key, values): the language's template (French set by fr_typography), each {name} filled."""
+    en, fr = PAGE_STRINGS[key]
+    text = en if lang == "en" else fr_typography(fr)
+    return re.sub(r"\{(\w+)\}", lambda m: str(values[m.group(1)]) if m.group(1) in values else m.group(0), text)
+
+
+def _page_words(key: str) -> tuple[str, str]:
+    return page_text(key, "en"), page_text(key, "fr")
+
+
 EVENT_NAME = {
     "tenders": ("New tender notices", "Nouveaux avis d’appel d’offres"),
     "awards": ("New award notices", "Nouveaux avis d’attribution"),
     "expiring": ("Contracts ending within three months", "Contrats qui prennent fin d’ici trois mois"),
+    MONTHLY_EVENT: _page_words("feeds.ev.monthly"),
 }
 EVENT_ABOUT = {
+    MONTHLY_EVENT: _page_words("monthly.lead"),
     "tenders": (
         "CanadaBuys tender notices, newest first by the date Award Watch first recorded them. "
         "Closing states are as of the data date; closing times are Eastern time (ET).",
@@ -482,6 +557,8 @@ def _el(parent: ET.Element, tag: str, text: str | None = None, **attrs: str) -> 
 
 
 def _page(scope: Scope, event: str) -> str:
+    if event == MONTHLY_EVENT:
+        return "/monthly"
     if event == "expiring":
         # The radar's 3-month list, filtered as the site's form filters it.
         if scope.kind == "buyer":
@@ -512,7 +589,9 @@ def feed_pages(entries: list[Entry], max_entries: int = MAX_ENTRIES, max_pages: 
 
 
 def feed_document(scope: Scope, event: str, entries: list[Entry], base: str, fallback_updated: str,
-                  page: int = 1, pages: int = 1) -> bytes:
+                  page: int = 1, pages: int = 1, *, updated: str | None = None) -> bytes:
+    """A feed file. Its updated is the first entry's (the newest first), or updated when given: the monthly record
+    lists its months newest first, and an older month's figures can be the ones that last moved."""
     rel = page_path(scope, event, page)
     ev_en, ev_fr = EVENT_NAME[event]
     about_en, about_fr = EVENT_ABOUT[event]
@@ -520,7 +599,7 @@ def feed_document(scope: Scope, event: str, entries: list[Entry], base: str, fal
     _el(root, "id", f"{TAG}feeds/{scope.folder}/{event}")
     _el(root, "title", f"{SITE_NAME}: {ev_en}, {scope.en} / {ev_fr}, {scope.fr}")
     _el(root, "subtitle", _both(about_en, about_fr))
-    _el(root, "updated", entries[0].updated if entries else fallback_updated)
+    _el(root, "updated", updated or (entries[0].updated if entries else fallback_updated))
     _el(root, "link", rel="self", type="application/atom+xml", href=f"{base}/data/{rel}")
     # RFC 5005 paged feeds: the next page holds the night's older entries.
     if pages > 1:
@@ -545,7 +624,9 @@ def feed_document(scope: Scope, event: str, entries: list[Entry], base: str, fal
         sep = "&" if "?" in e.link else "?"
         _el(entry, "link", rel="alternate", type="text/html", hreflang="en", href=f"{base}{e.link}")
         _el(entry, "link", rel="alternate", type="text/html", hreflang="fr", href=f"{base}{e.link}{sep}lang=fr")
-        _el(entry, "link", rel="via", href=e.via)
+        # A month of the monthly record is counted from many notices and has no one source record to point to.
+        if e.via:
+            _el(entry, "link", rel="via", href=e.via)
         _el(entry, "summary", e.summary)
     ET.indent(root, space="  ")
     return b'<?xml version="1.0" encoding="utf-8"?>\n' + ET.tostring(root, encoding="utf-8", xml_declaration=False) + b"\n"
@@ -612,3 +693,92 @@ def write_feeds(conn: sqlite3.Connection, out: Path, *, today: date | None = Non
     data = json.dumps(doc, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
     (folder / "index.json").write_bytes(data)
     return {"feeds": len(index), "feed_files": written, "feed_entries": entries_written, "feed_bytes": size + len(data)}
+
+
+# -- the monthly record's feed ---------------------------------------------------------
+
+
+# Intl.DateTimeFormat's long month and year in en-CA and fr-CA ("October 2026", "octobre 2026"), as the site names a
+# month (site/src/pages/monthly.tsx monthName).
+MONTH_NAMES = {
+    "en": ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+           "November", "December"),
+    "fr": ("janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre",
+           "novembre", "décembre"),
+}
+# Intl.NumberFormat's group and decimal separators in en-CA and fr-CA (fr-CA groups with a no-break space).
+_GROUP = {"en": ",", "fr": NBSP}
+_DECIMAL = {"en": ".", "fr": ","}
+
+
+def month_name(month: str, lang: str) -> str:
+    """'2026-10' as the site names it: 'October 2026', 'octobre 2026'."""
+    return f"{MONTH_NAMES[lang][int(month[5:7]) - 1]} {month[:4]}"
+
+
+def int_text(n: int, lang: str) -> str:
+    """site/src/i18n.ts fmtInt: '1,234' and '1 234' (a no-break space)."""
+    return f"{n:,}".replace(",", _GROUP[lang])
+
+
+def money_text(value: float, lang: str) -> str:
+    """site/src/i18n.ts fmtMoney in Canadian dollars: whole dollars from 1,000 up, cents below ('$512.50' and
+    '512,50 $'). Intl.NumberFormat rounds the shortest decimal that reads back as the value, halves away from zero
+    ('$2.68' for 2.675, '$1,235' for 1234.5), and so does this."""
+    exact = Decimal(repr(float(value)))
+    cents = abs(exact) < 1000 and exact != exact.to_integral_value()
+    shown = abs(exact).quantize(Decimal("0.01") if cents else Decimal(1), rounding=ROUND_HALF_UP)
+    whole, _, part = f"{shown:f}".partition(".")
+    text = int_text(int(whole), lang) + (_DECIMAL[lang] + part if cents else "")
+    sign = "-" if exact < 0 else ""
+    return f"{sign}${text}" if lang == "en" else f"{sign}{text}{NBSP}$"
+
+
+def _notices(kind: str, n: int, lang: str) -> str:
+    """A month's count of tender or award notices as the page's lead words it: none, one or many."""
+    if n == 0:
+        return page_text(f"monthly.lead_{kind}_none", lang)
+    return page_text(f"monthly.lead_{kind}_{'one' if n == 1 else 'many'}", lang, n=int_text(n, lang))
+
+
+def month_summary(row: dict, lang: str) -> str:
+    """One sentence from the three figures the monthly index holds for a month: the first two sentences of the
+    month's page (pages/monthly.tsx monthLead) joined into one, or its first alone when the award notices state no
+    value."""
+    values = {"month": month_name(row["month"], lang), "tenders": _notices("tenders", row["tenders"], lang),
+              "awards": _notices("awards", row["awards"], lang)}
+    if row["awards_value"] is None:
+        return page_text("monthly.lead_published", lang, **values)
+    return page_text("monthly.feed_summary", lang, value=money_text(row["awards_value"], lang), **values)
+
+
+def monthly_entries(months: list[dict], dates: dict[str, str]) -> list[Entry]:
+    """An entry for each row of the monthly index (newest month first), dated by dates: the data date on which the
+    month's figures last changed, keyed by the address of its page (export_static.ledger_dates)."""
+    out: list[Entry] = []
+    for row in months:
+        month = row["month"]
+        link = f"/monthly/{month}"
+        stamp = rfc3339(dates[link])
+        if stamp is None:
+            raise ValueError(f"no date for {link}")
+        title = [page_text("monthly.page_title", lang, month=month_name(month, lang)) for lang in ("en", "fr")]
+        out.append(Entry(id=f"{TAG}monthly/{month}", updated=stamp, title=_both(*title),
+                         summary=_both(month_summary(row, "en"), month_summary(row, "fr")), link=link, via=""))
+    return out
+
+
+def write_monthly_feed(out: Path, months: list[dict], dates: dict[str, str], *,
+                       base_url: str | None = None) -> dict[str, int]:
+    """Write the monthly record's feed at MONTHLY_FEED under out, one entry a month of months (the monthly index's
+    rows); its updated is the newest of its entries'. A record with no month gets no file and {}."""
+    entries = monthly_entries(months, dates)
+    if not entries:
+        return {}
+    base = (base_url or config.SITE_URL).rstrip("/")
+    newest = max(e.updated for e in entries)
+    data = feed_document(CANADA, MONTHLY_EVENT, entries, base, newest, updated=newest)
+    path = out / MONTHLY_FEED
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    return {"monthly_feed_entries": len(entries)}

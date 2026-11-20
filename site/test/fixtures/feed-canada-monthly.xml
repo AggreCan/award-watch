@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <id>tag:awardwatch.ca,2026:feeds/canada/monthly</id>
+  <title>Award Watch: Monthly record of federal procurement, Canada / Bilan mensuel des marchés publics fédéraux, Canada</title>
+  <subtitle>Each complete month of the last twelve in figures: the tender notices and award notices federal buyers published on CanadaBuys, by buyer, segment and supplier. Rebuilt every night from the data as they stand. / Chaque mois complet des douze derniers en chiffres : les avis d’appel d’offres et d’attribution que les acheteurs fédéraux ont publiés sur AchatsCanada, par acheteur, segment et fournisseur. Refait chaque nuit d’après les données telles qu’elles sont.</subtitle>
+  <updated>2026-10-31T00:00:00Z</updated>
+  <link rel="self" type="application/atom+xml" href="https://awardwatch.ca/data/feeds/canada/monthly.xml" />
+  <link rel="alternate" type="text/html" href="https://awardwatch.ca/monthly" />
+  <link rel="related" type="text/html" href="https://awardwatch.ca/feeds" />
+  <author>
+    <name>Award Watch</name>
+    <uri>https://awardwatch.ca/</uri>
+  </author>
+  <rights>CanadaBuys tender and award notices: Public Services and Procurement Canada, Open Government Licence, Canada. / Avis d’appel d’offres et d’attribution d’AchatsCanada : Services publics et Approvisionnement Canada, Licence du gouvernement ouvert, Canada.</rights>
+  <icon>https://awardwatch.ca/apple-touch-icon.png</icon>
+  <entry>
+    <id>tag:awardwatch.ca,2026:monthly/2026-09</id>
+    <title>Federal Procurement in September 2026 / Marchés publics fédéraux en septembre 2026</title>
+    <updated>2026-10-01T00:00:00Z</updated>
+    <link rel="alternate" type="text/html" hreflang="en" href="https://awardwatch.ca/monthly/2026-09" />
+    <link rel="alternate" type="text/html" hreflang="fr" href="https://awardwatch.ca/monthly/2026-09?lang=fr" />
+    <summary>In September 2026, federal buyers published 1,234 tender notices and 567 award notices on CanadaBuys; the award notices state $98,765,432 in Canadian dollars in total. / En septembre 2026, les acheteurs fédéraux ont publié 1 234 avis d’appel d’offres et 567 avis d’attribution sur AchatsCanada; les avis d’attribution indiquent 98 765 432 $ en dollars canadiens au total.</summary>
+  </entry>
+  <entry>
+    <id>tag:awardwatch.ca,2026:monthly/2026-08</id>
+    <title>Federal Procurement in August 2026 / Marchés publics fédéraux en août 2026</title>
+    <updated>2026-09-01T00:00:00Z</updated>
+    <link rel="alternate" type="text/html" hreflang="en" href="https://awardwatch.ca/monthly/2026-08" />
+    <link rel="alternate" type="text/html" hreflang="fr" href="https://awardwatch.ca/monthly/2026-08?lang=fr" />
+    <summary>In August 2026, federal buyers published 40 tender notices and no award notice on CanadaBuys. / En août 2026, les acheteurs fédéraux ont publié 40 avis d’appel d’offres et aucun avis d’attribution sur AchatsCanada.</summary>
+  </entry>
+  <entry>
+    <id>tag:awardwatch.ca,2026:monthly/2026-07</id>
+    <title>Federal Procurement in July 2026 / Marchés publics fédéraux en juillet 2026</title>
+    <updated>2026-10-31T00:00:00Z</updated>
+    <link rel="alternate" type="text/html" hreflang="en" href="https://awardwatch.ca/monthly/2026-07" />
+    <link rel="alternate" type="text/html" hreflang="fr" href="https://awardwatch.ca/monthly/2026-07?lang=fr" />
+    <summary>In July 2026, federal buyers published 35 tender notices and 5 award notices on CanadaBuys; the award notices state $1,000 in Canadian dollars in total. / En juillet 2026, les acheteurs fédéraux ont publié 35 avis d’appel d’offres et 5 avis d’attribution sur AchatsCanada; les avis d’attribution indiquent 1 000 $ en dollars canadiens au total.</summary>
+  </entry>
+  <entry>
+    <id>tag:awardwatch.ca,2026:monthly/2026-06</id>
+    <title>Federal Procurement in June 2026 / Marchés publics fédéraux en juin 2026</title>
+    <updated>2026-07-01T00:00:00Z</updated>
+    <link rel="alternate" type="text/html" hreflang="en" href="https://awardwatch.ca/monthly/2026-06" />
+    <link rel="alternate" type="text/html" hreflang="fr" href="https://awardwatch.ca/monthly/2026-06?lang=fr" />
+    <summary>In June 2026, federal buyers published 1 tender notice and 1 award notice on CanadaBuys; the award notices state $512.50 in Canadian dollars in total. / En juin 2026, les acheteurs fédéraux ont publié 1 avis d’appel d’offres et 1 avis d’attribution sur AchatsCanada; les avis d’attribution indiquent 512,50 $ en dollars canadiens au total.</summary>
+  </entry>
+  <entry>
+    <id>tag:awardwatch.ca,2026:monthly/2026-05</id>
+    <title>Federal Procurement in May 2026 / Marchés publics fédéraux en mai 2026</title>
+    <updated>2026-06-01T00:00:00Z</updated>
+    <link rel="alternate" type="text/html" hreflang="en" href="https://awardwatch.ca/monthly/2026-05" />
+    <link rel="alternate" type="text/html" hreflang="fr" href="https://awardwatch.ca/monthly/2026-05?lang=fr" />
+    <summary>In May 2026, federal buyers published no tender notice and 3 award notices on CanadaBuys; the award notices state $0 in Canadian dollars in total. / En mai 2026, les acheteurs fédéraux ont publié aucun avis d’appel d’offres et 3 avis d’attribution sur AchatsCanada; les avis d’attribution indiquent 0 $ en dollars canadiens au total.</summary>
+  </entry>
+  <entry>
+    <id>tag:awardwatch.ca,2026:monthly/2026-04</id>
+    <title>Federal Procurement in April 2026 / Marchés publics fédéraux en avril 2026</title>
+    <updated>2026-05-01T00:00:00Z</updated>
+    <link rel="alternate" type="text/html" hreflang="en" href="https://awardwatch.ca/monthly/2026-04" />
+    <link rel="alternate" type="text/html" hreflang="fr" href="https://awardwatch.ca/monthly/2026-04?lang=fr" />
+    <summary>In April 2026, federal buyers published 2 tender notices and 1 award notice on CanadaBuys; the award notices state $2.68 in Canadian dollars in total. / En avril 2026, les acheteurs fédéraux ont publié 2 avis d’appel d’offres et 1 avis d’attribution sur AchatsCanada; les avis d’attribution indiquent 2,68 $ en dollars canadiens au total.</summary>
+  </entry>
+  <entry>
+    <id>tag:awardwatch.ca,2026:monthly/2026-03</id>
+    <title>Federal Procurement in March 2026 / Marchés publics fédéraux en mars 2026</title>
+    <updated>2026-04-01T00:00:00Z</updated>
+    <link rel="alternate" type="text/html" hreflang="en" href="https://awardwatch.ca/monthly/2026-03" />
+    <link rel="alternate" type="text/html" hreflang="fr" href="https://awardwatch.ca/monthly/2026-03?lang=fr" />
+    <summary>In March 2026, federal buyers published 1,500 tender notices and 820 award notices on CanadaBuys; the award notices state $1,235 in Canadian dollars in total. / En mars 2026, les acheteurs fédéraux ont publié 1 500 avis d’appel d’offres et 820 avis d’attribution sur AchatsCanada; les avis d’attribution indiquent 1 235 $ en dollars canadiens au total.</summary>
+  </entry>
+  <entry>
+    <id>tag:awardwatch.ca,2026:monthly/2026-02</id>
+    <title>Federal Procurement in February 2026 / Marchés publics fédéraux en février 2026</title>
+    <updated>2026-03-01T00:00:00Z</updated>
+    <link rel="alternate" type="text/html" hreflang="en" href="https://awardwatch.ca/monthly/2026-02" />
+    <link rel="alternate" type="text/html" hreflang="fr" href="https://awardwatch.ca/monthly/2026-02?lang=fr" />
+    <summary>In February 2026, federal buyers published 980 tender notices and 410 award notices on CanadaBuys; the award notices state $2,500,000,001 in Canadian dollars in total. / En février 2026, les acheteurs fédéraux ont publié 980 avis d’appel d’offres et 410 avis d’attribution sur AchatsCanada; les avis d’attribution indiquent 2 500 000 001 $ en dollars canadiens au total.</summary>
+  </entry>
+  <entry>
+    <id>tag:awardwatch.ca,2026:monthly/2026-01</id>
+    <title>Federal Procurement in January 2026 / Marchés publics fédéraux en janvier 2026</title>
+    <updated>2026-02-01T00:00:00Z</updated>
+    <link rel="alternate" type="text/html" hreflang="en" href="https://awardwatch.ca/monthly/2026-01" />
+    <link rel="alternate" type="text/html" hreflang="fr" href="https://awardwatch.ca/monthly/2026-01?lang=fr" />
+    <summary>In January 2026, federal buyers published 1,100 tender notices and no award notice on CanadaBuys. / En janvier 2026, les acheteurs fédéraux ont publié 1 100 avis d’appel d’offres et aucun avis d’attribution sur AchatsCanada.</summary>
+  </entry>
+  <entry>
+    <id>tag:awardwatch.ca,2026:monthly/2025-12</id>
+    <title>Federal Procurement in December 2025 / Marchés publics fédéraux en décembre 2025</title>
+    <updated>2026-01-01T00:00:00Z</updated>
+    <link rel="alternate" type="text/html" hreflang="en" href="https://awardwatch.ca/monthly/2025-12" />
+    <link rel="alternate" type="text/html" hreflang="fr" href="https://awardwatch.ca/monthly/2025-12?lang=fr" />
+    <summary>In December 2025, federal buyers published no tender notice and no award notice on CanadaBuys. / En décembre 2025, les acheteurs fédéraux ont publié aucun avis d’appel d’offres et aucun avis d’attribution sur AchatsCanada.</summary>
+  </entry>
+  <entry>
+    <id>tag:awardwatch.ca,2026:monthly/2025-11</id>
+    <title>Federal Procurement in November 2025 / Marchés publics fédéraux en novembre 2025</title>
+    <updated>2025-12-01T00:00:00Z</updated>
+    <link rel="alternate" type="text/html" hreflang="en" href="https://awardwatch.ca/monthly/2025-11" />
+    <link rel="alternate" type="text/html" hreflang="fr" href="https://awardwatch.ca/monthly/2025-11?lang=fr" />
+    <summary>In November 2025, federal buyers published 1 tender notice and 2 award notices on CanadaBuys; the award notices state $1,000.00 in Canadian dollars in total. / En novembre 2025, les acheteurs fédéraux ont publié 1 avis d’appel d’offres et 2 avis d’attribution sur AchatsCanada; les avis d’attribution indiquent 1 000,00 $ en dollars canadiens au total.</summary>
+  </entry>
+  <entry>
+    <id>tag:awardwatch.ca,2026:monthly/2025-10</id>
+    <title>Federal Procurement in October 2025 / Marchés publics fédéraux en octobre 2025</title>
+    <updated>2025-11-01T00:00:00Z</updated>
+    <link rel="alternate" type="text/html" hreflang="en" href="https://awardwatch.ca/monthly/2025-10" />
+    <link rel="alternate" type="text/html" hreflang="fr" href="https://awardwatch.ca/monthly/2025-10?lang=fr" />
+    <summary>In October 2025, federal buyers published 12,000 tender notices and 7 award notices on CanadaBuys; the award notices state $1,150,000 in Canadian dollars in total. / En octobre 2025, les acheteurs fédéraux ont publié 12 000 avis d’appel d’offres et 7 avis d’attribution sur AchatsCanada; les avis d’attribution indiquent 1 150 000 $ en dollars canadiens au total.</summary>
+  </entry>
+</feed>

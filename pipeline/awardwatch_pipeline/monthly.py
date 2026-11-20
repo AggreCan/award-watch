@@ -6,10 +6,13 @@ CanadaBuys published them; nothing here judges a buyer or a supplier.
 
 Output tree (under data/out/static), written by the export's "monthly" section (export_static._write_static):
 
-  monthly/index.json       {as_of, months: [{month, tenders, awards, awards_value}]}: the months the record holds,
-                           newest first, each with its three headline figures
+  monthly/index.json       {as_of, months: [{month, tenders, awards, awards_value}], feed}: the months the record
+                           holds, newest first, each with its three headline figures; feed, the record's Atom feed
+                           ("feeds/canada/monthly.xml"), only when it was written tonight
   monthly/<YYYY-MM>.json   one month: {as_of, month, tenders: {...}, awards: {...}} (build and its helpers below;
                            site/src/data.ts MonthFigures names every field)
+  feeds/canada/monthly.xml the record's Atom feed, one entry a month (feeds.write_monthly_feed; write_all and
+                           write_feed say in what order and what a fault leaves)
 
 as_of, the data date, is the only date of the run in either file, at the top level, where the sitemap's digest of a
 page leaves it out (export_static._digest): a month whose figures a night left as they were keeps its lastmod. The
@@ -58,6 +61,7 @@ Deterministic: rows sorted with their ties broken by id, code, method or referen
 from __future__ import annotations
 
 import json
+import logging
 import statistics
 from collections import Counter, defaultdict
 from datetime import date
@@ -66,6 +70,8 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # export_static imports this module; the names below are read at call time.
     from .export_static import Model
+
+log = logging.getLogger(__name__)
 
 # The complete months the record holds, newest first.
 MONTHS = 12
@@ -299,16 +305,54 @@ def build(m: Model) -> tuple[list[str], dict[str, dict], dict]:
     return months, docs, index
 
 
-def write_all(m: Model, out: Path) -> dict[str, int]:
-    """Write monthly/index.json and each month's file under out; returns counts for the run log."""
+def write_all(m: Model, out: Path, *, base_url: str | None = None) -> dict[str, int]:
+    """Write each month's file, the record's feed and monthly/index.json under out, in that order; returns counts
+    for the run log.
+
+    The feed comes after the months' files, whose digests date its entries, and before the index, which names it
+    only when it was written. A fault in the feed costs nothing else (write_feed). A fault writing the index after
+    the feed removes the feed again, so nothing announces a record whose index is missing; the export logs that as
+    export_monthly, the section's fault."""
     from .export_static import _dump
+    from .feeds import MONTHLY_FEED
 
     months, docs, index = build(m)
     largest = 0
     for month in months:
         largest = max(largest, _dump(out / "monthly" / f"{month}.json", docs[month]))
-    _dump(out / "monthly" / "index.json", index)
-    return {"monthly_months": len(months), "monthly_largest_bytes": largest}
+    counts = {"monthly_months": len(months), "monthly_largest_bytes": largest}
+    feed = write_feed(m, out, months, index, base_url) if months else {}
+    if feed:
+        index["feed"] = MONTHLY_FEED
+        counts.update(feed)
+    try:
+        _dump(out / "monthly" / "index.json", index)
+    except BaseException:
+        (out / MONTHLY_FEED).unlink(missing_ok=True)
+        raise
+    return counts
+
+
+def write_feed(m: Model, out: Path, months: list[str], index: dict, base_url: str | None) -> dict[str, int]:
+    """The record's Atom feed (feeds.write_monthly_feed) from the index's rows, each month dated as the sitemap
+    dates its page: the digest of the month's file, read against the page_dates ledger without writing it
+    (export_static.ledger_dates; the sitemap writes the ledger at the end of the export with the same digests), so
+    the feed and the sitemap give a month the same date. Returns its counts, or {} when it failed: the fault is
+    logged as the stage export_monthly_feed, a file it left part written is removed, and no other file of the
+    export is touched (the feeds section's files were written before this section, and the record's own files
+    stand)."""
+    from . import feeds
+    from .db import log_run
+    from .export_static import ledger_dates
+
+    try:
+        dates, _ = ledger_dates(m.conn, page_digests(out, months), m.as_of)
+        return feeds.write_monthly_feed(out, index["months"], dates, base_url=base_url)
+    except Exception as exc:
+        log.exception("export: the monthly record's feed failed")
+        (out / feeds.MONTHLY_FEED).unlink(missing_ok=True)
+        log_run(m.conn, "export_monthly_feed", detail=f"{type(exc).__name__}: {exc}"[:900], ok=False)
+        return {}
 
 
 def months_written(out: Path) -> list[str]:
@@ -323,3 +367,11 @@ def months_written(out: Path) -> list[str]:
 def page_files(month: str) -> tuple[str, ...]:
     """The export file a month's page shows, for its lastmod (export_static._site_page_digests)."""
     return (f"monthly/{month}.json",)
+
+
+def page_digests(out: Path, months: list[str]) -> dict[str, str]:
+    """The digest of each month's page by its address, the one the page_dates ledger keeps: read by the sitemap
+    (export_static._site_page_digests) and by the feed (write_feed), so both date a month from the same digest."""
+    from .export_static import _digest
+
+    return {f"/monthly/{month}": _digest(out, page_files(month)) for month in months}

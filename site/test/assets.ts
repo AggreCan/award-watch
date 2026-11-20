@@ -21,6 +21,7 @@ import contractsConverted from "./fixtures/contracts-557.json";
 import expiring3mPage1 from "./fixtures/expiring-3m-1.json";
 import expiring3m from "./fixtures/expiring-3m-index.json";
 import expiringIndex from "./fixtures/expiring-index.json";
+import feedCanadaMonthly from "./fixtures/feed-canada-monthly.xml?raw";
 import feedCanadaTenders from "./fixtures/feed-canada-tenders.xml?raw";
 import directory from "./fixtures/directory-index.json";
 import directoryOn1 from "./fixtures/directory-on-1.json";
@@ -50,6 +51,9 @@ const TEXT_FILES: Record<string, [string, string]> = {
   "data/sitemaps/index.xml": [sitemapIndex, "application/xml"],
   "data/sitemaps/sitemap-1.xml": [sitemapPart, "application/xml"],
   "data/feeds/canada/tenders.xml": [feedCanadaTenders, "application/atom+xml"],
+  // The monthly record's feed as the export writes it (pipeline test_monthly_feed.py holds the bytes): twelve months,
+  // the first three monthly-index.json's, which names it.
+  "data/feeds/canada/monthly.xml": [feedCanadaMonthly, "application/atom+xml"],
   "robots.txt": [robots, "text/plain; charset=utf-8"],
   "llms.txt": [llms, "text/plain; charset=utf-8"],
 };
@@ -107,7 +111,8 @@ export const FILES: Record<string, unknown> = {
   "expiring/index.json": expiringIndex,
   "expiring/3m/index.json": expiring3m,
   "expiring/3m/1.json": expiring3mPage1,
-  // The monthly record: three months, the newest with every table, August with no award notice.
+  // The monthly record: three months, the newest with every table, August with no award notice; the index names the
+  // record's feed (TEXT_FILES above).
   "monthly/index.json": monthlyIndex,
   "monthly/2026-09.json": monthly202609,
   "monthly/2026-08.json": monthly202608,

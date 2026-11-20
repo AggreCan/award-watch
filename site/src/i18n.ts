@@ -1578,6 +1578,12 @@ const STRINGS = {
     en: "contracts whose end date came within 3 months of the data date since the previous run, so each appears once, about 90 days before it ends.",
     fr: "contrats dont la date de fin est entrée dans les 3 mois suivant la date des données depuis l'exécution précédente; chacun paraît donc une seule fois, environ 90 jours avant sa fin.",
   },
+  // The monthly record's feed (pipeline feeds.py write_monthly_feed, which holds the name as the feed's title too).
+  "feeds.ev.monthly": { en: "Monthly record of federal procurement", fr: "Bilan mensuel des marchés publics fédéraux" },
+  "feeds.about.monthly": {
+    en: "one entry for each month the monthly record holds, the last twelve complete months, with the tender notices and award notices published in it and the value the award notices state. An entry's date is the night its month's figures last changed.",
+    fr: "une entrée pour chaque mois que contient le bilan mensuel, soit les douze derniers mois complets, avec les avis d'appel d'offres et d'attribution publiés ce mois-là et la valeur qu'indiquent les avis d'attribution. La date d'une entrée est la nuit où les chiffres de son mois ont changé pour la dernière fois.",
+  },
   "feeds.link_title": { en: "{event} (Atom feed)", fr: "{event} (fil Atom)" },
   "feeds.button_tenders": { en: "Atom feed of new notices", fr: "Fil Atom des nouveaux avis" },
   "feeds.button_awards": { en: "Atom feed of new award notices", fr: "Fil Atom des nouveaux avis d'attribution" },
@@ -4883,6 +4889,13 @@ const STRINGS = {
   "monthly.free_buyer": { en: "buyer", fr: "acheteur" },
   "monthly.free_tenders": { en: "open tender notices", fr: "avis d'appel d'offres ouverts" },
   "monthly.method_unstated": { en: "Method not stated", fr: "Méthode non précisée" },
+  "monthly.follow_feed": { en: "Follow by feed", fr: "Suivre par fil Atom" },
+  // An entry's summary in the record's Atom feed: the lead's first two sentences in one (pipeline feeds.py
+  // month_summary, which holds this text; the lead's first sentence alone when no value is stated).
+  "monthly.feed_summary": {
+    en: "In {month}, federal buyers published {tenders} and {awards} on CanadaBuys; the award notices state {value} in Canadian dollars in total.",
+    fr: "En {month}, les acheteurs fédéraux ont publié {tenders} et {awards} sur AchatsCanada; les avis d'attribution indiquent {value} en dollars canadiens au total.",
+  },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;

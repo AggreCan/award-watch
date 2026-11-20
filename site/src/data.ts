@@ -1811,7 +1811,9 @@ export function codeLevel(code: string): "family" | "class" | null {
 export const MONTH_RE = /^\d{4}-(?:0[1-9]|1[0-2])$/;
 
 export interface MonthHeadline { month: string; tenders: number; awards: number; awards_value: number | null }
-export interface MonthlyIndex { as_of: string; months: MonthHeadline[] }
+// feed: the record's Atom feed under /data/ ("feeds/canada/monthly.xml"), named only when the export wrote it
+// (pipeline monthly.write_all); read through monthlyFeed.
+export interface MonthlyIndex { as_of: string; months: MonthHeadline[]; feed?: unknown }
 
 export interface MonthBuyer { id: string | null; en: string | null; fr: string | null; n: number; value?: number | null; n_no_value?: number }
 export interface MonthTenders {
@@ -1867,6 +1869,13 @@ const isMonthAwards = (v: unknown): v is MonthAwards => isObj(v) && isCount(v.n)
 export async function loadMonthlyIndex(env: Env): Promise<MonthlyIndex | null> {
   const v = await loadJson<unknown>(env, "monthly/index.json");
   return isObj(v) && isDay(v.as_of) && isListOf(v.months, isMonthHeadline) ? (v as unknown as MonthlyIndex) : null;
+}
+
+// The record's feed as the index names it, or null: no feed was written that night, or the value is not a feed
+// file's path. The pages announce and link it only then, and a bad value costs the index nothing.
+export function monthlyFeed(index: MonthlyIndex | null | undefined): string | null {
+  const feed = index?.feed;
+  return typeof feed === "string" && /^feeds\/[A-Za-z0-9/_-]+\.xml$/.test(feed) ? feed : null;
 }
 
 export async function loadMonth(env: Env, month: string): Promise<MonthFigures | null> {
