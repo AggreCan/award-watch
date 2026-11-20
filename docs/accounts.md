@@ -244,14 +244,15 @@ else the account page).
 ### Mail language
 
 The overview's Account panel shows the language the account's own mail goes
-out in (`users.lang`: the watch mail, the weekly email and a grouped
-saved-search message, *Phase 2: delivery*), with one
+out in (`users.lang`: the watch mail, the weekly email and a grouped message
+of saved searches, briefings or saved views, *Phase 2: delivery*), with one
 link-styled button that switches it between English and French (`POST
 /account/mail-language`, `mail_lang=en|fr`, with the CSRF value; the audit
 row `mail_lang` carries the language). A saved search, a briefing and a
 saved view keep the language of the page each was saved from, as the line
-under the row says; when more than five of an account's saved searches go in
-one message, that message is in the account's language.
+under the row says; when more than five of an account's saved searches, or of
+its briefings, or of its saved views, go in one message, that message is in
+the account's language.
 
 ## The switch
 
@@ -1300,7 +1301,12 @@ so it covers both days.
   run with nothing of it claimed but the searches with nothing new already
   written.
 - A fault reading or writing the accounts database logs one line and ends
-  the run. A second run in the same hour finds nothing due.
+  the run. A second run in the same hour finds nothing due. Every message
+  sent or refused before the fault, in whichever part, stays in the run's
+  row: each part fills the run's report as it goes and counts a message
+  before the writes that follow it, so a fault in those writes, in a grouped
+  message's, or in reading the next item cannot take a message out of the
+  count, and a later run of the day reads it against the ceiling.
 - Each run that gets past the switch ends with one row in `delivery_runs`
   (`writeRunLog`), on every way out, a fault included: `at` (the run's
   time), `data_date` (the date `stats.json` gave; NULL when the run stopped
@@ -1415,6 +1421,22 @@ List-Unsubscribe: <mailto:contact@awardwatch.ca>, <https://awardwatch.ca/account
   live mail check sends a grouped message whose link is that long, so a
   `sent` result proves Email Sending takes the header (docs/mail.md, *The
   live mail check*).
+
+A grouped briefings message (*Weekly briefings*, The run) and a grouped saved
+views message (*Saved views*, The email) work the same way, each with a
+parameter of its own: `/account/stop?gb=<user id>&t=<tags>` for briefings,
+`/account/stop?gv=<user id>&t=<tags>` for saved views. A tag is made over
+"stop briefings" or "stop views" with the item's id and its stop secret
+(`briefings.secret`, `saved_views.secret`), so a briefing's tag never stands
+for a search's. The route reads the account's briefings or views that hold a
+secret and acts on those whose tag the link holds: `GET` names them and shows
+one button, `POST` or a one-click `POST` turns off the email of each one
+("The briefings are off.", "The views' email is off."), the audit row is
+`briefing_stopped` or `view_stopped` with the detail `group_link` or
+`group_one_click`, and a link that proves none is the site's 404. Each section
+keeps its own `?b=` or `?v=` link. A briefing or view the message did not name
+(one with nothing new that run, another account's) has no tag in the link and
+is never stopped by it.
 
 A reply to the `mailto:` address reaches the contact inbox, where the
 operator turns the delivery off by hand.
@@ -3940,6 +3962,29 @@ the last fiscal year, the button Open the view, the first table as a CSV file
 (for a signed-in reader), why it came, the saved views page and the stop link,
 with `List-Unsubscribe` and its one-click partner.
 
+More than five of an account's views with new figures in one run (`GROUP_OVER`,
+the saved searches' figure) go in one message, as its saved searches and
+briefings do. An account with more than five views due in the run's list is
+read whole where its first one stands; the plan's figure and a seat's
+allowance come first, then the views that are unchanged (`same`) or at an
+address no view reads drop out, and the rest are counted: more than five go as
+one message (`digests.ts` `viewGroupDigest`), weekly and monthly together,
+five or fewer one message each, exactly as before. The grouped message is in
+the account's mail language (`users.lang`), the views named as the reader
+saved them; a section a view in the account's order, with its source and
+period linking the view, its newest fiscal year's figures, its largest records
+of the period's last fiscal year (the other party in the message's language;
+a supplier the records do not name stays unnamed), and its own stop link
+(`?v=`). The whole message lists at most 30 records and a section 5
+(`GROUP_ROWS_MAX`, `GROUP_SECTION_ROWS`), each view past them one line with
+its newest year's figures and its link; then the button to the saved views
+page, the reason line, and one stop link for the whole message (`?gv=`) in its
+footer and in `List-Unsubscribe`. It counts once against the run's cap, the
+day's ceiling and the run log; each view keeps its own claim, its own `sent`
+row and its own hash (written in one batch after the send, tried once more on
+a fault), and a send that does not go gives every claim back, with each one's
+`failed` row when the refusal is not a sending limit.
+
 ### Routes
 
 | Route | What it does |
@@ -5377,7 +5422,47 @@ sending limit writes `failed` and leaves `last_delivered_at`, so next week's
 message covers both weeks with the span in its lead. Each run of a briefing is
 a `briefing_deliveries` row (kept 90 days); after a message went, the row is
 written once more when the write fails. The log line adds `briefings: n
-sent, n failed, n with nothing new, n not on a plan with delivery`.
+sent, n failed, n with nothing new, n not on a plan with delivery` (and, when
+some went grouped, how many of the messages were grouped and how many
+briefings they carried).
+
+More than five of an account's briefings with something to send in one run
+(`GROUP_OVER`, the saved searches' figure) go in one message, as its saved
+searches do (*Phase 2: delivery*, What it sends and writes). An account with
+more than five briefings due in the run's list is read whole where its first
+one stands, each of its briefings read before any is sent; the plan's figure
+and a seat's allowance come first (the briefings past them are passed over as
+above), and those left with something to send are counted: more than five go
+as one message (`digests.ts` `briefingGroupDigest`), five or fewer go one
+message each, exactly as before grouping. Every other account's briefings go
+in the list's order, one message each, statement for statement as before
+(`site/test/mail-group.test.ts` holds both to what the run sent before this
+change). The grouped message:
+
+- is in the account's mail language (`users.lang`); each briefing is named as
+  the searches page names it (a segment's name written in that language, a
+  buyer's as saved);
+- has a section a briefing in the account's order: its name in a band, its
+  week's counts linking its subject's page, its first rows (the new notices,
+  then the awards, the contracts ending next quarter and the notable
+  amendments, each as its own message writes it, so a supplier the records do
+  not name stays unnamed), a line for the rest, and its own stop link (`?b=`);
+- holds the whole message to 30 rows and a section to 5 (`GROUP_ROWS_MAX`,
+  `GROUP_SECTION_ROWS`, the searches' figures; a briefing's row is smaller than
+  a search's), and past them names each briefing on one line with its counts
+  and its page, so an Ultra account's 100 stay under the size at which a
+  webmail client clips a message;
+- carries the notes its briefings' own messages carry, once each, the button
+  to the searches page, the reason line, and one stop link for the whole
+  message (`?gb=`, *Stopping a delivery*) in its footer and in
+  `List-Unsubscribe` with its one-click partner;
+- counts once against the run's cap, the day's ceiling and the run log's
+  `sent`; each briefing keeps its own claim (one batch for all) and its own
+  `sent` row (one batch, tried once more on a fault), and a send that does not
+  go gives every claim back together, with each one's `failed` row when the
+  refusal is not a sending limit. From its claims to its last write it costs
+  at most `GROUP_QUERIES` (4) queries: the claims, the stop secrets it lacks
+  with the account's language, the rows and their retry.
 
 A briefing read and passed over because its account's plan does not send it
 (no `delivery`, or past the plan's figure after a move to a smaller plan) is

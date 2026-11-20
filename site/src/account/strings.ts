@@ -2269,6 +2269,32 @@ export const ACCOUNT_STRINGS = {
   },
   "briefing.searches_link": { en: "Briefings and delivery", fr: "Bulletins et envoi" },
   "briefing.stop_link": { en: "Stop this briefing", fr: "Arrêter ce bulletin" },
+  // Several briefings in one message (digests.ts briefingGroupDigest), in the account's mail language.
+  "briefing.group_subject": {
+    en: "{n} of your briefings have news, week to {date}",
+    fr: "{n} de vos bulletins ont du nouveau, semaine se terminant le {date}",
+  },
+  "briefing.group_title": { en: "Your briefings, week to {date}", fr: "Vos bulletins, semaine se terminant le {date}" },
+  "briefing.group_lead_one": {
+    en: "1 of your briefings has news this week. When more than {max} have news in the same week, they come in this one email, a section each, in the order of your briefings. Week to {date}.",
+    fr: "1 de vos bulletins a du nouveau cette semaine. Quand plus de {max} ont du nouveau la même semaine, ils arrivent dans ce seul courriel, une section chacun, dans l'ordre de vos bulletins. Semaine se terminant le {date}.",
+  },
+  "briefing.group_lead_many": {
+    en: "{n} of your briefings have news this week. When more than {max} have news in the same week, they come in this one email, a section each, in the order of your briefings. Week to {date}.",
+    fr: "{n} de vos bulletins ont du nouveau cette semaine. Quand plus de {max} ont du nouveau la même semaine, ils arrivent dans ce seul courriel, une section chacun, dans l'ordre de vos bulletins. Semaine se terminant le {date}.",
+  },
+  "briefing.group_rest_one": { en: "1 more briefing with news", fr: "1 autre bulletin avec du nouveau" },
+  "briefing.group_rest_many": { en: "{n} more briefings with news", fr: "{n} autres bulletins avec du nouveau" },
+  "briefing.group_rest_note": {
+    en: "This email lists {rows} rows in all, so each of these is one line with its counts and a link to its page.",
+    fr: "Ce courriel énumère {rows} lignes en tout; chacun de ces bulletins tient donc en une ligne, avec ses comptes et le lien vers sa page.",
+  },
+  "briefing.group_button": { en: "Open your briefings", fr: "Ouvrir vos bulletins" },
+  "briefing.group_why": {
+    en: "You receive this each week for briefings in your account whose email is on.",
+    fr: "Vous recevez ce message chaque semaine pour des bulletins de votre compte dont le courriel est activé.",
+  },
+  "briefing.group_stop_all": { en: "Stop these briefings", fr: "Arrêter ces bulletins" },
 
   // The control on a segment page and a buyer page.
   "briefing.panel": { en: "Weekly Briefing", fr: "Bulletin hebdomadaire" },
@@ -2351,6 +2377,21 @@ export const ACCOUNT_STRINGS = {
     fr: "Le courriel du bulletin est désactivé. Réactivez-le à partir de votre page de recherches.",
   },
   "briefing.stopped_one_click": { en: "The briefing is off.", fr: "Le bulletin est désactivé." },
+  // The stop link of a grouped message (/account/stop?gb=...&t=..., group_stop.ts): every briefing the message carried.
+  "briefing.stop_group_title": { en: "Stop These Briefings", fr: "Arrêter ces bulletins" },
+  "briefing.stop_group_lead": {
+    en: "The briefings below came together in one email. This turns off the email of each one; the briefings stay on your searches page.",
+    fr: "Les bulletins ci-dessous sont arrivés ensemble dans un courriel. Ceci désactive le courriel de chacun; les bulletins restent sur votre page de recherches.",
+  },
+  "briefing.stop_group_panel": { en: "Weekly Briefings", fr: "Bulletins hebdomadaires" },
+  "briefing.stop_group_button": { en: "Turn these briefings off", fr: "Désactiver ces bulletins" },
+  "briefing.stop_group_already": { en: "These briefings' email is already off.", fr: "Le courriel de ces bulletins est déjà désactivé." },
+  "briefing.stopped_group_title": { en: "Briefings Off", fr: "Bulletins désactivés" },
+  "briefing.stopped_group_lead": {
+    en: "These briefings' email is off. Turn it back on from your searches page.",
+    fr: "Le courriel de ces bulletins est désactivé. Réactivez-le à partir de votre page de recherches.",
+  },
+  "briefing.stopped_group_one_click": { en: "The briefings are off.", fr: "Les bulletins sont désactivés." },
 
   // The public sample (/pro/briefing-sample).
   "briefing.sample_title": { en: "A Sample of the Weekly Briefing", fr: "Un exemple du bulletin hebdomadaire" },
@@ -2549,6 +2590,10 @@ export const ACCOUNT_STRINGS = {
   },
   "admin.mail_check_t_watch": { en: "The watch mail", fr: "Le courriel des suivis" },
   "admin.mail_check_t_briefing": { en: "The weekly briefing", fr: "Le bulletin hebdomadaire" },
+  "admin.mail_check_t_briefing_group": {
+    en: "Eight weekly briefings in one message, with the longest stop link an account's can carry",
+    fr: "Huit bulletins hebdomadaires dans un seul message, avec le plus long lien d'arrêt que peut porter celui d'un compte",
+  },
   "admin.mail_check_t_accounts_open": { en: "The accounts-open message", fr: "Le message d'ouverture des comptes" },
   "admin.mail_check_t_ultra_open": { en: "The Ultra message", fr: "Le message Ultra" },
   "admin.mail_check_t_address": { en: "The address-change notice", fr: "L'avis de changement d'adresse" },

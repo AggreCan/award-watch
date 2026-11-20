@@ -22,7 +22,7 @@ import { Layout, PageHead, Panel, publicPage, todayOf } from "../layout";
 import { ProNote } from "../pro";
 import {
   type Briefing, type BriefingData, type BriefingKind, type BriefingOverview, type BriefingRun, type BriefingSubject, WEEK_DAYS, briefValue,
-  briefingName, briefingPath, briefingState, readBriefing, sharedCap,
+  briefingLabel, briefingName, briefingPath, briefingState, readBriefing, sharedCap,
 } from "./briefings";
 import { AddToDashboard, type BoardChoice } from "./dashboard_add";
 import { holdsDashboard } from "./dashboard_rule";
@@ -38,9 +38,8 @@ const Csrf: FC<{ account: Account }> = ({ account }) => <input type="hidden" nam
 
 const stamp = (iso: string) => `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
 
-// A briefing's name in the page's language: a segment's rebuilt, a buyer's as the site wrote it.
-export const briefingLabel = (lang: Lang, b: Pick<Briefing, "kind" | "subject" | "segment" | "label" | "lang">): string =>
-  b.kind === "segment" ? briefingName(lang, b, "") : b.label;
+// A briefing's name in the page's language (briefings.ts, where a grouped message reads it too).
+export { briefingLabel };
 
 // -- the control on a segment page and a buyer page -----------------------------------------------
 
@@ -251,6 +250,42 @@ export function briefingStopView(lang: Lang, state: { id: string; secret: string
             <button type="submit" class="btn btn-primary">{t(lang, "briefing.stop_button")}</button>
           </form>
         )}
+      </Panel>
+    </>
+  );
+}
+
+// A grouped message's stop page (/account/stop?gb=&t=, group_stop.ts): the
+// names of the briefings its link proves, and one button that posts the
+// link's values back. No session is needed; the tags are the proof.
+export function briefingGroupStopView(lang: Lang, state: { userId: string; tags: string; labels: readonly string[]; off: boolean }) {
+  return (
+    <>
+      <PageHead lang={lang} title={t(lang, "briefing.stop_group_title")} lead={t(lang, "briefing.stop_group_lead")} />
+      <Panel title={t(lang, "briefing.stop_group_panel")} class="panel-form">
+        <ul class="account-list">{state.labels.map((label) => <li>{label}</li>)}</ul>
+        {state.off ? (
+          <p>{t(lang, "briefing.stop_group_already")}</p>
+        ) : (
+          <form method="post" action="/account/stop" class="stack">
+            <input type="hidden" name="gb" value={state.userId} />
+            <input type="hidden" name="t" value={state.tags} />
+            <input type="hidden" name="lang" value={lang} />
+            <button type="submit" class="btn btn-primary">{t(lang, "briefing.stop_group_button")}</button>
+          </form>
+        )}
+      </Panel>
+    </>
+  );
+}
+
+export function briefingGroupStoppedView(lang: Lang, labels: readonly string[]) {
+  return (
+    <>
+      <PageHead lang={lang} title={t(lang, "briefing.stopped_group_title")} lead={t(lang, "briefing.stopped_group_lead")}
+        actions={<a href="/account/searches#briefings" class="btn">{t(lang, "account.searches_title")}</a>} />
+      <Panel title={t(lang, "briefing.stop_group_panel")}>
+        <ul class="account-list">{labels.map((label) => <li>{label}</li>)}</ul>
       </Panel>
     </>
   );

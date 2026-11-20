@@ -237,7 +237,9 @@ async function mailSecret(env: Env, userId: string): Promise<string | null> {
 // the cap, the day's ceiling, or the run's query budget), for the caller's
 // report and log line. queries: the run's count (deliveries.ts QueryCount);
 // tally: what the run left due, which this part adds to on every way out;
-// ceiling: what the day's ceiling still allows (deliveries.ts Ceiling).
+// ceiling: what the day's ceiling still allows (deliveries.ts Ceiling);
+// report: the report to fill, the caller's, so a fault keeps what was sent
+// before it (deliveries.ts partFault); a part run alone makes its own.
 export async function runWatchMail(
   env: Env,
   o: {
@@ -245,11 +247,12 @@ export async function runWatchMail(
     ceiling?: Ceiling;
     // The run's groups and their counts (pool.ts RunPool); a part run alone keeps its own.
     pool?: RunPool;
+    report?: WatchReport;
   },
 ): Promise<{ report: WatchReport; stop: string | null; capped: boolean }> {
   const { site, dataDate, now } = o;
   const pool = o.pool ?? new RunPool();
-  const report = emptyWatchReport();
+  const report = o.report ?? emptyWatchReport();
   let accounts: DueRow[];
   try {
     accounts = (await env.ACCOUNTS!.prepare(WATCH_DUE_SQL).bind(dataDate, WATCH_ACCOUNTS_MAX).all<DueRow>()).results ?? [];
@@ -364,19 +367,20 @@ export async function runWatchMail(
       const result = await sendWithHeaders(env, site, message);
       if (result.sent) {
         held = null;
+        // Counted first, so a fault in the writes cannot take the message out of the run's count.
+        report.sent++;
         // Covered: tried once more on a fault, so the next data date does not send these events again.
         await afterSend(() => covered(env, a.user_id, "sent", total, now, dataDate, due, closed));
-        report.sent++;
       } else if (result.code && STOP_CODES.has(result.code)) {
         await release(env, a, dataDate, now);
         held = null;
         stop = result.code;
         break;
       } else {
+        report.failed++;
         await release(env, a, dataDate, now);
         held = null;
         await failed(env, a.user_id, total, now, dataDate);
-        report.failed++;
       }
     }
     await passedOver(env, passed, dataDate);

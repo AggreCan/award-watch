@@ -58,7 +58,7 @@ describe("the caps", () => {
     expect(WEEKLY_RUN_MAX).toBe(100);
     expect(WEEKLY_LINES).toBe(5);
     expect(SUBJECT_MAX).toBe(100);
-    expect(MAIL_CHECK_TEMPLATES).toHaveLength(12);
+    expect(MAIL_CHECK_TEMPLATES).toHaveLength(14);
     expect(VIEWS_RUN_MAX).toBe(1000);
     expect(VIEW_MAIL_ROWS).toBe(5);
     expect([RULES.free.match_mail, RULES.pro.match_mail]).toEqual([3, 10]);

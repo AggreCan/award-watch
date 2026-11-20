@@ -267,6 +267,8 @@ export const weekDays = (dataDate: string): string[] => Array.from({ length: WEE
 // in hand on, since every plan gets the email); ceiling: what the day's
 // ceiling still allows (deliveries.ts Ceiling). The list keeps its order of
 // choice: no plan is passed over here, so none fills it ahead of another.
+// report: the report to fill, the caller's, so a fault keeps what was sent
+// before it (deliveries.ts partFault); a part run alone makes its own.
 export async function runWeekly(
   env: Env,
   o: {
@@ -274,6 +276,7 @@ export async function runWeekly(
     queries?: QueryCount; tally?: Tally; ceiling?: Ceiling;
     // The run's groups (pool.ts RunPool), so a part after this one knows the group of an account read here first.
     pool?: RunPool;
+    report?: WeeklyReport;
   },
 ): Promise<{ report: WeeklyReport | null; stop: string | null; capped: boolean }> {
   const { site, dataDate, now } = o;
@@ -286,7 +289,7 @@ export async function runWeekly(
     if (missingTable(e)) return { report: null, stop: null, capped: false };
     throw e;
   }
-  const report = emptyWeeklyReport();
+  const report = o.report ?? emptyWeeklyReport();
   if (!due.length) return { report, stop: null, capped: false };
   const wait = (why: WeeklyWait, n: number) => {
     report.records = why;
@@ -389,17 +392,18 @@ export async function runWeekly(
       const result = await sendWithHeaders(env, site, message);
       if (result.sent) {
         held = null;
-        await afterSend(() => env.ACCOUNTS!.prepare("UPDATE weekly_mail SET last_status = 'sent' WHERE user_id = ?").bind(a.user_id).run());
+        // Counted first, so a fault in the write cannot take the message out of the run's count.
         report.sent++;
+        await afterSend(() => env.ACCOUNTS!.prepare("UPDATE weekly_mail SET last_status = 'sent' WHERE user_id = ?").bind(a.user_id).run());
       } else if (result.code && STOP_CODES.has(result.code)) {
         await release(env, a, week, now);
         held = null;
         stop = result.code;
         break;
       } else {
+        report.failed++;
         await refused(env, a, week, now);
         held = null;
-        report.failed++;
       }
     }
   } catch (e) {

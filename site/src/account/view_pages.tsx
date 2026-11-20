@@ -262,6 +262,42 @@ export function viewStopView(lang: Lang, state: { id: string; secret: string; na
   );
 }
 
+// A grouped message's stop page (/account/stop?gv=&t=, group_stop.ts): the
+// names of the views its link proves, and one button that posts the link's
+// values back. No session is needed; the tags are the proof.
+export function viewGroupStopView(lang: Lang, state: { userId: string; tags: string; names: readonly string[]; off: boolean }) {
+  return (
+    <>
+      <PageHead lang={lang} title={t(lang, "views.stop_group_title")} lead={t(lang, "views.stop_group_lead")} />
+      <Panel title={t(lang, "views.stop_group_panel")} class="panel-form">
+        <ul class="account-list">{state.names.map((name) => <li>{name}</li>)}</ul>
+        {state.off ? (
+          <p>{t(lang, "views.stop_group_already")}</p>
+        ) : (
+          <form method="post" action="/account/stop" class="stack">
+            <input type="hidden" name="gv" value={state.userId} />
+            <input type="hidden" name="t" value={state.tags} />
+            <input type="hidden" name="lang" value={lang} />
+            <button type="submit" class="btn btn-primary">{t(lang, "views.stop_group_button")}</button>
+          </form>
+        )}
+      </Panel>
+    </>
+  );
+}
+
+export function viewGroupStoppedView(lang: Lang, names: readonly string[]) {
+  return (
+    <>
+      <PageHead lang={lang} title={t(lang, "views.stopped_group_title")} lead={t(lang, "views.stopped_group_lead")}
+        actions={<a href={VIEWS_PATH} class="btn">{t(lang, "views.title")}</a>} />
+      <Panel title={t(lang, "views.stop_group_panel")}>
+        <ul class="account-list">{names.map((name) => <li>{name}</li>)}</ul>
+      </Panel>
+    </>
+  );
+}
+
 export function viewStoppedView(lang: Lang, name: string) {
   return (
     <>

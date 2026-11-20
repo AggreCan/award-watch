@@ -52,6 +52,12 @@ export const LABEL_MAX = 100;
 // How long a run's row is kept.
 export const VIEW_DELIVERY_DAYS = 90;
 
+// A grouped saved views message's stop link (/account/stop?gv=, routes.tsx): the account's views that hold a stop
+// secret, through idx_saved_views_user, at most GROUP_TAGS_MAX (?2), each checked against the link's tags (group_stop.ts).
+export const VIEW_GROUP_STOP_SQL =
+  "SELECT v.id, v.user_id, v.name, v.deliver, v.secret FROM saved_views v JOIN users u ON u.id = v.user_id " +
+  "WHERE v.user_id = ? AND v.secret IS NOT NULL AND u.status = 'active' ORDER BY v.created_at, v.id LIMIT ?";
+
 export type SavedView = {
   id: string; kind: View; address: string; name: string; lang: Lang; deliver: ViewDelivery; created_at: string; last_delivered_at: string | null;
 };

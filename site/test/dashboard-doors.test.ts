@@ -656,10 +656,14 @@ describe("a saved view's row", () => {
     expect(mainOf(html)).toContain(`<a href="/account/dashboard/tables/organizations/${A1}?source=history&years=5" class="dash-pick">Choose its tables</a>`);
     const links = [...mainOf(html).matchAll(/<a href="([^"]*)" class="dash-pick">/g)].map((m) => m[1]);
     expect(links).toHaveLength(2);
-    // Each opens the checklist as the view stands.
-    const history = await text(await open(ultra, links[0]));
+    // Each opens the checklist as the view stands. The two views were saved a moment apart and the list orders by
+    // the time saved, then by a random id, so each link is found by its address, never by its place.
+    const historyLink = links.find((l) => l.includes("source=history"))!;
+    const spanLink = links.find((l) => l.includes("from=2019"))!;
+    expect(new Set([historyLink, spanLink]).size).toBe(2);
+    const history = await text(await open(ultra, historyLink));
     expect([selected(history, "source"), selected(history, "years")]).toEqual(["history", "5"]);
-    const span = await text(await open(ultra, links[1]));
+    const span = await text(await open(ultra, spanLink));
     expect([selected(span, "source"), selected(span, "from"), selected(span, "to"), selected(span, "segment")]).toEqual(["awards", "2019", "2024", "43"]);
     expect(mainOf(span)).toContain('<input type="hidden" name="segment" value="43"/><input type="hidden" name="vs" value="org-a000000002"/>');
     expect(html).not.toContain(EM_DASH);

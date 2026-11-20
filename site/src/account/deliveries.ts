@@ -84,7 +84,15 @@
 // Then the weekly briefings (briefings.ts runBriefings), the same way, the
 // weekly email any account can turn on (weekly.ts runWeekly), and last the
 // saved analytics views by email (view_mail.ts runViewMail), Ultra's, which
-// reads and sends nothing while Ultra is not on sale.
+// reads and sends nothing while Ultra is not on sale. The briefings and the
+// saved views group per account as the saved searches do: more than
+// GROUP_OVER of an account's with something to send in one run go as one
+// message, counted once.
+//
+// Every message a part sent or tried is counted before the writes after it,
+// in the report the run hands the part, so a part that faults midway (in
+// those writes, in a grouped message's, or reading its next item) leaves
+// every message it sent in the run's row, where the day's ceiling reads it.
 //
 // Log lines name counts and dates only, never an address or a label.
 
@@ -111,14 +119,16 @@ import {
   rises,
 } from "./records_deliveries";
 import { survivorOf } from "./watches";
-import { BRIEFING_WAIT_WHY, type BriefingReport, briefingActive, briefingCounts, madeBefore, runBriefings, sharedCap } from "./briefings";
+import {
+  BRIEFING_WAIT_WHY, type BriefingReport, briefingActive, briefingCounts, emptyBriefingReport, madeBefore, runBriefings, sharedCap,
+} from "./briefings";
 import { DELIVERABLE_KINDS, DELIVERY_ROW_DAYS } from "./searches";
 import { randomHex } from "./secrets";
 import { type MailMessage, senderFor } from "./sender";
 import { accountsEnabled } from "./switch";
-import { VIEW_WAIT_WHY, type ViewReport, runViewMail, viewActive, viewCounts } from "./view_mail";
-import { WATCH_WAIT_WHY, type WatchReport, runWatchMail } from "./watch_mail";
-import { WEEKLY_WAIT_WHY, type WeeklyReport, runWeekly, weeklyActive, weeklyCounts } from "./weekly";
+import { VIEW_WAIT_WHY, type ViewReport, emptyViewReport, runViewMail, viewActive, viewCounts } from "./view_mail";
+import { WATCH_WAIT_WHY, type WatchReport, emptyWatchReport, runWatchMail } from "./watch_mail";
+import { WEEKLY_WAIT_WHY, type WeeklyReport, emptyWeeklyReport, runWeekly, weeklyActive, weeklyCounts } from "./weekly";
 
 // The hourly trigger in wrangler.jsonc; any other trigger is the daily check.
 export const DELIVERY_CRON = "0 15-20 * * *";
@@ -130,17 +140,24 @@ export { ROWS_MAX };
 // An account's saved searches with news in one run go one message each up to
 // this many; past it, all of them go in one message (groupDigest), so an
 // account at Ultra's 100 daily searches sends one message a day, not 100, of
-// the day's Email Sending quota (docs/accounts.md, Phase 2: delivery).
+// the day's Email Sending quota (docs/accounts.md, Phase 2: delivery). The
+// same figure groups an account's briefings (briefings.ts,
+// briefingGroupDigest) and its saved views (view_mail.ts, viewGroupDigest),
+// each kind on its own.
 export const GROUP_OVER = 5;
 // The most queries a grouped message makes from its claims to its last write,
-// whatever its size: the claims (one batch, each search its own statement and
-// its own condition), the stop secrets it lacks (one batch), then the rows and
+// whatever its size: the claims (one batch, each item its own statement and
+// its own condition), the stop secrets it lacks (one batch; for briefings and
+// views the same batch reads the account's language), then the rows and
 // marks after the send (one batch, tried once more on a fault), or the claims
 // given back with the failed rows (one batch). Within CLAIM_QUERIES, which the
 // run holds back before any claim, so a group is taken up whole or not at all.
-// A group its claims leave at GROUP_OVER or fewer goes as each search's own
+// A group its claims leave at GROUP_OVER or fewer goes as each item's own
 // message instead, the second and later each taken up as a message of its own.
 export const GROUP_QUERIES = 4;
+// The account's mail language (users.lang), which a grouped briefings or saved views message takes: read by the
+// primary key in the same batch as the group's stop secrets (briefings.ts, view_mail.ts groupSecrets).
+export const ACCOUNT_LANG_SQL = "SELECT lang FROM users WHERE id = ?";
 export { groupStopPath, groupTag } from "./group_stop";
 export { DELIVERY_ROW_DAYS };
 // The most days one delivery reaches back, whatever the gap since the last.
@@ -973,16 +990,21 @@ async function groupSection(env: Env, site: string, lang: Lang, r: Ready, secret
 }
 
 // One run: the delivery itself (deliver), then its row in the run log,
-// whatever way it ended. Nothing while the switch is off.
+// whatever way it ended. Nothing while the switch is off. The run's report is
+// made here and filled as the run goes, so a fault anywhere still writes
+// every message sent or refused before it: the day's ceiling (DAY_SENT_SQL)
+// reads the row, and a message left out of it would let a later run of the
+// day send past the ceiling.
 export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<RunReport> {
   if (!accountsEnabled(env)) return { ...emptyReport(), outcome: "off" };
   const tally: Tally = { left: 0 };
+  const sofar = emptyReport();
   let report: RunReport;
   try {
-    report = await deliver(env, now, tally);
+    report = await deliver(env, now, tally, sofar);
   } catch (e) {
-    // deliver ends every fault it expects; anything else still gets its row, then goes on as it would have.
-    await writeRunLog(env, now, { ...emptyReport(), outcome: "fault", left: tally.left, why: "the run stopped on an error it did not expect" });
+    // deliver ends every fault it expects; anything else still gets its row, with what was sent before it, then goes on as it would have.
+    await writeRunLog(env, now, { ...sofar, outcome: "fault", left: tally.left, why: "the run stopped on an error it did not expect" });
     throw e;
   }
   report.left = tally.left;
@@ -990,8 +1012,7 @@ export async function runDeliveries(env: Env, now: Date = nowOf(env)): Promise<R
   return report;
 }
 
-async function deliver(env: Env, now: Date, tally: Tally): Promise<RunReport> {
-  const report = emptyReport();
+async function deliver(env: Env, now: Date, tally: Tally, report: RunReport): Promise<RunReport> {
   const site = siteOf(env);
   if (!env.MAIL || !env.MAIL_FROM?.trim() || !site) {
     const missing = [!env.MAIL && "the MAIL binding", !env.MAIL_FROM?.trim() && "MAIL_FROM", !site && "an https SITE_URL"].filter(Boolean);
@@ -1030,9 +1051,12 @@ async function deliver(env: Env, now: Date, tally: Tally): Promise<RunReport> {
   // The ceiling's room for a part: what the run may still send less what the parts before it sent.
   const ceilingAfter = (...parts: ({ sent: number } | null | undefined)[]): Ceiling | undefined =>
     room === null ? undefined : { room: Math.max(0, room - parts.reduce((n, p) => n + (p ? p.sent : 0), 0)), text: ceilingWords };
+  // A part that threw: its report as far as it went is already on the run's
+  // report (each part fills the one it is handed), so the messages it sent or
+  // tried before the fault count in the run log and against the day's ceiling.
   const partFault = (part: string): RunReport => {
     fault = `${part} could not read or write the accounts database; the next hour tries again`;
-    log(`${dataDate}: ${fault}`);
+    log(`${dataDate}: ${fault} (${counts(report)} before it)`);
     return { ...report, outcome: "fault", why: fault };
   };
   // Past the query budget (claiming: too little left for a claim and its
@@ -1124,23 +1148,26 @@ async function deliver(env: Env, now: Date, tally: Tally): Promise<RunReport> {
     }
     const result = await send(env, site, message);
     if (result.sent) {
-      // Sent: the claim stands, whatever happens to the row that records it.
+      // Sent: the claim stands, whatever happens to the row that records it, and the message is counted
+      // before that row is written, so a fault writing it cannot take the message out of the run's count.
       unhold();
       done.add(s.id);
-      await afterSend(() => record(env, s.id, "sent", r.total, now, r.mark));
       report.sent++;
+      await afterSend(() => record(env, s.id, "sent", r.total, now, r.mark));
       return true;
     }
+    const limited = !!result.code && STOP_CODES.has(result.code);
+    // A refusal that is not a limit is a message tried: counted before the writes that follow it.
+    if (!limited) report.failed++;
     await release(env, s.id, s.last_delivered_at, now);
     unhold();
-    if (result.code && STOP_CODES.has(result.code)) {
+    if (limited) {
       stop = result.code;
       report.outcome = "limited";
       return false;
     }
     done.add(s.id);
     await record(env, s.id, "failed", r.total, now);
-    report.failed++;
     return true;
   };
 
@@ -1194,13 +1221,13 @@ async function deliver(env: Env, now: Date, tally: Tally): Promise<RunReport> {
     const message = groupDigest({ lang, to: first.email, site, dataDate, stopUrl, sections, over: GROUP_OVER });
     const result = await send(env, site, message);
     if (result.sent) {
-      // Sent: the claims stand, whatever happens to the rows that record them.
+      // Sent: the claims stand, whatever happens to the rows that record them, and the message is counted first.
       held = [];
       for (const r of members) done.add(r.s.id);
-      await afterSend(() => env.ACCOUNTS!.batch(kept.flatMap((r) => recordStatements(env, r.s.id, "sent", r.total, now, r.mark))));
       report.sent++;
       report.groups++;
       report.grouped += kept.length;
+      await afterSend(() => env.ACCOUNTS!.batch(kept.flatMap((r) => recordStatements(env, r.s.id, "sent", r.total, now, r.mark))));
       return true;
     }
     if (result.code && STOP_CODES.has(result.code)) {
@@ -1210,10 +1237,10 @@ async function deliver(env: Env, now: Date, tally: Tally): Promise<RunReport> {
       report.outcome = "limited";
       return false;
     }
+    report.failed++;
     await releaseAll(env, held, now, kept.map((r) => ({ id: r.s.id, items: r.total })));
     held = [];
     for (const r of members) done.add(r.s.id);
-    report.failed++;
     return true;
   };
 
@@ -1305,10 +1332,15 @@ async function deliver(env: Env, now: Date, tally: Tally): Promise<RunReport> {
     tally.left += report.waiting + unfinished(list, i, (s) =>
       !done.has(s.id) && isDue(s.deliver, s.last_delivered_at, dataDate) && likelyServed(plans, s.user_id, s.plan, "delivery"));
   }
+  // Each part after the saved searches is handed its report to fill (made
+  // here): what it returns is that report, and when it throws, the report as
+  // far as it went goes on the run's, so every message it sent before the
+  // fault is counted (partFault).
   if (!stop) {
+    const part = emptyWatchReport();
     try {
       const watch = await runWatchMail(env, {
-        site, dataDate, now, plans, pool, room: roomAfter(report), capText, queries, tally, ceiling: ceilingAfter(report),
+        site, dataDate, now, plans, pool, room: roomAfter(report), capText, queries, tally, ceiling: ceilingAfter(report), report: part,
       });
       report.watch = watch.report;
       if (watch.stop) {
@@ -1316,13 +1348,16 @@ async function deliver(env: Env, now: Date, tally: Tally): Promise<RunReport> {
         if (report.outcome === "done") report.outcome = watch.capped ? "capped" : "limited";
       }
     } catch {
+      report.watch = part;
       return partFault("the watch mail");
     }
   }
   if (!stop) {
+    const part = emptyBriefingReport();
     try {
       const brief = await runBriefings(env, {
         site, dataDate, now, plans, pool, room: roomAfter(report, report.watch), capText, queries, tally, ceiling: ceilingAfter(report, report.watch),
+        report: part,
       });
       report.briefing = brief.report;
       if (brief.stop) {
@@ -1330,14 +1365,16 @@ async function deliver(env: Env, now: Date, tally: Tally): Promise<RunReport> {
         if (report.outcome === "done") report.outcome = brief.capped ? "capped" : "limited";
       }
     } catch {
+      report.briefing = part;
       return partFault("the briefings");
     }
   }
   if (!stop) {
+    const part = emptyWeeklyReport();
     try {
       const weekly = await runWeekly(env, {
         site, dataDate, now, plans, pool, room: roomAfter(report, report.watch, report.briefing), capText, queries, files, stats, tally,
-        ceiling: ceilingAfter(report, report.watch, report.briefing),
+        ceiling: ceilingAfter(report, report.watch, report.briefing), report: part,
       });
       report.weekly = weekly.report;
       if (weekly.stop) {
@@ -1345,6 +1382,7 @@ async function deliver(env: Env, now: Date, tally: Tally): Promise<RunReport> {
         if (report.outcome === "done") report.outcome = weekly.capped ? "capped" : "limited";
       }
     } catch {
+      report.weekly = part;
       return partFault("the weekly email");
     }
   }
@@ -1352,9 +1390,11 @@ async function deliver(env: Env, now: Date, tally: Tally): Promise<RunReport> {
   // email alone: the saved views still get what the shared cap has left.
   const viewRoom = roomAfter(report, report.watch, report.briefing, report.weekly);
   if (!stop || (report.outcome === "capped" && viewRoom > 0 && !queries.spent)) {
+    const part = emptyViewReport();
     try {
       const views = await runViewMail(env, {
         site, dataDate, now, plans, pool, room: viewRoom, capText, queries, tally, ceiling: ceilingAfter(report, report.watch, report.briefing, report.weekly),
+        report: part,
       });
       report.views = views.report;
       if (views.stop) {
@@ -1362,6 +1402,7 @@ async function deliver(env: Env, now: Date, tally: Tally): Promise<RunReport> {
         if (report.outcome === "done") report.outcome = views.capped ? "capped" : "limited";
       }
     } catch {
+      report.views = part;
       return partFault("the saved views");
     }
   }

@@ -19,7 +19,9 @@
 // unclaimed. A view whose buyer or organization the nightly merged is read at
 // the surviving id (saved_views.ts survivingAddress), as its page reads it. A
 // view whose account's plan does not send it is marked for its period with no
-// run row (passedOver), so it leaves the list.
+// run row (passedOver), so it leaves the list. More than GROUP_OVER of an
+// account's views with new figures in one run go as one message
+// (digests.ts viewGroupDigest), as its saved searches do.
 //
 // Log lines name counts and dates only, never an address, a name or a view.
 
@@ -33,10 +35,12 @@ import {
 import { type Frame, type View, viewFrame, viewOf } from "../view_address";
 import { BRIEFING_WEEKDAY, type BriefingWait, recordPath, weekAnchor } from "./briefings";
 import {
-  type Ceiling, type QueryCount, STOP_CODES, type Tally, afterSend, budgetStop, likelyServed, sendWithHeaders, unfinished,
+  ACCOUNT_LANG_SQL, type Ceiling, GROUP_OVER, type QueryCount, STOP_CODES, type Tally, afterSend, budgetStop, likelyServed, sendWithHeaders,
+  unfinished,
 } from "./deliveries";
-import { type ViewRecord, type ViewYear, VIEW_MAIL_ROWS, siteLink, viewDigest } from "./digests";
+import { type ViewRecord, type ViewYear, VIEW_MAIL_ROWS, siteLink, viewDigest, viewGroupDigest } from "./digests";
 import { allowed, savedViewCap, type Plan } from "./entitlements";
+import { groupStopPath } from "./group_stop";
 import { ultraOnSale } from "./payments";
 import { RunPool } from "./pool";
 import { VIEW_DELIVERY_DAYS, missingViews, survivingAddress } from "./saved_views";
@@ -146,6 +150,9 @@ export type ViewWait = BriefingWait;
 export interface ViewReport {
   sent: number;
   failed: number;
+  // Of the messages sent, the grouped ones, and the views they carried (each grouped message counts once in sent).
+  groups: number;
+  grouped: number;
   // Due views whose figures had not changed: no message.
   same: number;
   // Due views whose owner's plan does not send them (no view_mail, or past its figure).
@@ -155,7 +162,7 @@ export interface ViewReport {
   records: ViewWait | null;
 }
 
-export const emptyViewReport = (): ViewReport => ({ sent: 0, failed: 0, same: 0, skipped: 0, waiting: 0, records: null });
+export const emptyViewReport = (): ViewReport => ({ sent: 0, failed: 0, groups: 0, grouped: 0, same: 0, skipped: 0, waiting: 0, records: null });
 
 // The views that can be due on the data date, those of accounts whose cached
 // plan is paid first, then oldest first (?1 the week's anchor, ?2 the month's,
@@ -180,19 +187,31 @@ type DueRow = {
 };
 
 // The view taken for its period by this run: one statement that holds only
-// while no run has covered it since the anchor.
+// while no run has covered it since the anchor. The same statement covers a
+// view passed over (passedOver below), and a group's claims are made with it,
+// one each, in one batch (claimAll).
+const CLAIM_SQL =
+  "UPDATE saved_views SET last_delivered_at = ?1 WHERE id = ?2 AND deliver IN ('weekly', 'monthly') " +
+  "AND (last_delivered_at IS NULL OR substr(last_delivered_at, 1, 10) < ?3)";
+
 async function claim(env: Env, id: string, anchor: string, now: Date): Promise<boolean> {
-  const res = await env.ACCOUNTS!.prepare(
-    "UPDATE saved_views SET last_delivered_at = ?1 WHERE id = ?2 AND deliver IN ('weekly', 'monthly') " +
-    "AND (last_delivered_at IS NULL OR substr(last_delivered_at, 1, 10) < ?3)",
-  ).bind(now.toISOString(), id, anchor).run();
+  const res = await env.ACCOUNTS!.prepare(CLAIM_SQL).bind(now.toISOString(), id, anchor).run();
   return (res.meta?.changes ?? 0) === 1;
 }
 
+// A group's claims: each view its own statement at its own period's anchor, in one batch (one query); whether each
+// one holds, in order.
+async function claimAll(env: Env, views: readonly { id: string; anchor: string }[], now: Date): Promise<boolean[]> {
+  const db = env.ACCOUNTS!;
+  const results = await db.batch(views.map((v) => db.prepare(CLAIM_SQL).bind(now.toISOString(), v.id, v.anchor)));
+  return results.map((r) => (r.meta?.changes ?? 0) === 1);
+}
+
 // The claim given back, while it is this run's.
+const RELEASE_SQL = "UPDATE saved_views SET last_delivered_at = ?1 WHERE id = ?2 AND last_delivered_at = ?3";
+
 async function release(env: Env, id: string, before: string | null, now: Date): Promise<void> {
-  await env.ACCOUNTS!.prepare("UPDATE saved_views SET last_delivered_at = ?1 WHERE id = ?2 AND last_delivered_at = ?3")
-    .bind(before, id, now.toISOString()).run();
+  await env.ACCOUNTS!.prepare(RELEASE_SQL).bind(before, id, now.toISOString()).run();
 }
 
 // The views read and passed over because their account's plan does not send
@@ -206,21 +225,35 @@ export const MARKS_BATCH = 100;
 async function passedOver(env: Env, views: readonly { id: string; anchor: string }[], now: Date): Promise<void> {
   const db = env.ACCOUNTS!;
   for (let i = 0; i < views.length; i += MARKS_BATCH) {
-    await db.batch(views.slice(i, i + MARKS_BATCH).map((v) => db.prepare(
-      "UPDATE saved_views SET last_delivered_at = ?1 WHERE id = ?2 AND deliver IN ('weekly', 'monthly') " +
-      "AND (last_delivered_at IS NULL OR substr(last_delivered_at, 1, 10) < ?3)",
-    ).bind(now.toISOString(), v.id, v.anchor)));
+    await db.batch(views.slice(i, i + MARKS_BATCH).map((v) => db.prepare(CLAIM_SQL).bind(now.toISOString(), v.id, v.anchor)));
   }
 }
 
 // One run row, written only while the view exists; a sent message keeps its hash beside it.
-async function record(env: Env, id: string, status: "sent" | "failed" | "same", now: Date, dataDate: string, hash: string | null = null): Promise<void> {
+function recordStatements(env: Env, id: string, status: "sent" | "failed" | "same", now: Date, dataDate: string, hash: string | null = null): D1PreparedStatement[] {
   const db = env.ACCOUNTS!;
   const row = db.prepare(
     "INSERT INTO view_deliveries (view_id, sent_at, day, status) SELECT ?1, ?2, ?3, ?4 WHERE EXISTS (SELECT 1 FROM saved_views WHERE id = ?1)",
   ).bind(id, now.toISOString(), dataDate, status);
-  if (status === "sent" && hash) await db.batch([row, db.prepare("UPDATE saved_views SET last_hash = ? WHERE id = ?").bind(hash, id)]);
-  else await row.run();
+  return status === "sent" && hash ? [row, db.prepare("UPDATE saved_views SET last_hash = ? WHERE id = ?").bind(hash, id)] : [row];
+}
+
+async function record(env: Env, id: string, status: "sent" | "failed" | "same", now: Date, dataDate: string, hash: string | null = null): Promise<void> {
+  const statements = recordStatements(env, id, status, now, dataDate, hash);
+  if (statements.length > 1) await env.ACCOUNTS!.batch(statements);
+  else await statements[0].run();
+}
+
+// Every claim of a group given back together, and, when the mail service
+// refused the message, each view's failed row with it: one batch.
+async function releaseAll(
+  env: Env, held: readonly { id: string; before: string | null }[], now: Date, dataDate: string, failed: readonly string[] = [],
+): Promise<void> {
+  const db = env.ACCOUNTS!;
+  await db.batch([
+    ...held.map((h) => db.prepare(RELEASE_SQL).bind(h.before, h.id, now.toISOString())),
+    ...failed.flatMap((id) => recordStatements(env, id, "failed", now, dataDate)),
+  ]);
 }
 
 // The stop link's secret, made with the view's first message.
@@ -233,13 +266,44 @@ async function stopSecret(env: Env, id: string): Promise<string | null> {
   return (read.results?.[0] as { secret?: string } | undefined)?.secret ?? null;
 }
 
+// What a grouped message needs after its claims, in one batch (one query):
+// the stop secrets of its views that have none yet, made as stopSecret makes
+// one (a view deleted while the run was going has none), and the account's
+// mail language (users.lang), which a grouped message takes. The secrets
+// are read by the primary key, at most an account's 50.
+export const GROUP_SECRETS_SQL = "SELECT id, secret FROM saved_views WHERE id IN (SELECT value FROM json_each(?))";
+
+async function groupSecrets(env: Env, userId: string, ids: readonly string[]): Promise<{ secrets: Map<string, string>; lang: Lang }> {
+  const db = env.ACCOUNTS!;
+  const results = await db.batch([
+    ...ids.map((id) => db.prepare("UPDATE saved_views SET secret = ? WHERE id = ? AND secret IS NULL").bind(randomHex(16), id)),
+    ...(ids.length ? [db.prepare(GROUP_SECRETS_SQL).bind(JSON.stringify(ids))] : []),
+    db.prepare(ACCOUNT_LANG_SQL).bind(userId),
+  ]);
+  const rows = (ids.length ? results[results.length - 2]?.results ?? [] : []) as { id: string; secret: string | null }[];
+  const lang = (results[results.length - 1]?.results?.[0] as { lang?: string } | undefined)?.lang === "fr" ? "fr" : "en";
+  return { secrets: new Map(rows.filter((r) => r.secret).map((r) => [r.id, r.secret!])), lang };
+}
+
 // room: the messages the run may still send (the cap less what the four parts
 // before it sent or tried). stop: why the run stopped early. report null: the
 // part did not run, Ultra not being on sale; without the tables it runs no
 // further than saying so (records "no_table"). queries: the run's count
 // (deliveries.ts QueryCount); tally: what the run left due, which this part
 // adds to on every way out; ceiling: what the day's ceiling still allows
-// (deliveries.ts Ceiling).
+// (deliveries.ts Ceiling); report: the report to fill, the caller's, so a
+// fault keeps what was sent before it (deliveries.ts partFault); a part run
+// alone makes its own.
+//
+// Grouping, as the saved searches and the briefings group: an account with
+// more than GROUP_OVER views due in the list is taken up whole where its first
+// one stands, each read before any is sent; when more than GROUP_OVER of them
+// have new figures (passed over, unreadable and unchanged ones out), they go
+// as one message (digests.ts viewGroupDigest, sendGroup below), weekly and
+// monthly together, counted once against the cap, the day's ceiling and the
+// run log, each view keeping its own claim, its own run row and its own hash.
+// Every other account's views go in the list's order, one message each,
+// exactly as before grouping.
 export async function runViewMail(
   env: Env,
   o: {
@@ -247,12 +311,13 @@ export async function runViewMail(
     ceiling?: Ceiling;
     // The run's groups and their counts (pool.ts RunPool); a part run alone keeps its own.
     pool?: RunPool;
+    report?: ViewReport;
   },
 ): Promise<{ report: ViewReport | null; stop: string | null; capped: boolean }> {
   if (!(await ultraOnSale(env).catch(() => false))) return { report: null, stop: null, capped: false };
   const { site, dataDate, now } = o;
   const pool = o.pool ?? new RunPool();
-  const report = emptyViewReport();
+  const report = o.report ?? emptyViewReport();
   const week = weekAnchor(dataDate);
   const month = monthAnchor(dataDate);
   let due: DueRow[];
@@ -270,7 +335,11 @@ export async function runViewMail(
   const reads = new Map<string, Awaited<ReturnType<typeof readRecords>>>();
   let stop: string | null = null;
   let capped = false;
-  let held: { id: string; before: string | null } | null = null;
+  // The claims this run holds and has not yet recorded or given back: a fault in between gives them back.
+  let held: { id: string; before: string | null }[] = [];
+  const unhold = (id: string) => {
+    held = held.filter((h) => h.id !== id);
+  };
   const passed: { id: string; anchor: string }[] = [];
   // Past the run's query budget (deliveries.ts QueryCount), nothing more is taken up; the next hour goes on.
   const pause = (claiming = false): boolean => {
@@ -281,99 +350,242 @@ export async function runViewMail(
     }
     return why !== null;
   };
+  const dueOn = (r: DueRow) => viewDue(r.deliver, r.last_delivered_at, dataDate);
+  // The due views of each account in the list, and the rows an account taken up whole has dealt with (handled), so
+  // the list's later rows of it are passed by and what the part leaves due counts them only while they wait.
+  const perAccount = new Map<string, number>();
+  for (const r of due) if (dueOn(r)) perAccount.set(r.user_id, (perAccount.get(r.user_id) ?? 0) + 1);
+  const taken = new Set<string>();
+  const handled = new Set<string>();
+  const left = (from: number) => due.slice(from).filter((r) => !handled.has(r.id)).length;
+
+  // A view read for its message: its address at the surviving id, its frame, the rows its figures come from (kept, so
+  // a grouped message names the other party in its own language), its figures in the view's language and their hash.
+  type Readied = {
+    row: DueRow; kind: View; address: string; frame: Frame; anchor: string; cadence: ViewCadence; rows: [Row[], Row[]];
+    figures: { years: ViewYear[]; largest: ViewRecord[] }; hash: string;
+  };
+  type Step = { go: "next" } | { go: "stop" } | { go: "send"; item: Readied };
+  // One view read: its plan, its place within the figure, its records, its hash; an unchanged one's row written.
+  // "stop" when the part must stop (the budget, or the records database not ready: every view from `from` on waits).
+  const readOne = async (row: DueRow, from: number): Promise<Step> => {
+    if (!dueOn(row)) return { go: "next" };
+    if (pause()) return { go: "stop" };
+    const cadence = row.deliver as ViewCadence;
+    const plan = await pool.plan(env, o.plans, { id: row.user_id, plan: row.plan, plan_until: row.plan_until }, now);
+    // In a group, past the account's allowance of the subscription's figure (pool.ts).
+    if (!allowed({ plan }, "view_mail") || (row.n_before ?? 0) >= (await pool.allowance(env, row.user_id, "views", savedViewCap(plan)))) {
+      report.skipped++;
+      passed.push({ id: row.id, anchor: anchorOf(cadence, dataDate) });
+      return { go: "next" };
+    }
+    const address = (await survivingAddress(env, row.address)) ?? row.address;
+    const v = viewOf(address);
+    const frame = v ? viewFrame(v.kind, v.url, current, planYears(plan)) : null;
+    const queries = v && frame ? viewQueries(v.kind, v.id, frame) : null;
+    // An address no view reads any more is passed over, as a search whose page no longer reads is.
+    if (!v || !frame || !queries) return { go: "next" };
+    const key = `${address}\n${frame.first}\n${frame.last}`;
+    let read = reads.get(key);
+    if (!read) {
+      read = await readRecords(env, queries);
+      reads.set(key, read);
+    }
+    if (read.state !== "ready" || read.asOf !== dataDate) {
+      report.records = read.state === "ready" ? "stale" : read.state;
+      report.waiting += left(from);
+      return { go: "stop" };
+    }
+    const lang: Lang = row.lang === "fr" ? "fr" : "en";
+    const rows: [Row[], Row[]] = [read.rows[0] ?? [], read.rows[1] ?? []];
+    const figures = viewFigures(v.kind, lang, rows[0], rows[1]);
+    const hash = await figuresHash(frame, figures);
+    const anchor = anchorOf(cadence, dataDate);
+    if (hash === row.last_hash) {
+      if (pause(true)) return { go: "stop" };
+      if (!(await claim(env, row.id, anchor, now))) return { go: "next" };
+      held = [{ id: row.id, before: row.last_delivered_at }];
+      await record(env, row.id, "same", now, dataDate);
+      held = [];
+      report.same++;
+      return { go: "next" };
+    }
+    return { go: "send", item: { row, kind: v.kind, address, frame, anchor, cadence, rows, figures, hash } };
+  };
+
+  // Whether the part may take up one more message: under the room, under the day's ceiling, with the queries for a
+  // claim and its writes left.
+  const mayTakeUp = (): boolean => {
+    if (report.sent + report.failed >= o.room) {
+      stop = o.capText;
+      capped = true;
+      return false;
+    }
+    // The day's ceiling reached: stopped before the claim, as a sending limit stops the run.
+    if (o.ceiling && report.sent >= o.ceiling.room) {
+      stop = o.ceiling.text;
+      return false;
+    }
+    return !pause(true);
+  };
+
+  // A view's own message, its claim held by this run and its stop secret known: sent and recorded, or its claim given
+  // back. Counted before the writes after it, so a fault there cannot take it out of the run's count.
+  const sendClaimed = async (x: Readied, secret: string): Promise<"next" | "stop"> => {
+    const { row, frame } = x;
+    const lang: Lang = row.lang === "fr" ? "fr" : "en";
+    const message = viewDigest({
+      lang, to: row.email, site, stopUrl: siteLink(site, `/account/stop?v=${row.id}&t=${secret}`, lang), cadence: x.cadence, name: row.name,
+      address: x.address, csv: viewCsv(x.kind, x.address), source: frame.source, first: frame.first, last: frame.last, current, dataDate, ...x.figures,
+    });
+    const result = await sendWithHeaders(env, site, message);
+    if (result.sent) {
+      unhold(row.id);
+      report.sent++;
+      // The hash with its row, tried once more on a fault, so an unchanged view does not send again.
+      await afterSend(() => record(env, row.id, "sent", now, dataDate, x.hash));
+      return "next";
+    }
+    if (result.code && STOP_CODES.has(result.code)) {
+      await release(env, row.id, row.last_delivered_at, now);
+      unhold(row.id);
+      stop = result.code;
+      return "stop";
+    }
+    report.failed++;
+    await release(env, row.id, row.last_delivered_at, now);
+    unhold(row.id);
+    await record(env, row.id, "failed", now, dataDate);
+    return "next";
+  };
+
+  // A view's own message, as before grouping: taken up, claimed, its secret made with the first message.
+  const sendOne = async (x: Readied): Promise<"next" | "stop"> => {
+    const { row } = x;
+    if (!mayTakeUp()) return "stop";
+    if (!(await claim(env, row.id, x.anchor, now))) return "next";
+    held = [{ id: row.id, before: row.last_delivered_at }];
+    const secret = row.secret ?? (await stopSecret(env, row.id));
+    if (!secret) {
+      await release(env, row.id, row.last_delivered_at, now);
+      held = [];
+      return "next";
+    }
+    return sendClaimed(x, secret);
+  };
+
+  // More than GROUP_OVER of an account's views with new figures: one message, one against the room and the day's
+  // ceiling, all or nothing, as deliveries.ts sendGroup sends an account's saved searches. Each view keeps its own
+  // claim (one batch), its own run row and hash (one batch after the send); a send that does not go gives every claim
+  // back together. At most GROUP_QUERIES queries from the claims on (the claims, the secrets and the account's
+  // language, the rows and their one retry), inside what mayTakeUp holds back. When the claims leave GROUP_OVER or
+  // fewer (a stop link clicked since the list was read), each goes as its own message, the second and later each held
+  // to mayTakeUp again.
+  const sendGroup = async (items: Readied[]): Promise<"next" | "stop"> => {
+    if (!mayTakeUp()) return "stop";
+    const claimed = await claimAll(env, items.map((x) => ({ id: x.row.id, anchor: x.anchor })), now);
+    const members = items.filter((_, k) => claimed[k]);
+    for (const x of items) if (!members.includes(x)) handled.add(x.row.id);
+    if (!members.length) return "next";
+    held = members.map((x) => ({ id: x.row.id, before: x.row.last_delivered_at }));
+    const userId = members[0].row.user_id;
+    const made = await groupSecrets(env, userId, members.filter((x) => !x.row.secret).map((x) => x.row.id));
+    const secretOf = (x: Readied) => x.row.secret ?? made.secrets.get(x.row.id) ?? null;
+    // A view deleted while the run was going has no secret any more, and its claim went with its row.
+    const kept = members.filter((x) => secretOf(x));
+    for (const x of members) if (!kept.includes(x)) handled.add(x.row.id);
+    held = held.filter((h) => kept.some((x) => x.row.id === h.id));
+    if (!kept.length) return "next";
+    if (kept.length <= GROUP_OVER) {
+      for (const [k, x] of kept.entries()) {
+        // The first was taken up with the group (mayTakeUp above); each later one is a message of its own.
+        const went = k > 0 && !mayTakeUp() ? "stop" : await sendClaimed(x, secretOf(x)!);
+        if (went === "stop") {
+          if (held.length) await releaseAll(env, held, now, dataDate);
+          held = [];
+          return "stop";
+        }
+        handled.add(x.row.id);
+      }
+      return "next";
+    }
+    const lang = made.lang;
+    const sections = kept.map((x) => ({
+      name: x.row.name, address: x.address, stopUrl: siteLink(site, `/account/stop?v=${x.row.id}&t=${secretOf(x)}`, lang),
+      source: x.frame.source, first: x.frame.first, last: x.frame.last,
+      // The other party of each record in the message's language; the hash, made of none of it, is the view's own.
+      ...viewFigures(x.kind, lang, x.rows[0], x.rows[1]),
+    }));
+    const stopUrl = siteLink(site, await groupStopPath(userId, kept.map((x) => ({ id: x.row.id, secret: secretOf(x)! })), "views"), lang);
+    const message = viewGroupDigest({ lang, to: kept[0].row.email, site, dataDate, current, stopUrl, sections, over: GROUP_OVER });
+    const result = await sendWithHeaders(env, site, message);
+    if (result.sent) {
+      // Sent: the claims stand, whatever happens to the rows that record them, and the message is counted first.
+      held = [];
+      for (const x of kept) handled.add(x.row.id);
+      report.sent++;
+      report.groups++;
+      report.grouped += kept.length;
+      await afterSend(() => env.ACCOUNTS!.batch(kept.flatMap((x) => recordStatements(env, x.row.id, "sent", now, dataDate, x.hash))));
+      return "next";
+    }
+    if (result.code && STOP_CODES.has(result.code)) {
+      await releaseAll(env, held, now, dataDate);
+      held = [];
+      stop = result.code;
+      return "stop";
+    }
+    report.failed++;
+    await releaseAll(env, held, now, dataDate, kept.map((x) => x.row.id));
+    held = [];
+    for (const x of kept) handled.add(x.row.id);
+    return "next";
+  };
+
+  // An account taken up whole (more than GROUP_OVER of its views due): each read in the list's order, then grouped
+  // or sent one by one. `from` is where its first one stands.
+  const takeAccount = async (userId: string, from: number): Promise<"next" | "stop"> => {
+    const rows = due.slice(from).filter((r) => r.user_id === userId);
+    const items: Readied[] = [];
+    for (const r of rows) {
+      taken.add(r.id);
+      const step = await readOne(r, from);
+      if (step.go === "stop") return "stop";
+      if (step.go === "send") items.push(step.item);
+      else handled.add(r.id);
+    }
+    if (items.length > GROUP_OVER) return sendGroup(items);
+    for (const x of items) {
+      if ((await sendOne(x)) === "stop") return "stop";
+      handled.add(x.row.id);
+    }
+    return "next";
+  };
+
   let i = 0;
   try {
     for (; i < due.length; i++) {
       const row = due[i];
-      if (!viewDue(row.deliver, row.last_delivered_at, dataDate)) continue;
-      if (pause()) break;
-      const cadence = row.deliver as ViewCadence;
-      const plan = await pool.plan(env, o.plans, { id: row.user_id, plan: row.plan, plan_until: row.plan_until }, now);
-      // In a group, past the account's allowance of the subscription's figure (pool.ts).
-      if (!allowed({ plan }, "view_mail") || (row.n_before ?? 0) >= (await pool.allowance(env, row.user_id, "views", savedViewCap(plan)))) {
-        report.skipped++;
-        passed.push({ id: row.id, anchor: anchorOf(cadence, dataDate) });
+      if (taken.has(row.id)) continue;
+      if ((perAccount.get(row.user_id) ?? 0) > GROUP_OVER) {
+        if ((await takeAccount(row.user_id, i)) === "stop") break;
         continue;
       }
-      const address = (await survivingAddress(env, row.address)) ?? row.address;
-      const v = viewOf(address);
-      const frame = v ? viewFrame(v.kind, v.url, current, planYears(plan)) : null;
-      const queries = v && frame ? viewQueries(v.kind, v.id, frame) : null;
-      // An address no view reads any more is passed over, as a search whose page no longer reads is.
-      if (!v || !frame || !queries) continue;
-      const key = `${address}\n${frame.first}\n${frame.last}`;
-      let read = reads.get(key);
-      if (!read) {
-        read = await readRecords(env, queries);
-        reads.set(key, read);
-      }
-      if (read.state !== "ready" || read.asOf !== dataDate) {
-        report.records = read.state === "ready" ? "stale" : read.state;
-        report.waiting += due.length - i;
-        break;
-      }
-      const lang: Lang = row.lang === "fr" ? "fr" : "en";
-      const figures = viewFigures(v.kind, lang, read.rows[0] ?? [], read.rows[1] ?? []);
-      const hash = await figuresHash(frame, figures);
-      const anchor = anchorOf(cadence, dataDate);
-      if (hash === row.last_hash) {
-        if (pause(true)) break;
-        if (!(await claim(env, row.id, anchor, now))) continue;
-        held = { id: row.id, before: row.last_delivered_at };
-        await record(env, row.id, "same", now, dataDate);
-        held = null;
-        report.same++;
-        continue;
-      }
-      if (report.sent + report.failed >= o.room) {
-        stop = o.capText;
-        capped = true;
-        break;
-      }
-      // The day's ceiling reached: stopped before the claim, as a sending limit stops the run.
-      if (o.ceiling && report.sent >= o.ceiling.room) {
-        stop = o.ceiling.text;
-        break;
-      }
-      if (pause(true)) break;
-      if (!(await claim(env, row.id, anchor, now))) continue;
-      held = { id: row.id, before: row.last_delivered_at };
-      const secret = row.secret ?? (await stopSecret(env, row.id));
-      if (!secret) {
-        await release(env, row.id, row.last_delivered_at, now);
-        held = null;
-        continue;
-      }
-      const message = viewDigest({
-        lang, to: row.email, site, stopUrl: siteLink(site, `/account/stop?v=${row.id}&t=${secret}`, lang), cadence, name: row.name, address,
-        csv: viewCsv(v.kind, address), source: frame.source, first: frame.first, last: frame.last, current, dataDate, ...figures,
-      });
-      const result = await sendWithHeaders(env, site, message);
-      if (result.sent) {
-        held = null;
-        // The hash with its row, tried once more on a fault, so an unchanged view does not send again.
-        await afterSend(() => record(env, row.id, "sent", now, dataDate, hash));
-        report.sent++;
-      } else if (result.code && STOP_CODES.has(result.code)) {
-        await release(env, row.id, row.last_delivered_at, now);
-        held = null;
-        stop = result.code;
-        break;
-      } else {
-        await release(env, row.id, row.last_delivered_at, now);
-        held = null;
-        await record(env, row.id, "failed", now, dataDate);
-        report.failed++;
-      }
+      const step = await readOne(row, i);
+      if (step.go === "stop") break;
+      if (step.go === "next") continue;
+      if ((await sendOne(step.item)) === "stop") break;
     }
     await passedOver(env, passed, now);
   } catch (e) {
-    if (held) await release(env, held.id, held.before, now).catch(() => undefined);
+    if (held.length === 1) await release(env, held[0].id, held[0].before, now).catch(() => undefined);
+    else if (held.length) await releaseAll(env, held, now, dataDate).catch(() => undefined);
     throw e;
   } finally {
-    // From the view in hand on (a wait, a stop or a fault), those due whose plan would send them.
+    // From the view in hand on (a wait, a stop or a fault), those due whose plan would send them; an account taken up
+    // whole counts its own that it has not dealt with.
     if (o.tally) {
-      o.tally.left += unfinished(due, i, (r) => viewDue(r.deliver, r.last_delivered_at, dataDate) && likelyServed(o.plans, r.user_id, r.plan, "view_mail"));
+      o.tally.left += unfinished(due, i, (r) => !handled.has(r.id) && dueOn(r) && likelyServed(o.plans, r.user_id, r.plan, "view_mail"));
     }
   }
   return { report, stop, capped };
@@ -390,5 +602,6 @@ export const VIEW_WAIT_WHY: Record<ViewWait, string> = {
 export const viewActive = (r: ViewReport) => r.sent + r.failed + r.same + r.skipped + r.waiting > 0 || r.records !== null;
 
 export const viewCounts = (r: ViewReport) =>
-  `saved views: ${r.sent} sent, ${r.failed} failed, ${r.same} unchanged, ${r.skipped} not on a plan with their email` +
+  `saved views: ${r.sent} sent${r.groups ? ` (${r.groups} of them grouped, carrying ${r.grouped} views)` : ""}, ${r.failed} failed, ` +
+  `${r.same} unchanged, ${r.skipped} not on a plan with their email` +
   (r.records ? `, ${r.waiting} waiting: ${VIEW_WAIT_WHY[r.records]}` : "");

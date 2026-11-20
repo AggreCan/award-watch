@@ -34,8 +34,8 @@ const LANGS = ["en", "fr"] as const;
 // The live check's templates as checkMessage reads them.
 const CHECK_SHAPE: Record<MailCheckTemplate, keyof typeof SHAPES> = {
   sign_in: "sign_in", tenders_daily: "digest_daily", expiring_weekly: "digest_weekly", records: "digest_daily", group: "group", watch: "watch",
-  briefing: "briefing", view: "view_weekly", weekly: "weekly", accounts_open: "accounts_open", ultra_open: "ultra_open",
-  address_notice: "address_notice",
+  briefing: "briefing", briefing_group: "briefing_group", view: "view_weekly", view_group: "view_group", weekly: "weekly",
+  accounts_open: "accounts_open", ultra_open: "ultra_open", address_notice: "address_notice",
 };
 
 // What every message carrying the week's matching notices holds in both
@@ -238,11 +238,11 @@ describe.each(LANGS)("every message, in %s", (lang) => {
 describe("the live check's messages", () => {
   // The records digest, the watch mail and the briefing of the live check
   // are the catalogue's samples of those kinds; their stop links lead nowhere.
-  // The grouped message's own link (g=, its tags) is held in check-group.test.ts.
+  // The grouped messages' own links (g=, gb=, gv=, their tags) are held in check-group.test.ts.
   it("point their stop links at an id and a secret no row holds", async () => {
     for (const lang of LANGS) {
       for (const { template, message } of await mailCheckMessages(lang, newEmail("stops"), SITE, new Date(), SAMPLE_ADDRESS)) {
-        for (const stop of (message.text.match(/https:\/\/\S+\/(?:account|interest)\/stop\?\S+/g) ?? []).filter((u) => !/[?&]g=/.test(u))) {
+        for (const stop of (message.text.match(/https:\/\/\S+\/(?:account|interest)\/stop\?\S+/g) ?? []).filter((u) => !/[?&]g[bv]?=/.test(u))) {
           expect(stop, template).toMatch(/[?&](?:s|w|b|e|v|t)=0{32}(?:&|$)/);
           const params = new URL(stop).searchParams;
           for (const key of ["s", "w", "b", "e", "v", "t"]) if (params.has(key)) expect(params.get(key), `${template} ${key}`).toBe("0".repeat(32));

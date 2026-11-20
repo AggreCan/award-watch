@@ -22,7 +22,7 @@
 // statements (seven for a buyer narrowed to a segment, which rec_due does not
 // hold).
 //
-// The delivery job's last step (deliveries.ts runDeliveries calls
+// The delivery job's third part (deliveries.ts runDeliveries calls
 // runBriefings after the watch mail, inside the same cap of RUN_MESSAGES_MAX
 // messages): each briefing with delivery weekly, an active account whose plan
 // allows delivery and that is not blocked, not covered since this week's
@@ -32,7 +32,9 @@
 // at today's data date, every briefing waits unclaimed. A briefing whose
 // account's plan does not send it is marked for the week with no run row
 // (passedOver), so it leaves the list; a buyer the nightly merged is read at
-// the surviving id, the briefing's row keeping the id saved.
+// the surviving id, the briefing's row keeping the id saved. More than
+// GROUP_OVER of an account's briefings with something to send in one run go
+// as one message (digests.ts briefingGroupDigest), as its saved searches do.
 //
 // Log lines name counts and dates only, never an address or a label.
 
@@ -46,10 +48,12 @@ import {
   BUYER_DUE_SQL, SEGMENT_DUE_SQL, type Query, SOURCE_NUMBER, fiscalYearOf, quarterEnd, readRecords,
 } from "../records_db";
 import {
-  type Ceiling, type QueryCount, STOP_CODES, type Tally, afterSend, budgetStop, likelyServed, sendWithHeaders, unfinished,
+  ACCOUNT_LANG_SQL, type Ceiling, GROUP_OVER, type QueryCount, STOP_CODES, type Tally, afterSend, budgetStop, likelyServed, sendWithHeaders,
+  unfinished,
 } from "./deliveries";
-import { type DigestMessage, briefingDigest, siteLink } from "./digests";
+import { type DigestMessage, briefingDigest, briefingGroupDigest, siteLink } from "./digests";
 import { allowed, savedSearchCap, SAVED_SEARCH_MAX, type Plan } from "./entitlements";
+import { groupStopPath } from "./group_stop";
 import { type InGroup, RunPool, groupIn, pooled } from "./pool";
 import { type RecordsWait, missingTable } from "./records_deliveries";
 import { newId, randomHex } from "./secrets";
@@ -195,6 +199,13 @@ export function briefingName(lang: Lang, s: BriefingSubject, name: string): stri
   if (s.kind === "segment") return `${s.subject} ${segmentShort(lang, s.subject)}`;
   return s.segment ? `${name} · ${s.segment} ${segmentShort(lang, s.segment)}` : name;
 }
+
+// A saved briefing's name in a page's or a message's language: a segment's
+// rebuilt, a buyer's as the site wrote it (its name in the language it was
+// saved in). The searches page, the stop page and a grouped message, which
+// takes the account's language, read it.
+export const briefingLabel = (lang: Lang, b: Pick<Briefing, "kind" | "subject" | "segment" | "label" | "lang">): string =>
+  b.kind === "segment" ? briefingName(lang, b, "") : b.label;
 
 // -- the records statements -------------------------------------------------------------------
 
@@ -661,6 +672,9 @@ export type BriefingWait = RecordsWait | "no_table";
 export interface BriefingReport {
   sent: number;
   failed: number;
+  // Of the messages sent, the grouped ones, and the briefings they carried (each grouped message counts once in sent).
+  groups: number;
+  grouped: number;
   empty: number;
   // Due briefings whose owner's plan does not allow delivery.
   skipped: number;
@@ -669,7 +683,9 @@ export interface BriefingReport {
   records: BriefingWait | null;
 }
 
-export const emptyBriefingReport = (): BriefingReport => ({ sent: 0, failed: 0, empty: 0, skipped: 0, waiting: 0, records: null });
+export const emptyBriefingReport = (): BriefingReport => ({
+  sent: 0, failed: 0, groups: 0, grouped: 0, empty: 0, skipped: 0, waiting: 0, records: null,
+});
 
 // The briefings that can be due this week, those of accounts whose cached
 // plan is paid first, then oldest first (?1 the week's weekday on or before
@@ -692,18 +708,29 @@ export const BRIEFINGS_DUE_SQL =
 type DueRow = BriefingRow & { user_id: string; secret: string | null; email: string; plan: string; plan_until: string | null; n_before: number };
 
 // The briefing taken for the week by this run: one statement that holds only
-// while no run has covered it since the week's weekday.
+// while no run has covered it since the week's weekday. The same statement
+// covers a briefing passed over (passedOver below), and a group's claims are
+// made with it, one each, in one batch (claimAll).
+const CLAIM_SQL =
+  "UPDATE briefings SET last_delivered_at = ?1 WHERE id = ?2 AND deliver = 'weekly' AND (last_delivered_at IS NULL OR substr(last_delivered_at, 1, 10) < ?3)";
+
 async function claim(env: Env, id: string, anchor: string, now: Date): Promise<boolean> {
-  const res = await env.ACCOUNTS!.prepare(
-    "UPDATE briefings SET last_delivered_at = ?1 WHERE id = ?2 AND deliver = 'weekly' AND (last_delivered_at IS NULL OR substr(last_delivered_at, 1, 10) < ?3)",
-  ).bind(now.toISOString(), id, anchor).run();
+  const res = await env.ACCOUNTS!.prepare(CLAIM_SQL).bind(now.toISOString(), id, anchor).run();
   return (res.meta?.changes ?? 0) === 1;
 }
 
+// A group's claims: each briefing its own statement, in one batch (one query); whether each one holds, in order.
+async function claimAll(env: Env, ids: readonly string[], anchor: string, now: Date): Promise<boolean[]> {
+  const db = env.ACCOUNTS!;
+  const results = await db.batch(ids.map((id) => db.prepare(CLAIM_SQL).bind(now.toISOString(), id, anchor)));
+  return results.map((r) => (r.meta?.changes ?? 0) === 1);
+}
+
 // The claim given back, while it is this run's.
+const RELEASE_SQL = "UPDATE briefings SET last_delivered_at = ?1 WHERE id = ?2 AND last_delivered_at = ?3";
+
 async function release(env: Env, id: string, before: string | null, now: Date): Promise<void> {
-  await env.ACCOUNTS!.prepare("UPDATE briefings SET last_delivered_at = ?1 WHERE id = ?2 AND last_delivered_at = ?3")
-    .bind(before, id, now.toISOString()).run();
+  await env.ACCOUNTS!.prepare(RELEASE_SQL).bind(before, id, now.toISOString()).run();
 }
 
 // The briefings read and passed over because their account's plan does not
@@ -717,18 +744,38 @@ export const MARKS_BATCH = 100;
 async function passedOver(env: Env, ids: readonly string[], anchor: string, now: Date): Promise<void> {
   const db = env.ACCOUNTS!;
   for (let i = 0; i < ids.length; i += MARKS_BATCH) {
-    await db.batch(ids.slice(i, i + MARKS_BATCH).map((id) => db.prepare(
-      "UPDATE briefings SET last_delivered_at = ?1 WHERE id = ?2 AND deliver = 'weekly' AND (last_delivered_at IS NULL OR substr(last_delivered_at, 1, 10) < ?3)",
-    ).bind(now.toISOString(), id, anchor)));
+    await db.batch(ids.slice(i, i + MARKS_BATCH).map((id) => db.prepare(CLAIM_SQL).bind(now.toISOString(), id, anchor)));
   }
 }
 
+// A grouped message's stop link (/account/stop?gb=, routes.tsx): the account's briefings that hold a stop secret,
+// through idx_briefings_user, at most GROUP_TAGS_MAX (?2), each checked against the link's tags (group_stop.ts).
+export const GROUP_STOP_SQL =
+  "SELECT b.id, b.user_id, b.kind, b.subject, b.segment, b.label, b.lang, b.deliver, b.secret FROM briefings b JOIN users u ON u.id = b.user_id " +
+  "WHERE b.user_id = ? AND b.secret IS NOT NULL AND u.status = 'active' ORDER BY b.created_at, b.id LIMIT ?";
+
 // One run row, written only while the briefing exists.
+const RECORD_SQL =
+  "INSERT INTO briefing_deliveries (briefing_id, sent_at, day, items, status) SELECT ?1, ?2, ?3, ?4, ?5 " +
+  "WHERE EXISTS (SELECT 1 FROM briefings WHERE id = ?1)";
+
+const recordStatement = (env: Env, id: string, status: "sent" | "failed" | "empty", items: number, now: Date, dataDate: string) =>
+  env.ACCOUNTS!.prepare(RECORD_SQL).bind(id, now.toISOString(), dataDate, items, status);
+
 async function record(env: Env, id: string, status: "sent" | "failed" | "empty", items: number, now: Date, dataDate: string): Promise<void> {
-  await env.ACCOUNTS!.prepare(
-    "INSERT INTO briefing_deliveries (briefing_id, sent_at, day, items, status) SELECT ?1, ?2, ?3, ?4, ?5 " +
-    "WHERE EXISTS (SELECT 1 FROM briefings WHERE id = ?1)",
-  ).bind(id, now.toISOString(), dataDate, items, status).run();
+  await recordStatement(env, id, status, items, now, dataDate).run();
+}
+
+// Every claim of a group given back together, and, when the mail service
+// refused the message, each briefing's failed row with it: one batch.
+async function releaseAll(
+  env: Env, held: readonly { id: string; before: string | null }[], now: Date, dataDate: string, failed: readonly { id: string; items: number }[] = [],
+): Promise<void> {
+  const db = env.ACCOUNTS!;
+  await db.batch([
+    ...held.map((h) => db.prepare(RELEASE_SQL).bind(h.before, h.id, now.toISOString())),
+    ...failed.map((f) => recordStatement(env, f.id, "failed", f.items, now, dataDate)),
+  ]);
 }
 
 // The stop link's secret, made with the briefing's first message.
@@ -741,11 +788,41 @@ async function stopSecret(env: Env, id: string): Promise<string | null> {
   return (read.results?.[0] as { secret?: string } | undefined)?.secret ?? null;
 }
 
+// What a grouped message needs after its claims, in one batch (one query):
+// the stop secrets of its briefings that have none yet, made as stopSecret
+// makes one (a briefing deleted while the run was going has none), and the
+// account's mail language (users.lang), which a grouped message takes. The
+// secrets are read by the primary key, at most an account's 100.
+export const GROUP_SECRETS_SQL = "SELECT id, secret FROM briefings WHERE id IN (SELECT value FROM json_each(?))";
+
+async function groupSecrets(env: Env, userId: string, ids: readonly string[]): Promise<{ secrets: Map<string, string>; lang: Lang }> {
+  const db = env.ACCOUNTS!;
+  const results = await db.batch([
+    ...ids.map((id) => db.prepare("UPDATE briefings SET secret = ? WHERE id = ? AND secret IS NULL").bind(randomHex(16), id)),
+    ...(ids.length ? [db.prepare(GROUP_SECRETS_SQL).bind(JSON.stringify(ids))] : []),
+    db.prepare(ACCOUNT_LANG_SQL).bind(userId),
+  ]);
+  const rows = (ids.length ? results[results.length - 2]?.results ?? [] : []) as { id: string; secret: string | null }[];
+  const lang = (results[results.length - 1]?.results?.[0] as { lang?: string } | undefined)?.lang === "fr" ? "fr" : "en";
+  return { secrets: new Map(rows.filter((r) => r.secret).map((r) => [r.id, r.secret!])), lang };
+}
+
 // room: the messages the run may still send (the cap less what the saved
 // searches and the watch mail sent). stop: why the run stopped early.
 // queries: the run's count (deliveries.ts QueryCount); tally: what the run
 // left due, which this part adds to on every way out; ceiling: what the
-// day's ceiling still allows (deliveries.ts Ceiling).
+// day's ceiling still allows (deliveries.ts Ceiling); report: the report to
+// fill, the caller's, so a fault keeps what was sent before it
+// (deliveries.ts partFault); a part run alone makes its own.
+//
+// Grouping, as the saved searches group (deliveries.ts): an account with more
+// than GROUP_OVER briefings due in the list is taken up whole where its first
+// one stands, each of them read before any is sent; when more than
+// GROUP_OVER of them have something to send (passed over and empty ones out),
+// they go as one message (briefingGroupDigest, sendGroup below), counted once
+// against the cap, the day's ceiling and the run log, each briefing keeping
+// its own claim and its own run row. Every other account's briefings go in the
+// list's order, one message each, exactly as before grouping.
 export async function runBriefings(
   env: Env,
   o: {
@@ -753,11 +830,12 @@ export async function runBriefings(
     ceiling?: Ceiling;
     // The run's groups and their counts (pool.ts RunPool); a part run alone keeps its own.
     pool?: RunPool;
+    report?: BriefingReport;
   },
 ): Promise<{ report: BriefingReport; stop: string | null; capped: boolean }> {
   const { site, dataDate, now } = o;
   const pool = o.pool ?? new RunPool();
-  const report = emptyBriefingReport();
+  const report = o.report ?? emptyBriefingReport();
   const anchor = weekAnchor(dataDate);
   let due: DueRow[];
   try {
@@ -773,7 +851,11 @@ export async function runBriefings(
   const reads = new Map<string, BriefingRead>();
   let stop: string | null = null;
   let capped = false;
-  let held: { id: string; before: string | null } | null = null;
+  // The claims this run holds and has not yet recorded or given back: a fault in between gives them back.
+  let held: { id: string; before: string | null }[] = [];
+  const unhold = (id: string) => {
+    held = held.filter((h) => h.id !== id);
+  };
   const passed: string[] = [];
   // Past the run's query budget (deliveries.ts QueryCount), nothing more is taken up; the next hour goes on.
   const pause = (claiming = false): boolean => {
@@ -784,98 +866,231 @@ export async function runBriefings(
     }
     return why !== null;
   };
+  const dueOn = (r: DueRow): boolean => {
+    const b = toBriefing(r);
+    return !!b && briefingDue(b.deliver, b.last_delivered_at, dataDate);
+  };
+  // The due briefings of each account in the list, and the rows an account taken up whole has dealt with (handled),
+  // so the list's later rows of it are passed by and what the part leaves due counts them only while they wait.
+  const perAccount = new Map<string, number>();
+  for (const r of due) if (dueOn(r)) perAccount.set(r.user_id, (perAccount.get(r.user_id) ?? 0) + 1);
+  const taken = new Set<string>();
+  const handled = new Set<string>();
+  const left = (from: number) => due.slice(from).filter((r) => !handled.has(r.id)).length;
+
+  // A briefing read for its message: the briefing at its surviving id, its row and what it reports.
+  type Readied = { row: DueRow; b: Briefing; data: BriefingData };
+  type Step = { go: "next" } | { go: "stop" } | { go: "send"; item: Readied };
+  // One briefing read: its plan, its place within the figure, its records; an empty one's row written. "stop" when the
+  // part must stop (the budget, or the records database not ready: every briefing from `from` on waits).
+  const readOne = async (row: DueRow, from: number): Promise<Step> => {
+    const saved = toBriefing(row);
+    if (!saved || !briefingDue(saved.deliver, saved.last_delivered_at, dataDate)) return { go: "next" };
+    if (pause()) return { go: "stop" };
+    const plan = await pool.plan(env, o.plans, { id: row.user_id, plan: row.plan, plan_until: row.plan_until }, now);
+    // One figure with the saved searches: in a group, the account's allowance of the subscription's (pool.ts).
+    if (!allowed({ plan }, "delivery") || (row.n_before ?? 0) >= (await pool.allowance(env, row.user_id, "searches", sharedCap(plan)))) {
+      report.skipped++;
+      passed.push(saved.id);
+      return { go: "next" };
+    }
+    // A buyer the nightly merged into another is read at the surviving id (watches.ts survivorOf, as a
+    // watch follows it); the briefing's row and label keep the id saved.
+    const moved = saved.kind === "buyer" ? await survivorOf(env, "buyer", saved.subject) : null;
+    const b = moved ? { ...saved, subject: moved } : saved;
+    const start = briefingStart(b.last_delivered_at, dataDate);
+    const key = `${b.kind}\n${b.subject}\n${b.segment}\n${start}`;
+    let read = reads.get(key);
+    if (!read) {
+      read = await readBriefing(env, b, dataDate, start);
+      reads.set(key, read);
+    }
+    if (read.state !== "ready" || read.data.asOf !== dataDate) {
+      report.records = read.state === "ready" ? "stale" : read.state;
+      report.waiting += left(from);
+      return { go: "stop" };
+    }
+    const data = read.data;
+    if (!hasNews(data)) {
+      if (pause(true)) return { go: "stop" };
+      if (!(await claim(env, b.id, anchor, now))) return { go: "next" };
+      held = [{ id: b.id, before: b.last_delivered_at }];
+      await record(env, b.id, "empty", 0, now, dataDate);
+      held = [];
+      report.empty++;
+      return { go: "next" };
+    }
+    return { go: "send", item: { row, b, data } };
+  };
+
+  // Whether the part may take up one more message: under the room, under the day's ceiling, with the queries for a
+  // claim and its writes left.
+  const mayTakeUp = (): boolean => {
+    if (report.sent + report.failed >= o.room) {
+      stop = o.capText;
+      capped = true;
+      return false;
+    }
+    // The day's ceiling reached: stopped before the claim, as a sending limit stops the run.
+    if (o.ceiling && report.sent >= o.ceiling.room) {
+      stop = o.ceiling.text;
+      return false;
+    }
+    return !pause(true);
+  };
+
+  // A briefing's own message, its claim held by this run and its stop secret known: sent and recorded, or its claim
+  // given back. Counted before the writes after it, so a fault there cannot take it out of the run's count.
+  const sendClaimed = async (x: Readied, secret: string): Promise<"next" | "stop"> => {
+    const { row, b, data } = x;
+    const message: DigestMessage = briefingDigest({
+      lang: b.lang, to: row.email, site, stopUrl: siteLink(site, `/account/stop?b=${b.id}&t=${secret}`, b.lang), briefing: b,
+      name: b.label, data,
+    });
+    const items = listedRows(data);
+    const result = await sendWithHeaders(env, site, message);
+    if (result.sent) {
+      unhold(b.id);
+      report.sent++;
+      await afterSend(() => record(env, b.id, "sent", items, now, dataDate));
+      return "next";
+    }
+    if (result.code && STOP_CODES.has(result.code)) {
+      await release(env, b.id, b.last_delivered_at, now);
+      unhold(b.id);
+      stop = result.code;
+      return "stop";
+    }
+    report.failed++;
+    await release(env, b.id, b.last_delivered_at, now);
+    unhold(b.id);
+    await record(env, b.id, "failed", items, now, dataDate);
+    return "next";
+  };
+
+  // A briefing's own message, as before grouping: taken up, claimed, its secret made with the first message.
+  const sendOne = async (x: Readied): Promise<"next" | "stop"> => {
+    const { row, b } = x;
+    if (!mayTakeUp()) return "stop";
+    if (!(await claim(env, b.id, anchor, now))) return "next";
+    held = [{ id: b.id, before: b.last_delivered_at }];
+    const secret = row.secret ?? (await stopSecret(env, b.id));
+    if (!secret) {
+      await release(env, b.id, b.last_delivered_at, now);
+      held = [];
+      return "next";
+    }
+    return sendClaimed(x, secret);
+  };
+
+  // More than GROUP_OVER of an account's briefings with something to send: one message, one against the room and the
+  // day's ceiling, all or nothing, as deliveries.ts sendGroup sends an account's saved searches. Each briefing keeps its
+  // own claim (one batch) and its own run row (one batch after the send); a send that does not go gives every claim back
+  // together. At most GROUP_QUERIES queries from the claims on (the claims, the secrets and the account's language, the
+  // rows and their one retry), inside what mayTakeUp holds back. When the claims leave GROUP_OVER or fewer (a stop link
+  // clicked since the list was read), each goes as its own message, the second and later each held to mayTakeUp again.
+  const sendGroup = async (items: Readied[]): Promise<"next" | "stop"> => {
+    if (!mayTakeUp()) return "stop";
+    const claimed = await claimAll(env, items.map((x) => x.b.id), anchor, now);
+    const members = items.filter((_, k) => claimed[k]);
+    for (const x of items) if (!members.includes(x)) handled.add(x.row.id);
+    if (!members.length) return "next";
+    held = members.map((x) => ({ id: x.b.id, before: x.b.last_delivered_at }));
+    const userId = members[0].row.user_id;
+    const made = await groupSecrets(env, userId, members.filter((x) => !x.row.secret).map((x) => x.b.id));
+    const secretOf = (x: Readied) => x.row.secret ?? made.secrets.get(x.b.id) ?? null;
+    // A briefing deleted while the run was going has no secret any more, and its claim went with its row.
+    const kept = members.filter((x) => secretOf(x));
+    for (const x of members) if (!kept.includes(x)) handled.add(x.row.id);
+    held = held.filter((h) => kept.some((x) => x.b.id === h.id));
+    if (!kept.length) return "next";
+    if (kept.length <= GROUP_OVER) {
+      for (const [k, x] of kept.entries()) {
+        // The first was taken up with the group (mayTakeUp above); each later one is a message of its own.
+        const went = k > 0 && !mayTakeUp() ? "stop" : await sendClaimed(x, secretOf(x)!);
+        if (went === "stop") {
+          if (held.length) await releaseAll(env, held, now, dataDate);
+          held = [];
+          return "stop";
+        }
+        handled.add(x.row.id);
+      }
+      return "next";
+    }
+    const lang = made.lang;
+    const sections = kept.map((x) => ({
+      label: briefingLabel(lang, x.b), briefing: x.b, data: x.data, stopUrl: siteLink(site, `/account/stop?b=${x.b.id}&t=${secretOf(x)}`, lang),
+    }));
+    const stopUrl = siteLink(site, await groupStopPath(userId, kept.map((x) => ({ id: x.b.id, secret: secretOf(x)! })), "briefings"), lang);
+    const message = briefingGroupDigest({ lang, to: kept[0].row.email, site, dataDate, stopUrl, sections, over: GROUP_OVER });
+    const result = await sendWithHeaders(env, site, message);
+    if (result.sent) {
+      // Sent: the claims stand, whatever happens to the rows that record them, and the message is counted first.
+      held = [];
+      for (const x of kept) handled.add(x.row.id);
+      report.sent++;
+      report.groups++;
+      report.grouped += kept.length;
+      await afterSend(() => env.ACCOUNTS!.batch(kept.map((x) => recordStatement(env, x.b.id, "sent", listedRows(x.data), now, dataDate))));
+      return "next";
+    }
+    if (result.code && STOP_CODES.has(result.code)) {
+      await releaseAll(env, held, now, dataDate);
+      held = [];
+      stop = result.code;
+      return "stop";
+    }
+    report.failed++;
+    await releaseAll(env, held, now, dataDate, kept.map((x) => ({ id: x.b.id, items: listedRows(x.data) })));
+    held = [];
+    for (const x of kept) handled.add(x.row.id);
+    return "next";
+  };
+
+  // An account taken up whole (more than GROUP_OVER of its briefings due): each read in the list's order, then grouped
+  // or sent one by one. `from` is where its first one stands.
+  const takeAccount = async (userId: string, from: number): Promise<"next" | "stop"> => {
+    const rows = due.slice(from).filter((r) => r.user_id === userId);
+    const items: Readied[] = [];
+    for (const r of rows) {
+      taken.add(r.id);
+      const step = await readOne(r, from);
+      if (step.go === "stop") return "stop";
+      if (step.go === "send") items.push(step.item);
+      else handled.add(r.id);
+    }
+    if (items.length > GROUP_OVER) return sendGroup(items);
+    for (const x of items) {
+      if ((await sendOne(x)) === "stop") return "stop";
+      handled.add(x.row.id);
+    }
+    return "next";
+  };
+
   let i = 0;
   try {
     for (; i < due.length; i++) {
       const row = due[i];
-      const saved = toBriefing(row);
-      if (!saved || !briefingDue(saved.deliver, saved.last_delivered_at, dataDate)) continue;
-      if (pause()) break;
-      const plan = await pool.plan(env, o.plans, { id: row.user_id, plan: row.plan, plan_until: row.plan_until }, now);
-      // One figure with the saved searches: in a group, the account's allowance of the subscription's (pool.ts).
-      if (!allowed({ plan }, "delivery") || (row.n_before ?? 0) >= (await pool.allowance(env, row.user_id, "searches", sharedCap(plan)))) {
-        report.skipped++;
-        passed.push(saved.id);
+      if (taken.has(row.id)) continue;
+      if ((perAccount.get(row.user_id) ?? 0) > GROUP_OVER) {
+        if ((await takeAccount(row.user_id, i)) === "stop") break;
         continue;
       }
-      // A buyer the nightly merged into another is read at the surviving id (watches.ts survivorOf, as a
-      // watch follows it); the briefing's row and label keep the id saved.
-      const moved = saved.kind === "buyer" ? await survivorOf(env, "buyer", saved.subject) : null;
-      const b = moved ? { ...saved, subject: moved } : saved;
-      const start = briefingStart(b.last_delivered_at, dataDate);
-      const key = `${b.kind}\n${b.subject}\n${b.segment}\n${start}`;
-      let read = reads.get(key);
-      if (!read) {
-        read = await readBriefing(env, b, dataDate, start);
-        reads.set(key, read);
-      }
-      if (read.state !== "ready" || read.data.asOf !== dataDate) {
-        report.records = read.state === "ready" ? "stale" : read.state;
-        report.waiting += due.length - i;
-        break;
-      }
-      const data = read.data;
-      if (!hasNews(data)) {
-        if (pause(true)) break;
-        if (!(await claim(env, b.id, anchor, now))) continue;
-        held = { id: b.id, before: b.last_delivered_at };
-        await record(env, b.id, "empty", 0, now, dataDate);
-        held = null;
-        report.empty++;
-        continue;
-      }
-      if (report.sent + report.failed >= o.room) {
-        stop = o.capText;
-        capped = true;
-        break;
-      }
-      // The day's ceiling reached: stopped before the claim, as a sending limit stops the run.
-      if (o.ceiling && report.sent >= o.ceiling.room) {
-        stop = o.ceiling.text;
-        break;
-      }
-      if (pause(true)) break;
-      if (!(await claim(env, b.id, anchor, now))) continue;
-      held = { id: b.id, before: b.last_delivered_at };
-      const secret = row.secret ?? (await stopSecret(env, b.id));
-      if (!secret) {
-        await release(env, b.id, b.last_delivered_at, now);
-        held = null;
-        continue;
-      }
-      const message: DigestMessage = briefingDigest({
-        lang: b.lang, to: row.email, site, stopUrl: siteLink(site, `/account/stop?b=${b.id}&t=${secret}`, b.lang), briefing: b,
-        name: b.label, data,
-      });
-      const items = listedRows(data);
-      const result = await sendWithHeaders(env, site, message);
-      if (result.sent) {
-        held = null;
-        await afterSend(() => record(env, b.id, "sent", items, now, dataDate));
-        report.sent++;
-      } else if (result.code && STOP_CODES.has(result.code)) {
-        await release(env, b.id, b.last_delivered_at, now);
-        held = null;
-        stop = result.code;
-        break;
-      } else {
-        await release(env, b.id, b.last_delivered_at, now);
-        held = null;
-        await record(env, b.id, "failed", items, now, dataDate);
-        report.failed++;
-      }
+      const step = await readOne(row, i);
+      if (step.go === "stop") break;
+      if (step.go === "next") continue;
+      if ((await sendOne(step.item)) === "stop") break;
     }
     await passedOver(env, passed, anchor, now);
   } catch (e) {
-    if (held) await release(env, held.id, held.before, now).catch(() => undefined);
+    if (held.length === 1) await release(env, held[0].id, held[0].before, now).catch(() => undefined);
+    else if (held.length) await releaseAll(env, held, now, dataDate).catch(() => undefined);
     throw e;
   } finally {
-    // From the briefing in hand on (a wait, a stop or a fault), those due whose plan would send them.
+    // From the briefing in hand on (a wait, a stop or a fault), those due whose plan would send them; an account taken
+    // up whole counts its own that it has not dealt with.
     if (o.tally) {
-      o.tally.left += unfinished(due, i, (r) => {
-        const b = toBriefing(r);
-        return !!b && briefingDue(b.deliver, b.last_delivered_at, dataDate) && likelyServed(o.plans, r.user_id, r.plan, "delivery");
-      });
+      o.tally.left += unfinished(due, i, (r) => !handled.has(r.id) && dueOn(r) && likelyServed(o.plans, r.user_id, r.plan, "delivery"));
     }
   }
   return { report, stop, capped };
@@ -892,7 +1107,8 @@ export const BRIEFING_WAIT_WHY: Record<BriefingWait, string> = {
 export const briefingActive = (r: BriefingReport) => r.sent + r.failed + r.empty + r.skipped + r.waiting > 0 || r.records !== null;
 
 export const briefingCounts = (r: BriefingReport) =>
-  `briefings: ${r.sent} sent, ${r.failed} failed, ${r.empty} with nothing new, ${r.skipped} not on a plan with delivery` +
+  `briefings: ${r.sent} sent${r.groups ? ` (${r.groups} of them grouped, carrying ${r.grouped} briefings)` : ""}, ${r.failed} failed, ` +
+  `${r.empty} with nothing new, ${r.skipped} not on a plan with delivery` +
   (r.records ? `, ${r.waiting} waiting: ${BRIEFING_WAIT_WHY[r.records]}` : "");
 
 // -- the console --------------------------------------------------------------------------------

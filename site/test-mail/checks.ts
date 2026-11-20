@@ -72,8 +72,8 @@ export interface Shape {
   manage?: string | null;
   // Lines worded for one part by design, as dictionary keys and their values.
   onePart?: readonly (readonly [Key, Record<string, string | number>?])[];
-  // A grouped delivery (digests.ts groupDigest): a stop link a section, each a search's own, and one for the
-  // whole message (/account/stop?g=), which List-Unsubscribe names.
+  // A grouped delivery (digests.ts groupDigest, briefingGroupDigest, viewGroupDigest): a stop link a section, each
+  // an item's own, and one for the whole message (/account/stop?g=, ?gb= or ?gv=), which List-Unsubscribe names.
   group?: boolean;
 }
 
@@ -370,7 +370,7 @@ export function checkMessage(m: Sent, shape: Shape, lang: Lang, o: { others?: re
   const stops = [...inHtml].filter((u) => STOP_RE.test(u));
   const headers = m.headers ?? {};
   if (shape.list) {
-    const whole = stops.filter((u) => /[?&]g=/.test(u));
+    const whole = stops.filter((u) => /[?&]g[bv]?=/.test(u));
     if (shape.group) {
       expect(whole, `${what}: one stop link for the whole message`).toHaveLength(1);
       expect(stops.length, `${what}: a stop link a section beside it`).toBeGreaterThan(1);
@@ -418,6 +418,10 @@ export const SHAPES = {
   weekly: { list: true, why: "weekly.why", manage: "/account" },
   // Several saved searches in one message (digests.ts groupDigest), in the account's mail language.
   group: { list: true, group: true, why: "digest.group_why", manage: "/account/searches", onePart: [["digest.text_searches"]] },
+  // Several briefings in one message (digests.ts briefingGroupDigest), and several saved views (viewGroupDigest), in
+  // the account's mail language.
+  briefing_group: { list: true, group: true, why: "briefing.group_why", manage: "/account/searches" },
+  view_group: { list: true, group: true, why: "view.group_why", manage: "/account/views" },
   accounts_open: { list: true, why: "announce.why", manage: null },
   ultra_open: { list: true, why: "announce.ultra_why", manage: null },
   // The shell's footer prints the tagline; the notice's text part, which

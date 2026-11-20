@@ -42,6 +42,8 @@
 //   POST /account/briefings/:id/delete remove a briefing                               (session, CSRF)
 //   GET  /account/stop?b=&t=           a briefing's stop page, from its message        (the link's secret)
 //   POST /account/stop?b=&t=           turn that briefing's email off; one-click too   (the link's secret)
+//   GET  /account/stop?gb=&t=          a grouped message's stop page: its briefings    (the tags of their secrets)
+//   POST /account/stop?gb=&t=          turn each one's email off; one-click too        (the tags of their secrets)
 //   GET  /account/stop?e=&t=           the weekly email's unsubscribe page              (the link's secret)
 //   POST /account/stop?e=&t=           turn the weekly email off; one-click too        (the link's secret)
 //   GET  /account/watches              watches with their last 14 days of events, the calendar feed (session)
@@ -97,6 +99,8 @@
 //   POST /account/views/:id/delete     remove a view                                   (session, CSRF)
 //   GET  /account/stop?v=&t=           a saved view's stop page, from its message      (the link's secret)
 //   POST /account/stop?v=&t=           turn that view's email off; one-click too       (the link's secret)
+//   GET  /account/stop?gv=&t=          a grouped message's stop page: its saved views  (the tags of their secrets)
+//   POST /account/stop?gv=&t=          turn each one's email off; one-click too        (the tags of their secrets)
 //
 // Every POST but the stop link's and the webhook's (which Stripe sends,
 // signed; billing.tsx) is refused with a 403 when its Origin names another
@@ -133,10 +137,12 @@ import {
   billingLine, billingPage, billingWebhook, bindReturn, deleteFacts, endForDeletion, moveBetweenPlans, openPortal, startCheckout,
 } from "./billing";
 import { pressRefund } from "./refund";
-import { BriefingsPanel, briefingLabel, briefingStopView, briefingStoppedView } from "./briefing_pages";
 import {
-  type Brief, type BriefingSubject, addBriefing, briefOf, briefValue, briefingName, briefingPath, deleteBriefing, deleteBriefingsOf,
-  isBriefingDelivery, isBriefingKind, lastBriefingRuns, listBriefings, narrowOf, setBriefingDelivery, subjectOf,
+  BriefingsPanel, briefingGroupStopView, briefingGroupStoppedView, briefingLabel, briefingStopView, briefingStoppedView,
+} from "./briefing_pages";
+import {
+  type Brief, type BriefingSubject, GROUP_STOP_SQL as BRIEFING_GROUP_STOP_SQL, addBriefing, briefOf, briefValue, briefingName, briefingPath,
+  deleteBriefing, deleteBriefingsOf, isBriefingDelivery, isBriefingKind, lastBriefingRuns, listBriefings, narrowOf, setBriefingDelivery, subjectOf,
 } from "./briefings";
 import { bugPage, fileBug } from "./bugs";
 import { refererPath, safeNext } from "./next";
@@ -161,7 +167,7 @@ import {
   type SavedSearch, addSearch, capFor, deleteSearch, heldCount, importInterest, isDelivery, lastDeliveries, listSearches, paidCapLine,
   pendingInterest, setDelivery,
 } from "./searches";
-import { GROUP_TAGS_MAX, GROUP_TAG_CHARS, USER_RE, provenBy, readGroupTags } from "./group_stop";
+import { GROUP_TAGS_MAX, GROUP_TAG_CHARS, type GroupKind, USER_RE, provenBy, readGroupTags } from "./group_stop";
 import { endSeatsOf } from "./seats";
 import { randomHex, sameHash, sha256Hex, ipHash } from "./secrets";
 import { isLocalHost, senderFor, signInMessage } from "./sender";
@@ -183,10 +189,10 @@ import { checkoutPrice, planCards, ultraCheckoutPrice } from "../pro";
 import { fiscalYearOf, planYears } from "../records_db";
 import { readViewAddress } from "../view_address";
 import {
-  addView, cleanName, deleteView as deleteSavedView, deleteViewsOf, followViewAliases, isViewDelivery, lastViewRuns, listViews, missingViews, setViewDelivery,
-  subjectName, viewLabel,
+  VIEW_GROUP_STOP_SQL, addView, cleanName, deleteView as deleteSavedView, deleteViewsOf, followViewAliases, isViewDelivery, lastViewRuns, listViews,
+  missingViews, setViewDelivery, subjectName, viewLabel,
 } from "./saved_views";
-import { VIEWS_PATH, viewStopView, viewStoppedView, viewsView } from "./view_pages";
+import { VIEWS_PATH, viewGroupStopView, viewGroupStoppedView, viewStopView, viewStoppedView, viewsView } from "./view_pages";
 import { MATCH_PATH, matchesPage } from "./fit_pages";
 import {
   DAY_SLOTS, type Follow, type WatchKind, followOf, followValue, isWatchKind, readEvents, segmentOf, targetOf, watchPath,
@@ -1060,6 +1066,34 @@ async function viewStopTarget(c: Context<AppEnv>, id: string, secret: string): P
   }
 }
 
+// A grouped message's stop link for briefings, /account/stop?gb=<user id>&t=<tags>, and for saved views, ?gv=
+// (group_stop.ts): the rules of ?g=, for every briefing or view the message carried, each proven by its own stop
+// secret (briefings.secret, saved_views.secret). The account's items of that kind are read with their secrets and the
+// link acts on those whose tag it holds; a link that proves none is the site's 404. It turns their email off; the
+// briefings and the views stay, and their pages turn it back on. A database without the views' table matches nothing.
+type ProvenBriefing = BriefingStopRow & { secret: string };
+type ProvenView = ViewStopRow & { secret: string };
+
+async function groupedStopTarget(c: Context<AppEnv>, kind: "briefings", userId: string, value: string): Promise<ProvenBriefing[] | null>;
+async function groupedStopTarget(c: Context<AppEnv>, kind: "views", userId: string, value: string): Promise<ProvenView[] | null>;
+async function groupedStopTarget(c: Context<AppEnv>, kind: Exclude<GroupKind, "searches">, userId: string, value: string) {
+  const tags = readGroupTags(value);
+  if (!USER_RE.test(userId) || !tags) return null;
+  if (kind === "briefings") {
+    const res = await c.env.ACCOUNTS!.prepare(BRIEFING_GROUP_STOP_SQL).bind(userId, GROUP_TAGS_MAX).all<ProvenBriefing>();
+    const proven = await provenBy(tags, (res.results ?? []).filter((r) => isBriefingKind(r.kind)), "briefings");
+    return proven.length ? proven : null;
+  }
+  try {
+    const res = await c.env.ACCOUNTS!.prepare(VIEW_GROUP_STOP_SQL).bind(userId, GROUP_TAGS_MAX).all<ProvenView>();
+    const proven = await provenBy(tags, res.results ?? [], "views");
+    return proven.length ? proven : null;
+  } catch (e) {
+    if (missingViews(e)) return null;
+    throw e;
+  }
+}
+
 // The weekly email's unsubscribe link, /account/stop?e=<user id>&t=<secret>:
 // the same rules, for the account's weekly email (weekly.ts). It turns the
 // email off; the row stays, off, and the account page turns it back on. A
@@ -1079,7 +1113,25 @@ account.get("/stop", async (c) => {
   const weekly = c.req.query("e");
   const view = c.req.query("v");
   const group = c.req.query("g");
+  const briefings = c.req.query("gb");
+  const views = c.req.query("gv");
+  // A grouped message's link for briefings or views names nothing else.
+  const alone = !searchId && group === undefined && watcher === undefined && briefing === undefined && weekly === undefined && view === undefined;
   return guarded(c, async () => {
+    if (briefings !== undefined && views === undefined && alone) {
+      const rows = await groupedStopTarget(c, "briefings", briefings, secret);
+      if (!rows) return c.notFound();
+      return accountPage(c, t(lang, "briefing.stop_group_title"), briefingGroupStopView(lang, {
+        userId: briefings, tags: secret, labels: rows.map((r) => stopLabel(lang, r)), off: rows.every((r) => r.deliver === "off"),
+      }));
+    }
+    if (views !== undefined && briefings === undefined && alone) {
+      const rows = await groupedStopTarget(c, "views", views, secret);
+      if (!rows) return c.notFound();
+      return accountPage(c, t(lang, "views.stop_group_title"), viewGroupStopView(lang, {
+        userId: views, tags: secret, names: rows.map((r) => r.name), off: rows.every((r) => r.deliver === "off"),
+      }));
+    }
     if (group !== undefined && !searchId && watcher === undefined && briefing === undefined && weekly === undefined && view === undefined) {
       const rows = await groupStopTarget(c, group, secret);
       if (!rows) return c.notFound();
@@ -1128,8 +1180,36 @@ account.post("/stop", async (c) => {
   const weekly = clean(fields, "e", 64) || (c.req.query("e") ?? "");
   const view = clean(fields, "v", 64) || (c.req.query("v") ?? "");
   const group = clean(fields, "g", 64) || (c.req.query("g") ?? "");
+  const briefings = clean(fields, "gb", 64) || (c.req.query("gb") ?? "");
+  const views = clean(fields, "gv", 64) || (c.req.query("gv") ?? "");
   const oneClick = fields["List-Unsubscribe"] === "One-Click";
   return guarded(c, async () => {
+    // A grouped message's link for briefings or views (groupedStopTarget): every item it proves, turned off together.
+    if ((briefings || views) && !(briefings && views) && !searchId && !group && !watcher && !briefing && !weekly && !view) {
+      // The tags run longer than a secret: one an item, GROUP_TAGS_MAX at most (group_stop.ts readGroupTags).
+      const tags = clean(fields, "t", GROUP_TAGS_MAX * GROUP_TAG_CHARS + 1) || (c.req.query("t") ?? "");
+      const db = c.env.ACCOUNTS!;
+      if (briefings) {
+        const rows = await groupedStopTarget(c, "briefings", briefings, tags);
+        if (!rows) return c.notFound();
+        const on = rows.filter((r) => r.deliver !== "off");
+        if (on.length) {
+          await db.batch(on.map((r) => db.prepare("UPDATE briefings SET deliver = 'off' WHERE id = ? AND user_id = ?").bind(r.id, r.user_id)));
+          await audit(c.env, rows[0].user_id, "briefing_stopped", oneClick ? "group_one_click" : "group_link");
+        }
+        if (oneClick) return c.text(t(lang, "briefing.stopped_group_one_click"), 200);
+        return accountPage(c, t(lang, "briefing.stopped_group_title"), briefingGroupStoppedView(lang, rows.map((r) => stopLabel(lang, r))));
+      }
+      const rows = await groupedStopTarget(c, "views", views, tags);
+      if (!rows) return c.notFound();
+      const on = rows.filter((r) => r.deliver !== "off");
+      if (on.length) {
+        await db.batch(on.map((r) => db.prepare("UPDATE saved_views SET deliver = 'off' WHERE id = ? AND user_id = ?").bind(r.id, r.user_id)));
+        await audit(c.env, rows[0].user_id, "view_stopped", oneClick ? "group_one_click" : "group_link");
+      }
+      if (oneClick) return c.text(t(lang, "views.stopped_group_one_click"), 200);
+      return accountPage(c, t(lang, "views.stopped_group_title"), viewGroupStoppedView(lang, rows.map((r) => r.name)));
+    }
     if (group && !searchId && !watcher && !briefing && !weekly && !view) {
       // The tags run longer than a secret: one a search, GROUP_TAGS_MAX at most (group_stop.ts readGroupTags).
       const tags = clean(fields, "t", GROUP_TAGS_MAX * GROUP_TAG_CHARS + 1) || (c.req.query("t") ?? "");

@@ -14,11 +14,12 @@
 // MAIL_CHECK_MARK, a fixed tag in both languages, so the message is never
 // taken for a reader's and an inbox rule can file it. The stop links name an
 // id and a secret of zeros, which match no row: a click, or a mail client's
-// one-click post, changes nothing. The grouped saved-search message's own
-// stop link (group_stop.ts) is built by groupStopPath for GROUP_TAGS_MAX
-// members, an account's most, under a user id of zeros, so its
-// List-Unsubscribe header is as long as a full Ultra account's would be and
-// the check proves Email Sending takes it; the route answers 404 to it.
+// one-click post, changes nothing. The grouped messages' own stop links
+// (group_stop.ts) are built by groupStopPath for an account's most items of
+// their kind (GROUP_TAGS_MAX saved searches or briefings, SAVED_VIEW_MAX
+// saved views) under a user id of zeros, so each List-Unsubscribe header is
+// as long as a full Ultra account's would be and the check proves Email
+// Sending takes it; the route answers 404 to it.
 //
 // The recipient is MAIL_TEST_TO alone: the builders are handed it, the run
 // sets it again on each message before the send, and nothing here reads an
@@ -39,10 +40,11 @@ import { accountsOpenMessage, announceLinks, ultraLinks, ultraOpenMessage } from
 import { type BriefingData, type BriefingSubject, INSTRUMENT_WITHIN, briefingName, nextQuarter, quarterTurn } from "./briefings";
 import { GROUP_OVER, sendWithHeaders } from "./deliveries";
 import {
-  type GroupSection, briefingDigest, expiringDigest, fitSubject, groupDigest, recordsDigest, siteLink, tenderDigest, viewDigest, watchDigest,
-  weeklyDigest,
+  type BriefingGroupSection, type GroupSection, type ViewGroupSection, briefingDigest, briefingGroupDigest, expiringDigest, fitSubject, groupDigest,
+  recordsDigest, siteLink, tenderDigest, viewDigest, viewGroupDigest, watchDigest, weeklyDigest,
 } from "./digests";
-import { GROUP_TAGS_MAX, groupStopPath } from "./group_stop";
+import { SAVED_VIEW_MAX } from "./entitlements";
+import { GROUP_TAGS_MAX, type GroupKind, groupStopPath } from "./group_stop";
 import { matchDigestBlock } from "./fit_mail";
 import { sameHash, sha256Hex } from "./secrets";
 import { type MailMessage, type Sender, addressNotice, senderFor, signInMessage } from "./sender";
@@ -58,17 +60,20 @@ export const MAIL_CHECK_MARK = "[mail check]";
 // saved-search delivery are covered by its two kinds (the tender notices
 // daily, the contracts ending weekly), since the footer's reason is the only
 // part the cadence changes. "group" is several saved searches in one message
-// (digests.ts groupDigest), with the longest stop link a reader's can carry.
+// (digests.ts groupDigest), "briefing_group" several briefings
+// (briefingGroupDigest) and "view_group" several saved views
+// (viewGroupDigest), each with the longest stop link a reader's can carry.
 export const MAIL_CHECK_TEMPLATES = [
-  "sign_in", "tenders_daily", "expiring_weekly", "records", "group", "watch", "briefing", "view", "weekly", "accounts_open", "ultra_open",
-  "address_notice",
+  "sign_in", "tenders_daily", "expiring_weekly", "records", "group", "watch", "briefing", "briefing_group", "view", "view_group", "weekly",
+  "accounts_open", "ultra_open", "address_notice",
 ] as const;
 export type MailCheckTemplate = (typeof MAIL_CHECK_TEMPLATES)[number];
 
 // The messages a list or watch delivery sends: each carries a stop link, the
 // reason it came, and List-Unsubscribe with an https stop link.
 export const MAIL_CHECK_LISTS: ReadonlySet<MailCheckTemplate> = new Set([
-  "tenders_daily", "expiring_weekly", "records", "group", "watch", "briefing", "view", "weekly", "accounts_open", "ultra_open",
+  "tenders_daily", "expiring_weekly", "records", "group", "watch", "briefing", "briefing_group", "view", "view_group", "weekly", "accounts_open",
+  "ultra_open",
 ]);
 
 // The reason the weekly email's template reports when MAIL_ADDRESS is unset:
@@ -196,14 +201,52 @@ export function mailCheckGroupSections(lang: Lang, site: string, day: string): G
   ];
 }
 
-// The grouped message's own stop link: what groupStopPath builds for an
-// account's most searches, GROUP_TAGS_MAX, under a user id of zeros, each
-// member a fixed id and a secret of zeros. No account has the id, so the
-// route answers 404 and nothing changes; the link is as long as a real one
-// can be.
-export async function mailCheckGroupStop(lang: Lang, site: string): Promise<string> {
-  const members = Array.from({ length: GROUP_TAGS_MAX }, (_, i) => ({ id: (i + 1).toString(16).padStart(32, "0"), secret: ZERO }));
-  return siteLink(site, await groupStopPath(ZERO, members), lang);
+// A grouped message's own stop link: what groupStopPath builds for an
+// account's most items of the kind (GROUP_TAGS_MAX searches or briefings,
+// SAVED_VIEW_MAX views), under a user id of zeros, each member a fixed id and
+// a secret of zeros. No account has the id, so the route answers 404 and
+// nothing changes; the link is as long as a real one can be.
+export async function mailCheckGroupStop(lang: Lang, site: string, kind: GroupKind = "searches"): Promise<string> {
+  const n = kind === "views" ? SAVED_VIEW_MAX : GROUP_TAGS_MAX;
+  const members = Array.from({ length: n }, (_, i) => ({ id: (i + 1).toString(16).padStart(32, "0"), secret: ZERO }));
+  return siteLink(site, await groupStopPath(ZERO, members, kind), lang);
+}
+
+// The grouped briefings' eight briefings: segments, a buyer whole and a buyer
+// narrowed to a segment, each with the sample week, its own stop link naming
+// zeros. Exported for the mail suite.
+export function mailCheckBriefingSections(lang: Lang, site: string, day: string): BriefingGroupSection[] {
+  const own = siteLink(site, `/account/stop?b=${ZERO}&t=${ZERO}`, lang);
+  const buyer = lang === "fr" ? BUYER.buyer_fr : BUYER.buyer_en;
+  const subjects: BriefingSubject[] = [
+    { kind: "segment", subject: "81", segment: "" }, { kind: "buyer", subject: BUYER.buyer_id, segment: "" },
+    { kind: "segment", subject: "43", segment: "" }, { kind: "buyer", subject: BUYER.buyer_id, segment: "72" },
+    { kind: "segment", subject: "72", segment: "" }, { kind: "segment", subject: "30", segment: "" },
+    { kind: "segment", subject: "46", segment: "" }, { kind: "segment", subject: "25", segment: "" },
+  ];
+  return subjects.map((briefing) => ({ label: briefingName(lang, briefing, buyer), briefing, data: mailCheckBriefingData(day), stopUrl: own }));
+}
+
+// The grouped views' eight saved views, a segment's and a buyer's in turn,
+// each with its years and its largest records (one with no organization
+// named), its own stop link naming zeros. Exported for the mail suite.
+export function mailCheckViewSections(lang: Lang, site: string, day: string): ViewGroupSection[] {
+  const own = siteLink(site, `/account/stop?v=${ZERO}&t=${ZERO}`, lang);
+  const fy = fiscalYearOf(day);
+  return Array.from({ length: 8 }, (_, i): ViewGroupSection => {
+    const segment = i % 2 === 0;
+    return {
+      name: lang === "fr" ? `${segment ? "Segment 81" : "Acheteur"}, exemple ${i + 1}` : `${segment ? "Segment 81" : "Buyer"}, sample ${i + 1}`,
+      address: segment ? `/segments/81/analytics?source=awards&years=${i + 3}` : `/buyers/${BUYER.buyer_id}/analytics?source=awards&years=${i + 3}`,
+      stopUrl: own, source: "awards", first: fy - 2, last: fy,
+      years: [{ fy: fy - 2, n: 41, cents: 912_000_000 }, { fy: fy - 1, n: 37, cents: 845_500_000 }, { fy, n: 12 + i, cents: null }],
+      largest: [
+        { src: 1, ref: "cb-000-00000040", title: lang === "fr" ? "Inspection de ponts (exemple)" : "Bridge inspection (sample)", cents: 48_500_000,
+          party: "Sample Engineering Ltd.", path: "/awards/cb-000-00000040" },
+        { src: 1, ref: "cb-000-00000041", title: null, cents: 9_900_000, party: null, path: "/awards/cb-000-00000041" },
+      ],
+    };
+  });
 }
 
 // The matching notices block for a Free account (fit_mail.ts), from four
@@ -304,6 +347,10 @@ export async function mailCheckMessages(
         data: mailCheckBriefingData(day),
       });
     },
+    briefing_group: async () => briefingGroupDigest({
+      lang, to, site, dataDate: day, stopUrl: await mailCheckGroupStop(lang, site, "briefings"), sections: mailCheckBriefingSections(lang, site, day),
+      over: GROUP_OVER,
+    }),
     // A segment's saved view, weekly: its years from the data date's fiscal year back, and its largest records of that year.
     view: () => {
       const fy = fiscalYearOf(day);
@@ -319,6 +366,10 @@ export async function mailCheckMessages(
         ],
       });
     },
+    view_group: async () => viewGroupDigest({
+      lang, to, site, dataDate: day, current: fiscalYearOf(day), stopUrl: await mailCheckGroupStop(lang, site, "views"),
+      sections: mailCheckViewSections(lang, site, day), over: GROUP_OVER,
+    }),
     // The form most accounts get: one that follows nothing, on Free, the site's week in figures, with the
     // week's matching notices of an account that names its organization, so the inbox shows the block.
     // The notices' figure has two digits so the French subject keeps its matches' count whole beside the mark.

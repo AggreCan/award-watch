@@ -102,6 +102,21 @@ export const VIEWS_STRINGS = {
     fr: "Le courriel de la vue est désactivé. Réactivez-le à partir de vos vues enregistrées.",
   },
   "views.stopped_one_click": { en: "The view's email is off.", fr: "Le courriel de la vue est désactivé." },
+  // The stop link of a grouped message (/account/stop?gv=...&t=..., group_stop.ts): every view the message carried.
+  "views.stop_group_title": { en: "Stop These Saved Views' Email", fr: "Arrêter le courriel de ces vues enregistrées" },
+  "views.stop_group_lead": {
+    en: "The saved views below came together in one email. This turns off the email of each one; the views stay in your saved views.",
+    fr: "Les vues enregistrées ci-dessous sont arrivées ensemble dans un courriel. Ceci désactive le courriel de chacune; les vues restent dans vos vues enregistrées.",
+  },
+  "views.stop_group_panel": { en: "Saved Views", fr: "Vues enregistrées" },
+  "views.stop_group_button": { en: "Turn these views' email off", fr: "Désactiver le courriel de ces vues" },
+  "views.stop_group_already": { en: "These views' email is already off.", fr: "Le courriel de ces vues est déjà désactivé." },
+  "views.stopped_group_title": { en: "Views' Email Off", fr: "Courriel des vues désactivé" },
+  "views.stopped_group_lead": {
+    en: "These views' email is off. Turn it back on from your saved views.",
+    fr: "Le courriel de ces vues est désactivé. Réactivez-le à partir de vos vues enregistrées.",
+  },
+  "views.stopped_group_one_click": { en: "The views' email is off.", fr: "Le courriel des vues est désactivé." },
 
   // -- the message (src/account/digests.ts viewDigest) ------------------------------------------------
   "view.mail_subject": { en: "{name}: figures to {date}", fr: "{name} : chiffres au {date}" },
@@ -127,6 +142,39 @@ export const VIEWS_STRINGS = {
   },
   "view.mail_stop": { en: "Stop this view's email", fr: "Arrêter le courriel de cette vue" },
 
+  // Several saved views in one message (src/account/digests.ts viewGroupDigest), in the account's mail language.
+  "view.group_subject": {
+    en: "{n} of your saved views have new figures, to {date}",
+    fr: "{n} de vos vues enregistrées ont de nouveaux chiffres, au {date}",
+  },
+  "view.group_title": { en: "Your saved views, figures to {date}", fr: "Vos vues enregistrées, chiffres au {date}" },
+  "view.group_lead_one": {
+    en: "1 of your saved views has new figures. When more than {max} have new figures on the same day, they come in this one email, a section each, in the order of your saved views. Data date {date}.",
+    fr: "1 de vos vues enregistrées a de nouveaux chiffres. Quand plus de {max} ont de nouveaux chiffres le même jour, elles arrivent dans ce seul courriel, une section chacune, dans l'ordre de vos vues enregistrées. Date des données : {date}.",
+  },
+  "view.group_lead_many": {
+    en: "{n} of your saved views have new figures. When more than {max} have new figures on the same day, they come in this one email, a section each, in the order of your saved views. Data date {date}.",
+    fr: "{n} de vos vues enregistrées ont de nouveaux chiffres. Quand plus de {max} ont de nouveaux chiffres le même jour, elles arrivent dans ce seul courriel, une section chacune, dans l'ordre de vos vues enregistrées. Date des données : {date}.",
+  },
+  // A view's source and period, linking the view.
+  "view.group_period": { en: "{source}, fiscal years {first} to {last}", fr: "{source}, exercices {first} à {last}" },
+  "view.group_rest_one": { en: "1 more saved view with new figures", fr: "1 autre vue enregistrée avec de nouveaux chiffres" },
+  "view.group_rest_many": { en: "{n} more saved views with new figures", fr: "{n} autres vues enregistrées avec de nouveaux chiffres" },
+  "view.group_rest_note": {
+    en: "This email lists {rows} records in all, so each of these is one line with its newest fiscal year and a link to the view.",
+    fr: "Ce courriel énumère {rows} dossiers en tout; chacune de ces vues tient donc en une ligne, avec son exercice le plus récent et le lien vers la vue.",
+  },
+  "view.group_button": { en: "Open your saved views", fr: "Ouvrir vos vues enregistrées" },
+  "view.group_why": {
+    en: "You receive this for saved views in your account whose email is on, each week or each month as each one is set.",
+    fr: "Vous recevez ce message pour des vues enregistrées de votre compte dont le courriel est activé, chaque semaine ou chaque mois selon le réglage de chacune.",
+  },
+  "view.group_stop_all": { en: "Stop the email of these views", fr: "Arrêter le courriel de ces vues" },
+
   // The console's live mail check (src/account/mail_check.ts).
   "admin.mail_check_t_view": { en: "A saved view, weekly", fr: "Une vue enregistrée, chaque semaine" },
+  "admin.mail_check_t_view_group": {
+    en: "Eight saved views in one message, with the longest stop link an account's can carry",
+    fr: "Huit vues enregistrées dans un seul message, avec le plus long lien d'arrêt que peut porter celui d'un compte",
+  },
 } as const satisfies Record<string, { en: string; fr: string }>;
