@@ -60,6 +60,8 @@ const PAGES: [string, string, string][] = [
   ["/methodology", `${O}/methodology`, "Methodology: Sources, Identity and Counting | Award Watch"],
   ["/data", `${O}/data`, "Federal Procurement Data: CSV, API, Licence | Award Watch"],
   ["/cite", `${O}/cite`, "How to Cite | Award Watch"],
+  ["/monthly", `${O}/monthly`, "Monthly Record of Federal Procurement | Award Watch"],
+  ["/monthly/2026-09", `${O}/monthly/2026-09`, "Federal Procurement in September 2026 | Award Watch"],
   ["/corrections?organization=org-a000000001", `${O}/corrections`, "Report a Correction | Award Watch"],
 ];
 

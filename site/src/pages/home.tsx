@@ -259,6 +259,7 @@ const HOME_DO: readonly { text: Key; link: Key; href: string }[] = [
   { text: "home.do_tenders", link: "home.do_tenders_link", href: "/tenders" },
   { text: "home.do_awards", link: "home.do_awards_link", href: "/awards" },
   { text: "home.do_expiring", link: "home.do_expiring_link", href: "/expiring" },
+  { text: "home.do_monthly", link: "home.do_monthly_link", href: "/monthly" },
 ];
 
 export const HomeDo: FC<{ lang: Lang; pro: boolean }> = ({ lang, pro }) => (

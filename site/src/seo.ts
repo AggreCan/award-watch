@@ -51,7 +51,7 @@ export type PageKey =
   | "home" | "overview" | "tenders" | "tenders_new" | "same_day" | "awards" | "awards_erroneous" | "expiring" | "organizations" | "buyers"
   | "segments" | "rankings" | "analytics"
   | "feeds" | "watchlist" | "methodology" | "data" | "cite" | "corrections" | "about" | "terms" | "privacy" | "alerts" | "pro"
-  | "guides";
+  | "guides" | "monthly";
 
 // A result list shows about 60 characters of a title; the whole <title>,
 // " | Award Watch" included, stays within it (test/seo-intent.test.ts).
@@ -275,6 +275,15 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
     description: {
       en: "Plain guides to federal procurement records: tender notices, ACANs, standing offers, Indigenous set-asides, one contract's records and contracts ending.",
       fr: "Guides sur les dossiers des marchés fédéraux : avis d'appel d'offres, PAC, offres à commandes, marchés réservés, dossiers d'un contrat, fins de contrats.",
+    },
+  },
+  // The monthly record's index (pages/monthly.tsx); each month's page is a section page of its own (sectionSeo).
+  monthly: {
+    path: "/monthly",
+    name: "monthly.title",
+    description: {
+      en: "Federal tender notices and award notices published each month, by buyer, segment and supplier: one page a month, free to read and cite, rebuilt nightly.",
+      fr: "Avis d'appel d'offres et d'attribution fédéraux publiés chaque mois, par acheteur, segment et fournisseur : une page par mois, refaite chaque nuit.",
     },
   },
 };

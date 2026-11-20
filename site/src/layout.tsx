@@ -543,6 +543,7 @@ export const FooterRow: FC<{ lang: Lang; lobbyingLoaded: boolean; on: boolean; b
       <a href="/rankings">{t(lang, "nav.rankings")}</a>
       {/* The rail's Browse group hides on a phone, where these links stand in for it; no chip here. */}
       <FooterAnalyticsLink lang={lang} on={on} />
+      <a href="/monthly">{t(lang, "footer.monthly")}</a>
       <a href="/methodology">{t(lang, "footer.methodology")}</a>
       <a href="/guides">{t(lang, "nav.guides")}</a>
       <a href="/data#downloads">{t(lang, "footer.download")}</a>

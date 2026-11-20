@@ -338,6 +338,7 @@ export async function dataPage(c: Context<AppEnv>): Promise<Response> {
             <p class="muted small">{tj(lang, "data.downloads_note", { undated: <span class="nw">-undated</span>, parts: <span class="nw">-2, -3</span> })}</p>
           </div>
           <p class="muted small">{t(lang, "data.downloads_closing")}</p>
+          <p class="muted small">{tj(lang, "data.monthly", { link: <a href="/monthly">{t(lang, "data.monthly_link")}</a> })}</p>
 
           <h2 id="api">{t(lang, "data.toc_api")}</h2>
           <p>{t(lang, "data.api_text")}</p>

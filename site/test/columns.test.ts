@@ -27,6 +27,7 @@ const PAGES = [
   "/awards/cb-400-40000004", "/history/w8472-000633", "/expiring", "/expiring/3m", "/organizations", "/organizations/directory/on",
   "/organizations/org-a000000001", "/organizations/org-a000000002", "/buyers", "/buyers/pwgsc-tpsgc", "/segments", "/segments/82",
   "/rankings", "/rankings/2026?source=contracts&by=count", "/data", "/feeds", "/watchlist", "/methodology",
+  "/monthly", "/monthly/2026-09", "/monthly/2026-08",
   // The guides that draw a table in a document (pages/guides.tsx, src/guides.ts).
   "/guides/reading-a-canadabuys-tender-notice", "/guides/standing-offers-and-supply-arrangements", "/guides/three-records-of-one-federal-contract",
   "/guides/advance-contract-award-notices-acan", "/guides/indigenous-business-set-asides-psib", "/guides/when-a-federal-contract-ends",

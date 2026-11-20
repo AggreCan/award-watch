@@ -27,6 +27,10 @@ import directoryOn1 from "./fixtures/directory-on-1.json";
 import directoryOn from "./fixtures/directory-on-index.json";
 import directoryYt from "./fixtures/directory-yt-index.json";
 import feeds from "./fixtures/feeds-index.json";
+import monthly202607 from "./fixtures/monthly-2026-07.json";
+import monthly202608 from "./fixtures/monthly-2026-08.json";
+import monthly202609 from "./fixtures/monthly-2026-09.json";
+import monthlyIndex from "./fixtures/monthly-index.json";
 import profiles from "./fixtures/profiles-a00.json";
 import rankings2026 from "./fixtures/rankings-2026.json";
 import rankingsAll from "./fixtures/rankings-all.json";
@@ -103,6 +107,11 @@ export const FILES: Record<string, unknown> = {
   "expiring/index.json": expiringIndex,
   "expiring/3m/index.json": expiring3m,
   "expiring/3m/1.json": expiring3mPage1,
+  // The monthly record: three months, the newest with every table, August with no award notice.
+  "monthly/index.json": monthlyIndex,
+  "monthly/2026-09.json": monthly202609,
+  "monthly/2026-08.json": monthly202608,
+  "monthly/2026-07.json": monthly202607,
 };
 
 // The assets binding sends a strong ETag that changes with the file's

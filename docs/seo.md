@@ -135,7 +135,7 @@ button of each tease panel. The side menu is unchanged.
 | Home | `Organization`: Award Watch, publisher, with the site's mark as logo and its British Columbia address region; `WebSite` with a `SearchAction` on the site search |
 | Data | one `Dataset` for the whole site, with a `Dataset` part for each downloadable set (open tenders, award notices, PSPC contract history, published contracts and grants by year, organizations, buyers, contracts ending within 3 months), each with its files, its licence (Open Government Licence, Canada) and the government dataset it is read from |
 | Pro | `Product` with one `Offer` a billing period, in Canadian dollars, taxes not included (only while the checkout is configured); `FAQPage` with the page's questions word for word |
-| Record pages | `BreadcrumbList` (tenders, awards, PSPC history, published contracts, organizations, buyers, segments, directory pages) |
+| Record pages | `BreadcrumbList` (tenders, awards, PSPC history, published contracts, organizations, buyers, segments, directory pages, the monthly record's months) |
 | Guides | `BreadcrumbList`, and an `Article` with the guide's title and summary, its language, the publisher as author and publisher, and the day the guide was last checked against its sources as `dateModified` |
 
 Google retired the sitelinks search box in 2024 and shows FAQ results only
@@ -207,9 +207,24 @@ of the docs holds the rules.
 
 **Home page.** The lead says what a reader can do and how many
 organizations have a page (from the nightly figures). Below the cards, a
-short "What You Can Do Here" section has four lines, each led by its link:
-watch tenders, find who wins, see what ends soon, and get it by email with
-Pro.
+short "What You Can Do Here" section has five lines, each led by its link:
+watch tenders, find who wins, see what ends soon, see each month in figures,
+and get it by email with Pro.
+
+**The monthly record, `/monthly`.** One page for each complete month of the
+last twelve that the data hold in full (`/monthly/<YYYY-MM>`), and an index
+of them: the tender notices and award notices published on CanadaBuys that
+month, the month before and the same month a year earlier, the buyers, the
+segments, the procurement methods, the share awarded without competition,
+the ten largest award notices, the suppliers named and those named for the
+first time, what the page does not show, and how to cite it (the How to Cite
+page's APA form, with the page's address and the figures' date). Every
+table has its CSV file (`/monthly/<YYYY-MM>/<table>.csv`,
+`/monthly/months.csv`), counted as a download. The pages are rebuilt every
+night from the export's `monthly/` files and say when their figures were
+counted; they are meant as pages a reader cites and links, different each
+month. The footer links the index on every page, and the Data page and the
+home page's lines link it too.
 
 ## Profile titles
 

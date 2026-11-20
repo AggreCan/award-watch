@@ -8,6 +8,7 @@ import { env as testBindings } from "cloudflare:test";
 import { app } from "../src/index";
 import { STYLES_VERSION } from "../src/layout";
 import { ACCOUNTS, PRO_SALE, ULTRA_VARS, nextIp, onEnv } from "./accounts-helpers";
+import { withoutMonthly } from "./seats-switch-fixtures";
 import { applySql } from "./setup";
 
 export const DAY = "2026-10-31";
@@ -132,11 +133,12 @@ async function sha(s: string): Promise<string> {
   return [...d.slice(0, 12)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-// A page's body with the session's CSRF value taken out and the stylesheet's stamp put back to the one the
-// capture was made at (test/seats-service.test.ts does the same).
+// A page's body with the session's CSRF value taken out, the stylesheet's stamp put back to the one the
+// capture was made at (test/seats-service.test.ts does the same), and what the monthly record added to every
+// page after the capture taken out (seats-switch-fixtures.ts CAPTURED_WITHOUT).
 export const CAPTURED_STYLES = 77;
 export const steady = (body: string) =>
-  body.replace(/(name="csrf" value="|"csrf":")[0-9a-f]{32}/g, "$1CSRF").replaceAll(`styles.css?v=${STYLES_VERSION}"`, `styles.css?v=${CAPTURED_STYLES}"`);
+  withoutMonthly(body).replace(/(name="csrf" value="|"csrf":")[0-9a-f]{32}/g, "$1CSRF").replaceAll(`styles.css?v=${STYLES_VERSION}"`, `styles.css?v=${CAPTURED_STYLES}"`);
 
 // What a request answered and read: its status, its body's hash, and the statements it sent to the accounts
 // database and to the records database, each sorted (reads made in parallel come in either order).

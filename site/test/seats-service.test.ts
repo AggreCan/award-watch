@@ -23,6 +23,7 @@ import stats from "./fixtures/stats.json";
 import { ACCOUNTS, PRO_SALE, ULTRA_VARS, decode, nbsp, nextIp, onEnv, signIn, useAccountsDb } from "./accounts-helpers";
 import { fakeMail } from "./mail-fixtures";
 import { applySql } from "./setup";
+import { withoutMonthly } from "./seats-switch-fixtures";
 import { KEYS, PAGES as TODAY_PAGES, RUN, RUN_MAIL, STATEMENTS } from "./seats-today";
 
 useAccountsDb();
@@ -136,10 +137,11 @@ async function sha(s: string): Promise<string> {
 }
 // A page's body with the session's CSRF value taken out, the one thing in it that differs between two sign-ins,
 // and the stylesheet's version stamp put back to the one the capture was made at: a change to the stylesheet raises
-// the stamp on every page (layout.tsx STYLES_VERSION) and changes nothing else in these pages' bytes.
+// the stamp on every page (layout.tsx STYLES_VERSION) and changes nothing else in these pages' bytes. What the
+// monthly record added to every page after the capture is taken out first (seats-switch-fixtures.ts CAPTURED_WITHOUT).
 const CAPTURED_STYLES = 74;
 const steady = (body: string) =>
-  body.replace(/(name="csrf" value="|"csrf":")[0-9a-f]{32}/g, "$1CSRF").replaceAll(`styles.css?v=${STYLES_VERSION}"`, `styles.css?v=${CAPTURED_STYLES}"`);
+  withoutMonthly(body).replace(/(name="csrf" value="|"csrf":")[0-9a-f]{32}/g, "$1CSRF").replaceAll(`styles.css?v=${STYLES_VERSION}"`, `styles.css?v=${CAPTURED_STYLES}"`);
 
 const PAGES = ["/account/searches", "/account/watches", "/account/views", "/account/keys", "/account/dashboard"];
 const text = (i: number) => STATEMENTS[i];

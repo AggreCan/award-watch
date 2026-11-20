@@ -33,6 +33,7 @@ account.
 ## Pages worth reading
 
 - https://awardwatch.ca/overview: the day at a glance: open tender notices by province, the notices new today and closing soon, the newest awards, and the contracts ending within 3 months
+- https://awardwatch.ca/monthly: each complete month of the last twelve in figures: the tender notices and award notices published, the buyers, segments and suppliers, the share awarded without competition and the largest awards, with a CSV file of each table and the date the figures were counted
 - https://awardwatch.ca/methodology: how organizations and buyers are merged and how money is counted, source by source
 - https://awardwatch.ca/guides: plain explanations of federal procurement records, each checked against the official pages it cites
 - https://awardwatch.ca/guides/how-to-bid-on-government-of-canada-contracts: the steps to bid on a federal contract, from registration and the numbers a supplier needs to the award, the debriefing and the published records

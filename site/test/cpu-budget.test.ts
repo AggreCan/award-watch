@@ -69,6 +69,34 @@ function bigExpiringPage(n: number): unknown[] {
   return Array.from({ length: n }, (_, i) => ({ ...rows[i % rows.length], reference: `cb-${700 + i}-${70000000 + i}` }));
 }
 
+// The monthly record at its production size (pipeline monthly.py): the index's twelve months, and a month whose
+// every list is full, TOP (10) rows each, from the September fixture's rows under their own references and ids.
+function bigMonthly(): Record<string, unknown> {
+  const sept = FILES["monthly/2026-09.json"] as Record<string, any>;
+  type Row = Record<string, any>;
+  const ten = (rows: Row[], make: (row: Row, i: number) => Row) => Array.from({ length: 10 }, (_, i) => make(rows[i % rows.length], i));
+  const segments = ["81", "82", "72", "43", "80", "46", "25", "30", "77", "86"];
+  const month = {
+    ...sept,
+    tenders: {
+      ...sept.tenders,
+      buyers: ten(sept.tenders.buyers, (b, i) => ({ ...b, n: 600 - i })),
+      segments: segments.map((code, i) => ({ code, n: 300 - i })),
+      methods: ten(sept.tenders.methods, (m, i) => ({ ...m, en: m.en ? `${m.en} ${i}` : null, n: 90 - i })),
+    },
+    awards: {
+      ...sept.awards,
+      largest: ten(sept.awards.largest, (r, i) => ({ ...r, reference: `cb-${910 + i}-${91000000 + i}` })),
+      buyers: ten(sept.awards.buyers, (b, i) => ({ ...b, n: 100 - i })),
+    },
+  };
+  const months = Array.from({ length: 12 }, (_, i) => {
+    const m = new Date(Date.UTC(2026, 8 - i, 1)).toISOString().slice(0, 7);
+    return { month: m, tenders: 1200 + i, awards: 500 + i, awards_value: 98_765_432.1 - i };
+  });
+  return { "monthly/index.json": { as_of: "2026-10-31", months }, "monthly/2026-09.json": month };
+}
+
 // Every file written out once, with a fixed ETag, as the assets layer serves
 // a deploy's files: the shared fake (test/assets.ts) serializes and hashes a
 // file on each read, which here would time the fake rather than the Worker.
@@ -78,6 +106,7 @@ for (const [path, value] of Object.entries({
   "stats.json": { ...(FILES["stats.json"] as Record<string, unknown>), closing_soon_times: closingTimes(900) },
   "profiles/a00.json": bigProfileShard(),
   "tenders/open.json": bigOpenList(900),
+  ...bigMonthly(),
 })) BODIES[path] = JSON.stringify(value);
 BODIES["sitemaps/sitemap-1.xml"] = bigSitemap(5000);
 
@@ -494,6 +523,10 @@ const BUDGET: [path: string, bound: number, per: number][] = [
   ["/expiring", 5, 16], // [1.48]
   [`${PUBLISHED_PAGE} (records in memory)`, 4.5, 16], // [1.35]
   [`${INSTRUMENT_PAGE} (records in memory)`, 4.5, 16], // [1.35]
+  // The monthly record (pages/monthly.tsx): its index of twelve months with their chart, and a month whose every
+  // list holds its ten rows (bigMonthly; measured 2026-11-19).
+  ["/monthly", 4.5, 16], // [1.46]
+  ["/monthly/2026-09", 7.5, 16], // [2.50]
 ];
 
 // -- a signed-in account that names its organization ---------------------------------------
@@ -840,6 +873,13 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
     expect(builder.match(/<section class="lp-feat lp-build"/g)).toHaveLength(1);
     expect(builder.match(/<div class="tr"><span>20\d\d<\/span>/g)).toHaveLength(12);
     expect(BIG_BUYER.length).toBeGreaterThan(30_000);
+    // What the monthly record's entries time: the month's ten largest award notices, ten buyers of each kind and
+    // ten segments, and the index's twelve months.
+    const month = await (await app.request("/monthly/2026-09", { headers: { "sec-fetch-mode": "navigate" } }, env)).text();
+    expect(month.match(/<a href="\/awards\/cb-9[0-9]{2}-/g)).toHaveLength(10);
+    expect(month.match(/<a href="\/segments\/[0-9]{2}">/g)).toHaveLength(10);
+    expect((await (await app.request("/monthly", { headers: { "sec-fetch-mode": "navigate" } }, env)).text()).match(/<a href="\/monthly\/20/g))
+      .toHaveLength(12);
     for (const [name, bound, per] of BUDGET) {
       const home = name === "/ (app home)";
       const signedIn = name.includes("(signed in");

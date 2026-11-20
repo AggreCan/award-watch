@@ -94,8 +94,20 @@ const DRAWN: readonly ((text: string) => string)[] = [
   (text) => text.replaceAll("'", "&#39;"),
   (text) => text.replaceAll("'", "’"),
 ];
+// The capture was made before the monthly record (pages/monthly.tsx). It added two things to these pages and
+// changed nothing else in them: the footer's link to it on every page (layout.tsx FooterRow) and a fourth line in
+// the app home's "What You Can Do Here" (pages/home.tsx HOME_DO). Each is taken out, as the page draws it in
+// each language, before a page is hashed; the line first, since it holds the same address as the link. Also
+// read by test/seats-service.test.ts and test/seats-rest-fixtures.ts, whose captures predate it too.
+export const CAPTURED_WITHOUT: readonly string[] = [
+  '<li><a href="/monthly">See each month in figures</a>: the tender notices, award notices, buyers and suppliers of each complete month, ready to cite.</li>',
+  '<li><a href="/monthly">Voir chaque mois en chiffres</a>\u00a0: les avis d’appel d’offres et d’attribution, les acheteurs et les fournisseurs de chaque mois complet, prêts à citer.</li>',
+  '<a href="/monthly">Monthly record</a>',
+  '<a href="/monthly">Bilan mensuel</a>',
+];
+export const withoutMonthly = (page: string): string => CAPTURED_WITHOUT.reduce((p, added) => p.replaceAll(added, ""), page);
 export async function shortHash(text: string): Promise<string> {
-  let page = text.replaceAll(`styles.css?v=${STYLES_VERSION}"`, `styles.css?v=${CAPTURED_STYLES}"`);
+  let page = withoutMonthly(text).replaceAll(`styles.css?v=${STYLES_VERSION}"`, `styles.css?v=${CAPTURED_STYLES}"`);
   for (const [now, then] of CAPTURED_TEXT) for (const drawn of DRAWN) page = page.replaceAll(drawn(now), drawn(then));
   return (await sha256Hex(page)).slice(0, 24);
 }

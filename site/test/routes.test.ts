@@ -50,6 +50,8 @@ const PAGES: [string, string, string, string][] = [
   ["/rankings/2026", "<h1>Rankings for 2026</h1>", "<h1>Classements de 2026</h1>", "stats.json"],
   ["/data", "<h1>Data, Downloads and Licence</h1>", "<h1>Données, téléchargements et licence</h1>", "stats.json"],
   ["/cite", "<h1>How to Cite</h1>", "<h1>Comment citer</h1>", "stats.json"],
+  ["/monthly", "<h1>Monthly Record of Federal Procurement</h1>", "<h1>Bilan mensuel des marchés publics fédéraux</h1>", "monthly/index.json"],
+  ["/monthly/2026-09", "<h1>Federal Procurement in September 2026</h1>", "<h1>Marchés publics fédéraux en septembre 2026</h1>", "monthly/2026-09.json"],
 ];
 
 // Pages that answer without the data files, in both languages.

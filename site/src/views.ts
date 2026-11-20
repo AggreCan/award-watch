@@ -84,6 +84,8 @@ const PAGES = new Set([
   "/overview",
   // The guides' index (pages/guides.tsx); each guide is counted at its own address below.
   "/guides",
+  // The monthly record's index (pages/monthly.tsx); each month is counted under one template below.
+  "/monthly",
 ]);
 const API_FIXED = new Set(["/api/stats"]);
 const DOWNLOAD_FILES = new Set(DOWNLOADS.map((d) => d.file));
@@ -165,6 +167,10 @@ export function routeTemplate(method: string, path: string): { route: string; ki
   if (/^\/segments\/[^/]+$/.test(path)) return { route: "/segments/:nn", kind: "page" };
   if (/^\/categories\/[^/]+$/.test(path)) return { route: "/categories/:nn", kind: "page" };
   if (/^\/rankings\/[^/]+$/.test(path)) return { route: "/rankings/:year", kind: "page" };
+  // The monthly record (pages/monthly.tsx): the index's CSV, a month's tables as CSV, a month.
+  if (path === "/monthly/months.csv") return { route: path, kind: "download" };
+  if (/^\/monthly\/[^/]+\/[a-z]+\.csv$/.test(path)) return { route: "/monthly/:month/:table.csv", kind: "download" };
+  if (/^\/monthly\/[^/]+$/.test(path)) return { route: "/monthly/:month", kind: "page" };
   if (path.startsWith("/api/")) {
     if (API_FIXED.has(path)) return { route: path, kind: "api" };
     // The keyed API (src/api_keyed.ts): ids and windows folded into their templates.

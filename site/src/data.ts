@@ -1801,3 +1801,77 @@ export async function loadOpenLevels(env: Env): Promise<readonly CodeLevel[] | n
 export function codeLevel(code: string): "family" | "class" | null {
   return code.length === 4 ? "family" : code.length === 6 ? "class" : null;
 }
+
+// -- the monthly record -------------------------------------------------------------------
+
+// monthly/index.json and monthly/<YYYY-MM>.json (pipeline monthly.py): the
+// complete months the record holds, newest first, and one month's figures.
+// Every count and sum is the export's; the page formats them and takes a share
+// only of two figures the file gives.
+export const MONTH_RE = /^\d{4}-(?:0[1-9]|1[0-2])$/;
+
+export interface MonthHeadline { month: string; tenders: number; awards: number; awards_value: number | null }
+export interface MonthlyIndex { as_of: string; months: MonthHeadline[] }
+
+export interface MonthBuyer { id: string | null; en: string | null; fr: string | null; n: number; value?: number | null; n_no_value?: number }
+export interface MonthTenders {
+  n: number;
+  before: { month: string; n: number } | null;
+  year_before: { month: string; n: number } | null;
+  buyers: MonthBuyer[];
+  n_no_buyer: number;
+  segments: { code: string; n: number }[];
+  n_no_segment: number;
+  methods: { en: string | null; fr: string | null; n: number }[];
+  days_open: { median: number | null; n: number };
+}
+export interface MonthAwardFigure { month: string; n: number; value: number | null; n_no_value: number }
+export interface MonthAwards {
+  n: number;
+  value: number | null;
+  n_no_value: number;
+  n_not_counted: number;
+  before: MonthAwardFigure | null;
+  year_before: MonthAwardFigure | null;
+  n_nc: number;
+  n_unstated: number;
+  pos: number | null;
+  pos_nc: number | null;
+  largest: AwardRow[];
+  buyers: MonthBuyer[];
+  n_no_buyer: number;
+  suppliers: number;
+  suppliers_new: number;
+}
+export interface MonthFigures { as_of: string; month: string; tenders: MonthTenders; awards: MonthAwards }
+
+const isMonth = (v: unknown): v is string => isStr(v) && MONTH_RE.test(v);
+const isMonthHeadline = (v: unknown): v is MonthHeadline => isObj(v) && isMonth(v.month) && isCount(v.tenders) &&
+  isCount(v.awards) && isNumOrNull(v.awards_value);
+const isMonthBuyer = (withValue: boolean) => (v: unknown): v is MonthBuyer => isObj(v) && isBuyerIdOrNull(v.id) &&
+  isStrOrNull(v.en) && isStrOrNull(v.fr) && isCount(v.n) && (!withValue || (isNumOrNull(v.value) && isCount(v.n_no_value)));
+const isTenderFigure = (v: unknown): boolean => v === null || (isObj(v) && isMonth(v.month) && isCount(v.n));
+const isAwardFigure = (v: unknown): boolean =>
+  v === null || (isObj(v) && isMonth(v.month) && isCount(v.n) && isNumOrNull(v.value) && isCount(v.n_no_value));
+const isMonthTenders = (v: unknown): v is MonthTenders => isObj(v) && isCount(v.n) && isTenderFigure(v.before) &&
+  isTenderFigure(v.year_before) && isListOf(v.buyers, isMonthBuyer(false)) && isCount(v.n_no_buyer) &&
+  isListOf(v.segments, (s) => isObj(s) && isStr(s.code) && s.code in SEGMENTS && isCount(s.n)) && isCount(v.n_no_segment) &&
+  isListOf(v.methods, (m) => isObj(m) && isStrOrNull(m.en) && isStrOrNull(m.fr) && isCount(m.n)) &&
+  isObj(v.days_open) && isNumOrNull(v.days_open.median) && isCount(v.days_open.n);
+const isMonthAwards = (v: unknown): v is MonthAwards => isObj(v) && isCount(v.n) && isNumOrNull(v.value) &&
+  isCount(v.n_no_value) && isCount(v.n_not_counted) && isAwardFigure(v.before) && isAwardFigure(v.year_before) &&
+  isCount(v.n_nc) && isCount(v.n_unstated) && isNumOrNull(v.pos) && isNumOrNull(v.pos_nc) &&
+  isListOf(v.largest, (r) => isAwardRow(r) && isStr(r.published)) && isListOf(v.buyers, isMonthBuyer(true)) &&
+  isCount(v.n_no_buyer) && isCount(v.suppliers) && isCount(v.suppliers_new);
+
+export async function loadMonthlyIndex(env: Env): Promise<MonthlyIndex | null> {
+  const v = await loadJson<unknown>(env, "monthly/index.json");
+  return isObj(v) && isDay(v.as_of) && isListOf(v.months, isMonthHeadline) ? (v as unknown as MonthlyIndex) : null;
+}
+
+export async function loadMonth(env: Env, month: string): Promise<MonthFigures | null> {
+  if (!MONTH_RE.test(month)) return null;
+  const v = await loadJson<unknown>(env, `monthly/${month}.json`);
+  const ok = isObj(v) && v.month === month && isDay(v.as_of) && isMonthTenders(v.tenders) && isMonthAwards(v.awards);
+  return ok ? (v as unknown as MonthFigures) : null;
+}

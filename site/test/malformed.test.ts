@@ -43,6 +43,10 @@ const READERS: Record<string, string[]> = {
   "expiring/index.json": ["/", "/expiring"],
   "expiring/3m/index.json": ["/expiring/3m", "/expiring/3m?buyer=dnd-mdn"],
   "expiring/3m/1.json": ["/expiring", "/expiring/3m", "/expiring/3m?value=over-10m"],
+  "monthly/index.json": ["/monthly", "/monthly/2026-09", "/monthly/months.csv", "/monthly/2026-09/tenders.csv"],
+  "monthly/2026-09.json": ["/monthly/2026-09", "/monthly/2026-09/largest.csv", "/monthly/2026-09?lang=fr"],
+  "monthly/2026-08.json": ["/monthly/2026-08", "/monthly/2026-08/awards.csv"],
+  "monthly/2026-07.json": ["/monthly/2026-07"],
 };
 
 describe("malformed data files", () => {

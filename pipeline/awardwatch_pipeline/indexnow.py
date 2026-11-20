@@ -16,13 +16,14 @@ here in the code and the workflow needs no secret.
 Which pages: first every tender notice open on the data date with a version
 first seen during the run (a new notice or an amendment: a notice earns
 visits only while it is open, and it is the sitemap's first part); then the
-pages that follow the nightly data (FIXED_PAGES); then the other notices with
-a version first seen during the run (closed on the data date) and the
-category pages all those notices fall in; then every buyer and organization
-whose row changed during the run (organizations.recompute and
-indicators.compute write updated_at only when something on the page changed,
-and a new row gets the stamp of its insert). At most CAP URLs a night, in
-that order, the most recently changed first within each kind; pages beyond
+pages that follow the nightly data (FIXED_PAGES) and the monthly record's
+newest month; then the other notices with a version first seen during the
+run (closed on the data date) and the category pages all those notices fall
+in; then every buyer and organization whose row changed during the run
+(organizations.recompute and indicators.compute write updated_at only when
+something on the page changed, and a new row gets the stamp of its insert).
+At most CAP URLs a night, in that order, the most recently changed first
+within each kind; pages beyond
 the cap wait for the sitemap, which lists the open notices and every
 organization with its date.
 
@@ -66,7 +67,7 @@ TIMEOUT = 30
 RETRY_S = 10.0
 # The pages whose content follows the nightly data. "/" is the home page.
 FIXED_PAGES: tuple[str, ...] = ("/", "/overview", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations",
-                                "/buyers", "/segments", "/rankings")
+                                "/buyers", "/segments", "/rankings", "/monthly")
 
 ACCEPTED = (200, 202)
 # 400 bad request, 403 key not valid, 422 URLs not on the host or a key that
@@ -141,6 +142,11 @@ def changed_urls(conn: sqlite3.Connection, since: str, site_url: str, *, cap: in
         add(path)
     for page in pages:
         add(page)
+    # The monthly record's newest month (monthly.py), the one late notices move most; none while the record holds none.
+    from .monthly import record_months
+
+    for month in record_months(conn, as_of)[:1]:
+        add(f"/monthly/{month}")
     for path in closed:
         add(path)
     for code in sorted(touched):

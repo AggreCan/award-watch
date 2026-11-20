@@ -136,7 +136,9 @@ python -m awardwatch_pipeline.nightly indexnow --db data/awardwatch.sqlite --sin
 - every tender notice open on the data date with a version first seen during
   the run (a new notice or an amendment), the sitemap's first part;
 - the fixed pages in `FIXED_PAGES` (the home page and the list pages that
-  follow the nightly data);
+  follow the nightly data, the monthly record's index among them), then the
+  monthly record's newest month (`/monthly/<YYYY-MM>`), the one a late
+  notice moves most;
 - the other notices with a version first seen during the run (closed on the
   data date), and the category pages all those notices fall in;
 - every buyer and organization page whose row changed during the run.
@@ -307,6 +309,9 @@ accounts' routes file lists (`sign-in`, `check`, `stop`, `billing`,
 `/account/calendar/:id.ics` (kind `download`), the dashboard's three reads as
 `/account/dashboard/:read` (kind `file`, fetched by its script), and the
 payment service's notices as `/account/billing/webhook` (kind `hook`).
+The monthly record is counted as `/monthly`, `/monthly/:month` (kind
+`page`), and its tables' files as `/monthly/:month/:table.csv` and
+`/monthly/months.csv` (kind `download`).
 `other` now holds only paths that match no route: probes such as
 `/wp-login.php`, mistyped addresses, an unknown section under `/account`.
 
@@ -992,7 +997,7 @@ organizations, found by their names.
 | Order | Part | Holds | A page's `lastmod` |
 |---|---|---|---|
 | 1 | `/sitemap-open-tenders-<n>.xml` | every tender notice open on the data date, newest first | the night its newest version (the notice, or its latest amendment) first appeared on the site |
-| 2 | `/sitemap-pages-<n>.xml` | the home page, the overview, the lists, the rankings, the buyers, the segments, the award years, the radar's three windows, the directory pages, the standing offers and supply arrangements | below |
+| 2 | `/sitemap-pages-<n>.xml` | the home page, the overview, the lists, the rankings, the monthly record's index, the buyers, the segments, the award years, the radar's three windows, the directory pages, the standing offers and supply arrangements, each month of the monthly record | below |
 | 3 | `/sitemap-guides.xml` | the guides' index and each guide | the day the guide was last checked against its sources |
 | 4 | `/sitemap-active-organizations-<n>.xml` | the organizations with an award notice, a PSPC contract history record or a published contract dated within 24 months of the data date, the most recent record first | the night a figure on the profile last changed |
 | 5 | `/sitemap-other-organizations-<n>.xml` | every other organization, by id | the same |
@@ -1013,7 +1018,12 @@ segment, each award year, each window of the radar and the standing offers'
 list carries the data date on which the export files holding what it shows
 last changed: the database's `page_dates` table keeps a hash of those files
 for each page and the date the hash last moved (the data date a file carries
-is left out of the hash; every page shows it in its frame). The pages that
+is left out of the hash; every page shows it in its frame). A month of the
+monthly record (`/monthly/<YYYY-MM>`) is dated by its own file, which holds
+its figures and nothing of the night but the data date, so a finished month
+keeps its date until a late notice or a correction moves one of its figures;
+the record's index by its index file, which changes when a month's headline
+figures move or the night a month completes and joins it. The pages that
 list the night's runs (the home page, the overview, the Data page), the day's
 new notices and the radar, whose rows count their days left, change every
 night and carry each night's date. A buyer carries the night its figures last

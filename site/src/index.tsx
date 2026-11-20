@@ -38,6 +38,7 @@ import { rootPage, ultraSubmit } from "./pages/landing";
 import { contractIcs, publishedContractIcs, tenderIcs } from "./pages/ics";
 import { ULTRA_KIND, field, interestSubmit, readInterestPost } from "./pages/interest";
 import { methodologyPage } from "./pages/methodology";
+import { monthlyCsv, monthlyIndexCsv, monthlyIndexPage, monthlyPage } from "./pages/monthly";
 import { organizationPage } from "./pages/organization";
 import { publishedContractPage } from "./pages/published";
 import { orgFeed } from "./pages/backbone";
@@ -224,6 +225,13 @@ app.get("/analytics/build.csv", builderCsv);
 app.get("/categories", (c) => movedTo(c, "/segments"));
 app.get("/categories/:nn", (c) => movedTo(c, `/segments/${encodeURIComponent(c.req.param("nn") ?? "")}`));
 app.get("/rankings", rankingsPage);
+// The monthly record (pages/monthly.tsx, pipeline monthly.py): the months, the
+// index's CSV (before the month, which would read "months.csv" as one), a
+// month, and each of its tables as CSV, counted as downloads.
+app.get("/monthly", monthlyIndexPage);
+app.get("/monthly/months.csv", monthlyIndexCsv);
+app.get("/monthly/:month", monthlyPage);
+app.get("/monthly/:month/:table{[a-z]+\\.csv}", monthlyCsv);
 // Standing offers and supply arrangements (pages/instruments.tsx, docs/sosa.md):
 // the list from its static index, its CSV (Pro), then one instrument from the
 // records database, its number escaped as one path segment, and its holders'

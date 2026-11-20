@@ -4706,6 +4706,183 @@ const STRINGS = {
   },
   // The line of guides under a record or a list (src/guide_links.tsx): links is the guides' titles, a middle dot apart.
   "guides.line": { en: "Guides: {links}", fr: "Guides : {links}" },
+
+  // -- the monthly record (pages/monthly.tsx, pipeline monthly.py) ------------------------------------------------
+  "footer.monthly": { en: "Monthly record", fr: "Bilan mensuel" },
+  "home.do_monthly_link": { en: "See each month in figures", fr: "Voir chaque mois en chiffres" },
+  "home.do_monthly": {
+    en: "{link}: the tender notices, award notices, buyers and suppliers of each complete month, ready to cite.",
+    fr: "{link} : les avis d'appel d'offres et d'attribution, les acheteurs et les fournisseurs de chaque mois complet, prêts à citer.",
+  },
+  "data.monthly": {
+    en: "Each complete month of the last twelve in figures, with a CSV file of each table: {link}.",
+    fr: "Chaque mois complet des douze derniers en chiffres, avec un fichier CSV de chaque tableau : {link}.",
+  },
+  "data.monthly_link": { en: "the monthly record", fr: "le bilan mensuel" },
+  "monthly.title": { en: "Monthly Record of Federal Procurement", fr: "Bilan mensuel des marchés publics fédéraux" },
+  "monthly.lead": {
+    en: "Each complete month of the last twelve in figures: the tender notices and award notices federal buyers published on CanadaBuys, by buyer, segment and supplier. Rebuilt every night from the data as they stand.",
+    fr: "Chaque mois complet des douze derniers en chiffres : les avis d'appel d'offres et d'attribution que les acheteurs fédéraux ont publiés sur AchatsCanada, par acheteur, segment et fournisseur. Refait chaque nuit d'après les données telles qu'elles sont.",
+  },
+  "monthly.none": { en: "No month is held in full yet.", fr: "Aucun mois n'est encore détenu en entier." },
+  "monthly.months_heading": { en: "The Months", fr: "Les mois" },
+  "monthly.chart_heading": { en: "Notices Published by Month", fr: "Avis publiés par mois" },
+  "monthly.chart_aria": {
+    en: "One bar a month, oldest first. Every figure is in the table below.",
+    fr: "Une barre par mois, du plus ancien au plus récent. Chaque chiffre figure dans le tableau ci-dessous.",
+  },
+  "monthly.col_month": { en: "Month", fr: "Mois" },
+  "monthly.col_tenders": { en: "Tender notices", fr: "Avis d'appel d'offres" },
+  "monthly.col_awards": { en: "Award notices", fr: "Avis d'attribution" },
+  "monthly.col_awards_value": { en: "Value of award notices", fr: "Valeur des avis d'attribution" },
+  "monthly.col_no_value": { en: "No value stated", fr: "Sans valeur indiquée" },
+  "monthly.col_notices": { en: "Notices", fr: "Avis" },
+  "monthly.col_procurement_method": { en: "Procurement method", fr: "Méthode d'approvisionnement" },
+  "monthly.col_share": { en: "Share", fr: "Part" },
+  "monthly.col_measure": { en: "Measure", fr: "Mesure" },
+  "monthly.col_non_competitive": { en: "Non-competitive", fr: "Non concurrentiels" },
+  "monthly.col_whole": { en: "All award notices", fr: "Tous les avis d'attribution" },
+  "monthly.index_rule": {
+    en: "A notice is counted in the month CanadaBuys published it. The value adds what each award notice states in Canadian dollars; a notice that states no value, or one in another currency, adds nothing.",
+    fr: "Un avis est compté dans le mois où AchatsCanada l'a publié. La valeur additionne ce que chaque avis d'attribution indique en dollars canadiens; un avis sans valeur, ou en une autre devise, n'ajoute rien.",
+  },
+  "monthly.notices_one": { en: "{n} notice", fr: "{n} avis" },
+  "monthly.notices_many": { en: "{n} notices", fr: "{n} avis" },
+  "monthly.page_title": { en: "Federal Procurement in {month}", fr: "Marchés publics fédéraux en {month}" },
+  "monthly.description": {
+    en: "Federal procurement in {month}: {tenders} tender notices and {awards} award notices published on CanadaBuys, by buyer, segment and supplier.",
+    fr: "Marchés fédéraux en {month} : {tenders} avis d'appel d'offres et {awards} avis d'attribution publiés sur AchatsCanada, par acheteur et segment.",
+  },
+  "monthly.as_of": {
+    en: "Figures as of {date}: counted from the data as they stood that night. A late notice or a correction can move them.",
+    fr: "Chiffres au {date} : comptés d'après les données telles qu'elles étaient cette nuit-là. Un avis tardif ou une correction peut les changer.",
+  },
+  "monthly.lead_tenders_one": { en: "{n} tender notice", fr: "{n} avis d'appel d'offres" },
+  "monthly.lead_tenders_many": { en: "{n} tender notices", fr: "{n} avis d'appel d'offres" },
+  "monthly.lead_awards_one": { en: "{n} award notice", fr: "{n} avis d'attribution" },
+  "monthly.lead_awards_many": { en: "{n} award notices", fr: "{n} avis d'attribution" },
+  "monthly.lead_tenders_none": { en: "no tender notice", fr: "aucun avis d'appel d'offres" },
+  "monthly.lead_awards_none": { en: "no award notice", fr: "aucun avis d'attribution" },
+  "monthly.lead_published": {
+    en: "In {month}, federal buyers published {tenders} and {awards} on CanadaBuys.",
+    fr: "En {month}, les acheteurs fédéraux ont publié {tenders} et {awards} sur AchatsCanada.",
+  },
+  "monthly.lead_value": {
+    en: "The award notices state {value} in Canadian dollars in total.",
+    fr: "Les avis d'attribution indiquent {value} en dollars canadiens au total.",
+  },
+  "monthly.lead_nc": {
+    en: "The source marks {nc} of them ({pct}) as non-competitive.",
+    fr: "La source en indique {nc} ({pct}) comme non concurrentiels.",
+  },
+  "monthly.lead_nc_value": {
+    en: "The source marks {nc} of them ({pct}) as non-competitive, {value} of their positive value ({value_pct}).",
+    fr: "La source en indique {nc} ({pct}) comme non concurrentiels, soit {value} de leur valeur positive ({value_pct}).",
+  },
+  "monthly.lead_largest": {
+    en: "The largest states {value}: {title}, from {buyer} to {supplier}.",
+    fr: "Le plus grand indique {value} : {title}, de {buyer} à {supplier}.",
+  },
+  "monthly.lead_largest_no_supplier": {
+    en: "The largest states {value}: {title}, from {buyer}.",
+    fr: "Le plus grand indique {value} : {title}, de {buyer}.",
+  },
+  "monthly.months_nav": { en: "Months", fr: "Mois" },
+  "monthly.previous": { en: "Previous month: {month}", fr: "Mois précédent : {month}" },
+  "monthly.next": { en: "Next month: {month}", fr: "Mois suivant : {month}" },
+  "monthly.all": { en: "All months", fr: "Tous les mois" },
+  "monthly.tenders_panel": { en: "Tender Notices Published", fr: "Avis d'appel d'offres publiés" },
+  "monthly.tenders_rule": {
+    en: "A notice is in the month of its publication date on CanadaBuys (a notice published on the last day of a month is in that month), and every notice counts, whatever its status since. The month before and the same month a year before are shown when the data hold them in full.",
+    fr: "Un avis est compté dans le mois de sa date de publication sur AchatsCanada (un avis publié le dernier jour d'un mois est dans ce mois), et chaque avis compte, quel que soit son statut depuis. Le mois précédent et le même mois un an plus tôt figurent lorsque les données les contiennent en entier.",
+  },
+  "monthly.tender_buyers_panel": { en: "Buyers That Published the Most Tender Notices", fr: "Acheteurs ayant publié le plus d'avis d'appel d'offres" },
+  "monthly.tender_buyers_rule": {
+    en: "A notice counts for the buyer that published it; ties are in the order of the buyers' identifiers. A notice whose buyer names no federal institution counts for none ({n} this month).",
+    fr: "Un avis compte pour l'acheteur qui l'a publié; à égalité, les acheteurs suivent l'ordre de leurs identifiants. Un avis dont l'acheteur ne nomme aucune institution fédérale ne compte pour aucun ({n} ce mois-ci).",
+  },
+  "monthly.segments_panel": { en: "Tender Notices by Segment", fr: "Avis d'appel d'offres par segment" },
+  "monthly.segments_rule": {
+    en: "The ten UNSPSC segments with the most notices, ties by code. A notice counts in each segment its codes fall in, so the rows can add up to more than the month's notices. A notice with no code counts in none ({n} this month).",
+    fr: "Les dix segments UNSPSC qui comptent le plus d'avis, à égalité selon le code. Un avis compte dans chaque segment où tombent ses codes, de sorte que les lignes peuvent dépasser le total du mois. Un avis sans code ne compte dans aucun ({n} ce mois-ci).",
+  },
+  "monthly.methods_panel": { en: "Tender Notices by Procurement Method", fr: "Avis d'appel d'offres par méthode d'approvisionnement" },
+  "monthly.methods_rule": {
+    en: "The procurement method in the source's own words, each notice once; the share is of the month's notices.",
+    fr: "La méthode d'approvisionnement dans les mots de la source, chaque avis une fois; la part est celle des avis du mois.",
+  },
+  "monthly.days_open": {
+    en: "Days open, median: {days}, over {n} notices: the closing date less the publication date, for the notices that state a closing date on or after it.",
+    fr: "Jours d'ouverture, médiane : {days}, sur {n} avis : la date de clôture moins la date de publication, pour les avis dont la clôture tombe à cette date ou après.",
+  },
+  "monthly.days_open_none": {
+    en: "Days open: no notice of the month states a closing date on or after its publication date.",
+    fr: "Jours d'ouverture : aucun avis du mois n'indique une clôture à sa date de publication ou après.",
+  },
+  "monthly.awards_panel": { en: "Award Notices Published", fr: "Avis d'attribution publiés" },
+  "monthly.awards_rule": {
+    en: "Counted by publication date, as the tender notices are; a contract's award date is often earlier. The value adds what each notice states in Canadian dollars by the site's counting rules (a cancelled contract counts zero). {no_value} notices state no value and {not_counted} state one in another currency or one flagged for checking; neither is in the value.",
+    fr: "Comptés selon la date de publication, comme les avis d'appel d'offres; la date d'attribution d'un contrat est souvent antérieure. La valeur additionne ce que chaque avis indique en dollars canadiens selon les règles de calcul du site (un contrat annulé compte pour zéro). {no_value} avis n'indiquent aucune valeur et {not_counted} en indiquent une en une autre devise ou signalée pour vérification; ni les uns ni les autres ne sont dans la valeur.",
+  },
+  "monthly.competition_panel": { en: "Awarded Without Competition", fr: "Attribués sans mise en concurrence" },
+  "monthly.by_number": { en: "By number", fr: "En nombre" },
+  "monthly.by_value": { en: "By value", fr: "En valeur" },
+  "monthly.competition_rule": {
+    en: "Non-competitive is the source's own term: the method \"Non-competitive\" or an advance contract award notice. By number, the share is of every award notice of the month, {unstated} of which state no method; by value, of the positive values the month's value adds.",
+    fr: "« Non concurrentiel » est le terme de la source : la méthode « Non concurrentielle » ou un préavis d'adjudication de contrat. En nombre, la part porte sur tous les avis d'attribution du mois, dont {unstated} n'indiquent aucune méthode; en valeur, sur les valeurs positives que la valeur du mois additionne.",
+  },
+  "monthly.largest_panel": { en: "Largest Award Notices by Value", fr: "Plus grands avis d'attribution selon la valeur" },
+  "monthly.largest_rule": {
+    en: "The ten notices of the month that state the most in Canadian dollars, ties by reference. The Awarded column gives the contract's award date; the notice is in this month by its publication date.",
+    fr: "Les dix avis du mois qui indiquent le plus en dollars canadiens, à égalité selon la référence. La colonne « Attribué le » donne la date d'attribution du contrat; l'avis est dans ce mois selon sa date de publication.",
+  },
+  "monthly.award_buyers_panel": { en: "Buyers by Value of Award Notices", fr: "Acheteurs selon la valeur des avis d'attribution" },
+  "monthly.award_buyers_rule": {
+    en: "The ten buyers whose award notices of the month state the most in Canadian dollars, then by notices, ties by identifier. A notice whose buyer names no federal institution counts for none ({n} this month).",
+    fr: "Les dix acheteurs dont les avis d'attribution du mois indiquent le plus en dollars canadiens, puis selon le nombre d'avis, à égalité selon l'identifiant. Un avis dont l'acheteur ne nomme aucune institution fédérale ne compte pour aucun ({n} ce mois-ci).",
+  },
+  "monthly.suppliers_panel": { en: "Suppliers", fr: "Fournisseurs" },
+  "monthly.suppliers_named": { en: "Suppliers named in the month's award notices", fr: "Fournisseurs nommés dans les avis d'attribution du mois" },
+  "monthly.suppliers_new": { en: "Named in an award notice for the first time", fr: "Nommés dans un avis d'attribution pour la première fois" },
+  "monthly.suppliers_rule": {
+    en: "A supplier is an organization an award notice names, counted once however many notices name it. A notice whose supplier is withheld as a private individual names none. A supplier is named for the first time when no award notice published before this month names it; the award notices go back to 2012.",
+    fr: "Un fournisseur est une organisation qu'un avis d'attribution nomme, comptée une fois quel que soit le nombre d'avis. Un avis dont le fournisseur est retenu parce qu'il s'agit d'un particulier n'en nomme aucun. Un fournisseur est nommé pour la première fois lorsqu'aucun avis d'attribution publié avant ce mois ne le nomme; les avis d'attribution remontent à 2012.",
+  },
+  "monthly.none_month": { en: "None this month.", fr: "Aucun ce mois-ci." },
+  "monthly.not_shown_panel": { en: "What This Page Does Not Show", fr: "Ce que cette page ne montre pas" },
+  "monthly.not_paid": {
+    en: "Money paid. A notice's value is what the notice states when it is published, not what was spent.",
+    fr: "Les sommes versées. La valeur d'un avis est ce que l'avis indique à sa publication, et non ce qui a été dépensé.",
+  },
+  "monthly.not_changes": {
+    en: "Corrections as a count of their own. A notice can be amended, corrected or withdrawn; the figures count each notice as it stands on the date above.",
+    fr: "Les corrections comme compte à part. Un avis peut être modifié, corrigé ou retiré; les chiffres comptent chaque avis tel qu'il est à la date ci-dessus.",
+  },
+  "monthly.not_contracts": {
+    en: "Published contracts over $10,000. Departments report them by quarter, weeks or months after the quarter ends, so a calendar month of them keeps growing long after it ends; they are not in these figures.",
+    fr: "Les contrats publiés de plus de 10 000 $. Les ministères les déclarent par trimestre, des semaines ou des mois après la fin du trimestre, de sorte qu'un mois de ces contrats continue de croître longtemps après sa fin; ils ne sont pas dans ces chiffres.",
+  },
+  "monthly.not_amendments": {
+    en: "Amendments by month. The source files list each notice at its newest version, so the amendments of a month cannot be counted from them.",
+    fr: "Les modifications par mois. Les fichiers de la source donnent chaque avis à sa version la plus récente, de sorte que les modifications d'un mois ne peuvent pas en être comptées.",
+  },
+  "monthly.not_fixed": {
+    en: "Fixed figures. The page is rebuilt every night and its figures follow the data: a late notice or a correction moves them, and the date above says when they were counted.",
+    fr: "Des chiffres figés. La page est refaite chaque nuit et ses chiffres suivent les données : un avis tardif ou une correction les change, et la date ci-dessus indique quand ils ont été comptés.",
+  },
+  "monthly.cite_panel": { en: "How to Cite This Page", fr: "Comment citer cette page" },
+  "monthly.cite_text": {
+    en: "Name the date of the figures with the page's address. The {cite} page gives the other styles.",
+    fr: "Indiquez la date des chiffres avec l'adresse de la page. La page {cite} donne les autres styles.",
+  },
+  "monthly.cite_title": { en: "Federal procurement in {month}: Monthly record", fr: "Marchés publics fédéraux en {month} : bilan mensuel" },
+  "monthly.free_tools": {
+    en: "With a free account you can follow a {buyer} from its page and save a search of the {tenders}.",
+    fr: "Avec un compte gratuit, vous pouvez suivre un {buyer} à partir de sa page et enregistrer une recherche des {tenders}.",
+  },
+  "monthly.free_buyer": { en: "buyer", fr: "acheteur" },
+  "monthly.free_tenders": { en: "open tender notices", fr: "avis d'appel d'offres ouverts" },
+  "monthly.method_unstated": { en: "Method not stated", fr: "Méthode non précisée" },
 } as const satisfies Record<string, Entry>;
 
 export type Key = keyof typeof STRINGS;

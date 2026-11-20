@@ -141,6 +141,8 @@ change there. Output tree (under data/out/static):
   instruments/index.json        the standing offers and supply arrangements with an active holder
                                 (sosa_export.py, which also names what profiles, segment and buyer files and
                                 tender details carry of them: "instruments" and "holders")
+  monthly/index.json, monthly/<YYYY-MM>.json   the monthly record: each complete month of the last 12 in
+                                figures, tender notices and award notices by publication date (monthly.py)
   sitemaps/index.xml, sitemaps/sitemap-<part>-<n>.xml   the sitemap index and its parts, in SITEMAP_PARTS order
                                 (sitemap_parts: the open notices, the site's own pages, the organizations with
                                 recent activity, the other organizations), dated by page_dates
@@ -242,7 +244,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 from xml.sax.saxutils import escape
 
-from . import config, directory, expiring, indicators, organizations, profile_matching, sosa_export, value_checks
+from . import config, directory, expiring, indicators, monthly, organizations, profile_matching, sosa_export, value_checks
 from .db import get_meta, log_run, set_meta
 from .export import SUMS, listed_buyer_ids, register_functions, scrub, scrub_doc
 from .feeds import write_feeds
@@ -354,11 +356,12 @@ ACTIVE_MONTHS = 24
 # reader; "/" is the landing page for a reader without a session.
 SITEMAP_PAGES = ["/", "/overview", "/tenders", "/tenders/new", "/tenders/same-day", "/awards", "/awards/erroneous",
                  "/expiring", "/organizations", "/buyers", "/segments", "/analytics", "/rankings", "/feeds", "/watchlist",
-                 "/data", "/methodology", "/cite", "/corrections", "/about", "/terms", "/privacy", "/alerts", "/pro"]
+                 "/data", "/methodology", "/cite", "/corrections", "/about", "/terms", "/privacy", "/alerts", "/pro",
+                 "/monthly"]
 # Pages whose content follows the nightly data carry a date; the others
 # change only with the code, so they carry none rather than a false one.
 SITEMAP_DATED_PAGES = {"/", "/overview", "/tenders", "/tenders/new", "/awards", "/awards/erroneous", "/expiring",
-                       "/organizations", "/buyers", "/segments", "/analytics", "/rankings", "/feeds", "/data"}
+                       "/organizations", "/buyers", "/segments", "/analytics", "/rankings", "/feeds", "/data", "/monthly"}
 # The export files that hold what each dated page shows. Its lastmod is the
 # data date on which their bytes last changed (page_dates), so a page whose
 # files a night left as they were keeps its date. "{day}" is the data date.
@@ -378,6 +381,7 @@ SITEMAP_PAGE_FILES: dict[str, tuple[str, ...]] = {
     "/rankings": ("rankings/all.json",),
     "/feeds": ("feeds/index.json",),
     "/data": ("stats.json",),
+    "/monthly": ("monthly/index.json",),
 }
 
 
@@ -2406,6 +2410,9 @@ def _site_page_digests(m: Model, out: Path, fixed: Sequence[str], years: Sequenc
             digests[f"/expiring/{name}"] = _digest(out, (f"expiring/{name}/index.json", f"expiring/{name}/1.json"))
     if "instruments" not in skip:
         digests["/instruments"] = _digest(out, ("instruments/index.json",))
+    if "monthly" not in skip:
+        for month in monthly.months_written(out):
+            digests[f"/monthly/{month}"] = _digest(out, monthly.page_files(month))
     return digests
 
 
@@ -2459,6 +2466,8 @@ def sitemap_parts(m: Model, out: Path, skip: Collection[str] = ()) -> list[tuple
         pages += directory.sitemap_entries(conn)
     if "instruments" not in skip:
         pages += sosa_export.sitemap_entries(conn, dates["/instruments"])
+    if "monthly" not in skip:
+        pages += [(f"/monthly/{month}", dates[f"/monthly/{month}"]) for month in monthly.months_written(out)]
 
     since = active_since(m.today)
     active: list[tuple[str, str, str | None]] = []
@@ -2618,6 +2627,7 @@ def _write_static(conn: sqlite3.Connection, out: Path, today: date, base_url: st
         ("aliases", lambda: write_aliases(conn, out)),
         ("directory", lambda: directory.write_all(conn, out, m.as_of)),
         ("instruments", lambda: write_instruments(m, out)),
+        ("monthly", lambda: monthly.write_all(m, out)),
     )
     for name, write in sections:
         try:

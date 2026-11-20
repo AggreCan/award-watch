@@ -226,6 +226,44 @@ def expiring_part(v):
     return count(v["n"]) and num_or_none(v["total"]) and every(v["rows"], expiring_row) and len(v["rows"]) <= v["n"]
 
 
+# The monthly record (site/src/data.ts loadMonthlyIndex and loadMonth).
+MONTH = re.compile(r"^\d{4}-(?:0[1-9]|1[0-2])$")
+DAY = re.compile(r"^\d{4}-\d{2}-\d{2}")
+
+
+def month_headline(v):
+    return (MONTH.match(v["month"]) and count(v["tenders"]) and count(v["awards"]) and num_or_none(v["awards_value"]))
+
+
+def month_buyer(with_value):
+    return lambda v: (buyer_or_none(v["id"]) and s_or_none(v["en"]) and s_or_none(v["fr"]) and count(v["n"])
+                      and (not with_value or (num_or_none(v["value"]) and count(v["n_no_value"]))))
+
+
+def tender_figure(v):
+    return v is None or (MONTH.match(v["month"]) and count(v["n"]))
+
+
+def award_figure(v):
+    return v is None or (MONTH.match(v["month"]) and count(v["n"]) and num_or_none(v["value"]) and count(v["n_no_value"]))
+
+
+def month_doc(v, month, segments):
+    t, a = v["tenders"], v["awards"]
+    return (v["month"] == month and s(v["as_of"]) and DAY.match(v["as_of"])
+            and count(t["n"]) and tender_figure(t["before"]) and tender_figure(t["year_before"])
+            and every(t["buyers"], month_buyer(False)) and count(t["n_no_buyer"])
+            and every(t["segments"], lambda x: x["code"] in segments and count(x["n"])) and count(t["n_no_segment"])
+            and every(t["methods"], lambda x: s_or_none(x["en"]) and s_or_none(x["fr"]) and count(x["n"]))
+            and num_or_none(t["days_open"]["median"]) and count(t["days_open"]["n"])
+            and count(a["n"]) and num_or_none(a["value"]) and count(a["n_no_value"]) and count(a["n_not_counted"])
+            and award_figure(a["before"]) and award_figure(a["year_before"]) and count(a["n_nc"]) and count(a["n_unstated"])
+            and num_or_none(a["pos"]) and num_or_none(a["pos_nc"])
+            and every(a["largest"], lambda r: award_row(r) and s(r["published"]))
+            and every(a["buyers"], month_buyer(True)) and count(a["n_no_buyer"])
+            and count(a["suppliers"]) and count(a["suppliers_new"]))
+
+
 def test_every_file_passes_the_site_checks(exported):
     conn, out, ids, _ = exported
     stats = load(out, "stats.json")
@@ -325,6 +363,10 @@ def test_every_file_passes_the_site_checks(exported):
             page = load(out, f"directory/{d['code']}/{n}.json")
             assert page["code"] == d["code"] and page["page"] == n and page["rows"]
             assert every(page["rows"], lambda r: ORG_ID.match(r["id"]) and s(r["name"]) and count(r["n_records"]))
+    monthly = load(out, "monthly/index.json")
+    assert DAY.match(monthly["as_of"]) and len(monthly["months"]) == 12 and every(monthly["months"], month_headline)
+    for row in monthly["months"]:
+        assert month_doc(load(out, f"monthly/{row['month']}.json"), row["month"], es.read_segments()), row["month"]
 
 
 def test_counts_and_home_lists(exported):

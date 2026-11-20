@@ -57,6 +57,9 @@ const SENTINELS = [
   "How email lists work",
   "Every new tender notice",
   "Contracts now within",
+  "Monthly record",
+  "Tender Notices Published",
+  "What This Page Does Not Show",
 ];
 
 const FRENCH_PAGES = [
@@ -98,6 +101,9 @@ const FRENCH_PAGES = [
   "/guides/three-records-of-one-federal-contract?lang=fr",
   "/data?lang=fr",
   "/cite?lang=fr",
+  "/monthly?lang=fr",
+  "/monthly/2026-09?lang=fr",
+  "/monthly/2026-08?lang=fr",
   "/corrections?lang=fr",
   "/alerts?lang=fr",
   "/about?lang=fr",
@@ -344,7 +350,7 @@ describe("rendered French pages", () => {
       [
         "/", "/tenders", "/methodology", "/cite", "/organizations/org-a000000001", "/organizations/directory/on",
         "/nothing-here", "/organizations/org-a000000001/respond", "/tenders/cb-100-10000001", "/awards/cb-400-40000004",
-        "/rankings", "/corrections", "/expiring", "/history/w8472-000633",
+        "/rankings", "/corrections", "/expiring", "/history/w8472-000633", "/monthly/2026-09",
       ].map(async (p) => (await get(p)).text()),
     );
     pages.push(await (await get("/", {}, testEnv(emptyAssets))).text());

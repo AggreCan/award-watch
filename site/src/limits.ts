@@ -74,6 +74,8 @@ export const BUILDER_CSV = /^\/analytics\/build\.csv$/;
 // The standing offers' files (pages/instruments.tsx): a filtered list, and one instrument's holders.
 export const INSTRUMENTS_CSV = /^\/instruments\/(?:rows|.+\/holders)\.csv$/;
 export const RECORDS_CSV = /^\/(?:expiring\/(?:3m|6m|12m)\/rows|(?:buyers|organizations)\/[^/]+\/records)\.csv$/;
+// The monthly record's tables as CSV (pages/monthly.tsx): the index's and each month's.
+export const MONTHLY_CSV = /^\/monthly\/(?:months|[^/]+\/[a-z]+)\.csv$/;
 // A notice's or a contract's one-event calendar file.
 export const RECORD_ICS = /^\/(?:(?:tenders|awards|history)\/[^/]+|contracts\/[^/]+\/.+)\.ics$/;
 // A Pro account's calendar feed.
@@ -119,7 +121,7 @@ export function bucketFor(method: string, path: string): Bucket {
   if (path.startsWith("/downloads/")) return method === "HEAD" ? "page" : "download";
   if (
     ANALYTICS_CSV.test(path) || BUILDER_CSV.test(path) || RECORDS_CSV.test(path) || RECORD_ICS.test(path) || INSTRUMENTS_CSV.test(path) ||
-    ORG_CLAIM_CSV.test(path)
+    ORG_CLAIM_CSV.test(path) || MONTHLY_CSV.test(path)
   ) {
     return method === "HEAD" ? "page" : "download";
   }

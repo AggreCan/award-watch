@@ -186,18 +186,22 @@ def test_a_page_that_did_not_change_keeps_its_date_from_one_night_to_the_next(co
     indicators.compute(conn, now="2026-11-01T13:00:00Z")
     conn.commit()
     second = everything_after(conn, tmp_path / "two", TODAY + timedelta(days=1))
-    assert set(first) == set(second)
-    moved = {loc.replace(BASE, "") for loc in first if first[loc] != second[loc]}
+    # The second night's data date is past October's last day: the monthly record (monthly.py) takes October and
+    # lets its oldest month go, so its index lists other months. No other address comes or goes.
+    assert set(second) - set(first) == {f"{BASE}/monthly/2026-10"}
+    assert set(first) - set(second) == {f"{BASE}/monthly/2025-10"}
+    moved = {loc.replace(BASE, "") for loc in first if loc in second and first[loc] != second[loc]}
     # What moved really changed: the pages listing the night's runs (stats.json), the day's new notices (another
-    # day's list), the radar and its windows (each row counts its days left), and the part holding them.
+    # day's list), the radar and its windows (each row counts its days left), the monthly record's index, and the
+    # part holding them. Every month already in the record keeps its date: its own figures did not move.
     assert moved == {"/", "/overview", "/data", "/tenders/new", "/expiring", "/expiring/3m", "/expiring/6m",
-                     "/expiring/12m", "/sitemap-pages-1.xml"}
+                     "/expiring/12m", "/monthly", "/sitemap-pages-1.xml"}
     assert all(second[f"{BASE}{p}"] == "2026-11-01" for p in moved)
     # Everything else kept its date: the open notices, the organizations, the buyers, the segments, the years, the
     # directories, the lists that did not move, and the parts and their index entries.
     for path in ("/tenders/cb-100-1", f"/organizations/{ids[ACME]}", f"/organizations/{ids[OLD]}", "/buyers/dnd-mdn",
                  "/segments/72", "/awards/2026", "/awards/2021", "/organizations/directory/on", "/tenders", "/awards",
-                 "/segments", "/rankings", "/feeds", "/organizations", "/buyers",
+                 "/segments", "/rankings", "/feeds", "/organizations", "/buyers", "/monthly/2026-09", "/monthly/2025-11",
                  "/sitemap-open-tenders-1.xml", "/sitemap-active-organizations-1.xml"):
         assert second[f"{BASE}{path}"] == first[f"{BASE}{path}"] == "2026-10-31", path
 
