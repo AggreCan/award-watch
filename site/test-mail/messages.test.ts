@@ -16,12 +16,14 @@ import { describe, expect, it } from "vitest";
 import { accountsOpenMessage, announceLinks, runAnnouncement, ultraLinks, ultraOpenMessage } from "../src/account/announce";
 import { expiringDigest, recordsDigest, tenderDigest, viewDigest, watchDigest, weeklyDigest } from "../src/account/digests";
 import { RULES } from "../src/account/entitlements";
-import { MAIL_CHECK_LISTS, MAIL_CHECK_MARK, MAIL_CHECK_TEMPLATES, type MailCheckTemplate, mailCheckMessages } from "../src/account/mail_check";
+import {
+  MAIL_CHECK_HOLDER, MAIL_CHECK_LISTS, MAIL_CHECK_MARK, MAIL_CHECK_TEMPLATES, type MailCheckTemplate, mailCheckMessages,
+} from "../src/account/mail_check";
 import { weekOpening } from "../src/account/org_claim";
 import { addressNotice } from "../src/account/sender";
 import { t, tn, type Lang } from "../src/i18n";
 import { INSERT_INTEREST, newToken } from "../src/pages/interest";
-import { DB, decode, lastMail, nbsp, newEmail, onEnv, post, useAccountsDb } from "../test/accounts-helpers";
+import { DB, csrf, decode, grantUltra, lastMail, nbsp, newEmail, onEnv, post, signIn, useAccountsDb } from "../test/accounts-helpers";
 import {
   DAY, MATCH_NAME, SAMPLE_ADDRESS, SITE, STOP, expiringInput, matchesInput, tenderInput, viewInput, weeklyInput,
 } from "../test/mail-fixtures";
@@ -35,7 +37,7 @@ const LANGS = ["en", "fr"] as const;
 const CHECK_SHAPE: Record<MailCheckTemplate, keyof typeof SHAPES> = {
   sign_in: "sign_in", tenders_daily: "digest_daily", expiring_weekly: "digest_weekly", records: "digest_daily", group: "group", watch: "watch",
   briefing: "briefing", briefing_group: "briefing_group", view: "view_weekly", view_group: "view_group", weekly: "weekly",
-  accounts_open: "accounts_open", ultra_open: "ultra_open", address_notice: "address_notice",
+  accounts_open: "accounts_open", ultra_open: "ultra_open", address_notice: "address_notice", invite: "invite",
 };
 
 // What every message carrying the week's matching notices holds in both
@@ -220,6 +222,30 @@ describe.each(LANGS)("every message, in %s", (lang) => {
     checkMessage(await viaLogSender(addressNotice(lang, newEmail(`address-${lang}`), SITE)), shapeOf("address_notice", "address notice", SITE), lang);
   });
 
+  it("a seat's invitation, as the Seats page sends it, in the language the holder chose, naming the holder alone", async () => {
+    const holder = newEmail(`seat-holder-${lang}`);
+    const cookie = await signIn(holder);
+    await grantUltra(holder);
+    const env = onEnv({ SEATS: "on" });
+    const to = newEmail(`seat-invited-${lang}`);
+    // The page is in English; the message is in the language the holder chose.
+    const res = await post("/account/seats/invite", { csrf: await csrf(cookie, "/account/seats", { env }), email: to, message_lang: lang, lang: "en" },
+      { cookie, env });
+    expect(res.status).toBe(200);
+    const row = await lastMail(to);
+    expect(row?.to_addr).toBe(to);
+    const m = { to, subject: row!.subject, text: row!.text, html: row!.html, lang: row!.lang as Lang };
+    checkMessage(m, shapeOf("invite", "seat invitation", LOCAL), lang, { named: [holder] });
+    // The holder's address in the body, never in the subject; the invited address nowhere in the message.
+    expect(m.subject).not.toContain("@");
+    expect(m.text).toContain(holder);
+    expect(`${m.text}${m.html}`).not.toContain(to);
+    const link = /\/account\/seats\/join\?i=[0-9a-f]{32}&t=[0-9a-f]{64}(&lang=fr)?\n/.exec(m.text);
+    expect(link?.[0].startsWith("/account/seats/join"), "the link in the text part").toBe(true);
+    expect(m.text).toContain(`${LOCAL}${link?.[0]}`);
+    expect(link?.[1] === "&lang=fr").toBe(lang === "fr");
+  });
+
   it("the live check's messages: one of each template, marked, to the one address", async () => {
     const to = newEmail(`mail-check-${lang}`);
     const messages = await mailCheckMessages(lang, to, SITE, new Date("2026-11-09T16:00:00Z"), SAMPLE_ADDRESS);
@@ -230,7 +256,7 @@ describe.each(LANGS)("every message, in %s", (lang) => {
       expect(message.to, template).toBe(to);
       expect(message.subject.startsWith(`${MAIL_CHECK_MARK} `), template).toBe(true);
       expect(MAIL_CHECK_LISTS.has(template), template).toBe(SHAPES[CHECK_SHAPE[template]].list);
-      checkMessage(await viaLogSender(message), shapeOf(CHECK_SHAPE[template], `mail check ${template}`, SITE), lang);
+      checkMessage(await viaLogSender(message), shapeOf(CHECK_SHAPE[template], `mail check ${template}`, SITE), lang, { named: [MAIL_CHECK_HOLDER] });
     }
   });
 });

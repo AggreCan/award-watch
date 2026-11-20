@@ -1,5 +1,5 @@
 import { type Env, type MailCeiling, mailCeiling } from "./env";
-import { CEILING_TEXT_START, CONSOLE_OUTCOME, DELIVERY_CRON, RUN_DETAIL_MAX } from "./account/deliveries";
+import { CEILING_TEXT_START, CONSOLE_OUTCOME, DELIVERY_CRON, RUN_DETAIL_MAX, SEND_ONLY_OUTCOMES } from "./account/deliveries";
 import { LIVE_PRO_SQL } from "./account/entitlements";
 import { missingTable } from "./account/records_deliveries";
 import { accountsEnabled } from "./account/switch";
@@ -48,8 +48,9 @@ import { faultSummary } from "./search_db";
 // database without the table, or a fault reading it, is one log line and no
 // line in the email, as the paid plans' count is. The console's bulk runs
 // (the accounts-open and Ultra messages) write rows of their own outcome
-// (CONSOLE_OUTCOME): they are the day's sends against the ceiling and
-// nothing more, never a run of the job.
+// (CONSOLE_OUTCOME), and so does each seat's invitation (INVITE_OUTCOME):
+// they are the day's sends against the ceiling and nothing more, never a run
+// of the job (SEND_ONLY_OUTCOMES).
 //
 // The day's figures (pipeline/awardwatch_pipeline/funnel.py): the nightly
 // keeps one line for the last finished UTC day, the account funnel's counts
@@ -619,8 +620,8 @@ const NOT_READ: Record<string, string> = {
 function deliveryAlerts(d: DeliveryDay | null, c: MailCeiling | null): string[] {
   if (!d) return [];
   const { day } = d;
-  // The job's runs; the console's rows count only in the day's sends.
-  const runs = d.runs.filter((r) => r.outcome !== CONSOLE_OUTCOME);
+  // The job's runs; the console's rows and the invitations' count only in the day's sends.
+  const runs = d.runs.filter((r) => !SEND_ONLY_OUTCOMES.has(r.outcome));
   const fromConsole = d.runs.reduce((n, r) => n + (r.outcome === CONSOLE_OUTCOME ? r.sent : 0), 0);
   if (!runs.length) {
     return [

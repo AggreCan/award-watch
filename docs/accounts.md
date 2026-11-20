@@ -2892,16 +2892,23 @@ covering a seat, the seat stays and gives no plan; what its member keeps
 stays theirs.
 
 What is built is the table, the plan read through a seat, deletion, the
-sweep, the console's read, the pool at the inserts (*The pool*) and the pool
-in service (*In service*). No page creates a seat yet: there is no
-invitation, no Seats page, no route under `/account/seats` and no line on
-any plan card, the Terms or the privacy page, and with no seat row every
-page, post, feed, API answer and email reads as before. The code is
+sweep, the console's read, the pool at the inserts (*The pool*), the pool
+in service (*In service*), and, behind a switch of their own that ships off
+(*The seats' switch*), the invitation and its message, the invitation's page,
+the Seats page of a holder and of a member, leaving a seat and removing a
+member. While that switch is off nothing creates a seat: there is no route
+under `/account/seats` or `/account/seat` and no line about seats on any
+page, and with no seat row every page, post, feed, API answer and email
+reads as before. Not built yet: the plan cards' row, `/pro`'s and the
+landing card's lines, the Terms' Seats section, the privacy page's paragraph,
+the console's actions on a seat, and the seat notices by email. The code is
 `site/src/account/entitlements.ts` (`planFor`, `withSeats`, `seatsReady`),
-`site/src/account/seats.ts`, `site/src/account/pool.ts` and
+`site/src/account/seats.ts`, `site/src/account/seats_pages.tsx`,
+`site/src/account/seats_strings.ts`, `site/src/account/pool.ts` and
 `site/src/account/pool_lines.tsx`; the tests are `site/test/seats.test.ts`,
-`site/test/seats-unchanged.test.ts`, `site/test/seats-pool.test.ts` and
-`site/test/seats-service.test.ts`.
+`site/test/seats-unchanged.test.ts`, `site/test/seats-pool.test.ts`,
+`site/test/seats-service.test.ts`, `site/test/seats-switch.test.ts` and
+`site/test/seats-invite.test.ts`.
 
 ### The table
 
@@ -3103,6 +3110,164 @@ group from the next read: their things are under their own plan's figures
 (Free's, as a rule), saved and unavailable past them, and the group's counts
 drop by theirs at once, so the others' items past their allowance come back
 into service.
+
+### The seats' switch
+
+`SEATS` in `site/wrangler.jsonc`, `"off"` as shipped. `seatsOn(env)`
+(`seats.ts`) is true only when it is `"on"`, the accounts switch is on and the
+seats table is on the database (`seatsReady`); it asks the variable first, so
+while it is off nothing is read. While it is off, or on without the table:
+
+- every address under `/account/seats` and `/account/seat` answers the site's
+  404 page, the same answer as an address the accounts module does not know,
+  before anything else is read;
+- no page names a seat: the overview has no Seats row, the billing page no
+  Seats link, and a seat's member keeps its Subscribe panel;
+- no invitation is sent;
+- the limiter counts those addresses as pages.
+
+`site/test/seats-switch.test.ts` holds every page of a signed-out reader and
+of a Free, Pro and Ultra account, Ultra off sale and on sale, the table
+present and absent, to the bytes main drew before the switch existed
+(`site/test/seats-switch-today.ts`, captured from main), and holds every
+seats address to the 404 with nothing more read. With the switch on, a
+reader who gives and holds no seat reads every page as before; an Ultra
+account's overview gains the Seats row and its billing page the Seats link.
+The operator sets it `"on"` once the lawyer's read of the Terms' Seats
+section and of the invitation is done.
+
+### Invitations
+
+Only a holder whose own plan has member seats (Ultra: 4) invites, its
+session read from the database now (one remembered through an outage is
+refused, as the refund is). The Seats page's "Invite a Person" panel posts
+an address and the message's language to `POST /account/seats/invite`. In
+order, nothing written before each: the address in form and not the
+holder's own ("That is this account's own address..."); the day's mail
+ceiling has room (`dayRoom`; at 0, "No more invitations can be sent today",
+429, no row); then one statement (`INVITE_SQL`, 13 values bound) writes the
+invitation only while all of these hold inside it:
+
+| Held | Figure | Refusal |
+|---|---|---|
+| The seats in use (live seats and open invitations) below the plan's member seats | 4 on Ultra | "All 5 seats are taken or invited..." |
+| The holder's invitations in any 24 hours | `SEAT_INVITES_PER_DAY` 10 | "This account has sent 10 invitations in the last 24 hours..." |
+| The holder's invitations to one address in 30 days | `SEAT_INVITES_PER_ADDRESS` 2 | "This address has had 2 invitations from this account..." |
+| Joins in 30 days (rows joined in the window, ended or not) with the open invitations | member seats + `SEAT_SWAPS` 2: 6 on Ultra | "6 people have joined this subscription or been invited to it in the last 30 days... Try again from (date)." |
+| The address holds no seat of this holder | | "(address) holds a seat on this subscription already." |
+| The address has no open invitation of this holder | | "(address) has an invitation waiting already." |
+
+D1 runs one statement at a time, so two invitations posted at once for the
+last seat write one row. When nothing is written a second read
+(`INVITE_WHY_SQL`) picks the line. Every count is per holder, so the answer
+is the same for an address with an account as for one without, and for
+every address outside the holder's own members and invitations.
+
+The row keeps the address (as sign-in normalizes it), the language, when it
+was sent and when its link ends (`SEAT_INVITE_DAYS`, 7 days), and SHA-256 of
+the link's secret (32 random bytes): the secret is in the link and nowhere
+else. The message (`sender.ts inviteMessage`) goes through the sign-in
+message's path (`senderFor`), in the language the holder chose: headers
+`Auto-Submitted: auto-generated`, Reply-To the contact address, no
+`List-Unsubscribe` (one message about one invitation; nothing follows it). Its
+subject names no address; its body names the holder's own address, says what
+a seat gives and what the holder sees, carries the link
+(`/account/seats/join?i=<id>&t=<secret>`) and until when it works, and says
+that ignoring it does nothing and that the invitation and its address are
+deleted 30 days after sending. It counts against the day's ceiling: each
+send writes a `delivery_runs` row of outcome `invite` (sent 1, or failed 1),
+which `DAY_SENT_SQL` counts with the job's and the console's sends and the
+daily check reads as sends only (`SEND_ONLY_OUTCOMES`, never a run of the
+job). A message that does not go removes the invitation ("The invitation
+could not be sent, and nothing was kept."). Audit `seat_invited`, no detail.
+
+The holder's Cancel (`POST /account/seats/:id/cancel`, bound to the holder)
+ends an open invitation `cancelled` and clears its hash, so the link stops at
+once; the address stays on the row until the sweep, so the per-address count
+still holds it. Audit `seat_cancelled`.
+
+### The invitation's page
+
+`GET /account/seats/join?i=&t=` reads the row by its id, checks the secret's
+form and compares its hash in constant time; a wrong, unknown, run out,
+taken, declined or cancelled link, or one of a holder no longer active, is
+the same page ("This invitation link has expired, been used or been
+cancelled.", 400). The GET writes nothing of the invitation, so a mail
+scanner that opens the link uses nothing up. Then, by reader:
+
+- signed out: who invited the address, what a seat gives (the Ultra card's own
+  lines) and the sign-in form with the address filled in and the page as
+  `next`, so the sign-in ends here (the secret rides in the sign-in message's
+  link, to the same address);
+- signed in as another address: whose the invitation is, and nothing to press;
+- an account holding a seat elsewhere, or with a paid plan of its own: why it
+  cannot take one, and Decline;
+- otherwise What Fits and Take the seat (the page's filled button) beside
+  Decline.
+
+What Fits is the pool's own rule (`seats_pages.tsx whatFits`): the holder's
+group as its own plan reads it now, the reader placed after its members, and
+each figure's allowance from one `POOL_COUNTS_SQL` and `allowanceIn`, the
+reader's items by creation served first. Where the reader's own would pass
+the room left, it says how many would be in service and how many saved and
+unavailable; else "Everything your account keeps fits."
+
+`POST /account/seats/join` (session, CSRF, Origin, the secret again, `action`
+take or decline) requires the session's address to be the invitation's (any
+other gets the line above, 403, and nothing changes). Decline ends it
+`declined` and clears the hash (audit `seat_declined`). Take needs the session
+read from the database, no seat and no paid plan of the account's own, and
+the holder's own plan read now from the database (`planFor`; a plan answered
+from the cache through an outage grants nothing: the 503 page); a holder
+blocked, or whose plan holds no member seat, gets "This subscription has no
+seat for you now." Then one statement (`TAKE_SQL`) writes the member and
+clears the address and the hash only while the invitation is open with the
+hash compared, the holder's live seats below its plan's and the window's
+joins below its figure. Two presses take it once (the second reads the stale
+line); one person taking two holders' seats at once meets
+`idx_seats_member_live` ("This account holds a seat on another
+subscription..."). Audit `seat_taken`.
+
+### The Seats page
+
+`GET /account/seats` (`private, no-store`). For a holder whose plan has
+member seats: each person (the holder first, "Yours, the subscriber's", then
+each live seat, "Taken" or "Taken, without the plan for now", with Remove,
+then each open invitation with until when its link works and Cancel), "n of 5
+seats", the joins line, "What the Subscription Holds" (each pooled figure's
+total against the plan's figure and each account's count, in columns headed
+by address, and how many items are past the figures when any are), and
+"Invite a Person". For Free or Pro: the seats each plan has and the plan
+cards; an account that still gives seats its plan does not hold (a holder that
+moved down or lapsed) also sees those people, with Remove, and the line on
+what that means for them. For a member: its seat (whose subscription, whether
+it gives Ultra, what the holder sees, that billing is the subscriber's), Leave
+this seat, and the subscription's totals beside its own counts.
+
+Counts, never content: the holder reads its own seat rows, its members'
+addresses (which it typed) and `POOL_COUNTS_SQL` over the group its own
+session read gave; a member the same counts over its own group. No page of
+one account shows another's searches, watches, views, dashboards, keys or
+pages, and no statement takes an account id from a form.
+
+Remove (`GET` then `POST /account/seats/:id/remove` with `confirm=yes`, bound
+to the holder) ends the seat `removed`; the member is on its own plan from its
+next read and is told by the seat notices (to come). Leave (`GET` then `POST
+/account/seat/leave`, `confirm=yes`, bound to the member) ends it `left` with
+`told` at 0, since the page itself said so. Audit `seat_removed`,
+`seat_left`, no detail.
+
+The overview's Seats row reads "n of 5 seats" for a holder, "Your seat" for a
+member, and "Seats this plan does not hold" for an account that gives seats
+its plan does not hold; the billing page's head links the Seats page for each
+of them. A member's billing page shows "Billing is the subscriber's. To buy a
+plan of your own, leave the seat first." in place of Subscribe, and its plan
+line names the holder rather than the holder's end; its checkout post is
+refused (409) before anything is asked of Stripe.
+
+Buckets (`limits.ts`, while the switch is on): the invitation and the join
+page's post with the forms (5 a minute), the join page with the stop links
+(20), cancel, remove and leave with the edits (60), the pages as pages.
 
 ### Before the table is on the database
 

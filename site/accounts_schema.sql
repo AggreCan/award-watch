@@ -195,7 +195,10 @@ CREATE INDEX IF NOT EXISTS idx_deliveries_search ON deliveries(saved_search_id, 
 -- stopped early, in a few words that name no account and no address. A
 -- bulk run from the console (src/account/announce.tsx) writes a row too,
 -- outcome console, no data date, nothing due, so the day's ceiling counts
--- its sends. The daily check (src/watchdog.ts) reads the last day's rows, so
+-- its sends; so does each seat's invitation (src/account/seats_pages.tsx),
+-- outcome invite, sent 1 or failed 1. The daily check (src/watchdog.ts)
+-- reads the console's and the invitations' rows as sends only, never as a
+-- run of the job. It reads the last day's rows, so
 -- a day whose runs all failed, or that had no run, is said. Rows go after 90
 -- days.
 CREATE TABLE IF NOT EXISTS delivery_runs (

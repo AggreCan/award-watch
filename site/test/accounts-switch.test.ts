@@ -49,6 +49,10 @@ const ACCOUNT_ROUTES: [string, string][] = [
   ["POST", "/account/organization/delete"], ["GET", "/account/organization/years.csv"],
   // Matching notices (account/fit_pages.tsx).
   ["GET", "/account/matches"], ["GET", "/account/matches?page=2"],
+  // Seats (account/seats_pages.tsx), behind their own switch too (test/seats-switch.test.ts).
+  ["GET", "/account/seats"], ["POST", "/account/seats/invite"], ["GET", `/account/seats/join?i=${"a".repeat(32)}&t=${"b".repeat(64)}`],
+  ["POST", "/account/seats/join"], ["POST", `/account/seats/${"a".repeat(32)}/cancel`], ["GET", `/account/seats/${"a".repeat(32)}/remove`],
+  ["POST", `/account/seats/${"a".repeat(32)}/remove`], ["GET", "/account/seat/leave"], ["POST", "/account/seat/leave"],
 ];
 
 // A binding that notes every use and throws: the accounts database, or the

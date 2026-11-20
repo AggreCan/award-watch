@@ -67,6 +67,14 @@ export interface Env {
   // else: the notice page byte for byte as before, no records statement for
   // it, and no word of may follow on the Methodology or the Terms.
   FOLLOWS_PANEL?: string;
+  // The seats' switch (src/account/seats.ts seatsOn; docs/accounts.md, Seats):
+  // "on", with the accounts switch on and the seats table on the database,
+  // opens the Seats page, the invitations and their join page. Anything else
+  // ("off" in wrangler.jsonc until the lawyer's read of the Terms' Seats
+  // section and of the invitation): every address under /account/seats and
+  // /account/seat is the site's 404 with nothing read, no page names a seat,
+  // and no invitation is sent.
+  SEATS?: string;
   // "log" writes sign-in messages to the local outbox, and only on a local
   // host. Unset (production), they go out through the MAIL binding, or to
   // the stub sender when the binding or MAIL_FROM is missing.

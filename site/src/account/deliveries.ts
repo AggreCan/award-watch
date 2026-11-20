@@ -400,6 +400,24 @@ export async function writeConsoleRun(env: Env, now: Date, o: { sent: number; fa
   }
 }
 
+// A seat's invitation (seats.ts sendInvitation) goes through the same binding
+// too, one message a post: each writes a row of this outcome, sent 1 or failed
+// 1, no data date and nothing left due, so the day's ceiling counts it with the
+// job's and the console's sends. The daily check reads it as the console's
+// rows are read: the day's sends, never a run of the job.
+export const INVITE_OUTCOME = "invite";
+export const SEND_ONLY_OUTCOMES: ReadonlySet<string> = new Set([CONSOLE_OUTCOME, INVITE_OUTCOME]);
+
+export async function writeInviteRun(env: Env, now: Date, sent: boolean): Promise<void> {
+  try {
+    await env.ACCOUNTS!.prepare(RUN_LOG_SQL).bind(now.toISOString(), null, INVITE_OUTCOME, sent ? 1 : 0, sent ? 0 : 1, 0, "a seat's invitation").run();
+  } catch (e) {
+    log(missingTable(e)
+      ? "an invitation was not logged: the accounts database has no delivery_runs table (apply accounts_schema.sql)"
+      : `an invitation was not logged (${faultSummary(e)})`);
+  }
+}
+
 // The messages the day's ceiling still allows this run: the ceiling less the
 // day's sends so far. null without the delivery_runs table, since the day's
 // sends cannot be counted then: no ceiling, and one log line. The console's

@@ -186,6 +186,50 @@ export function signInMessage(
   return { to, subject, text, html, lang };
 }
 
+// -- a seat's invitation ------------------------------------------------------
+//
+// Sent once, from the holder's Seats page (seats_pages.tsx invitePost), to the
+// address the holder typed, in the language the holder chose, in the mail
+// shell as the sign-in message is: the heading, who invited the address and
+// to what, what a seat gives and what the holder sees, the button carrying the
+// link (/account/seats/join?i=<id>&t=<secret>), until when it works, the note
+// for a reader who does not want it, and the footer with the reason. It names
+// one address, the holder's own (which proved itself by sign-in), never in the
+// subject; nothing else the holder typed, no name, no note, no price. No stop
+// link and no List-Unsubscribe: it is the one message about one invitation,
+// and nothing follows it (invite.ignore says so). link is the full address;
+// site is where the wordmarks and the header point.
+export function inviteMessage(lang: Lang, to: string, holder: string, link: string, expiresAt: string, site: string = SITE_ORIGIN): MailMessage {
+  const subject = t(lang, "invite.subject");
+  const heading = t(lang, "invite.heading");
+  const date = expiresAt.slice(0, 10);
+  const lead = t(lang, "invite.lead", { holder });
+  const what = t(lang, "invite.what", { holder });
+  const until = t(lang, "invite.until", { date, time: expiresAt.slice(11, 16) });
+  const ignore = t(lang, "invite.ignore", { holder });
+  const why = t(lang, "invite.why");
+  const tagline = `${t(lang, "site.name")} · ${t(lang, "site.tagline")}`;
+  const body = [
+    h1(heading),
+    para(escapeHtml(lead)),
+    para(escapeHtml(what)),
+    button(link, t(lang, "invite.button")),
+    para(escapeHtml(until), true),
+    para(escapeHtml(ignore), true),
+  ].join("");
+  const html = shell({ lang, site, subject, preheader: t(lang, "invite.preheader", { holder, date }), body, why: escapeHtml(why) });
+  const text = [
+    heading, "",
+    lead, "",
+    what, "",
+    t(lang, "invite.text_link"), link, "",
+    until, "",
+    ignore, "",
+    why, tagline, CONTACT_EMAIL, "",
+  ].join("\n");
+  return { to, subject, text, html, lang };
+}
+
 // -- the address-change notice ------------------------------------------------
 //
 // Sent by the operator console when it changes an account's address

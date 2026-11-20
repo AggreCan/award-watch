@@ -129,7 +129,8 @@ Each in English and in French.
 | The accounts-open message | its console run, `runAnnouncement`, and with an https stop link |
 | The Ultra message | its console run (kind `ultra`), and with an https stop link |
 | The address-change notice | the console's notice |
-| The live check's fourteen messages | `site/src/account/mail_check.ts` |
+| A seat's invitation, in the language the holder chose, naming the holder's address and no other but the site's own | the Seats page itself, `POST /account/seats/invite`, with the seats' switch on |
+| The live check's fifteen messages | `site/src/account/mail_check.ts` |
 
 The operator's own alerts (the daily check's email and the bug reports, both
 through the `ALERTS` binding to the operator's address) are not reader mail
@@ -189,7 +190,9 @@ and keep their own tests.
 - No address but the site's two role addresses, `contact@awardwatch.ca` and
   `alerts@awardwatch.ca`: never the reader's own and never another reader's.
   The accounts-open and Ultra runs send to several addresses at once, and
-  each message is checked against the others.
+  each message is checked against the others. One exception, by design: a
+  seat's invitation names the holder who sent it, whose own address proved
+  itself by sign-in (`checkMessage`'s `named`); never the invited address.
 
 `site/test-mail/caps.test.ts` holds the caps and their arithmetic:
 
@@ -211,7 +214,7 @@ and keep their own tests.
 | Lists named in the accounts-open message | `LISTS_SHOWN`, 10 | twelve lists name ten and count two more |
 | Messages in one accounts-open or Ultra run | `ANNOUNCE_MAX`, 300 | runs capped at 2 send at most 2 each, each address once; what waited less what a run sent is what waits after it; account holders are passed over (accounts-open only) |
 | Sign-in codes an address may ask for in an hour | `CODES_PER_HOUR`, 5 | the sixth request answers 429 and sends nothing |
-| Messages in one live check | one per template, 14 | all to the one address, nothing to any other; without `MAIL_ADDRESS` the weekly email is reported `stubbed` and not sent |
+| Messages in one live check | one per template, 15 | all to the one address, nothing to any other; without `MAIL_ADDRESS` the weekly email is reported `stubbed` and not sent |
 
 One more ceiling holds the delivery job across a UTC day rather than a run:
 `MAIL_DAILY_QUOTA` less `MAIL_DAILY_RESERVE` (200 less 40 as shipped), the
@@ -268,6 +271,11 @@ sender a reader's message goes through (`sendWithHeaders` in
 12. the accounts-open message
 13. the Ultra message
 14. the address-change notice
+15. a seat's invitation (`sender.ts inviteMessage`), its holder the site's
+    contact address (`MAIL_CHECK_HOLDER`), and its link an id and a secret of
+    zeros, which the invitation's page answers as a link that has expired; sent
+    whatever the seats' switch, since the check proves the way out and the
+    switch holds only the Seats page's own sends
 
 Each subject starts with `[mail check]`, the same tag in both languages, so
 the message is never taken for a reader's and an inbox rule can file it. The
@@ -355,7 +363,7 @@ address.
 | Cloudflare Access stopped the request | check the service token secrets and the Service Auth policy (step 3) |
 | The site answered 404 | the switch is off, `OPERATOR_EMAILS` is unset, Access's token did not check out, or the repository's token is not the Worker's |
 | The Worker has no test address | add the secret `MAIL_TEST_TO` and deploy (step 1) |
-| n of 14 templates were not sent | read the run summary: a `refused` reason is Email Sending's code, `stubbed` means the binding or `MAIL_FROM` is missing, or for the weekly email that `MAIL_ADDRESS` is not set (`docs/accounts.md`, Weekly email) |
+| n of 15 templates were not sent | read the run summary: a `refused` reason is Email Sending's code, `stubbed` means the binding or `MAIL_FROM` is missing, or for the weekly email that `MAIL_ADDRESS` is not set (`docs/accounts.md`, Weekly email) |
 
 ### Setting up
 

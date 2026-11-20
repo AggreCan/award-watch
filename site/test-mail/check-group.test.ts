@@ -43,8 +43,8 @@ const groupLinkOf = (headers: Record<string, string>, param: string) =>
   new RegExp(`<(https:[^>]*\\/account\\/stop\\?${param}=[^>]*)>$`).exec(headers["List-Unsubscribe"] ?? "")?.[1] ?? null;
 
 describe("the live check's grouped messages", () => {
-  it("are three of the fourteen templates, each a list delivery", () => {
-    expect(MAIL_CHECK_TEMPLATES).toHaveLength(14);
+  it("are three of the fifteen templates, each a list delivery", () => {
+    expect(MAIL_CHECK_TEMPLATES).toHaveLength(15);
     for (const k of KINDS) {
       expect(MAIL_CHECK_TEMPLATES, k.template).toContain(k.template);
       expect(MAIL_CHECK_LISTS.has(k.template as never), k.template).toBe(true);

@@ -35,8 +35,9 @@ import { CONTACT_EMAIL } from "../contact";
 import { PlanCards, planCards, type PlanReader } from "../pro";
 import { type ChargeState, operatorStripe } from "./admin_stripe";
 import { audit } from "./audit";
-import { type PaidPlan, type Plan, entitlementWrites, isPaidPlan, planFor, planRank, withTiers } from "./entitlements";
-import { type DeleteFacts, accountPage, planLine } from "./pages";
+import { type PaidPlan, type Plan, entitlementWrites, isPaidPlan, memberSeats, planFor, planRank, withTiers } from "./entitlements";
+import { type DeleteFacts, accountPage, overviewPlanLine, planLine } from "./pages";
+import { seatsInUse, seatsOn } from "./seats";
 import {
   INTERVALS, type Interval, type Notice, type PaymentSource, type SubscriptionState, isInterval, paymentSource, ultraOnSale,
 } from "./payments";
@@ -330,6 +331,12 @@ export function billingView(
     // The plan the bound subscription last paid for (subscriptionPlan), for
     // the overdue note once the account's own plan has ended.
     lastPlan?: PaidPlan | null;
+    // While the seats' switch is on (billingPage): whether the account holds a
+    // seat, whose billing is the subscriber's (no Subscribe panel; while the
+    // seat gives the plan, the plan line names the holder rather than the
+    // holder's end), and whether the
+    // head links the Seats page. Absent, the page is as it was before seats.
+    seats?: { member: boolean; link: boolean } | null;
   },
 ) {
   const { offer, row, canManage } = state;
@@ -358,8 +365,14 @@ export function billingView(
   const ending = !!row?.cancel_at_period_end && !!row.current_period_end;
   return (
     <>
-      <PageHead lang={lang} title={t(lang, "billing.title")} lead={t(lang, "billing.lead", { plan: planLine(lang, account, state.line) })}
-        actions={<a href="/account" class="btn">{t(lang, "account.title")}</a>} />
+      <PageHead lang={lang} title={t(lang, "billing.title")}
+        lead={t(lang, "billing.lead", { plan: state.seats?.member && account.seat?.covered ? overviewPlanLine(lang, account, state.line) : planLine(lang, account, state.line) })}
+        actions={state.seats?.link ? (
+          <>
+            <a href="/account/seats" class="btn">{t(lang, "seats.title")}</a>
+            <a href="/account" class="btn">{t(lang, "account.title")}</a>
+          </>
+        ) : <a href="/account" class="btn">{t(lang, "account.title")}</a>} />
       {state.errors?.length ? <ul class="errors" role="alert">{state.errors.map((e) => <li>{t(lang, e, vars)}</li>)}</ul> : null}
       {state.notice ? <p class="account-notice" role="status">{state.notice}</p> : null}
       {live && row ? (
@@ -392,7 +405,15 @@ export function billingView(
       <Panel title={t(lang, ultra ? "billing.panel_plans" : "billing.panel_pro")}>
         <PlanCards lang={lang} plans={planCards(lang, { price: offer, ultra, reader: readerOf(account.plan), place: "billing", chosen, move, live })} />
       </Panel>
-      {live ? null : (
+      {/* A seat's billing is the subscriber's: in place of Subscribe, the line and the way to leave the seat. The id keeps
+          the cards' links to the Subscribe panel landing here. */}
+      {!live && state.seats?.member ? (
+        <Panel title={t(lang, "seat.title")} id="subscribe" class="panel-form">
+          <p>{t(lang, "seat.billing")}</p>
+          <p><a href={`/account/seat/leave${lang === "fr" ? "?lang=fr" : ""}`} class="btn">{t(lang, "seat.leave")}</a></p>
+        </Panel>
+      ) : null}
+      {live || state.seats?.member ? null : (
         <Panel title={t(lang, chosen === "ultra" ? "billing.panel_subscribe_ultra" : "billing.panel_subscribe")} id="subscribe" class="panel-form">
           {chosenOffer ? (
             <>
@@ -469,9 +490,13 @@ export async function billingPage(
   const noticeKey = refundNotice(asked) ?? (ultra || who.plan === "ultra" ? moveNotice(c.req.query("move") ?? "") : null);
   const notice = noticeKey ? t(lang, noticeKey, { plan: planName(lang, isPaidPlan(who.plan) ? who.plan : "pro") }) : null;
   const lastPlan = !isPaidPlan(who.plan) && liveSubscription(row) ? await subscriptionPlan(c.env, who.userId, row!.subscription_id) : null;
+  // While the seats' switch is on: a member's billing, and the link to the Seats page for a member or an account that gives seats.
+  const seats = (await seatsOn(c.env))
+    ? { member: !!who.seat, link: !!who.seat || memberSeats(who.plan) > 0 || (await seatsInUse(c.env, who.userId)) > 0 }
+    : null;
   const view = billingView(lang, who, {
     offer: source.offer(), canManage: source.kind !== "stub", row, line, errors: extra.errors, refund, notice,
-    ultra, chosen: c.req.query("plan") === "ultra" ? "ultra" : "pro", lastPlan,
+    ultra, chosen: c.req.query("plan") === "ultra" ? "ultra" : "pro", lastPlan, seats,
   });
   return accountPage(c, t(lang, "billing.title"), view, extra.status ?? 200);
 }
@@ -502,6 +527,8 @@ export async function startCheckout(c: Context<AppEnv>, who: Account, fields: Re
   const interval = fields.interval;
   const plan = planField(fields.plan);
   if (!isInterval(interval) || !plan) return c.text(t(lang, "form.rejected"), 400);
+  // An account in a seat buys no plan of its own: it leaves the seat first (seats.ts; the seats' switch on). Nothing is asked of Stripe.
+  if (who.seat && (await seatsOn(c.env))) return billingPage(c, who, { errors: ["seat.billing"], status: 409 });
   const source = paymentSource(c.env);
   if (!source.available()) return c.redirect("/account/billing", 303);
   if (plan === "ultra" && !(await ultraOnSale(c.env))) return c.redirect("/account/billing", 303);

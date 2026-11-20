@@ -35,7 +35,8 @@
     // A delivery's stop link (/account/stop, GET and POST), only while
     // ACCOUNTS_ENABLED is "true": each request reads the accounts database,
     // and one-click posts arrive from mail providers' servers, many readers
-    // to one address.
+    // to one address. A seat's invitation page (GET /account/seats/join),
+    // a link from a message too, counts here while SEATS is "on".
     { "name": "STOP_LIMIT", "namespace_id": "2007", "simple": { "limit": 20, "period": 60 } },
     // Stripe's webhook (/account/billing/webhook), only while ACCOUNTS_ENABLED
     // is "true". Stripe posts from a few addresses and retries a 429 later;
@@ -66,7 +67,9 @@
     // and /account/views, src/limits.ts "edit"), only while ACCOUNTS_ENABLED
     // is "true": each moves, adds or removes one row of the account's own, a
     // dashboard is rearranged one place a post, and FORM_LIMIT's 5 stays for
-    // the posts that send mail or call the payment service.
+    // the posts that send mail or call the payment service (a seat's
+    // invitation among them). Cancelling a seat's invitation, removing a
+    // member and leaving a seat count here too, while SEATS is "on".
     { "name": "EDIT_LIMIT", "namespace_id": "2012", "simple": { "limit": 60, "period": 60 } },
     // A paying reader's downloads (src/limits.ts, the "download" bucket),
     // only while ACCOUNTS_ENABLED is "true": a download whose session is
@@ -235,6 +238,13 @@
   // first night's cubes. WORKFLOW_REPO is the repository
   // whose nightly and same-day workflows the Worker's cron starts
   // (src/dispatch.ts); the token is the secret WORKFLOW_RUN, never a variable.
+  // SEATS is the seats' switch (src/account/seats.ts seatsOn, docs/accounts.md
+  // "Seats"): "on", with ACCOUNTS_ENABLED "true" and the seats table on the
+  // accounts database, opens the Seats page, the invitations and their join
+  // page; anything else keeps every address under /account/seats and
+  // /account/seat the site's 404, sends no invitation and leaves every page
+  // as it was. It stays "off" until the lawyer's read of the Terms' Seats
+  // section and of the invitation.
   "vars": {
     "ALERT_FROM": "alerts@awardwatch.ca",
     "RUN_LOG_URL": "https://github.com/AggreCan/award-watch/actions/workflows/nightly.yml",
@@ -255,6 +265,7 @@
     "FOLLOWS_PANEL": "on",
     "BUILDER_DEMO": "off",
     "BUILDER": "off",
+    "SEATS": "off",
     "WORKFLOW_REPO": "AggreCan/award-watch"
   },
   // Workers Logs keeps the console lines (which name events and counts, never

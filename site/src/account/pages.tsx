@@ -26,6 +26,7 @@ import { FEEDS_MAX, type FeedKind } from "./feeds";
 import type { PoolLine } from "./pool";
 import { PoolLines, PoolMark, poolCount, poolOver } from "./pool_lines";
 import { DELIVERY, type Delivery, type InterestRow, type LastDelivery, type SavedSearch, paidCapLine } from "./searches";
+import type { SeatsRow } from "./seats_pages";
 import { type Account, type LiveSession, SESSIONS_MAX } from "./session";
 import { CODE_MINUTES } from "./signin";
 import { type Follow, followValue } from "./watch_events";
@@ -486,6 +487,8 @@ export function overviewView(
     billing?: BillingLine | null; notice?: string | null; weekly?: { on: boolean } | null;
     // The account's live sessions for the Signed-In Browsers panel; absent, the panel is left out.
     sessions?: readonly LiveSession[];
+    // The Seats row (seats_pages.tsx seatsRow): absent while the seats' switch is off and for an account with no seat.
+    seats?: SeatsRow | null;
   } = {},
 ) {
   const stripe = extra.billing?.stripe && account.plan !== "free";
@@ -501,6 +504,18 @@ export function overviewView(
           <dd>{overviewPlanLine(lang, account, extra.billing)}</dd>
           <dt>{t(lang, "billing.field")}</dt>
           <dd><a href="/account/billing">{t(lang, stripe ? "billing.manage" : "billing.link_plans")}</a></dd>
+          {extra.seats ? (
+            <>
+              <dt>{t(lang, "account.field_seats")}</dt>
+              <dd>
+                <a href="/account/seats">
+                  {extra.seats.kind === "member" ? t(lang, "seat.link")
+                    : extra.seats.kind === "fewer" ? t(lang, "seats.overview_fewer")
+                    : tn(lang, "seats.count_one", "seats.count", extra.seats.n, { n: fmtInt(extra.seats.n, lang), cap: fmtInt(extra.seats.cap, lang) })}
+                </a>
+              </dd>
+            </>
+          ) : null}
           <dt>{t(lang, "account.field_since")}</dt><dd class="mono">{day(account.createdAt)}</dd>
           <dt>{t(lang, "account.field_sessions")}</dt>
           <dd>{t(lang, "account.sessions_count", { n: fmtInt(counts.sessions, lang), cap: fmtInt(SESSIONS_MAX, lang) })}</dd>

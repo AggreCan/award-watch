@@ -1,6 +1,7 @@
 import type { Context, Next } from "hono";
 import type { AppEnv, Env } from "./env";
 import { t } from "./i18n";
+import { seatsSwitched } from "./account/seats";
 import { paidAccountOf } from "./account/session";
 import { accountsEnabled } from "./account/switch";
 import { isNavigation, refusalPage } from "./limit_page";
@@ -97,6 +98,17 @@ const DASHBOARD_READS = /^\/account\/dashboard\/(?:tiles\/[^/]+|find|tables\/(?:
 const VIEW_POSTS = /^\/account\/views(?:\/[^/]+(?:\/delete)?)?$/;
 // The overview's Sign out on another of the account's browsers (account/routes.tsx).
 const SESSION_POSTS = /^\/account\/sessions\/[^/]+\/sign-out$/;
+// The seats' addresses (account/seats_pages.tsx): an invitation, which sends a
+// message, and taking or declining a seat count with the forms; cancelling an
+// invitation, removing a member and leaving a seat, each one row of the
+// account's own, with the edits; the invitation's page, a link from a message
+// as a stop link is, with the stop links. Their pages count as pages. On the
+// accounts terms, and on the seats' own: while the seats' switch is off they
+// are unknown paths and count as pages (throttle).
+export const SEATS_ROUTE = /^\/account\/seats?(?:\/|$)/;
+const SEATS_FORM_POSTS = new Set(["/account/seats/invite", "/account/seats/join"]);
+const SEATS_EDIT_POSTS = /^\/account\/(?:seats\/[^/]+\/(?:cancel|remove)|seat\/leave)$/;
+const SEATS_LINK = "/account/seats/join";
 
 // A HEAD request for a download (a link checker, a client asking a file's
 // size before fetching it) moves no file, so it is not counted against the
@@ -115,7 +127,9 @@ export function bucketFor(method: string, path: string): Bucket {
   if (method === "POST" && (path === "/account/sign-in" || path === "/account/check")) return "auth";
   if (path === "/account/stop" || path === "/interest/stop") return "stop";
   if (method === "POST" && path === "/account/billing/webhook") return "hook";
-  if (method === "POST" && (DASHBOARD_POSTS.test(path) || VIEW_POSTS.test(path) || SESSION_POSTS.test(path))) return "edit";
+  if (method === "POST" && SEATS_FORM_POSTS.has(path)) return "form";
+  if (method === "GET" && path === SEATS_LINK) return "stop";
+  if (method === "POST" && (DASHBOARD_POSTS.test(path) || VIEW_POSTS.test(path) || SESSION_POSTS.test(path) || SEATS_EDIT_POSTS.test(path))) return "edit";
   if (method === "GET" && DASHBOARD_READS.test(path)) return "edit";
   if (method === "POST" && (path === "/account/bug" || BILLING_POSTS.has(path))) return "form";
   if (method === "POST" && (path === "/corrections" || path === "/interest" || /^\/organizations\/[^/]+\/respond$/.test(path))) {
@@ -251,6 +265,8 @@ export async function throttle(c: Context<AppEnv>, next: Next): Promise<Response
   const accountsOnly = bucket === "auth" || bucket === "stop" || bucket === "hook" || bucket === "calendar" || bucket === "edit" ||
     ((bucket === "form" || bucket === "download") && c.req.path.startsWith("/account/"));
   if (accountsOnly && !accountsEnabled(c.env)) bucket = "page";
+  // The seats' buckets hold while the seats' switch is on (the variable only, nothing read); off, their addresses are pages.
+  if (bucket !== "page" && SEATS_ROUTE.test(c.req.path) && !seatsSwitched(c.env)) bucket = "page";
   // A verified search engine's crawler reads the pages at its own pace.
   if (bucket === "page" && searchEngine(c.req.header("user-agent"), edgeCategory(c))) return next();
   let limiter = c.env[BINDING[bucket]] as RateLimit | undefined;

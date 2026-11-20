@@ -31,7 +31,12 @@ export type AuditEvent =
   // refund_made the refund's status. Never an amount. refund_failed (the
   // webhook, billing.tsx): a refund Stripe took that failed later, with the
   // charge's id and Stripe's reason, a fixed word; the daily check reads it.
-  | "refund_requested" | "refund_refused" | "refund_made" | "refund_cancel_failed" | "refund_failed";
+  | "refund_requested" | "refund_refused" | "refund_made" | "refund_cancel_failed" | "refund_failed"
+  // Seats (seats.ts), each with no detail: never the invited address, the
+  // link's secret or the other account's id. seat_invited and seat_cancelled
+  // and seat_removed are the holder's; seat_taken, seat_declined and seat_left
+  // the person invited or seated.
+  | "seat_invited" | "seat_cancelled" | "seat_taken" | "seat_declined" | "seat_left" | "seat_removed";
 
 export const AUDIT_DAYS = 90;
 

@@ -101,6 +101,16 @@
 //   POST /account/stop?v=&t=           turn that view's email off; one-click too       (the link's secret)
 //   GET  /account/stop?gv=&t=          a grouped message's stop page: its saved views  (the tags of their secrets)
 //   POST /account/stop?gv=&t=          turn each one's email off; one-click too        (the tags of their secrets)
+//   GET  /account/seats                the holder's seats, invitations and pool; a member's seat (session; the seats' switch)
+//   POST /account/seats/invite         invite an address to a seat, one message           (session read now, CSRF; own plan's seats)
+//   POST /account/seats/:id/cancel     cancel an open invitation, its link stops          (session, CSRF; bound to the holder)
+//   GET  /account/seats/:id/remove     what removing a member does                        (session; the holder's live seat)
+//   POST /account/seats/:id/remove     remove the member (confirm=yes)                    (session, CSRF; bound to the holder)
+//   GET  /account/seats/join?i=&t=     an invitation's page; uses nothing up              (the link's secret; session optional)
+//   POST /account/seats/join           take the seat or decline it (action)               (session read now, CSRF, the secret,
+//                                                                                      the invited address)
+//   GET  /account/seat/leave           what leaving the seat does                         (session)
+//   POST /account/seat/leave           leave the seat (confirm=yes)                       (session, CSRF; bound to the member)
 //
 // Every POST but the stop link's and the webhook's (which Stripe sends,
 // signed; billing.tsx) is refused with a 403 when its Origin names another
@@ -112,7 +122,9 @@
 // two sign-in posts are capped per address by AUTH_LIMIT (limits.ts); the
 // codes per address are capped in the database (signin.ts). Every response is
 // no-store and noindex. The site's referrer policy already keeps a link's
-// token off any request to another site.
+// token off any request to another site. Every address under /account/seats
+// and /account/seat (seats_pages.tsx) is the site's 404, before anything is
+// read, while the seats' switch is off (seats.ts seatsOn).
 
 import { Hono, type Context } from "hono";
 import { getCookie } from "hono/cookie";
@@ -125,7 +137,7 @@ import { loadBuyer, loadContract, loadOpenList, loadProfile, loadStats, loadTend
 import type { AppEnv } from "../env";
 import { fmtInt, pick, t, type Key, type Lang } from "../i18n";
 import { todayOf } from "../layout";
-import { FEED_ICS } from "../limits";
+import { FEED_ICS, SEATS_ROUTE } from "../limits";
 import { readPublishedContract } from "../records_tables";
 import { EMAIL_MAX, interestFilter, kindOfPath, normalizeEmail } from "../pages/interest";
 import { deviceClass } from "../views";
@@ -168,7 +180,10 @@ import {
   pendingInterest, setDelivery,
 } from "./searches";
 import { GROUP_TAGS_MAX, GROUP_TAG_CHARS, type GroupKind, USER_RE, provenBy, readGroupTags } from "./group_stop";
-import { endSeatsOf } from "./seats";
+import { endSeatsOf, seatsOn } from "./seats";
+import {
+  cancelPost, invitePost, joinPage, joinPost, leaveConfirm, leavePost, removeConfirm, removePost, seatsPage, seatsRow,
+} from "./seats_pages";
 import { randomHex, sameHash, sha256Hex, ipHash } from "./secrets";
 import { isLocalHost, senderFor, signInMessage } from "./sender";
 import {
@@ -217,9 +232,21 @@ account.use("*", async (c, next) => {
   // and the notices matching it; and the dashboard, whose 404 stays as it was, with each dashboard's own address,
   // its posts and its one read.
   const own = FEED_ICS.test(c.req.path) || c.req.path === ORG_PATH || c.req.path.startsWith(`${ORG_PATH}/`) || c.req.path === MATCH_PATH ||
-    (c.req.path === DASHBOARD_PATH && c.res.status === 200) || c.req.path.startsWith(`${DASHBOARD_PATH}/`);
+    (c.req.path === DASHBOARD_PATH && c.res.status === 200) || c.req.path.startsWith(`${DASHBOARD_PATH}/`) ||
+    // The seats' pages name the account's people and counts; their 404, while the switch is off, stays as it was.
+    (SEATS_ROUTE.test(c.req.path) && c.res.status !== 404);
   c.header("Cache-Control", own ? "private, no-store" : "no-store");
   c.header("X-Robots-Tag", "noindex, nofollow");
+});
+
+// The seats' addresses (limits.ts SEATS_ROUTE: /account/seats and below, /account/seat and below).
+// While the seats' switch is off each of them is the site's 404, as an
+// address the module does not know is, reading what that 404 reads (its
+// rail's session) and nothing more; seatsOn asks the variable first and reads
+// nothing while it is off.
+account.use("*", async (c, next) => {
+  if (SEATS_ROUTE.test(c.req.path) && !(await seatsOn(c.env))) return c.notFound();
+  await next();
 });
 
 // -- shared steps --------------------------------------------------------------------
@@ -570,6 +597,8 @@ account.get("/", async (c) => {
       // The weekly email's control; null leaves it out while its table is not on the database.
       weekly: await weeklyState(c.env, who.userId),
       sessions,
+      // The Seats row while the seats' switch is on, for a member or an account that gives seats; null otherwise.
+      seats: await seatsRow(c, who),
     }));
   });
 });
@@ -1941,6 +1970,64 @@ account.post("/views/:id", async (c) => {
     await audit(c.env, who.userId, "view_changed", deliver);
     return c.redirect(`${VIEWS_PATH}?m=changed`, 303);
   });
+});
+
+// -- seats (seats_pages.tsx) ---------------------------------------------------------------------------
+//
+// Behind the seats' switch (the gate above). The invitation and the take are
+// refused to a session remembered through a database outage, as the refund
+// is: one sends a message, the other grants a plan.
+
+account.get("/seats", async (c) => {
+  const who = await signedIn(c);
+  if (who instanceof Response) return who;
+  return guarded(c, () => seatsPage(c, who));
+});
+
+account.post("/seats/invite", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  if (post.account.stale) return unavailable(c);
+  return guarded(c, () => invitePost(c, post.account, post.fields, siteBase(c)));
+});
+
+// The invitation's page: the link's secret decides, signed in or not.
+account.get("/seats/join", (c) => guarded(c, () => joinPage(c)));
+
+account.post("/seats/join", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  return guarded(c, () => joinPost(c, post.account, post.fields));
+});
+
+account.post("/seats/:id/cancel", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  return guarded(c, () => cancelPost(c, post.account, c.req.param("id") ?? ""));
+});
+
+account.get("/seats/:id/remove", async (c) => {
+  const who = await signedIn(c);
+  if (who instanceof Response) return who;
+  return guarded(c, () => removeConfirm(c, who, c.req.param("id") ?? ""));
+});
+
+account.post("/seats/:id/remove", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  return guarded(c, () => removePost(c, post.account, c.req.param("id") ?? "", post.fields));
+});
+
+account.get("/seat/leave", async (c) => {
+  const who = await signedIn(c);
+  if (who instanceof Response) return who;
+  return guarded(c, () => leaveConfirm(c, who));
+});
+
+account.post("/seat/leave", async (c) => {
+  const post = await signedInPost(c);
+  if (post instanceof Response) return post;
+  return guarded(c, () => leavePost(c, post.account, post.fields));
 });
 
 // -- deletion ----------------------------------------------------------------------------------------

@@ -298,7 +298,9 @@ export function addressesIn(m: Sent): string[] {
 
 // -- the checks ------------------------------------------------------------------------------------
 
-export function checkMessage(m: Sent, shape: Shape, lang: Lang, o: { others?: readonly string[] } = {}): void {
+// named: addresses the message names by design beside the role addresses: a seat's invitation names its holder,
+// whose own address proved itself by sign-in (sender.ts inviteMessage).
+export function checkMessage(m: Sent, shape: Shape, lang: Lang, o: { others?: readonly string[]; named?: readonly string[] } = {}): void {
   const what = `${shape.name} (${lang})`;
 
   // The subject: present, one line, under SUBJECT_MAX characters.
@@ -329,7 +331,7 @@ export function checkMessage(m: Sent, shape: Shape, lang: Lang, o: { others?: re
   }
 
   // No address but the site's role addresses: never the reader's own, never another reader's.
-  for (const address of addressesIn(m)) expect(ROLE_ADDRESSES.has(address), `${what}: names ${address}`).toBe(true);
+  for (const address of addressesIn(m)) expect(ROLE_ADDRESSES.has(address) || !!o.named?.includes(address), `${what}: names ${address}`).toBe(true);
   for (const other of o.others ?? []) {
     expect(`${m.subject}\n${m.text}\n${decode(m.html)}`.includes(other), `${what}: names another reader`).toBe(false);
   }
@@ -427,6 +429,9 @@ export const SHAPES = {
   // The shell's footer prints the tagline; the notice's text part, which
   // ends on the contact line, does not.
   address_notice: { list: false, why: null, onePart: [["account.sign_in"], ["admin.mail_sign_in", { link: "" }], ["site.tagline"]] },
+  // A seat's invitation (sender.ts inviteMessage): one message about one invitation, no stop link and no
+  // List-Unsubscribe; it names its holder's address (checkMessage's named).
+  invite: { list: false, why: "invite.why" },
 } as const satisfies Record<string, Omit<Shape, "name" | "site">>;
 
 export const shapeOf = (kind: keyof typeof SHAPES, name: string, site: string): Shape => ({ ...SHAPES[kind], name, site });

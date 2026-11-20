@@ -22,6 +22,7 @@ import {
   MAIL_CHECK_MARK, MAIL_CHECK_TEMPLATES, NO_MAIL_ADDRESS, mailCheckBriefingData, mailCheckMessages, runMailCheck,
 } from "../src/account/mail_check";
 import { RULES } from "../src/account/entitlements";
+import { SEAT_INVITES_PER_ADDRESS, SEAT_INVITES_PER_DAY, SEAT_INVITE_DAYS, SEAT_WINDOW_DAYS } from "../src/account/seats";
 import { CODES_PER_HOUR } from "../src/account/signin";
 import { ROWS_PER_KIND, type EventRow, type Found, foundKey } from "../src/account/watch_events";
 import { WATCH_ACCOUNTS_MAX, groupsFor } from "../src/account/watch_mail";
@@ -58,7 +59,9 @@ describe("the caps", () => {
     expect(WEEKLY_RUN_MAX).toBe(100);
     expect(WEEKLY_LINES).toBe(5);
     expect(SUBJECT_MAX).toBe(100);
-    expect(MAIL_CHECK_TEMPLATES).toHaveLength(14);
+    expect(MAIL_CHECK_TEMPLATES).toHaveLength(15);
+    // A seat's invitation: a holder's in any 24 hours, to one address in 30 days, and the days its link works.
+    expect([SEAT_INVITES_PER_DAY, SEAT_INVITES_PER_ADDRESS, SEAT_WINDOW_DAYS, SEAT_INVITE_DAYS]).toEqual([10, 2, 30, 7]);
     expect(VIEWS_RUN_MAX).toBe(1000);
     expect(VIEW_MAIL_ROWS).toBe(5);
     expect([RULES.free.match_mail, RULES.pro.match_mail]).toEqual([3, 10]);

@@ -31,6 +31,7 @@ import { clockAt } from "../closing";
 import type { ExpiringRow, TenderRow } from "../data";
 import type { Env } from "../env";
 import { segmentShort, t, type Lang } from "../i18n";
+import { CONTACT_EMAIL } from "../contact";
 import { readExpiringQuery } from "../pages/expiring";
 import { normalizeEmail } from "../pages/interest";
 import { fiscalYearOf } from "../records_db";
@@ -47,7 +48,8 @@ import { SAVED_VIEW_MAX } from "./entitlements";
 import { GROUP_TAGS_MAX, type GroupKind, groupStopPath } from "./group_stop";
 import { matchDigestBlock } from "./fit_mail";
 import { sameHash, sha256Hex } from "./secrets";
-import { type MailMessage, type Sender, addressNotice, senderFor, signInMessage } from "./sender";
+import { SEAT_INVITE_DAYS } from "./seats";
+import { type MailMessage, type Sender, addressNotice, inviteMessage, senderFor, signInMessage } from "./sender";
 import { CODE_MINUTES } from "./signin";
 import { accountsEnabled } from "./switch";
 import { mailAddress } from "./weekly";
@@ -63,9 +65,12 @@ export const MAIL_CHECK_MARK = "[mail check]";
 // (digests.ts groupDigest), "briefing_group" several briefings
 // (briefingGroupDigest) and "view_group" several saved views
 // (viewGroupDigest), each with the longest stop link a reader's can carry.
+// "invite" is a seat's invitation (sender.ts inviteMessage), sent here whatever
+// the seats' switch, its holder MAIL_CHECK_HOLDER and its link an id and a
+// secret of zeros, which the join page answers as an invitation that is not.
 export const MAIL_CHECK_TEMPLATES = [
   "sign_in", "tenders_daily", "expiring_weekly", "records", "group", "watch", "briefing", "briefing_group", "view", "view_group", "weekly",
-  "accounts_open", "ultra_open", "address_notice",
+  "accounts_open", "ultra_open", "address_notice", "invite",
 ] as const;
 export type MailCheckTemplate = (typeof MAIL_CHECK_TEMPLATES)[number];
 
@@ -102,6 +107,10 @@ export function mailCheckTo(env: Pick<Env, "MAIL_TEST_TO">): string | null {
 // An id and a secret that no row holds (ids and secrets are 32 random hex
 // characters), so every stop link and token below leads nowhere.
 const ZERO = "0".repeat(32);
+
+// The invitation's sample holder: the site's own contact address, the one kind
+// of address a sample may name (no reader's, and none typed into the source).
+export const MAIL_CHECK_HOLDER = CONTACT_EMAIL;
 
 const BUYER = { buyer_id: "pwgsc-tpsgc", buyer_en: "Public Services and Procurement Canada", buyer_fr: "Services publics et Approvisionnement Canada" };
 
@@ -381,6 +390,8 @@ export async function mailCheckMessages(
     accounts_open: () => accountsOpenMessage(lang, to, [t(lang, "interest.label_tenders_all")], announceLinks(site, lang, ZERO)),
     ultra_open: () => ultraOpenMessage(lang, to, ultraLinks(site, lang, ZERO)),
     address_notice: () => addressNotice(lang, to, site),
+    invite: () => inviteMessage(lang, to, MAIL_CHECK_HOLDER, siteLink(site, `/account/seats/join?i=${ZERO}&t=${ZERO}${ZERO}`, lang),
+      new Date(now.getTime() + SEAT_INVITE_DAYS * 86_400_000).toISOString(), site),
   };
   const out: MailCheckMessage[] = [];
   for (const template of MAIL_CHECK_TEMPLATES) {

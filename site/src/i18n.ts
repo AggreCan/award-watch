@@ -15,6 +15,7 @@ import { SEGMENTS, SEGMENT_SHORT } from "./constants";
 import { ACCOUNT_STRINGS } from "./account/strings";
 import { DASHBOARD_STRINGS } from "./account/dashboard_strings";
 import { VIEWS_STRINGS } from "./account/views_strings";
+import { SEATS_STRINGS } from "./account/seats_strings";
 import { CALENDAR_STRINGS } from "./calendar_strings";
 import { BUILDER_STRINGS } from "./builder_strings";
 
@@ -33,6 +34,8 @@ const STRINGS = {
   ...CALENDAR_STRINGS,
   // The analytics builder's strings (src/builder_strings.ts).
   ...BUILDER_STRINGS,
+  // The seats' pages and the invitation (src/account/seats_strings.ts).
+  ...SEATS_STRINGS,
   "site.name": { en: "Award Watch", fr: "Award Watch" },
   "site.tagline": {
     en: "Federal tenders, awards, contracts and grants, by organization.",
