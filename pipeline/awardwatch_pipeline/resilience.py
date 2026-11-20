@@ -515,11 +515,45 @@ class R2Error(Exception):
     """R2 did not answer as expected. The message never carries the token."""
 
 
+# The one shape of key this code may ever remove from the bucket
+# (R2Rest.delete_download): a yearly CSV file directly under downloads/. It is
+# written out here, apart from nightly.YEARLY_DOWNLOAD_RE, which chooses the
+# files, so a mistake in the choice is not a mistake in the removal (a test
+# holds the two to the same names).
+DELETABLE_KEY_RE = re.compile(
+    r"^downloads/(?:awards|history|contracts|grants)-(?:[0-9]{4}|before-[0-9]{4}|after-[0-9]{4}|undated)(?:-[2-9])?\.csv$")
+# What no removable key holds: the names of the database and of its backups,
+# the bucket's other prefixes, and anything that could climb out of
+# downloads/ or be read another way by the API. Checked apart from the
+# pattern above, on the key in lower case.
+PROTECTED_MARKS = ("sqlite", "backup", ".gz", ".parts", ".sql", ".tar", ".json", ".txt", ".zip", "static", "status",
+                   "views/", "seeds/", "review/", "intraday/", "mirror/", "weekly", "slot", "prev",
+                   "..", "//", "%", "\\", "?", "#", "&", " ", "\t", "\n", "\r", "\x00")
+
+
+def removal_refusal(key: Any) -> str | None:
+    """Why the object at key may not be removed, or None when it may: the
+    removal's own check (R2Rest.delete_download), which trusts no caller."""
+    if not isinstance(key, str) or not key:
+        return "not a key"
+    lowered = key.lower()
+    for mark in PROTECTED_MARKS:
+        if mark in lowered:
+            return f"the key holds {mark!r}, which no download file's name does"
+    if key.count("/") != 1 or not key.startswith("downloads/"):
+        return "the key is not directly under downloads/"
+    if not DELETABLE_KEY_RE.fullmatch(key):
+        return "the key is not a yearly download file"
+    return None
+
+
 class R2Rest:
     """The R2 calls Wrangler has no command for: a listing, the download of an
-    object found by it, and the removal of one (the prune of old download
-    files, when nightly.PRUNE_MODE is "delete"). Same token as the rest of the
-    run (CLOUDFLARE_API_TOKEN, R2 edit on the project account)."""
+    object found by it, and the removal of one stale download file (the prune
+    of old download files, when nightly.PRUNE_MODE is "delete"). There is no
+    general removal: delete_download is the only call that sends a DELETE,
+    and it checks the key itself. Same token as the rest of the run
+    (CLOUDFLARE_API_TOKEN, R2 edit on the project account)."""
 
     def __init__(self, http: Any, account: str, token: str, bucket: str, timeout: float = 120) -> None:
         self.http, self.account, self.token, self.bucket, self.timeout = http, account, token, bucket, timeout
@@ -546,7 +580,8 @@ class R2Rest:
         objects: list[dict[str, Any]] = []
         cursor = None
         for _ in range(MAX_LIST_PAGES):
-            params = {"prefix": prefix, "per_page": 100}
+            # No prefix lists the whole bucket (the prune's inventory before and after a removal).
+            params: dict[str, Any] = {"prefix": prefix, "per_page": 100} if prefix else {"per_page": 100}
             if cursor:
                 params["cursor"] = cursor
             try:
@@ -669,9 +704,16 @@ class R2Rest:
         if _status_code(resp) not in (200, 201):
             raise self._fail(f"the upload of {key}", resp=resp)
 
-    def delete(self, key: str) -> None:
-        """Remove one object (the path Wrangler's own r2 object delete takes).
-        Raises R2Error for any answer but 200 or 204."""
+    def delete_download(self, key: str) -> None:
+        """Remove one stale yearly download file, and nothing else: THE ONLY
+        REMOVAL THIS CODE CAN MAKE. The key is checked here, whatever the
+        caller chose (removal_refusal): it must be exactly downloads/<a yearly
+        CSV file> and hold no mark of a database, a backup or another prefix.
+        Any other key raises R2Error before a request is sent. Raises R2Error
+        for any answer but 200 or 204."""
+        refusal = removal_refusal(key)
+        if refusal:
+            raise R2Error(f"refused to remove an object: {refusal}")
         url = f"{self._base()}/{quote(key, safe='/')}"
         try:
             resp = self.http.delete(url, headers=self._headers(), timeout=self.timeout)
@@ -909,15 +951,53 @@ def databases_ahead(status: Any) -> str | None:
             f"until the next deploy")
 
 
+# -- the bucket before and after a removal --------------------------------------
+
+
+def inventory(objects: Any) -> dict[str, tuple[Any, Any]]:
+    """key -> (size, etag) for each object of a listing: what the prune of old
+    download files records of the whole bucket before it removes anything,
+    and compares after."""
+    out: dict[str, tuple[Any, Any]] = {}
+    for o in objects or []:
+        if isinstance(o, dict) and isinstance(o.get("key"), str):
+            out[o["key"]] = (o.get("size"), o.get("etag"))
+    return out
+
+
+def backup_missing(held: Mapping[str, Any], base: str, parts_suffix: str = ".parts") -> str | None:
+    """What of the nightly database backup the bucket does not hold (its
+    manifest, or any part), or None when the manifest and at least one part
+    are there. base is the set's name (nightly.BACKUP)."""
+    part = re.compile(re.escape(base) + r"\.[0-9]{3}$")
+    if base + parts_suffix not in held:
+        return "its manifest is not in the bucket"
+    if not any(part.fullmatch(k) for k in held):
+        return "none of its parts is in the bucket"
+    return None
+
+
+def changed_objects(before: Mapping[str, Any], after: Mapping[str, Any], removed: Any) -> list[str]:
+    """The keys held before that are gone or differ after (in size or etag),
+    leaving out the keys the prune itself removed. An empty list says the
+    removal touched nothing but what it named. A key that is new after is
+    not a change to anything held."""
+    gone = set(removed or ())
+    return sorted(k for k, v in before.items() if k not in gone and after.get(k) != v)
+
+
 # The source of the prune's notice (nightly.prune_downloads) in status.json.
 PRUNE_SOURCE = "downloads_prune"
+# The prune's outcome when the bucket after a removal is not the bucket before less the files it named.
+PRUNE_ALARM = "alarm"
 
 
 def prune_item(status: dict[str, Any]) -> str | None:
     """The item for a prune of old download files that refused to act
-    (status.json downloads_prune "refused"): its notice, which says why and
-    names the files; None for any other outcome."""
-    if status.get(PRUNE_SOURCE) != "refused":
+    (status.json downloads_prune "refused"), or whose check of the bucket
+    after a removal found another object gone or changed ("alarm"): its
+    notice, which says why and names the files; None for any other outcome."""
+    if status.get(PRUNE_SOURCE) not in ("refused", PRUNE_ALARM):
         return None
     detail = next((n["detail"] for n in status.get("notices") or []
                    if isinstance(n, dict) and n.get("source") == PRUNE_SOURCE and isinstance(n.get("detail"), str)),

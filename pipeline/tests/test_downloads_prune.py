@@ -33,6 +33,12 @@ NEVER = ["awards-2027.csv", "views/summary.csv", "backups/weekly/db-slot-1.sqlit
          "downloads/old/awards-2027.csv", "downloads/awards-2027.csv.bak", "downloads/Awards-2027.csv",
          "downloads/awards-2027-1.csv", "downloads/awards-2027-10.csv", "downloads/awards-27.csv",
          "downloads/expiring.csv", "downloads/SHA256SUMS.old", "downloads/awards-2027.csv\n", "downloads/"]
+# The database's nightly backup, the one before it, a weekly snapshot and the run status: what a removal must
+# see before it starts and find unchanged after.
+BACKUPS = ["awardwatch.sqlite.gz.000", "awardwatch.sqlite.gz.001", "awardwatch.sqlite.gz.parts",
+           "awardwatch.sqlite.prev.gz.000", "awardwatch.sqlite.prev.gz.parts",
+           "backups/weekly/db-slot-7.sqlite.gz.000", "backups/weekly/db-slot-7.sqlite.gz.parts",
+           "backups/weekly/d1-latest.sql.gz", "status.json", "static.tar.gz.000", "static.tar.gz.parts"]
 # The download route's other prefix: counted, never stale, never touched (a yearly name there included).
 MIRRORED = ["mirror/a.csv", "mirror/awards-2027.csv"]
 
@@ -46,6 +52,8 @@ class FakeBucket:
         self.page_size = page_size
         self.answers = answers or {}  # prefix -> the answer every listing of it gets
         self.refuse = set(refuse)  # keys whose removal answers 500
+        self.sizes = {}  # key -> size, where a test changes one
+        self.etags = {}  # key -> etag, where a test changes one
         self.calls = []
         self.closed = False
 
@@ -54,7 +62,7 @@ class FakeBucket:
         parts = urlsplit(url)
         assert parts.scheme == "https" and parts.netloc == "api.cloudflare.com" and parts.path == OBJECTS
         query = parse_qs(parts.query)
-        prefix = query["prefix"][0]
+        prefix = query.get("prefix", [""])[0]
         if prefix in self.answers:
             return self.answers[prefix]
         keys = sorted(k for k in self.keys if k.startswith(prefix))
@@ -64,7 +72,8 @@ class FakeBucket:
         more = start + size < len(keys)
         return Resp(200, json_data={
             "success": True, "errors": [],
-            "result": [{"key": k, "last_modified": "2026-11-19T14:40:00.000Z", "size": 10} for k in chunk],
+            "result": [{"key": k, "last_modified": "2026-11-19T14:40:00.000Z", "size": self.sizes.get(k, 10),
+                        "etag": self.etags.get(k, "e1")} for k in chunk],
             "result_info": {"is_truncated": more, "cursor": str(start + size) if more else "", "per_page": 100},
         })
 
@@ -85,7 +94,8 @@ class FakeBucket:
         return [unquote(urlsplit(u).path[len(OBJECTS) + 1:]) for m, u, _ in self.calls if m == "DELETE"]
 
     def listed(self, prefix):
-        return [u for m, u, _ in self.calls if m == "GET" and parse_qs(urlsplit(u).query)["prefix"] == [prefix]]
+        return [u for m, u, _ in self.calls
+                if m == "GET" and parse_qs(urlsplit(u).query).get("prefix", [""]) == [prefix]]
 
 
 def r2(fake):
@@ -103,7 +113,7 @@ def export_folder(tmp_path, names=None, *, sums=True, name="csv"):
 
 
 def bucket(stale=STALE, **kw):
-    keys = [f"downloads/{n}" for n in YEARLY + FIXED + ["SHA256SUMS"] + list(stale)] + NEVER + MIRRORED
+    keys = [f"downloads/{n}" for n in YEARLY + FIXED + ["SHA256SUMS"] + list(stale)] + NEVER + MIRRORED + BACKUPS
     return FakeBucket(keys, **kw)
 
 
@@ -132,7 +142,7 @@ def test_the_yearly_pattern_is_the_one_the_site_serves():
 def test_the_mode_ships_as_report_and_nothing_outside_the_code_changes_it():
     assert nightly.PRUNE_MODE == "report"
     options = {a.dest for a in nightly.build_parser()._subparsers._group_actions[0].choices["prune-downloads"]._actions}
-    assert options == {"help", "csv", "upload_outcome", "out_dir", "bucket"}
+    assert options == {"help", "csv", "upload_outcome", "save_db_outcome", "out_dir", "bucket"}
     # The limits the docs and the workflow comment name.
     assert (nightly.PRUNE_CAP, nightly.PRUNE_FLOOR, nightly.PRUNE_NAMED) == (30, 30, 10)
 
@@ -198,23 +208,34 @@ def test_every_page_of_the_listing_is_read(tmp_path):
 
 def test_delete_mode_removes_each_stale_object_and_nothing_else(tmp_path):
     fake = bucket()
-    record = nightly.prune_downloads(r2(fake), export_folder(tmp_path), "success", mode="delete")
-    assert record["outcome"] == "4 deleted" and record["mode"] == "delete"
+    held = len(fake.keys)
+    record = nightly.prune_downloads(r2(fake), export_folder(tmp_path), "success", mode="delete", save_db="success")
+    assert record["outcome"] == "4 deleted" and record["mode"] == "delete" and record["objects_checked"] == held - 4
     assert fake.deleted() == [f"downloads/{n}" for n in sorted(STALE)]
     assert all(f"downloads/{n}" not in fake.keys for n in STALE)
     assert set(NEVER) | set(MIRRORED) <= fake.keys
     assert record["notice"] == (
         "deleted 4 yearly files under downloads/ that tonight's export no longer writes: awards-2027.csv, "
-        "awards-2029.csv, grants-2019-3.csv, history-after-2025.csv; 2 objects under mirror/ (never touched)")
+        f"awards-2029.csv, grants-2019-3.csv, history-after-2025.csv; the {held - 4} other objects in the bucket, the "
+        "database backup among them, are as they were; 2 objects under mirror/ (never touched)")
+    assert set(BACKUPS) <= fake.keys and len(fake.keys) == held - 4
+    # The whole bucket was listed before the first removal and after the last, and at no other time.
+    order = ["LIST" if m == "GET" and "prefix=" not in u else m for m, u, _ in fake.calls
+             if m == "DELETE" or "prefix=" not in u]
+    assert order == ["LIST"] + ["DELETE"] * 4 + ["LIST"]
     # The next night finds nothing and says nothing.
-    again = nightly.prune_downloads(r2(fake), export_folder(tmp_path, name="next"), "success", mode="delete")
+    again = nightly.prune_downloads(r2(fake), export_folder(tmp_path, name="next"), "success", mode="delete", save_db="success")
     assert (again["outcome"], again["notice"], fake.deleted()[4:]) == ("none stale", None, [])
+    # A report never lists the whole bucket: it removes nothing, so it has nothing to compare.
+    quiet = bucket()
+    nightly.prune_downloads(r2(quiet), export_folder(tmp_path, name="report"), "success")
+    assert quiet.listed("") == [] and quiet.deleted() == []
 
 
 def test_a_removal_that_fails_is_reported_and_the_rest_go_on(tmp_path, caplog):
     fake = bucket(refuse={"downloads/awards-2029.csv"})
     with caplog.at_level(logging.INFO):
-        record = nightly.prune_downloads(r2(fake), export_folder(tmp_path), "success", mode="delete")
+        record = nightly.prune_downloads(r2(fake), export_folder(tmp_path), "success", mode="delete", save_db="success")
     assert fake.deleted() == [f"downloads/{n}" for n in sorted(STALE)]
     assert record["outcome"] == "3 deleted, 1 not deleted" and record["not_deleted"] == ["awards-2029.csv"]
     assert "not deleted, the removal failed (the next run tries again): awards-2029.csv" in record["notice"]
@@ -224,7 +245,7 @@ def test_a_removal_that_fails_is_reported_and_the_rest_go_on(tmp_path, caplog):
 def test_any_mode_but_delete_deletes_nothing(tmp_path):
     for mode in ("report", "Delete", "", "remove", None):
         fake = bucket()
-        nightly.prune_downloads(r2(fake), export_folder(tmp_path, name=f"csv-{mode}"), "success", mode=mode)
+        nightly.prune_downloads(r2(fake), export_folder(tmp_path, name=f"csv-{mode}"), "success", mode=mode, save_db="success")
         assert fake.deleted() == [], mode
 
 
@@ -235,7 +256,7 @@ def test_any_mode_but_delete_deletes_nothing(tmp_path):
 def test_only_an_upload_that_saved_every_file_lets_it_act(tmp_path, upload):
     fake = bucket()
     for mode in ("report", "delete"):
-        record = nightly.prune_downloads(r2(fake), export_folder(tmp_path, name=f"csv-{mode}"), upload, mode=mode)
+        record = nightly.prune_downloads(r2(fake), export_folder(tmp_path, name=f"csv-{mode}"), upload, mode=mode, save_db="success")
         assert (record["outcome"], record["notice"]) == ("skipped", None)
     assert fake.calls == []
 
@@ -250,7 +271,7 @@ def test_an_upload_that_looks_like_a_broken_export_is_refused_before_anything_is
     fake = bucket()
     for mode in ("report", "delete"):
         folder = export_folder(tmp_path, names, sums=sums, name=f"csv-{mode}")
-        record = nightly.prune_downloads(r2(fake), folder, "success", mode=mode)
+        record = nightly.prune_downloads(r2(fake), folder, "success", mode=mode, save_db="success")
         assert (record["outcome"], record["notice"]) == ("refused", f"refused, nothing deleted: {why}")
     assert fake.calls == []
     # At the floor it goes on.
@@ -265,7 +286,7 @@ def test_more_stale_files_than_the_cap_are_refused_in_either_mode(tmp_path):
     assert len(many) == nightly.PRUNE_CAP + 1
     for mode in ("report", "delete"):
         fake = bucket(stale=many)
-        record = nightly.prune_downloads(r2(fake), export_folder(tmp_path, name=f"csv-{mode}"), "success", mode=mode)
+        record = nightly.prune_downloads(r2(fake), export_folder(tmp_path, name=f"csv-{mode}"), "success", mode=mode, save_db="success")
         assert record["outcome"] == "refused" and fake.deleted() == [] and record["stale"] == many
         assert record["notice"] == (
             "refused, nothing deleted: 31 yearly files under downloads/ that tonight's export no longer writes, more "
@@ -273,7 +294,7 @@ def test_more_stale_files_than_the_cap_are_refused_in_either_mode(tmp_path):
             "touched)")
     # At the cap it acts.
     fake = bucket(stale=many[:30])
-    record = nightly.prune_downloads(r2(fake), export_folder(tmp_path, name="cap"), "success", mode="delete")
+    record = nightly.prune_downloads(r2(fake), export_folder(tmp_path, name="cap"), "success", mode="delete", save_db="success")
     assert record["outcome"] == "30 deleted" and len(fake.deleted()) == 30
     # The bucket as it stood when the cap was set: 21 stale files, which one night may report and remove.
     first = [f"awards-{y}.csv" for y in (*range(1996, 2012), 2027, 2028, 2029, 2030, 2040)]
@@ -303,7 +324,7 @@ def answers(prefix, answer):
 ])
 def test_a_listing_that_fails_or_is_cut_short_is_failed_and_deletes_nothing(tmp_path, answer, why):
     fake = answers("downloads/", answer)
-    record = nightly.prune_downloads(r2(fake), export_folder(tmp_path), "success", mode="delete")
+    record = nightly.prune_downloads(r2(fake), export_folder(tmp_path), "success", mode="delete", save_db="success")
     assert record["outcome"] == "failed" and fake.deleted() == [] and record["stale"] == []
     assert record["notice"] == f"the listing of downloads/ failed, so nothing was deleted ({why})"
     assert TOKEN not in json.dumps(record) and ACCOUNT not in json.dumps(record)
@@ -321,7 +342,7 @@ def test_it_never_raises(tmp_path, monkeypatch):
         def list(self, prefix, *, whole=False):
             raise ValueError("odd")
 
-    record = nightly.prune_downloads(Broken(), export_folder(tmp_path), "success", mode="delete")
+    record = nightly.prune_downloads(Broken(), export_folder(tmp_path), "success", mode="delete", save_db="success")
     assert record["outcome"] == "failed"
     assert record["notice"] == "the check stopped on a fault (ValueError); nothing was deleted"
     # No token in the environment: failed, nothing listed.
@@ -410,6 +431,12 @@ def test_the_status_carries_the_word_and_the_notice_and_only_a_refusal_needs_att
     assert status_with(tmp_path, None)["downloads_prune"] == "not run"
     assert resilience.attention_items({"stages": [], "downloads_prune": "refused"}) == [
         "Old download files in R2: refused, nothing deleted"]
+    # The bucket not as it was after a removal: an item needing attention, with what the check found.
+    alarm = {"outcome": "alarm", "notice": "ALARM, the bucket is not as it was less the files removed: 1 other "
+                                           "object gone or changed: awardwatch.sqlite.gz.001"}
+    status = status_with(tmp_path, "alarm", alarm)
+    assert resilience.attention_items(status) == [f"Old download files in R2: {alarm['notice']}"]
+    assert resilience.PRUNE_ALARM == "alarm"
 
 
 def test_the_status_command_reads_both_files_and_last_run_md_gets_the_word_alone(tmp_path, capsys):
@@ -467,12 +494,13 @@ def test_the_step_follows_the_upload_takes_its_outcome_and_never_holds_the_run_b
         "timeout-minutes: 5",
         "env:",
         "UPLOAD_OUTCOME: ${{ steps.save_files.outcome }}",
+        "SAVE_DB_OUTCOME: ${{ steps.save_db.outcome }}",
         "run: |",
         "out=data/out/downloads_prune",
         'mkdir -p "$out"',
         'echo "failed" > "$out/last_outcome.txt"',
         'python -m awardwatch_pipeline.nightly prune-downloads --csv data/out/csv --upload-outcome "$UPLOAD_OUTCOME" \\',
-        '--out-dir "$out"',
+        '--save-db-outcome "$SAVE_DB_OUTCOME" --out-dir "$out"',
     ]
     # No secret of its own (the job's token and account), no Wrangler, no mode from outside the code.
     assert "secrets." not in block and "WRANGLER" not in block and "--mode" not in block
@@ -493,12 +521,189 @@ def test_the_step_follows_the_upload_takes_its_outcome_and_never_holds_the_run_b
     assert re.findall(r"^  (\w+):", on, re.M) == ["schedule", "workflow_dispatch"]
 
 
+# -- the database and its backups: three checks, each apart from the others -----------------------
+
+
+# Keys no removal may ever reach, however they came to be asked for: the database and its backups by every name
+# the bucket holds, the bucket's other prefixes, paths that climb, and near misses of a download's name.
+FORBIDDEN = BACKUPS + NEVER + MIRRORED + [
+    "awardwatch.sqlite.gz.003", "awardwatch.sqlite.prev.gz.003", "backups/weekly/db-slot-5.sqlite.gz.002",
+    "backups/weekly/d1-slot-6.sql.gz", "backups/weekly/slot-7.txt", "backups/weekly/accounts-slot-1.sql.gz",
+    "views/2026-11-01.csv", "views/funnel.csv", "seeds/communications_ocl_cal.zip", "review/awards-persons.txt",
+    "intraday/lookup.json.gz", "static.tar.gz.001",
+    "downloads/../awardwatch.sqlite.gz.parts", "downloads/../backups/weekly/db-slot-7.sqlite.gz.000",
+    "downloads/awards-2027.csv/../../status.json", "downloads//awards-2027.csv", "downloads/./awards-2027.csv",
+    "downloads%2Fawards-2027.csv", "downloads/awards-2027.csv?versionId=1", "downloads/awards-2027.csv#x",
+    "downloads/awards-2027.csv ", " downloads/awards-2027.csv", "DOWNLOADS/awards-2027.csv", "downloads\\awards-2027.csv",
+    "downloads/SHA256SUMS", "downloads/organizations.csv", "downloads/open-tenders.csv", "downloads/awards-backup-2027.csv",
+    "downloads/awards-2027.csv.gz", "downloads/awards-2027.sqlite", "/downloads/awards-2027.csv", "downloads", "", "*",
+]
+
+
+def test_the_removal_checks_the_key_itself_and_sends_nothing_for_any_other():
+    # Whatever a caller asks, the call refuses before a request leaves: no key but a yearly download file.
+    for key in FORBIDDEN + [None, 7, b"downloads/awards-2027.csv", ["downloads/awards-2027.csv"]]:
+        fake = bucket()
+        before = set(fake.keys)
+        with pytest.raises(resilience.R2Error) as caught:
+            r2(fake).delete_download(key)
+        assert str(caught.value).startswith("refused to remove an object: "), key
+        assert fake.calls == [] and fake.keys == before, key
+    # The files it is for go through.
+    for name in STALE + ["awards-1996.csv", "awards-2040.csv", "contracts-undated.csv", "history-before-2009.csv"]:
+        fake = bucket(stale=STALE + [name])
+        r2(fake).delete_download(f"downloads/{name}")
+        assert fake.deleted() == [f"downloads/{name}"], name
+
+
+def test_the_choice_and_the_removal_name_the_same_files_by_patterns_written_apart():
+    # Two patterns, one in each module, so a mistake in the choice is not a mistake in the removal.
+    assert resilience.DELETABLE_KEY_RE.pattern != nightly.YEARLY_DOWNLOAD_RE.pattern
+    names = YEARLY + STALE + FIXED + ["SHA256SUMS"] + [k.split("/", 1)[1] for k in NEVER if k.startswith("downloads/") and
+                                                        "/" not in k.split("/", 1)[1]] + [
+        "awards-1996.csv", "awards-2040.csv", "grants-2019-9.csv", "grants-2019-10.csv", "history-before-2009.csv",
+        "contracts-after-2026.csv", "contracts-undated-2.csv", "awards-.csv", "lobbying-2020.csv", "awards-2027.CSV"]
+    for name in names:
+        chosen = bool(nightly.YEARLY_DOWNLOAD_RE.fullmatch(name))
+        removable = resilience.removal_refusal(f"downloads/{name}") is None
+        assert chosen == removable, name
+    # Every mark of a database, a backup or another prefix refuses, whatever else the key is.
+    for mark in resilience.PROTECTED_MARKS:
+        assert resilience.removal_refusal(f"downloads/awards-2027{mark}.csv") is not None, mark
+    # And the names the bucket's backups carry each hold at least one mark.
+    for key in BACKUPS:
+        assert any(mark in key for mark in resilience.PROTECTED_MARKS), key
+
+
+def test_there_is_one_removal_in_the_code_and_no_workflow_removes_an_object():
+    assert not hasattr(resilience.R2Rest, "delete") and hasattr(resilience.R2Rest, "delete_download")
+    package = ROOT / "pipeline" / "awardwatch_pipeline"
+    sends = {p.name: len(re.findall(r"\.delete\(", p.read_text(encoding="utf-8"))) for p in sorted(package.rglob("*.py"))}
+    assert {name: n for name, n in sends.items() if n} == {"resilience.py": 1}
+    source = (package / "resilience.py").read_text(encoding="utf-8")
+    body = source.split("    def delete_download(self, key: str) -> None:", 1)[1].split("\ndef ", 1)[0]
+    assert "self.http.delete(" in body and body.index("removal_refusal(key)") < body.index("self.http.delete(")
+    # The one caller hands it a name the choice made, under downloads/.
+    callers = {p.name: len(re.findall(r"\.delete_download\(", p.read_text(encoding="utf-8"))) for p in sorted(package.rglob("*.py"))}
+    assert {name: n for name, n in callers.items() if n} == {"nightly.py": 1}
+    assert "r2.delete_download(DOWNLOADS_PREFIX + name)" in (package / "nightly.py").read_text(encoding="utf-8")
+    # No workflow removes an object from a bucket, by Wrangler or by the API.
+    for path in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+        text = path.read_text(encoding="utf-8")
+        assert not re.search(r"object\s+delete|bucket\s+delete|-X\s*DELETE|--request\s+DELETE", text), path.name
+
+
+@pytest.mark.parametrize("saved", [None, "", "failure", "skipped", "cancelled", "Success", "success "])
+def test_a_removal_waits_for_a_night_whose_database_was_saved(tmp_path, saved):
+    fake = bucket()
+    record = nightly.prune_downloads(r2(fake), export_folder(tmp_path), "success", mode="delete", save_db=saved)
+    assert record["outcome"] == "refused" and fake.deleted() == [] and fake.listed("") == []
+    assert record["notice"] == (
+        f"refused, nothing deleted: tonight's database was not saved to R2 (the save step: {saved or 'not run'}), and a "
+        "removal waits for a night with a fresh backup; 4 yearly files under downloads/ that tonight's export no longer "
+        "writes: awards-2027.csv, awards-2029.csv, grants-2019-3.csv, history-after-2025.csv")
+    # A report says what it found whatever the save did: it removes nothing.
+    assert nightly.prune_downloads(r2(bucket()), export_folder(tmp_path, name="r"), "success", save_db=saved)[
+        "outcome"] == "4 stale (reported)"
+
+
+@pytest.mark.parametrize("gone,why", [
+    (["awardwatch.sqlite.gz.parts"], "its manifest is not in the bucket"),
+    (["awardwatch.sqlite.gz.000", "awardwatch.sqlite.gz.001"], "none of its parts is in the bucket"),
+    (["awardwatch.sqlite.gz.000", "awardwatch.sqlite.gz.001", "awardwatch.sqlite.gz.parts"], "its manifest is not in the bucket"),
+])
+def test_a_removal_needs_the_backup_seen_whole_in_the_bucket(tmp_path, gone, why):
+    fake = bucket()
+    fake.keys -= set(gone)
+    record = nightly.prune_downloads(r2(fake), export_folder(tmp_path), "success", mode="delete", save_db="success")
+    assert record["outcome"] == "refused" and fake.deleted() == []
+    assert record["notice"].startswith(f"refused, nothing deleted: the database backup was not seen whole in the bucket ({why}); ")
+    # The previous night's set and the weekly snapshots do not stand in for tonight's.
+    assert {"awardwatch.sqlite.prev.gz.000", "awardwatch.sqlite.prev.gz.parts"} <= fake.keys
+
+
+def test_the_bucket_that_cannot_be_listed_before_a_removal_removes_nothing(tmp_path):
+    fake = bucket(answers={"": Resp(403, json_data={"success": False, "errors": [{"code": 10000, "message": f"no {TOKEN}"}]})})
+    record = nightly.prune_downloads(r2(fake), export_folder(tmp_path), "success", mode="delete", save_db="success")
+    assert record["outcome"] == "failed" and fake.deleted() == []
+    assert record["notice"].startswith("the bucket could not be listed before the removal, so nothing was deleted (")
+    assert TOKEN not in json.dumps(record)
+
+
+def test_another_object_gone_or_changed_after_a_removal_is_an_alarm(tmp_path):
+    # The worst case, staged: while the stale files go, a part of the database backup goes too.
+    class Careless(FakeBucket):
+        def delete(self, url, headers=None, timeout=None, **kwargs):
+            self.keys.discard("awardwatch.sqlite.gz.001")
+            return super().delete(url, headers=headers, timeout=timeout, **kwargs)
+
+    keys = bucket().keys
+    fake = Careless(keys)
+    record = nightly.prune_downloads(r2(fake), export_folder(tmp_path), "success", mode="delete", save_db="success")
+    assert record["outcome"] == "alarm" and len(fake.deleted()) == 4
+    assert record["notice"].startswith(
+        "ALARM, the bucket is not as it was less the files removed: 1 other object gone or changed: "
+        "awardwatch.sqlite.gz.001; deleted 4 yearly files under downloads/")
+    # An object whose bytes changed (its size, or its etag alone) is seen as well, and so is a download not named.
+    for key, change in (("backups/weekly/db-slot-7.sqlite.gz.000", "size"), ("status.json", "etag"),
+                        ("downloads/organizations.csv", "gone")):
+        class Changing(FakeBucket):
+            def delete(self, url, headers=None, timeout=None, **kwargs):
+                if change == "size":
+                    self.sizes[key] = 11
+                elif change == "etag":
+                    self.etags[key] = "e2"
+                else:
+                    self.keys.discard(key)
+                return super().delete(url, headers=headers, timeout=timeout, **kwargs)
+
+        fake = Changing(bucket().keys)
+        record = nightly.prune_downloads(r2(fake), export_folder(tmp_path, name=f"csv-{change}"), "success", mode="delete",
+                                         save_db="success")
+        assert record["outcome"] == "alarm" and f"1 other object gone or changed: {key}" in record["notice"], key
+    # The bucket that cannot be listed after is an alarm too: the check did not happen.
+    class Blind(FakeBucket):
+        def get(self, url, headers=None, timeout=None, stream=False, **kwargs):
+            if "prefix=" not in url and self.deleted():
+                return Resp(500)
+            return super().get(url, headers=headers, timeout=timeout, stream=stream, **kwargs)
+
+    fake = Blind(bucket().keys)
+    record = nightly.prune_downloads(r2(fake), export_folder(tmp_path, name="blind"), "success", mode="delete", save_db="success")
+    assert record["outcome"] == "alarm" and "the bucket could not be listed after the removal" in record["notice"]
+    # A new object that appears meanwhile is not a change to anything held.
+    class Growing(FakeBucket):
+        def delete(self, url, headers=None, timeout=None, **kwargs):
+            self.keys.add("views/2026-11-21.csv")
+            return super().delete(url, headers=headers, timeout=timeout, **kwargs)
+
+    fake = Growing(bucket().keys)
+    record = nightly.prune_downloads(r2(fake), export_folder(tmp_path, name="growing"), "success", mode="delete", save_db="success")
+    assert record["outcome"] == "4 deleted"
+
+
+def test_the_inventory_helpers():
+    listing = [{"key": "a", "size": 1, "etag": "x"}, {"key": "b", "size": 2}, {"nokey": 1}, "junk", {"key": 5}]
+    assert resilience.inventory(listing) == {"a": (1, "x"), "b": (2, None)}
+    assert resilience.inventory(None) == {}
+    before = {"a": (1, "x"), "b": (2, None), "c": (3, "z")}
+    assert resilience.changed_objects(before, before, set()) == []
+    assert resilience.changed_objects(before, {"a": (1, "x"), "c": (3, "y")}, {"b"}) == ["c"]
+    assert resilience.changed_objects(before, {"a": (1, "x")}, {"b"}) == ["c"]
+    assert resilience.changed_objects(before, {**before, "d": (4, "n")}, None) == []
+    assert resilience.backup_missing({"awardwatch.sqlite.gz.parts": 1, "awardwatch.sqlite.gz.000": 1}, "awardwatch.sqlite.gz") is None
+    assert resilience.backup_missing({"awardwatch.sqlite.gz.parts": 1, "awardwatch.sqlite.prev.gz.000": 1},
+                                     "awardwatch.sqlite.gz") == "none of its parts is in the bucket"
+    assert resilience.backup_missing({"awardwatch.sqlite.gz.000": 1}, "awardwatch.sqlite.gz") == "its manifest is not in the bucket"
+    assert (nightly.BACKUP, nightly.PARTS_SUFFIX) == ("awardwatch.sqlite.gz", ".parts")
+
+
 # -- R2Rest: the removal and the whole listing ---------------------------------------------------
 
 
 def test_the_removal_goes_to_the_object_with_the_token_in_the_header_only():
     fake = bucket()
-    r2(fake).delete("downloads/awards-2027.csv")
+    r2(fake).delete_download("downloads/awards-2027.csv")
     [(method, url, headers)] = fake.calls
     assert method == "DELETE" and url == f"https://api.cloudflare.com{OBJECTS}/downloads/awards-2027.csv"
     assert headers["Authorization"] == f"Bearer {TOKEN}" and TOKEN not in url
@@ -512,14 +717,14 @@ def test_the_removal_goes_to_the_object_with_the_token_in_the_header_only():
                 raise self.answer
             return self.answer
 
-    resilience.R2Rest(Answers(Resp(204)), ACCOUNT, TOKEN, "awardwatch-data").delete("downloads/a.csv")
+    resilience.R2Rest(Answers(Resp(204)), ACCOUNT, TOKEN, "awardwatch-data").delete_download("downloads/awards-2027.csv")
     for answer, why in ((Resp(404, json_data={"errors": [{"code": 10007, "message": f"gone {TOKEN}"}]}),
-                         "the removal of downloads/a.csv answered HTTP 404 (10007 gone [token])"),
-                        (Resp(500), "the removal of downloads/a.csv answered HTTP 500"),
+                         "the removal of downloads/awards-2027.csv answered HTTP 404 (10007 gone [token])"),
+                        (Resp(500), "the removal of downloads/awards-2027.csv answered HTTP 500"),
                         (ConnectionError(f"reset {TOKEN} {ACCOUNT}"),
-                         "the removal of downloads/a.csv failed (ConnectionError: reset [token] [token])")):
+                         "the removal of downloads/awards-2027.csv failed (ConnectionError: reset [token] [token])")):
         with pytest.raises(resilience.R2Error) as caught:
-            resilience.R2Rest(Answers(answer), ACCOUNT, TOKEN, "awardwatch-data").delete("downloads/a.csv")
+            resilience.R2Rest(Answers(answer), ACCOUNT, TOKEN, "awardwatch-data").delete_download("downloads/awards-2027.csv")
         assert str(caught.value) == why
 
 

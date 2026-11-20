@@ -429,7 +429,8 @@ serves and nothing in the repository writes, and never touches them.
 names the stale files (ten at most, then the count of the rest) and gives the
 count under `mirror/`, and nothing is deleted. Set to `"delete"`, it removes
 each stale object and names what it removed; a removal that fails is named
-and the others still go. To switch, change the constant, the step's comment
+and the others still go, and the notice says how many other objects were
+checked and found as they were. To switch, change the constant, the step's comment
 in `nightly.yml` and this section in one commit, with the test that holds the
 shipped value.
 
@@ -440,7 +441,47 @@ shipped value.
 | More than 30 objects are stale (`PRUNE_CAP`) | `refused`; nothing is deleted; an item needing attention |
 | The listing failed, was cut short with no cursor to continue, or did not end | `failed`; nothing is deleted; a notice |
 | No token in the environment | `failed` |
+| Deleting, and tonight's database was not saved to R2 | `refused`; nothing is deleted; an item needing attention |
+| Deleting, and the database backup is not seen whole in the bucket | `refused`; nothing is deleted; an item needing attention |
+| Deleting, and the bucket cannot be listed before the first removal | `failed`; nothing is deleted |
+| After a removal, another object is gone or changed, or the bucket cannot be listed | `alarm`; an item needing attention that names the objects |
 | Otherwise | `none stale`, `<n> stale (reported)`, or once it deletes `<n> deleted` |
+
+#### What keeps the database and its backups from a removal
+
+The bucket that holds the downloads also holds the nightly database backup
+(`awardwatch.sqlite.gz.*`), the one before it (`awardwatch.sqlite.prev.gz.*`),
+the weekly snapshots (`backups/weekly/`), the static bundle, the audience
+records (`views/`) and the run status. Three checks stand between them and a
+removal, each written apart from the others, so a mistake in one is caught by
+the next.
+
+1. **What may be chosen, and when** (`nightly.stale_downloads`,
+   `prune_downloads`). Only a yearly file directly under `downloads/` that
+   tonight's export did not write can be chosen, 30 at most. A removal runs
+   only after an upload that saved every file, on a night whose database
+   save succeeded (the save step's outcome, `--save-db-outcome`), with the
+   nightly backup's manifest and at least one of its parts seen in the
+   bucket.
+2. **What the removal call will send** (`resilience.R2Rest.delete_download`,
+   `removal_refusal`). It is the only call in the code that removes an
+   object, and it checks the key itself, whatever asked: the key must be
+   exactly `downloads/<a yearly CSV file>` by a pattern of its own
+   (`DELETABLE_KEY_RE`), and must hold none of the marks of a database, a
+   backup, another prefix or a path that climbs (`PROTECTED_MARKS`). Any
+   other key is refused before a request is sent. No workflow removes an
+   object by any other means, and a test holds both facts.
+3. **What the bucket holds before and after** (`resilience.inventory`,
+   `changed_objects`). Every object in the bucket is recorded (its key, size
+   and etag) before the first removal and compared after the last. An
+   object gone or changed that the prune did not name is the outcome
+   `alarm`, an item needing attention that names it the same night.
+
+A fourth, outside the code and the operator's to set: an R2 bucket lock rule
+on the prefix `backups/weekly/db-slot-` stops Cloudflare itself from deleting
+or overwriting a weekly snapshot for the rule's days, whatever token asks. A
+slot is rewritten every eight weeks, so a rule shorter than that (30 days,
+say) never blocks the nightly's own write.
 
 The outcome word is `downloads_prune` in `status.json` and a line of
 `LAST_RUN.md`. The file names stay in the run status's notice, which the

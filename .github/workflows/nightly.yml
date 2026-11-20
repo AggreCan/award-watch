@@ -1143,6 +1143,14 @@ jobs:
       # (nightly.PRUNE_FLOOR). A listing that fails or is cut short is
       # "failed" and deletes nothing. "failed" is written first, so a step
       # stopped anywhere reads as failed. It never stops the run.
+      # When it removes (nightly.PRUNE_MODE "delete"), the database and its
+      # backups are kept from it three ways, each apart from the others: it
+      # removes only on a night whose database save succeeded and whose
+      # backup is seen whole in the bucket; the one removal call checks each
+      # key itself and refuses any that is not a yearly download file; and
+      # every object in the bucket is recorded before the first removal and
+      # compared after the last, anything else gone or changed being "alarm",
+      # an item needing attention.
       - name: Report or remove the old download files in R2
         id: prune_downloads
         if: ${{ !cancelled() }}
@@ -1150,12 +1158,13 @@ jobs:
         timeout-minutes: 5
         env:
           UPLOAD_OUTCOME: ${{ steps.save_files.outcome }}
+          SAVE_DB_OUTCOME: ${{ steps.save_db.outcome }}
         run: |
           out=data/out/downloads_prune
           mkdir -p "$out"
           echo "failed" > "$out/last_outcome.txt"
           python -m awardwatch_pipeline.nightly prune-downloads --csv data/out/csv --upload-outcome "$UPLOAD_OUTCOME" \
-            --out-dir "$out"
+            --save-db-outcome "$SAVE_DB_OUTCOME" --out-dir "$out"
 
       # The names the person test withheld from tonight's records (the
       # CanadaBuys stages list them in data/out/review/<stage>-persons.txt,

@@ -1209,7 +1209,7 @@ def _files(n: int) -> str:
 
 
 def prune_downloads(r2: resilience.R2Rest | None, csv_dir: Path, upload_outcome: str | None, *,
-                    mode: str | None = None) -> dict[str, Any]:
+                    mode: str | None = None, save_db: str | None = None) -> dict[str, Any]:
     """Compare the objects under downloads/ with the files tonight's upload
     sent (uploaded_names of the export's CSV folder) and act by mode
     (PRUNE_MODE by default). Returns the record the status reads: outcome,
@@ -1224,12 +1224,27 @@ def prune_downloads(r2: resilience.R2Rest | None, csv_dir: Path, upload_outcome:
     was cut short: nothing is deleted); "none stale"; in report mode "<n>
     stale (reported)"; in delete mode "<n> deleted", with ", <m> not deleted"
     when a removal failed (the others still go). Never raises; a message
-    from R2 never carries the token (R2Rest scrubs it)."""
+    from R2 never carries the token (R2Rest scrubs it).
+
+    THE DATABASE AND ITS BACKUPS ARE KEPT FROM A REMOVAL THREE WAYS, each
+    apart from the others. (1) What may be chosen, and when: only a yearly
+    file directly under downloads/ that tonight did not send
+    (stale_downloads), at most PRUNE_CAP, and in delete mode only on a
+    night whose database save succeeded (save_db, the save step's outcome)
+    with the nightly backup seen whole in the bucket; otherwise "refused".
+    (2) What the removal call sends: R2Rest.delete_download checks the key
+    itself and refuses any that is not such a file or that holds a mark of
+    a database, a backup or another prefix; no other removal exists.
+    (3) What the bucket holds: every object is recorded before the first
+    removal and compared after the last (resilience.inventory,
+    changed_objects); an object gone or changed that the prune did not name
+    is the outcome "alarm", an item needing attention."""
     deleting = (PRUNE_MODE if mode is None else mode) == "delete"
     record: dict[str, Any] = {"outcome": "failed", "mode": "delete" if deleting else "report", "notice": None,
-                              "stale": [], "deleted": [], "not_deleted": [], "mirror_objects": None}
+                              "stale": [], "deleted": [], "not_deleted": [], "mirror_objects": None,
+                              "objects_checked": None}
     try:
-        _prune(record, r2, csv_dir, upload_outcome, deleting)
+        _prune(record, r2, csv_dir, upload_outcome, deleting, save_db)
     except Exception as exc:
         done = len(record["deleted"])
         record.update(outcome="failed", notice=(f"the check stopped on a fault ({type(exc).__name__}); "
@@ -1241,7 +1256,7 @@ def prune_downloads(r2: resilience.R2Rest | None, csv_dir: Path, upload_outcome:
 
 
 def _prune(record: dict[str, Any], r2: resilience.R2Rest | None, csv_dir: Path, upload_outcome: str | None,
-           deleting: bool) -> None:
+           deleting: bool, save_db: str | None = None) -> None:
     if upload_outcome != "success":
         record["outcome"] = "skipped"
         return
@@ -1292,9 +1307,28 @@ def _prune(record: dict[str, Any], r2: resilience.R2Rest | None, csv_dir: Path, 
     if not stale:
         record["outcome"] = "none stale"
         return
+    # Before any removal. A fresh backup first: nothing is removed on a night whose database was not saved.
+    if save_db != "success":
+        record.update(outcome="refused", notice=(
+            f"refused, nothing deleted: tonight's database was not saved to R2 (the save step: "
+            f"{save_db or 'not run'}), and a removal waits for a night with a fresh backup; {found}: {_named(stale)}"))
+        return
+    # Then the whole bucket as it stands, and the backup seen in it.
+    try:
+        before = resilience.inventory(r2.list("", whole=True))
+    except resilience.R2Error as exc:
+        record["notice"] = f"the bucket could not be listed before the removal, so nothing was deleted ({exc})"
+        return
+    missing = resilience.backup_missing(before, BACKUP, PARTS_SUFFIX)
+    if missing:
+        record.update(outcome="refused", notice=(
+            f"refused, nothing deleted: the database backup was not seen whole in the bucket ({missing}); "
+            f"{found}: {_named(stale)}"))
+        return
+    record["objects_checked"] = len(before) - len(stale)
     for name in stale:
         try:
-            r2.delete(DOWNLOADS_PREFIX + name)
+            r2.delete_download(DOWNLOADS_PREFIX + name)
             record["deleted"].append(name)
         except resilience.R2Error as exc:
             record["not_deleted"].append(name)
@@ -1305,6 +1339,20 @@ def _prune(record: dict[str, Any], r2: resilience.R2Rest | None, csv_dir: Path, 
              f"{_named(done)}"] if done else []
     if left:
         parts.append(f"not deleted, the removal failed (the next run tries again): {_named(left)}")
+    # After the last removal: the bucket must be what it was, less the files named.
+    try:
+        after = resilience.inventory(r2.list("", whole=True))
+        changed = resilience.changed_objects(before, after, {DOWNLOADS_PREFIX + n for n in done})
+        trouble = (f"{len(changed)} other object{'s' if len(changed) != 1 else ''} gone or changed: "
+                   f"{_named(changed)}") if changed else None
+    except resilience.R2Error as exc:
+        trouble = f"the bucket could not be listed after the removal ({exc})"
+    if trouble:
+        record["outcome"] = resilience.PRUNE_ALARM
+        record["notice"] = "; ".join([f"ALARM, the bucket is not as it was less the files removed: {trouble}"] + parts + [mirror])
+        return
+    parts.append(f"the {record['objects_checked']} other objects in the bucket, the database backup among them, "
+                 "are as they were")
     record["notice"] = "; ".join(parts + [mirror])
 
 
@@ -1653,6 +1701,8 @@ def build_parser() -> argparse.ArgumentParser:
     pd.add_argument("--csv", required=True, help="the export's CSV folder, whose files the upload step sent")
     pd.add_argument("--upload-outcome", default=None,
                     help="the outcome of the step that uploaded them; anything but success skips the prune")
+    pd.add_argument("--save-db-outcome", default=None,
+                    help="the outcome of the step that saved tonight's database to R2; a removal needs success")
     pd.add_argument("--out-dir", required=True, help=f"where {PRUNE_OUTCOME} and {PRUNE_SUMMARY} are written")
     pd.add_argument("--bucket", default=os.environ.get("BUCKET") or resilience.DATA_BUCKET,
                     help=f"the R2 bucket (default $BUCKET, else {resilience.DATA_BUCKET})")
@@ -2064,7 +2114,7 @@ def _prune_downloads(args: argparse.Namespace) -> int:
     allowed to fail), else 0. Nothing reaches the bucket unless the upload saved every file."""
     r2 = _bucket(args.bucket) if args.upload_outcome == "success" else None
     try:
-        record = prune_downloads(r2, Path(args.csv), args.upload_outcome)
+        record = prune_downloads(r2, Path(args.csv), args.upload_outcome, save_db=args.save_db_outcome)
     finally:
         try:
             if r2 is not None:
@@ -2082,7 +2132,7 @@ def _prune_downloads(args: argparse.Namespace) -> int:
     log.info("prune-downloads: %s (mode %s)", record["outcome"], record["mode"])
     if record["notice"]:
         log.info("prune-downloads: %s", record["notice"])
-    return 1 if record["outcome"] in ("failed", "refused") else 0
+    return 1 if record["outcome"] in ("failed", "refused", resilience.PRUNE_ALARM) else 0
 
 
 def _summary(lines: list[str]) -> None:
