@@ -226,7 +226,13 @@
   // docs/landing.md "The builder's band"): "on", with ACCOUNTS_ENABLED
   // "true", shows it, drawn from National Defence's buyer file; anything else
   // keeps the landing page as it was. It stays "off" until the builder and
-  // the new dashboard it shows are live. WORKFLOW_REPO is the repository
+  // the new dashboard it shows are live. BUILDER is the analytics builder's
+  // switch (src/pages/builder.tsx, docs/analytics.md "The builder"): "on",
+  // with ACCOUNTS_ENABLED "true", serves /analytics/build and its CSV to
+  // Ultra, links it from the analytics index and the rail and names it on
+  // Ultra's plan card; anything else keeps both addresses the site's 404 and
+  // every page as it was. It stays "off" until the operator has checked the
+  // first night's cubes. WORKFLOW_REPO is the repository
   // whose nightly and same-day workflows the Worker's cron starts
   // (src/dispatch.ts); the token is the secret WORKFLOW_RUN, never a variable.
   "vars": {
@@ -248,6 +254,7 @@
     "PRICE_ULTRA_YEARLY_CAD": "389.99",
     "FOLLOWS_PANEL": "on",
     "BUILDER_DEMO": "off",
+    "BUILDER": "off",
     "WORKFLOW_REPO": "AggreCan/award-watch"
   },
   // Workers Logs keeps the console lines (which name events and counts, never

@@ -1082,6 +1082,18 @@ nav.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px
 .toolbar-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--border); }
 .toolbar-chips[hidden] { display: none; }
 .toolbar-note { margin: 0; padding: 8px 0; border-top: 1px solid var(--border); font-size: 12px; line-height: 16px; color: var(--muted); }
+/* A group of fields under one legend (the analytics builder's comparison, the
+   share chart's organizations): no frame, padding or margin of its own, and
+   no least width beyond its column, and no row's separating rule drawn
+   through its legend (hence its row's class in the selector); its legend
+   above the fields, set as a field's label is. */
+.toolbar fieldset, .toolbar fieldset.toolbar-row, .toolbar fieldset.toolbar-fields { min-width: 0; margin: 0; padding: 0 0 8px; border: 0; }
+.toolbar fieldset > legend {
+  margin: 0; padding: 8px 0 4px; font-size: 12px; line-height: 16px; font-weight: 500;
+  letter-spacing: normal; text-transform: none; color: var(--muted);
+}
+/* A line under a field saying what it takes (the builder's organization). */
+.field-hint { font-size: 12px; line-height: 16px; color: var(--muted); }
 ul.quick-links { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .quick-links li { margin: 0; }
 .quick-links a, .quick-links span[aria-current] {

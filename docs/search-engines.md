@@ -800,6 +800,11 @@ a page skip it when nothing changed.
 
 ### robots.txt
 
+Each group that closes `/analytics?` closes `/analytics/build` too, the
+analytics builder (`docs/analytics.md`, *The builder*), whether or not the
+builder's switch is on: the line is in the file, so the file is served by
+the assets layer as before and never passes through the Worker.
+
 `site/public/robots.txt` gives every crawler the `User-agent: *` group (with
 `Crawl-delay: 5`) and Bingbot a group of its own with the same rules and no
 delay (Bing honours the delay, and five seconds would cap it far below the

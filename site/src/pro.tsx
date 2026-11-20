@@ -17,7 +17,7 @@
 // page; while Ultra is on sale (account/payments.ts ultraOnSale) its card is
 // the third, with its own wording of every row.
 
-import type { FC } from "hono/jsx";
+import { useContext, type FC } from "hono/jsx";
 import { KEYS_MAX } from "./account/api_keys";
 import { PLANS, RULES, type CountedFeature, type Feature, type Plan } from "./account/entitlements";
 import { paymentSource, ultraOnSale } from "./account/payments";
@@ -26,7 +26,7 @@ import { KEY_PER_DAY, keyQuota } from "./api_keyed_spec";
 import { EXPIRING_WINDOWS } from "./data";
 import type { Env } from "./env";
 import { decimal, fmtInt, numberLocale, t, tj, type Key, type Lang } from "./i18n";
-import { Panel } from "./layout";
+import { Panel, RailContext } from "./layout";
 import { MAX_RIVALS, planYears } from "./records_db";
 import { SAME_DAY_RUNS_UTC } from "./refresh";
 
@@ -237,11 +237,20 @@ export const PLAN_ROWS: readonly PlanRow[] = [
   { feature: "view_mail", free: null, pro: null, ultra: { key: "plans.view_mail" } },
 ];
 
+// A row behind a switch, drawn after PLAN_ROWS only while the switch is on,
+// so a card with it off keeps every byte: the analytics builder
+// (src/pages/builder.tsx), Ultra's alone (RULES builder), while BUILDER is
+// "on". The page's shell says so (layout.tsx Shell.builder), and PlanCards
+// reads it there; the landing page passes it to its own cards.
+export const BUILDER_ROW: PlanRow = { feature: "builder", free: null, pro: null, ultra: { key: "plans.builder" } };
+export type PlanSwitches = { builder?: boolean };
+
 // The rows a set of cards draws: those one of its plans has, so the two
 // cards drawn while Ultra is not on sale keep their rows, and a row only
 // Ultra has comes with Ultra's card.
-export function planRows(plans: readonly Plan[]): readonly PlanRow[] {
-  return PLAN_ROWS.filter((r) => plans.some((p) => r[p] !== null));
+export function planRows(plans: readonly Plan[], on: PlanSwitches = {}): readonly PlanRow[] {
+  const rows = on.builder ? [...PLAN_ROWS, BUILDER_ROW] : PLAN_ROWS;
+  return rows.filter((r) => plans.some((p) => r[p] !== null));
 }
 
 // What Pro adds, each line under the feature that carries it, so a test can
@@ -395,7 +404,7 @@ const PlanCardView: FC<{ lang: Lang; card: PlanCard; rows: readonly PlanRow[] }>
 // row at one height across them (public/styles.css .plan-cards). Three fit
 // side by side where the column allows it; two and one below.
 export const PlanCards: FC<{ lang: Lang; plans: readonly PlanCard[] }> = ({ lang, plans }) => {
-  const rows = planRows(plans.map((c) => c.plan));
+  const rows = planRows(plans.map((c) => c.plan), { builder: !!useContext(RailContext)?.builder });
   return (
     <div class="plan-cards" style={`--plan-rows:${rows.length};--plan-card-rows:${cardRows(rows.length)}`}>
       {plans.map((card) => <PlanCardView lang={lang} card={card} rows={rows} />)}

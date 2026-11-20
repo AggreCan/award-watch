@@ -1,0 +1,163 @@
+// The analytics builder's strings (src/pages/builder.tsx, src/builder.ts;
+// docs/analytics.md, "The builder"), in English and French, spread into the
+// site's dictionary (src/i18n.ts) as the dashboard's are. The menus' other
+// labels are the analytics views' own keys. French is written with plain
+// spaces and straight apostrophes; the dictionary's typography pass adds the
+// Canadian French forms when they are read. None of these reach a page while
+// the BUILDER switch is off.
+
+export const BUILDER_STRINGS = {
+  // The plan cards' row, on Ultra's card only (src/pro.tsx BUILDER_ROW), while the switch is on.
+  "plans.builder": { en: "Analytics builder: your own views", fr: "Générateur d'analyses : vos propres vues" },
+  // The Methodology page's paragraph on the builder (src/pages/methodology.tsx), while the switch is on.
+  "methodology.analytics_builder": {
+    en: "The analytics builder, part of Ultra, counts by the same rules, from figures the nightly counts ahead for each buyer, segment, province of delivery, source and fiscal year. A median, a count of organizations and the largest organizations' share are never added across fiscal years; provinces and segments are never added together, since one notice can name several; a supplier withheld as a person counts in the totals and is named by no row.",
+    fr: "Le générateur d'analyses, qui fait partie d'Ultra, compte selon les mêmes règles, à partir de chiffres que le traitement de nuit calcule d'avance pour chaque acheteur, segment, province de livraison, source et exercice. Une médiane, un nombre d'organisations et la part des plus grandes organisations ne s'additionnent jamais d'un exercice à l'autre; les provinces et les segments ne sont jamais additionnés, puisqu'un avis peut en nommer plusieurs; un fournisseur dont le nom est retenu parce qu'il s'agit d'une personne compte dans les totaux et ne figure dans aucune ligne.",
+  },
+  // The rail's item and the analytics index's link.
+  "rail.builder": { en: "Analytics builder", fr: "Générateur d'analyses" },
+
+  // -- the page ---------------------------------------------------------------------------------------
+  "build.title": { en: "Analytics Builder", fr: "Générateur d'analyses" },
+  "build.crumb": { en: "Builder", fr: "Générateur" },
+  "build.lead": {
+    en: "Choose what to count, how to group it, the source and the period. The page's address keeps the choices.",
+    fr: "Choisissez quoi compter, comment le regrouper, la source et la période. L'adresse de la page conserve les choix.",
+  },
+  "build.description": {
+    en: "Federal procurement figures by buyer, segment, organization, province and fiscal year, as you choose them.",
+    fr: "Chiffres de l'approvisionnement fédéral par acheteur, segment, organisation, province et exercice, selon vos choix.",
+  },
+  "build.gate": { en: "The analytics builder is part of Ultra.", fr: "Le générateur d'analyses fait partie d'Ultra." },
+  "build.gate_link": { en: "See the plans", fr: "Voir les forfaits" },
+  "build.unavailable": { en: "The builder's figures cannot be read right now.", fr: "Les chiffres du générateur ne peuvent pas être lus pour le moment." },
+  "build.unavailable_title": { en: "Figures Not Available Right Now", fr: "Chiffres non disponibles pour le moment" },
+  "build.form": { en: "Choose the view", fr: "Choisir la vue" },
+
+  // -- the menus ----------------------------------------------------------------------------------------
+  "build.subject": { en: "About", fr: "Sujet" },
+  "build.rows": { en: "Rows", fr: "Lignes" },
+  "build.measure": { en: "Figure", fr: "Chiffre" },
+  "build.show": { en: "Show", fr: "Afficher" },
+  "build.top": { en: "Rows shown", fr: "Lignes affichées" },
+  "build.top_n": { en: "The {n} largest", fr: "Les {n} plus grands" },
+  "build.compare": { en: "Compare with (up to {n})", fr: "Comparer avec (jusqu'à {n})" },
+  "build.apply": { en: "Show this view", fr: "Afficher cette vue" },
+  "build.buyer": { en: "Buyer", fr: "Acheteur" },
+  "build.segment_choose": { en: "Choose a segment", fr: "Choisir un segment" },
+  "build.org": { en: "Organization", fr: "Organisation" },
+  "build.buyer_choose": { en: "Choose a buyer", fr: "Choisir un acheteur" },
+  "build.org_hint": {
+    en: "Its id (org- and ten characters) or the address of its page.",
+    fr: "Son identifiant (org- et dix caractères) ou l'adresse de sa page.",
+  },
+  // The link from a buyer's or an organization's analytics view to the same subject, source and period in the
+  // builder (src/pages/analytics.tsx), for an Ultra reader while the switch is on.
+  "build.open": { en: "Open in the builder", fr: "Ouvrir dans le générateur" },
+
+  "build.subject_all": { en: "Every buyer", fr: "Tous les acheteurs" },
+  "build.subject_buyer": { en: "One buyer", fr: "Un acheteur" },
+  "build.subject_buyers": { en: "Up to five buyers", fr: "Jusqu'à cinq acheteurs" },
+  "build.subject_segment": { en: "One segment", fr: "Un segment" },
+  "build.subject_buyer_segment": { en: "One buyer in one segment", fr: "Un acheteur dans un segment" },
+  "build.subject_org": { en: "One organization", fr: "Une organisation" },
+  "build.subject_orgs": { en: "Up to five organizations", fr: "Jusqu'à cinq organisations" },
+
+  "build.rows_year": { en: "Fiscal year", fr: "Exercice" },
+  "build.rows_quarter": { en: "Fiscal quarter", fr: "Trimestre d'exercice" },
+  "build.rows_buyer": { en: "Buyer", fr: "Acheteur" },
+  "build.rows_province": { en: "Province of delivery", fr: "Province de livraison" },
+  "build.rows_method": { en: "Procurement method", fr: "Méthode d'approvisionnement" },
+  "build.rows_competitive": { en: "Competitive or not", fr: "Concurrentiel ou non" },
+  "build.rows_organization": { en: "Organization", fr: "Organisation" },
+  "build.rows_none": { en: "None: one figure", fr: "Aucune : un seul chiffre" },
+  // The rows in a view's title, after its figure ("Median value by segment").
+  "build.by_year": { en: "by fiscal year", fr: "par exercice" },
+  "build.by_quarter": { en: "by fiscal quarter", fr: "par trimestre d'exercice" },
+  "build.by_segment": { en: "by segment", fr: "par segment" },
+  "build.by_buyer": { en: "by buyer", fr: "par acheteur" },
+  "build.by_province": { en: "by province of delivery", fr: "par province de livraison" },
+  "build.by_method": { en: "by procurement method", fr: "par méthode d'approvisionnement" },
+  "build.by_competitive": { en: "competitive or not", fr: "concurrentiel ou non" },
+  "build.by_organization": { en: "by organization", fr: "par organisation" },
+
+  "build.measure_nc": { en: "Non-competitive share, by count and by value", fr: "Part non concurrentielle, en nombre et en valeur" },
+  "build.largest_share": {
+    en: "Share of the value held by the 1, 5 and 10 organizations with the largest values",
+    fr: "Part de la valeur détenue par les 1, 5 et 10 organisations aux valeurs les plus élevées",
+  },
+  // The two long figures' names in a view's title, before its rows ("Non-competitive share by segment").
+  "build.title_nc": { en: "Non-competitive share", fr: "Part non concurrentielle" },
+  "build.title_largest": { en: "Share of the value held by the largest organizations", fr: "Part de la valeur détenue par les plus grandes organisations" },
+  "build.measure_amendments": { en: "Change in value through amendments", fr: "Variation de la valeur par modifications" },
+  "build.measure_ending": { en: "Contracts ending by fiscal quarter", fr: "Contrats prenant fin par trimestre d'exercice" },
+
+  "build.show_bars": { en: "Bars", fr: "Barres" },
+  "build.show_line": { en: "Line", fr: "Courbe" },
+  "build.show_ranked": { en: "Sorted bars", fr: "Barres triées" },
+  "build.show_number": { en: "One number", fr: "Un seul nombre" },
+  "build.show_table": { en: "Table", fr: "Tableau" },
+
+  // -- why a view is not drawn ---------------------------------------------------------------------
+  "build.not_offered": { en: "This combination is not offered: {why}", fr: "Cette combinaison n'est pas offerte : {why}" },
+  "build.why_sum": {
+    en: "a median, a count of organizations or a share of the largest organizations cannot be added across years, so choose one fiscal year.",
+    fr: "une médiane, un nombre d'organisations ou une part des plus grandes organisations ne s'additionnent pas d'une année à l'autre; choisissez donc un seul exercice.",
+  },
+  "build.why_source": { en: "{source} does not record this.", fr: "{source} ne consigne pas cette donnée." },
+  "build.why_rows": { en: "these rows are not offered for this subject.", fr: "ces lignes ne sont pas offertes pour ce sujet." },
+  "build.why_measure": { en: "this figure is not offered by these rows for this subject.", fr: "ce chiffre n'est pas offert selon ces lignes pour ce sujet." },
+  "build.why_quarters": {
+    en: "fiscal quarters are offered for periods of up to {n} fiscal years.",
+    fr: "les trimestres d'exercice sont offerts pour des périodes d'au plus {n} exercices.",
+  },
+  "build.choose_buyer": { en: "Choose a buyer from the list to see its figures.", fr: "Choisissez un acheteur dans la liste pour voir ses chiffres." },
+  "build.choose_segment": { en: "Choose a segment to see its figures.", fr: "Choisissez un segment pour voir ses chiffres." },
+  "build.choose_org": {
+    en: "Enter an organization's id or the address of its page to see its figures.",
+    fr: "Inscrivez l'identifiant d'une organisation ou l'adresse de sa page pour voir ses chiffres.",
+  },
+
+  // -- the result ---------------------------------------------------------------------------------------
+  "build.as_of": { en: "Figures from {source}, fiscal years {first} to {last}, as of {date}.", fr: "Chiffres tirés de {source}, exercices {first} à {last}, au {date}." },
+  "build.as_of_ending": {
+    en: "Contracts ending by the radar's rule, each contract once across the three contract sources, as of {date}.",
+    fr: "Contrats prenant fin selon la règle du radar, chaque contrat une seule fois dans les trois sources de contrats, au {date}.",
+  },
+  "build.places_note": {
+    en: "A notice that names several provinces counts in each, so the provinces are not added together.",
+    fr: "Un avis qui nomme plusieurs provinces compte dans chacune; les provinces ne sont donc pas additionnées.",
+  },
+  "build.segments_note": {
+    en: "A notice whose codes reach several segments counts in each, so the segments are not added together.",
+    fr: "Un avis dont les codes touchent plusieurs segments compte dans chacun; les segments ne sont donc pas additionnés.",
+  },
+  "build.withheld_note": {
+    en: "A supplier withheld as a person counts in the totals and is named in no row.",
+    fr: "Un fournisseur dont le nom est retenu parce qu'il s'agit d'une personne compte dans les totaux et ne figure dans aucune ligne.",
+  },
+  "build.orgs_note": {
+    en: "Organizations named in the records; a supplier withheld as a person is not counted as one.",
+    fr: "Organisations nommées dans les dossiers; un fournisseur dont le nom est retenu parce qu'il s'agit d'une personne n'est pas compté.",
+  },
+  "build.largest_note": {
+    en: "Each share is of the value of every record of the year, those of suppliers withheld as persons included.",
+    fr: "Chaque part est celle de la valeur de tous les dossiers de l'exercice, y compris ceux des fournisseurs dont le nom est retenu.",
+  },
+  "build.competitive_note": {
+    en: "Value: the counted values above zero, as the non-competitive share counts them.",
+    fr: "Valeur : les valeurs comptées supérieures à zéro, comme la part non concurrentielle les compte.",
+  },
+  "build.top_note": { en: "The {n} with the largest values in the period, sorted by the figure.", fr: "Les {n} aux valeurs les plus élevées pour la période, triés selon le chiffre." },
+  "build.none": { en: "No record of this view in these fiscal years.", fr: "Aucun dossier pour cette vue et ces exercices." },
+  "build.province_none": { en: "No province named", fr: "Aucune province nommée" },
+  "build.in_segment": { en: "{buyer}, segment {segment}", fr: "{buyer}, dans le segment {segment}" },
+  "build.the_set": { en: "The buyers or organizations compared", fr: "Les acheteurs ou organisations comparés" },
+  "build.col_subject": { en: "About", fr: "Sujet" },
+  "build.col_top1": { en: "Largest organization", fr: "Principale organisation" },
+  "build.col_top5": { en: "Five largest", fr: "Cinq principales" },
+  "build.col_top10": { en: "Ten largest", fr: "Dix principales" },
+  "build.col_change": { en: "Change", fr: "Variation" },
+  "build.col_period": { en: "Fiscal years {first} to {last}", fr: "Exercices {first} à {last}" },
+  "build.chart_aria": { en: "Chart of the view", fr: "Graphique de la vue" },
+} as const;

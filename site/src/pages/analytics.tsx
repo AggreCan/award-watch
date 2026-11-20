@@ -67,7 +67,8 @@ import { BUYER_ID_RE, SEGMENT_RE, loadBuyer, loadBuyerAlias, loadProfile, loadSt
 import type { AppEnv } from "../env";
 import { fmtInt, fmtMoney, fmtMoneyShort, fmtPct, pick, segmentLabel, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, lowerRedirect, noDataPage, notFoundPage, page, todayOf } from "../layout";
-import { allowsAnalytics, analyticsPlan } from "../plan";
+import { allowsAnalytics, allowsBuilder, analyticsPlan, builderOn } from "../plan";
+import { buildLink } from "../builder";
 import { ultraOnSale } from "../account/payments";
 import {
   AMENDED_SOURCES, BUYER_COMPETITION_SQL, BUYER_DUE_SQL, BUYER_GROWTH_SQL, BUYER_QUARTERS_SQL, BUYER_RECORDS_SQL, BUYER_SEGMENTS_SQL,
@@ -75,7 +76,7 @@ import {
   ORG_BUYERS_SQL, ORG_GROWTH_SQL, ORG_RECORDS_SQL, ORG_SEGMENTS_SQL, ORG_SHARE_SQL, ORG_YEARS_SQL, PERIODS, SEGMENT_BUYERS_SQL,
   SEGMENT_DUE_SQL, SEGMENT_ENTRANTS_SQL, SEGMENT_RECORDS_SQL, SEGMENT_SOURCES, RIVALS_N, SEGMENT_VALUES_SQL, SEGMENT_WINNERS_SQL,
   SEGMENT_YEARS_SQL, SHARE_SLOTS, SOURCE_NUMBER, TOP_N, type Query, type Read, type Row, dollars,
-  fiscalLabel, fiscalYearOf, num, orgIdOf, orgNumber, quarterEnd, readRecords, segmentCode, segmentNumber,
+  fiscalLabel, fiscalQuarterOf, fiscalYearOf, num, orgIdOf, orgNumber, quarterEnd, readRecords, segmentCode, segmentNumber,
 } from "../records_db";
 import { type Account, railAccount } from "../account/session";
 import { AddToDashboard, type BoardChoice, analyticPanelRef, anchorOf, boardChoices, dashboardAccount } from "../account/dashboard_add";
@@ -187,8 +188,8 @@ const fy = (lang: Lang, year: number, current: number) =>
 // line ran into the next column: the year, and under it a muted "(to date)",
 // as a date cell carries its second fact. The line break lets the cell wrap
 // (styles.css, td.mono) and ends what public/sort.js reads, so the cell
-// still sorts by its year.
-const FyCell: FC<{ lang: Lang; year: number; current: number }> = ({ lang, year, current }) =>
+// still sorts by its year. The analytics builder's tables (pages/builder.tsx) write theirs with it.
+export const FyCell: FC<{ lang: Lang; year: number; current: number }> = ({ lang, year, current }) =>
   year === current ? <>{fiscalLabel(lang, year)}<br /><span class="muted small">{t(lang, "analytics.to_date_line")}</span></> : <>{fiscalLabel(lang, year)}</>;
 const int = (v: unknown): number => num(v) ?? 0;
 const share = (lang: Lang, part: number | null, whole: number | null) => (part !== null && whole !== null && whole > 0 ? fmtPct(part, whole, lang) : "");
@@ -312,6 +313,9 @@ interface Shell {
   allowed: readonly MoneySource[];
   more?: Record<string, string | readonly string[]>;
   active: string;
+  // The same subject, source and period in the analytics builder (builder.ts buildLink): for an Ultra reader while
+  // the builder's switch is on (Ctx builder), and for no one else, whose page keeps its bytes.
+  builder?: string;
 }
 
 // The head, the toolbar and the foot around a view's panels; a database that
@@ -342,6 +346,7 @@ async function shell(c: Context<AppEnv>, s: Shell, read: Read, body: unknown): P
         <PeriodTabs lang={lang} base={s.base} frame={frame} pro={s.pro} ultra={s.ultra} more={s.more} />
         <PeriodForm lang={lang} base={s.base} frame={frame} pro={s.pro} more={s.more} />
         <SaveViewRow lang={lang} state={save} />
+        {s.builder ? <p class="toolbar-note"><a href={s.builder}>{t(lang, "build.open")}</a></p> : null}
       </div>
       {ok ? (body as any) : (
         <Panel title={t(lang, "analytics.unavailable_title")}>
@@ -480,8 +485,12 @@ const ValuesPanel: FC<{ lang: Lang; rows: Row[]; frame: Frame; csv: string; d: P
   </Panel>
 );
 
+// The average of the counted values above zero, in dollars to the cent, or null when none: the views' and the
+// analytics builder's (pages/builder.tsx) one definition.
+export const averageOf = (r: { n_pos?: unknown; pos?: unknown }): number | null => (int(r.n_pos) > 0 ? Math.round(int(r.pos) / int(r.n_pos)) / 100 : null);
+
 const ValuesBody: FC<{ lang: Lang; rows: Row[]; frame: Frame; fit?: TileFit }> = ({ lang, rows, frame, fit }) => {
-  const average = (r: Row) => (int(r.n_pos) > 0 ? Math.round(int(r.pos) / int(r.n_pos)) / 100 : null);
+  const average = averageOf;
   const valued = (r: Row) => tn(lang, "tip.valued_one", "tip.valued_many", int(r.n_pos), { n: fmtInt(int(r.n_pos), lang) });
   return rows.some((r) => int(r.n_pos) > 0) ? <>
     <YearChart lang={lang} frame={frame} fit={fit} fmt={(v) => fmtMoneyShort(v, lang)} panels={[
@@ -669,8 +678,6 @@ const RecordsBody: FC<{ lang: Lang; rows: Row[]; frame: Frame; party: Party; fit
   );
 };
 
-// The fiscal quarter a date falls in (1 is April to June).
-const fiscalQuarterOf = (day: string) => Math.floor(((Number(day.slice(5, 7)) + 8) % 12) / 3) + 1;
 const DAY_MS = 86_400_000;
 
 // The contracts ending in each of the DUE_QUARTERS fiscal quarters from the
@@ -794,7 +801,11 @@ export function buyerQueries(id: string, f: Frame, tables: readonly string[]): R
 // dash: the account, when it holds the dashboard, that adds each panel's
 // table to it (panelDash), with its dashboards to choose from when it holds
 // several (boards); nothing is read for it for anyone else.
-type Ctx = { c: Context<AppEnv>; lang: Lang; stats: Stats; pro: boolean; most: number; ultra: boolean; dash: Account | null; boards: BoardChoice[] };
+// builder: the reader's plan holds the analytics builder and its switch is on (plan.ts builderOn), so a buyer's and
+// an organization's view link it.
+type Ctx = {
+  c: Context<AppEnv>; lang: Lang; stats: Stats; pro: boolean; most: number; ultra: boolean; dash: Account | null; boards: BoardChoice[]; builder: boolean;
+};
 
 async function context(c: Context<AppEnv>): Promise<Ctx | Response> {
   const plan = await analyticsPlan(c);
@@ -806,7 +817,7 @@ async function context(c: Context<AppEnv>): Promise<Ctx | Response> {
   const pro = allowsAnalytics(plan);
   const dash = pro ? await dashboardAccount(c) : null;
   const boards = dash ? await boardChoices(c.env, dash.userId, lang).catch(() => []) : [];
-  return { c, lang, stats, pro, most, ultra: most < ULTRA_YEARS && (await ultraOnSale(c.env)), dash, boards };
+  return { c, lang, stats, pro, most, ultra: most < ULTRA_YEARS && (await ultraOnSale(c.env)), dash, boards, builder: builderOn(c.env) && allowsBuilder(plan) };
 }
 
 async function signedIn(c: Context<AppEnv>): Promise<boolean> {
@@ -845,6 +856,7 @@ export async function buyerAnalytics(c: Context<AppEnv>): Promise<Response> {
   const s: Shell = {
     view: "buyer", lang, stats, name, base, frame, pro, ultra, allowed: MONEY_SOURCES, active: "/buyers", back: `/buyers/${id}`, backKey: "analytics.back_buyer",
     crumbs: [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "buyers.title"), path: "/buyers" }, { name, path: `/buyers/${id}` }],
+    ...(ctx.builder ? { builder: buildLink({ buyer: id }, frame.source, frame.first, frame.last) } : {}),
   };
   if (read.state !== "ready") return shell(c, s, read, null);
 
@@ -1138,6 +1150,7 @@ export async function organizationAnalytics(c: Context<AppEnv>): Promise<Respons
     view: "organization", lang, stats, name, base, frame, pro, ultra, allowed: MONEY_SOURCES, active: "/organizations", more,
     back: `/organizations/${id}`, backKey: "analytics.back_organization",
     crumbs: [{ name: t(lang, "common.home"), path: "/" }, { name: t(lang, "nav.organizations"), path: "/organizations" }, { name, path: `/organizations/${id}` }],
+    ...(ctx.builder ? { builder: buildLink({ org: id }, frame.source, frame.first, frame.last) } : {}),
   };
   if (read.state !== "ready") return shell(c, s, read, null);
 

@@ -895,6 +895,9 @@ async function textFile(c: Context<AppEnv>, name: string): Promise<Response> {
 // the Worker runs. These routes answer when a request reaches the Worker
 // anyway (a run-worker-first configuration, the test runtime), from the same
 // files. llms.txt tells AI crawlers and agents where the bulk files are, so
-// they need not walk the profiles.
+// they need not walk the profiles. robots.txt closes the analytics builder
+// (/analytics/build) in each group that closes the analytics index's queries,
+// whether or not the builder's switch is on: the line is in the file, so the
+// file never has to pass through the Worker.
 export const llmsTxt = (c: Context<AppEnv>) => textFile(c, "llms.txt");
 export const robotsTxt = (c: Context<AppEnv>) => textFile(c, "robots.txt");

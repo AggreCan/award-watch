@@ -16,6 +16,7 @@ import { ACCOUNT_STRINGS } from "./account/strings";
 import { DASHBOARD_STRINGS } from "./account/dashboard_strings";
 import { VIEWS_STRINGS } from "./account/views_strings";
 import { CALENDAR_STRINGS } from "./calendar_strings";
+import { BUILDER_STRINGS } from "./builder_strings";
 
 export type Lang = "en" | "fr";
 
@@ -30,6 +31,8 @@ const STRINGS = {
   ...VIEWS_STRINGS,
   // The calendar files' strings (src/calendar_strings.ts).
   ...CALENDAR_STRINGS,
+  // The analytics builder's strings (src/builder_strings.ts).
+  ...BUILDER_STRINGS,
   "site.name": { en: "Award Watch", fr: "Award Watch" },
   "site.tagline": {
     en: "Federal tenders, awards, contracts and grants, by organization.",

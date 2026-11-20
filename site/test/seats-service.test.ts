@@ -17,6 +17,7 @@ import { FEED_SERVED_SQL } from "../src/account/feeds";
 import { POOL_COUNTS_SQL, POOL_SLOTS, RunPool, allowanceIn, pastAllowance, readPool } from "../src/account/pool";
 import { VIEW_STATE_GROUP_SQL, VIEW_STATE_SQL } from "../src/account/saved_views";
 import { app } from "../src/index";
+import { STYLES_VERSION } from "../src/layout";
 import { makeFakeAssets } from "./assets";
 import stats from "./fixtures/stats.json";
 import { ACCOUNTS, PRO_SALE, ULTRA_VARS, decode, nbsp, nextIp, onEnv, signIn, useAccountsDb } from "./accounts-helpers";
@@ -133,8 +134,12 @@ async function sha(s: string): Promise<string> {
   const d = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)));
   return [...d.slice(0, 12)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
-// A page's body with the session's CSRF value taken out, the one thing in it that differs between two sign-ins.
-const steady = (body: string) => body.replace(/(name="csrf" value="|"csrf":")[0-9a-f]{32}/g, "$1CSRF");
+// A page's body with the session's CSRF value taken out, the one thing in it that differs between two sign-ins,
+// and the stylesheet's version stamp put back to the one the capture was made at: a change to the stylesheet raises
+// the stamp on every page (layout.tsx STYLES_VERSION) and changes nothing else in these pages' bytes.
+const CAPTURED_STYLES = 74;
+const steady = (body: string) =>
+  body.replace(/(name="csrf" value="|"csrf":")[0-9a-f]{32}/g, "$1CSRF").replaceAll(`styles.css?v=${STYLES_VERSION}"`, `styles.css?v=${CAPTURED_STYLES}"`);
 
 const PAGES = ["/account/searches", "/account/watches", "/account/views", "/account/keys", "/account/dashboard"];
 const text = (i: number) => STATEMENTS[i];

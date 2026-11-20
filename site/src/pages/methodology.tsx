@@ -12,6 +12,7 @@ import {
   CODE_CHARS, FOLLOW_AFTER_DAYS, FOLLOW_BEFORE_DAYS, FOLLOW_CLOSE, FOLLOW_MAX, FOLLOW_MIN, FOLLOW_WORDS_MIN, LINE_YEARS, LONG_RUN,
   RUN_GAP_DAYS, RUN_OVERLAP_DAYS, SIMILAR_GROUP_MAX, SIMILAR_PREFIX, followsPanelOn,
 } from "../lines";
+import { builderOn } from "../plan";
 import { BAND_KEY } from "../lines_view";
 import { ENTRANT_LOOKBACK, FREE_YEARS } from "../records_db";
 import { EXPIRING_TEASER_ROWS } from "./expiring";
@@ -93,6 +94,8 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
   const lang = c.get("lang");
   const stats = await loadStats(c.env).catch(() => null);
   const follows = followsPanelOn(c.env);
+  // The analytics builder's paragraph, only while its switch is on (plan.ts builderOn).
+  const builder = builderOn(c.env);
   const tocKey = (id: string, key: Key): Key => (id === "holders" && follows ? "methodology.toc_holders_follows" : key);
   const pct = (share: number) => fmtInt(Math.round(share * 100), lang);
   return page(
@@ -199,6 +202,7 @@ export async function methodologyPage(c: Context<AppEnv>): Promise<Response> {
             "methodology.analytics_records", "methodology.analytics_due", "methodology.analytics_entrants", "methodology.analytics_people",
             "methodology.analytics_pro", "methodology.analytics_date",
           ]} />
+          {builder ? <p>{t(lang, "methodology.analytics_builder")}</p> : null}
 
           <h2 id="matching">{t(lang, "methodology.toc_matching")}</h2>
           <p>{t(lang, "methodology.matching_what")}</p>

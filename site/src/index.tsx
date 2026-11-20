@@ -20,6 +20,7 @@ import { clockAt } from "./closing";
 import { Layout, PageHead, page } from "./layout";
 import { analyticsCsv, buyerAnalytics, organizationAnalytics, segmentAnalytics } from "./pages/analytics";
 import { analyticsIndex } from "./pages/analytics_index";
+import { builderCsv, builderPage } from "./pages/builder";
 import { awardsPage, awardsYearPage, erroneousAwardsPage } from "./pages/awards";
 import { buyerPage, buyersIndex } from "./pages/buyers";
 import { segmentPage, segmentsIndex } from "./pages/segments";
@@ -214,6 +215,10 @@ app.get("/segments/:nn/analytics/:table{[a-z]+\\.csv}", (c) => analyticsCsv(c, "
 // The index of the views, the rail's Analytics item (pages/analytics_index.tsx):
 // the site's 404 while the accounts switch is off, as the views are.
 app.get("/analytics", analyticsIndex);
+// The analytics builder (pages/builder.tsx) and its view as CSV: Ultra's, the
+// site's 404 while its switch (BUILDER) or the accounts switch is off.
+app.get("/analytics/build", builderPage);
+app.get("/analytics/build.csv", builderCsv);
 // The UNSPSC segment pages were /categories until "category" was kept for
 // the CanadaBuys field alone; old links move for good, the query kept.
 app.get("/categories", (c) => movedTo(c, "/segments"));

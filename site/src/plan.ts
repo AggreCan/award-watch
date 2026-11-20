@@ -12,7 +12,7 @@
 
 import type { Context } from "hono";
 import type { ExpiringWindow } from "./data";
-import type { AppEnv } from "./env";
+import type { AppEnv, Env } from "./env";
 import { type Plan, allowed } from "./account/entitlements";
 import { planOfRequest } from "./account/session";
 import { accountsEnabled } from "./account/switch";
@@ -73,4 +73,18 @@ export async function analyticsAccess(c: Context<AppEnv>): Promise<"pro" | "free
 export async function analyticsPlan(c: Context<AppEnv>): Promise<Plan | null> {
   if (!accountsEnabled(c.env)) return null;
   return requestPlan(c);
+}
+
+// The analytics builder (src/pages/builder.tsx, docs/analytics.md "The
+// builder"): its switch BUILDER "on", with the accounts switch on, for the
+// page, its links and its plan line; then Ultra's feature "builder" for the
+// figures. Anything else: its addresses are the site's 404 and nothing names it.
+export const BUILDER = "builder";
+
+export function builderOn(env: Pick<Env, "BUILDER" | "ACCOUNTS_ENABLED" | "ACCOUNTS">): boolean {
+  return env.BUILDER === "on" && accountsEnabled(env);
+}
+
+export function allowsBuilder(plan: Plan): boolean {
+  return allowed({ plan }, BUILDER);
 }

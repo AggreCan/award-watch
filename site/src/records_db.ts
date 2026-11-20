@@ -80,6 +80,9 @@ export function fiscalYearOf(day: string): number {
   return month >= 4 ? year : year - 1;
 }
 
+// The fiscal quarter a date falls in (1 is April to June).
+export const fiscalQuarterOf = (day: string): number => Math.floor(((Number(day.slice(5, 7)) + 8) % 12) / 3) + 1;
+
 // "2025-26" in English, "2025-2026" in French, the forms the government's
 // own pages use.
 export function fiscalLabel(lang: "en" | "fr", fy: number): string {
@@ -145,11 +148,13 @@ export const BUYER_SEGMENTS_SQL =
   `GROUP BY sid ORDER BY cents DESC, n DESC, sid LIMIT ${TOP_N}`;
 
 // The non-competitive share by fiscal year, by count and by value; the value
-// share over positive values alone, as the profiles take it.
+// share over positive values alone, as the profiles take it. The columns are
+// the analytics builder's too (builder_sql.ts), so the share has one definition.
+export const COMPETITION_COLUMNS =
+  "SUM(CASE WHEN comp = 0 THEN 1 ELSE 0 END) AS n_nc, SUM(CASE WHEN comp IS NULL THEN 1 ELSE 0 END) AS n_unstated, " +
+  "SUM(CASE WHEN cents > 0 THEN cents END) AS pos, SUM(CASE WHEN comp = 0 AND cents > 0 THEN cents END) AS pos_nc";
 export const BUYER_COMPETITION_SQL =
-  "SELECT fy, COUNT(*) AS n, SUM(CASE WHEN comp = 0 THEN 1 ELSE 0 END) AS n_nc, SUM(CASE WHEN comp IS NULL THEN 1 ELSE 0 END) AS n_unstated, " +
-  "SUM(CASE WHEN cents > 0 THEN cents END) AS pos, SUM(CASE WHEN comp = 0 AND cents > 0 THEN cents END) AS pos_nc " +
-  `FROM records WHERE ${BUYER} AND extra = 0 GROUP BY fy ORDER BY fy LIMIT ${ULTRA_YEARS}`;
+  `SELECT fy, COUNT(*) AS n, ${COMPETITION_COLUMNS} FROM records WHERE ${BUYER} AND extra = 0 GROUP BY fy ORDER BY fy LIMIT ${ULTRA_YEARS}`;
 
 // The organizations with the largest values, and how many organizations the
 // buyer paid in the period (the window count runs over the groups before the
@@ -236,12 +241,14 @@ export const SEGMENT_VALUES_SQL = `SELECT fy, n_pos, pos, med FROM rec_segment_y
 // notices and history, the sources that number their versions): the
 // records, those amended (a version after the first), and of those, the ones
 // with a first value above zero and a last value counted: how many, how many
-// grew, and the two sums.
+// grew, and the two sums. The columns are the analytics builder's too
+// (builder_sql.ts).
 const COMPARED = "namd > 0 AND ocents > 0 AND cents IS NOT NULL";
-const GROWTH =
-  "SELECT fy, COUNT(*) AS n, SUM(CASE WHEN namd > 0 THEN 1 ELSE 0 END) AS n_amended, " +
+export const GROWTH_COLUMNS =
+  "SUM(CASE WHEN namd > 0 THEN 1 ELSE 0 END) AS n_amended, " +
   `SUM(CASE WHEN ${COMPARED} THEN 1 ELSE 0 END) AS n_compared, SUM(CASE WHEN ${COMPARED} AND cents > ocents THEN 1 ELSE 0 END) AS n_grew, ` +
-  `SUM(CASE WHEN ${COMPARED} THEN ocents END) AS first_cents, SUM(CASE WHEN ${COMPARED} THEN cents END) AS last_cents FROM records WHERE`;
+  `SUM(CASE WHEN ${COMPARED} THEN ocents END) AS first_cents, SUM(CASE WHEN ${COMPARED} THEN cents END) AS last_cents`;
+const GROWTH = `SELECT fy, COUNT(*) AS n, ${GROWTH_COLUMNS} FROM records WHERE`;
 export const BUYER_GROWTH_SQL = `${GROWTH} ${BUYER} AND extra = 0 GROUP BY fy ORDER BY fy LIMIT ${ULTRA_YEARS}`;
 export const ORG_GROWTH_SQL = `${GROWTH} ${ORG} AND extra = 0 GROUP BY fy ORDER BY fy LIMIT ${ULTRA_YEARS}`;
 

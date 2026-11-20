@@ -165,6 +165,14 @@ export interface Env {
   // landing page byte for byte as before, no buyer file read and no word of
   // the builder.
   BUILDER_DEMO?: string;
+  // The analytics builder's switch (src/pages/builder.tsx builderOn): "on",
+  // with the accounts switch on too, serves /analytics/build and its CSV,
+  // links it from the analytics index and the rail, and adds its line to
+  // Ultra's plan card. Anything else ("off" in wrangler.jsonc until the
+  // operator has checked the first night's cubes): both addresses are the
+  // site's 404, nothing links them, no card names the builder and every
+  // page is byte for byte as before.
+  BUILDER?: string;
 
   // -- the live mail check (src/account/mail_check.ts, docs/mail.md) ----------
   // The operator's test inbox: the one address POST /admin/mail-check sends

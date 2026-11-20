@@ -40,7 +40,7 @@ import { BUYER_ID_RE, SEGMENT_RE, loadBuyers, loadStats, type BuyerSummary, type
 import type { AppEnv, Env } from "../env";
 import { fmtInt, numberLocale, pick, segmentLabel, t, tj, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, page, todayOf } from "../layout";
-import { analyticsAccess } from "../plan";
+import { analyticsAccess, builderOn } from "../plan";
 import { ProNote, SUBSCRIBE_PATH } from "../pro";
 import { FREE_YEARS, MAX_YEARS } from "../records_db";
 import {
@@ -213,6 +213,11 @@ const OrgList: FC<{ rows: readonly { id: string; name: string }[] }> = ({ rows }
   </ul>
 );
 
+// The analytics builder (pages/builder.tsx), a plain button in the head beside
+// the index's own: only while its switch is on, so the page is as it was
+// otherwise. No chip: the rail's item carries Ultra's.
+const BuilderLink: FC<{ lang: Lang }> = ({ lang }) => <a href="/analytics/build" class="btn">{t(lang, "rail.builder")}</a>;
+
 const directoryLink = (lang: Lang) => <a href="/organizations">{t(lang, "analytics.orgs_directory")}</a>;
 
 const BuyersUnavailable: FC<{ lang: Lang }> = ({ lang }) => <p class="muted">{t(lang, "analytics.buyers_unavailable")}</p>;
@@ -254,12 +259,13 @@ export async function analyticsIndex(c: Context<AppEnv>): Promise<Response> {
     }
     const nothing = !!orgs && !!index && matched === 0;
     const shownOrgs = orgs?.rows.slice(0, ORG_MATCHES_SHOWN) ?? [];
+    const allViews = <a href={ANALYTICS_INDEX_PATH} class="btn">{t(lang, "analytics.all_views")}</a>;
     const res = await page(
       c,
       <Layout lang={lang} title={t(lang, "analytics.title")} dataAsOf={dataAsOf} active={ANALYTICS_INDEX_PATH}
         seo={pageSeo("analytics", lang, { noindex: true, title: pageTitle(t(lang, "analytics.title_of", { name: q })) })}>
         <PageHead lang={lang} title={t(lang, "analytics.title")} lead={lead}
-          actions={<a href={ANALYTICS_INDEX_PATH} class="btn">{t(lang, "analytics.all_views")}</a>}>
+          actions={builderOn(c.env) ? <><BuilderLink lang={lang} /> {allViews}</> : allViews}>
           {free ? <FreeLine lang={lang} /> : null}
           {!terms.terms.length ? <p class="page-note">{t(lang, "search.no_terms")}</p> : null}
           {nothing ? <p class="page-note">{t(lang, "analytics.no_match", { q })}</p> : null}
@@ -301,7 +307,7 @@ export async function analyticsIndex(c: Context<AppEnv>): Promise<Response> {
   return page(
     c,
     <Layout lang={lang} title={t(lang, "analytics.title")} dataAsOf={dataAsOf} active={ANALYTICS_INDEX_PATH} seo={pageSeo("analytics", lang)}>
-      <PageHead lang={lang} title={t(lang, "analytics.title")} lead={lead}>
+      <PageHead lang={lang} title={t(lang, "analytics.title")} lead={lead} actions={builderOn(c.env) ? <BuilderLink lang={lang} /> : undefined}>
         {free ? <FreeLine lang={lang} /> : null}
       </PageHead>
       <FindForm lang={lang} q="" />

@@ -65,10 +65,12 @@ export const cachedPlanOf = (p: Plan): "free" | "pro" => (p === "ultra" ? "pro" 
 // follows: how many earlier contracts an open notice's page shows a reader
 // (src/pages/follows.tsx, while FOLLOWS_PANEL is "on"), the closest first;
 // Free's without their holders' records.
+// builder: the analytics builder (src/pages/builder.tsx, /analytics/build)
+// and its CSV file, while its switch (BUILDER) is on.
 export const FEATURES = [
   "saved_searches", "delivery", "api", "export_filtered", "intraday", "radar_depth", "bug_reports", "analytics", "watchlists",
   "watch_mail", "matches", "match_mail",
-  "dashboards", "dashboard_tiles", "saved_views", "view_mail", "follows",
+  "dashboards", "dashboard_tiles", "saved_views", "view_mail", "follows", "builder",
 ] as const;
 export type Feature = (typeof FEATURES)[number];
 
@@ -87,13 +89,13 @@ export const MATCH_PAGE = 50;
 type Rules = {
   saved_searches: number; delivery: boolean; api: boolean; export_filtered: boolean; intraday: boolean; radar_depth: boolean;
   bug_reports: boolean; analytics: boolean; watchlists: number; watch_mail: boolean; matches: number; match_mail: number;
-  dashboards: number; dashboard_tiles: number; saved_views: number; view_mail: boolean; follows: number;
+  dashboards: number; dashboard_tiles: number; saved_views: number; view_mail: boolean; follows: number; builder: boolean;
 };
 
 const PRO_RULES: Rules = {
   saved_searches: 25, delivery: true, api: true, export_filtered: true, intraday: true, radar_depth: true, bug_reports: true,
   analytics: true, watchlists: 25, watch_mail: true, matches: 200, match_mail: 10,
-  dashboards: 0, dashboard_tiles: 0, saved_views: 10, view_mail: false, follows: 3,
+  dashboards: 0, dashboard_tiles: 0, saved_views: 10, view_mail: false, follows: 3, builder: false,
 };
 
 // Ultra holds every Pro feature, with figures of its own on the counted ones:
@@ -105,7 +107,7 @@ export const RULES: Readonly<Record<Plan, Rules>> = {
   free: {
     saved_searches: 3, delivery: false, api: false, export_filtered: false, intraday: false, radar_depth: false, bug_reports: false,
     analytics: false, watchlists: 3, watch_mail: false, matches: 5, match_mail: 3,
-    dashboards: 0, dashboard_tiles: 0, saved_views: 0, view_mail: false, follows: 1,
+    dashboards: 0, dashboard_tiles: 0, saved_views: 0, view_mail: false, follows: 1, builder: false,
   },
   pro: PRO_RULES,
   ultra: {
@@ -119,6 +121,7 @@ export const RULES: Readonly<Record<Plan, Rules>> = {
     dashboard_tiles: 24,
     saved_views: SAVED_VIEW_MAX,
     view_mail: true,
+    builder: true,
   },
 };
 

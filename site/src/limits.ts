@@ -66,6 +66,8 @@ export type Bucket = "page" | "api" | "download" | "form" | "edit" | "feed" | "c
 
 // A table of an analytics view as CSV (pages/analytics.tsx, analyticsCsv).
 export const ANALYTICS_CSV = /^\/(?:buyers|organizations|segments)\/[^/]+\/analytics\/[a-z]+\.csv$/;
+// A view of the analytics builder as CSV (pages/builder.tsx, builderCsv): a download, as the views' tables are.
+export const BUILDER_CSV = /^\/analytics\/build\.csv$/;
 // A file of records from the records database (src/records_tables.ts): a
 // filtered radar window's matches, a profile's or a buyer's record table.
 // The standing offers' files (pages/instruments.tsx): a filtered list, and one instrument's holders.
@@ -103,7 +105,10 @@ export function bucketFor(method: string, path: string): Bucket {
   if (path.startsWith("/data/feeds/")) return "feed";
   if (path.startsWith("/api/")) return "api";
   if (path.startsWith("/downloads/")) return method === "HEAD" ? "page" : "download";
-  if (ANALYTICS_CSV.test(path) || RECORDS_CSV.test(path) || RECORD_ICS.test(path) || INSTRUMENTS_CSV.test(path) || ORG_CLAIM_CSV.test(path)) {
+  if (
+    ANALYTICS_CSV.test(path) || BUILDER_CSV.test(path) || RECORDS_CSV.test(path) || RECORD_ICS.test(path) || INSTRUMENTS_CSV.test(path) ||
+    ORG_CLAIM_CSV.test(path)
+  ) {
     return method === "HEAD" ? "page" : "download";
   }
   if (FEED_ICS.test(path)) return "calendar";

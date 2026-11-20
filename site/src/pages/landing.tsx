@@ -66,9 +66,10 @@ import { BrandMark, BrandWordmark, FooterRow, ICONS_VERSION, MetaTags, langToggl
 import { CHART_HEIGHT, CHART_WIDTH, PLOT_BASE, PLOT_LEFT, PLOT_RIGHT, buildChart } from "../landing_chart";
 import { LANDING_ORGS_A, LANDING_ORGS_B, type LandingOrg, brandfetchLogoUrl } from "../landing_orgs";
 import {
-  PLAN_ROWS, type ProPrice, ProTag, SUBSCRIBE_PATH, ULTRA_SUBSCRIBE_PATH, UltraTag, checkoutPrice, planLine, planRows, rowFor, sameDayHours,
+  BUILDER_ROW, PLAN_ROWS, type ProPrice, ProTag, SUBSCRIBE_PATH, ULTRA_SUBSCRIBE_PATH, UltraTag, checkoutPrice, planLine, planRows, rowFor, sameDayHours,
   ultraCheckoutPrice, ultraLines,
 } from "../pro";
+import { builderOn } from "../plan";
 import { MAX_YEARS } from "../records_db";
 import { DAILY_RUNS_UTC } from "../refresh";
 import { homeJsonLd, pageSeo } from "../seo";
@@ -567,9 +568,10 @@ const BuildBand: FC<{ lang: Lang; build: BuildFigures }> = ({ lang, build }) => 
 // draw the same rows, so their lists stay level and none can differ from
 // /pro's; before, the two cards draw the rows Free or Pro has, and Ultra's
 // card lists its own lines (ultraRows).
-const PlanList: FC<{ lang: Lang; plan: Plan; plans: readonly Plan[]; wrap?: boolean }> = ({ lang, plan, plans, wrap }) => (
+// builder: the analytics builder's switch is on (plan.ts builderOn), so Ultra's card names it (src/pro.tsx BUILDER_ROW).
+const PlanList: FC<{ lang: Lang; plan: Plan; plans: readonly Plan[]; wrap?: boolean; builder?: boolean }> = ({ lang, plan, plans, wrap, builder }) => (
   <ul class={wrap ? "lp-plan-list lp-plan-list-wrap" : "lp-plan-list"}>
-    {planRows(plans).map((row) => {
+    {planRows(plans, { builder }).map((row) => {
       const { wording, has } = rowFor(row, plan);
       return has ? (
         <li><Check /><span>{planLine(lang, wording)}</span></li>
@@ -586,10 +588,11 @@ const PlanList: FC<{ lang: Lang; plan: Plan; plans: readonly Plan[]; wrap?: bool
 // them since they shipped), then the part still planned, saying so. Every row
 // is one Ultra will have (operator's ruling on tier lines, 2026-11-06). Once
 // it is on sale (ultraOnSale), the card lists what Ultra holds that day, and
-// the planned line leaves it.
+// the planned line leaves it. While the builder's switch is on (builder), the
+// builder is built: its plan line takes the planned line's place.
 export const ULTRA_PLANNED = ["landing.ultra_builder"] as const;
-export const ultraRows = (lang: Lang): string[] =>
-  [t(lang, "landing.everything_pro"), ...ultraLines(lang), ...ULTRA_PLANNED.map((k) => t(lang, k))];
+export const ultraRows = (lang: Lang, builder = false): string[] =>
+  [t(lang, "landing.everything_pro"), ...ultraLines(lang), ...(builder ? [planLine(lang, BUILDER_ROW.ultra)] : ULTRA_PLANNED.map((k) => t(lang, k)))];
 
 // The Ultra card's form and what stands in its place after a post: the line
 // that says the address is kept, or the form again with the address as typed
@@ -638,14 +641,14 @@ export const UltraBox: FC<{ lang: Lang } & UltraState> = ({ lang, done, error, e
 // card on /pro, in the same order), and Subscribe to Ultra
 // through the sign-in page, outlined in sapphire as the form's button is;
 // the form leaves the card, and the addresses it kept stay for the message.
-const UltraCard: FC<{ lang: Lang; ultra: UltraState; sale: ProPrice | null; planned: ProPrice | null }> = ({ lang, ultra, sale, planned }) => {
+const UltraCard: FC<{ lang: Lang; ultra: UltraState; sale: ProPrice | null; planned: ProPrice | null; builder?: boolean }> = ({ lang, ultra, sale, planned, builder }) => {
   const figure = (n: string) => t(lang, "plans.figure", { n: decimal(lang, n) });
   return sale ? (
     <div class="lp-plan lp-plan-ultra" id={ULTRA_ANCHOR}>
       <h3 class="lp-plan-nm">{t(lang, "ultra.tag")}<UltraTag lang={lang} size={11} /></h3>
       <p class="lp-pr">{figure(sale.monthly)}<small>{t(lang, "landing.price_rest", { yearly: figure(sale.yearly) })}</small></p>
       <p class="lp-for">{t(lang, "plans.ultra_for")}</p>
-      <PlanList lang={lang} plan="ultra" plans={ON_SALE} wrap />
+      <PlanList lang={lang} plan="ultra" plans={ON_SALE} wrap builder={builder} />
       <p class="lp-plan-acts"><a class="lp-btn" href={ULTRA_SUBSCRIBE_PATH}>{t(lang, "plans.ultra_subscribe")}</a></p>
     </div>
   ) : (
@@ -661,7 +664,7 @@ const UltraCard: FC<{ lang: Lang; ultra: UltraState; sale: ProPrice | null; plan
       )}
       <p class="lp-for">{t(lang, "plans.ultra_for")}</p>
       <ul class="lp-plan-list lp-plan-list-wrap">
-        {ultraRows(lang).map((line) => <li><Check /><span>{line}</span></li>)}
+        {ultraRows(lang, builder).map((line) => <li><Check /><span>{line}</span></li>)}
       </ul>
       <UltraBox lang={lang} {...ultra} />
     </div>
@@ -673,7 +676,9 @@ const UltraCard: FC<{ lang: Lang; ultra: UltraState; sale: ProPrice | null; plan
 const ON_SALE: readonly Plan[] = ["free", "pro", "ultra"];
 const BEFORE_ULTRA: readonly Plan[] = ["free", "pro"];
 
-const Plans: FC<{ lang: Lang; price: ProPrice | null; ultra: UltraState; sale: ProPrice | null; planned: ProPrice | null }> = ({ lang, price, ultra, sale, planned }) => {
+const Plans: FC<{ lang: Lang; price: ProPrice | null; ultra: UltraState; sale: ProPrice | null; planned: ProPrice | null; builder?: boolean }> = ({
+  lang, price, ultra, sale, planned, builder,
+}) => {
   const figure = (n: string) => t(lang, "plans.figure", { n: decimal(lang, n) });
   const plans = sale ? ON_SALE : BEFORE_ULTRA;
   return (
@@ -687,7 +692,7 @@ const Plans: FC<{ lang: Lang; price: ProPrice | null; ultra: UltraState; sale: P
             <h3 class="lp-plan-nm">{t(lang, "plans.free")}</h3>
             <p class="lp-pr">{figure("0")}</p>
             <p class="lp-for">{t(lang, "plans.free_for")}</p>
-            <PlanList lang={lang} plan="free" plans={plans} />
+            <PlanList lang={lang} plan="free" plans={plans} builder={builder} />
             <p class="lp-plan-acts"><a class="lp-btn" href="/account/sign-in">{t(lang, "plans.create_free")}</a></p>
           </div>
           <div class="lp-plan lp-plan-pro">
@@ -696,13 +701,13 @@ const Plans: FC<{ lang: Lang; price: ProPrice | null; ultra: UltraState; sale: P
               ? <p class="lp-pr">{figure(price.monthly)}<small>{t(lang, "landing.price_rest", { yearly: figure(price.yearly) })}</small></p>
               : <p class="lp-pr lp-pr-unset">{t(lang, "plans.unavailable")}</p>}
             <p class="lp-for">{t(lang, "plans.pro_for")}</p>
-            <PlanList lang={lang} plan="pro" plans={plans} />
+            <PlanList lang={lang} plan="pro" plans={plans} builder={builder} />
             <p class="lp-plan-acts">
               <a class="lp-btn lp-btn-fill" href={SUBSCRIBE_PATH}>{t(lang, "expiring.pro_sign_in")}</a>
               <a class="lp-btn" href="/pro">{t(lang, "landing.everything_pro")}</a>
             </p>
           </div>
-          <UltraCard lang={lang} ultra={ultra} sale={sale} planned={planned} />
+          <UltraCard lang={lang} ultra={ultra} sale={sale} planned={planned} builder={builder} />
         </div>
         {price ? <p class="lp-plans-note">{t(lang, "plans.seller")}</p> : null}
       </div>
@@ -739,7 +744,7 @@ export async function landingPage(c: Context<AppEnv>, ultra: UltraState | null, 
   return c.html(html`<!doctype html>${(
     <LandingDoc lang={lang} on={accountsEnabled(c.env)} stats={stats} clock={clock} endingN={three?.n} ending={firstEnding ?? []}
       profile={profile} price={checkoutPrice(c.env)} logo={c.env.BRANDFETCH_CLIENT_ID?.trim() || null} ultra={ultra} ultraPrice={ultraPrice} ultraPlanned={ultraFigures(c.env)}
-      search={new URL(c.req.url).search} build={build} />
+      search={new URL(c.req.url).search} build={build} builder={builderOn(c.env)} />
   ) as any}`, status);
 }
 
@@ -795,10 +800,12 @@ type DocProps = {
   search?: string;
   ultraPlanned?: ProPrice | null;
   build?: BuildFigures | null;
+  // The analytics builder's switch is on (plan.ts builderOn): Ultra's card names the builder.
+  builder?: boolean;
 };
 
 export const LandingDoc: FC<DocProps> = ({
-  lang, on, stats, clock, endingN, ending, profile, price, logo, ultra = null, ultraPrice = null, ultraPlanned = null, search = "", build = null,
+  lang, on, stats, clock, endingN, ending, profile, price, logo, ultra = null, ultraPrice = null, ultraPlanned = null, search = "", build = null, builder = false,
 }) => {
   const counts = stats.counts;
   const seo = pageSeo("home", lang, { jsonLd: [homeJsonLd(lang)] });
@@ -1037,7 +1044,7 @@ export const LandingDoc: FC<DocProps> = ({
             </div>
           </section>
 
-          {on ? <Plans lang={lang} price={price} ultra={ultra ?? {}} sale={ultraPrice} planned={ultraPlanned} /> : null}
+          {on ? <Plans lang={lang} price={price} ultra={ultra ?? {}} sale={ultraPrice} planned={ultraPlanned} builder={builder} /> : null}
 
           <section class="lp-close" aria-labelledby="lp-close-h">
             <div class="lp-wrap">

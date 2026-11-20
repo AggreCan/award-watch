@@ -12,6 +12,7 @@ import { type Plan, allowed } from "./account/entitlements";
 import { DASHBOARD_PATH, dashboardInRail } from "./account/dashboard_rule";
 import { type RailAccount, railAccount } from "./account/session";
 import { accountsEnabled } from "./account/switch";
+import { builderOn } from "./plan";
 import { ProTag, UltraTag } from "./pro";
 import { clockOf } from "./closing";
 import { type TableUse, TableUseContext } from "./columns";
@@ -253,9 +254,12 @@ export const MetaTags: FC<{ seo?: Seo; lang: Lang; title: string }> = ({ seo, la
 // accountsOn: the accounts switch, for the top bar's same-day timer (refresh.tsx).
 // stamps: the data the page was built from, for both timers (refresh.tsx).
 // dashboard: the rail shows the Dashboard item (dashboardInRail).
+// builder: the analytics builder's switch is on (plan.ts builderOn): the
+// rail's item and Ultra's plan line (pro.tsx PlanCards); absent otherwise,
+// so no page changes while it is off.
 export type Shell = {
   rail: RailCounts | null; here: string; account?: RailAccount; now?: number; accountsOn?: boolean; stamps?: RefreshStamps;
-  dashboard?: boolean;
+  dashboard?: boolean; builder?: boolean;
   // The request's query string ("?a=b", or ""), for the language toggle (langToggle); "" on any
   // answer but a 200, so an error page (the site's 404 above all) reads the same whatever was asked.
   search?: string;
@@ -293,9 +297,9 @@ export function viewKey(pathAndQuery: string): string {
 // child's label under its parent in the tree ("In 2026"); below 1000 px the
 // tree flattens into a wrap of items, where the full label stands alone.
 // `pro`: the entry leads to a page that comes with Pro, so it carries the
-// chip in its count's slot (src/pro.tsx).
+// chip in its count's slot (src/pro.tsx); `ultra` the same with Ultra's chip.
 type RailEntry = {
-  href: string; label: string; short?: string; n?: number; section?: string; soon?: boolean; pro?: boolean; children?: RailEntry[];
+  href: string; label: string; short?: string; n?: number; section?: string; soon?: boolean; pro?: boolean; ultra?: boolean; children?: RailEntry[];
 };
 type RailState = "current" | "ancestor" | null;
 
@@ -305,7 +309,7 @@ const RailLink: FC<{ lang: Lang; e: RailEntry; state: RailState; child?: boolean
     <span class="rail-label">
       {e.short ? <><span class="rail-short">{e.short}</span><span class="rail-full">{e.label}</span></> : e.label}
     </span>
-    {e.pro ? <ProTag lang={lang} /> : null}
+    {e.pro ? <ProTag lang={lang} /> : e.ultra ? <UltraTag lang={lang} /> : null}
     {/* The closing-soon count goes down as public/countdown.js sees a notice on the page close. */}
     {e.n !== undefined ? <span class="rail-n" data-soon-count={e.soon ? "" : undefined}>{fmtInt(e.n, lang)}</span> : null}
   </a>
@@ -340,8 +344,8 @@ export function railStates(entries: readonly RailEntry[], here: string, section?
 // without moving anything above them. Nothing in it assumes a signed-in
 // reader: the watchlist lives in this browser, and alerts are a link to the
 // page that says they are coming and takes an address meanwhile.
-const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: string; account?: RailAccount; dashboard?: boolean }> = ({
-  lang, active, rail, here, account, dashboard,
+const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: string; account?: RailAccount; dashboard?: boolean; builder?: boolean }> = ({
+  lang, active, rail, here, account, dashboard, builder,
 }) => {
   const year = rail?.year ?? new Date().toISOString().slice(0, 4);
   const expiring = rail?.ending12m !== undefined || rail?.ending3m !== undefined;
@@ -383,6 +387,8 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: str
     // The analytics views' index (pages/analytics_index.tsx), the chip in the count's
     // slot: listed for every reader once Pro exists, since the views exist only then.
     ...(paid ? [{ href: "/analytics", label: t(lang, "rail.analytics"), section: "/analytics", pro: true }] : []),
+    // The analytics builder (pages/builder.tsx), Ultra's chip in the count's slot: only while its switch is on.
+    ...(paid && builder ? [{ href: "/analytics/build", label: t(lang, "rail.builder"), section: "/analytics/build", ultra: true }] : []),
     { href: "/feeds", label: t(lang, "nav.feeds"), section: "/feeds" },
     // The Email lists page, reachable without scrolling to a page's foot (operator, 2026-11-02).
     { href: "/alerts", label: t(lang, "rail.email_lists"), section: "/alerts" },
@@ -497,7 +503,7 @@ export const ICONS_VERSION = 2;
 
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 74;
+export const STYLES_VERSION = 75;
 
 // The subscript after the wordmark for a signed-in reader, by plan: Ultra's
 // in its sapphire (public/styles.css .brand-plan-ultra), Pro's in the accent.
@@ -601,7 +607,8 @@ export const Layout: FC<
           </div>
         </header>
         <div class="frame">
-          <Rail lang={lang} active={active} rail={shell?.rail ?? null} here={shell?.here ?? ""} account={shell?.account} dashboard={shell?.dashboard} />
+          <Rail lang={lang} active={active} rail={shell?.rail ?? null} here={shell?.here ?? ""} account={shell?.account} dashboard={shell?.dashboard}
+            builder={shell?.builder} />
           <div class="content">
             <TableUseContext.Provider value={tables}>
               <main id="main">{props.children}</main>
@@ -655,6 +662,7 @@ export async function page(c: Context<AppEnv>, body: unknown, status = 200): Pro
   const account = await railAccount(c).catch(() => undefined);
   if (account) shell.account = account;
   if (account && (await dashboardInRail(c.env, account.plan))) shell.dashboard = true;
+  if (builderOn(c.env)) shell.builder = true;
   if (account?.email) c.header("Cache-Control", "private, no-store");
   return c.html(html`<!doctype html>${(<RailContext.Provider value={shell}>{body as any}</RailContext.Provider>) as any}`, status as any);
 }
@@ -745,6 +753,7 @@ export async function publicPage(c: Context<AppEnv>, body: unknown, status = 200
   // What railAccount gives a request with no session.
   if (shell.accountsOn) shell.account = { email: null, plan: null };
   if (shell.account && (await dashboardInRail(c.env, null))) shell.dashboard = true;
+  if (builderOn(c.env)) shell.builder = true;
   c.header("Cache-Control", status === 200 ? `public, max-age=${maxAge}` : "no-store");
   return c.html(html`<!doctype html>${(<RailContext.Provider value={shell}>{body as any}</RailContext.Provider>) as any}`, status as any);
 }

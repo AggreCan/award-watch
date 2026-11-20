@@ -64,6 +64,8 @@ const PAGES = new Set([
   "/search",
   // The index of the analytics views (pages/analytics_index.tsx); its query is never stored either.
   "/analytics",
+  // The analytics builder (pages/builder.tsx), its view's query never stored.
+  "/analytics/build",
   // The app home at its own address (pages/home.tsx), counted apart from "/", where a reader without a session gets the landing page.
   "/overview",
   // The guides' index (pages/guides.tsx); each guide is counted at its own address below.
@@ -97,6 +99,8 @@ export function routeTemplate(method: string, path: string): { route: string; ki
       ? { route: `/${analytics[1]}/${param}/analytics/:table.csv`, kind: "download" }
       : { route: `/${analytics[1]}/${param}/analytics`, kind: "page" };
   }
+  // The analytics builder's view as CSV (pages/builder.tsx).
+  if (path === "/analytics/build.csv") return { route: path, kind: "download" };
   if (/^\/buyers\/[^/]+$/.test(path)) return { route: "/buyers/:id", kind: "page" };
   if (/^\/segments\/[^/]+$/.test(path)) return { route: "/segments/:nn", kind: "page" };
   if (/^\/categories\/[^/]+$/.test(path)) return { route: "/categories/:nn", kind: "page" };

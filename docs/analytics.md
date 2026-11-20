@@ -751,9 +751,8 @@ row read.
 ## The builder's cubes
 
 Two tables counted ahead for the analytics builder (the Ultra design,
-section 4.4): `cube_bs` and `cube_place`, with `cube_meta`. Nothing on the
-site reads them yet; the builder's page, its menus and its statements are a
-later build.
+section 4.4): `cube_bs` and `cube_place`, with `cube_meta`. The builder's
+page reads them (*The builder*, below).
 
 **Built from the views' own rows.** The pipeline stage `cubes`
 (`pipeline/awardwatch_pipeline/cubes.py`) reads `records_db.record_rows`,
@@ -861,6 +860,149 @@ history, as the design counted them, 357 and 350 of them in 2026-27; `sid 0`
 stated provinces alone and no `''` cells, the buyer-province cells are the
 design's 332 and 163; the provinces derived from other fields and the
 notices placed nowhere make up the rest.
+
+## The builder
+
+`/analytics/build` (`site/src/pages/builder.tsx`) is a form of fixed menus,
+never a query, whose address is the view; under it, one chart and its table,
+the line naming the source, the period and the data date, and the view as a
+CSV file. It is Ultra's (the plan feature `builder`), behind a switch of its
+own, `BUILDER` in `site/wrangler.jsonc`: anything but `"on"`, or the accounts
+switch off, and `/analytics/build` and `/analytics/build.csv` are the site's
+404, nothing links them, no plan card names the builder and every other page
+is as it was. On, the rail's Browse group lists "Analytics builder" after
+"Analytics" with the Ultra chip, the analytics index links it in its head,
+Ultra's plan card gains the line "Analytics builder: your own views" (the
+cards on `/pro`, the billing page, the tease panels and the landing page),
+the Methodology page's analytics section gains a paragraph, and a buyer's and an organization's
+analytics view give an Ultra reader "Open in the builder" (the same subject,
+source and period, value by fiscal year). `robots.txt` closes
+`/analytics/build` in each group that closes `/analytics?`, on or off: the
+line is in the file.
+
+**The menus.** The lists and the rules are `site/public/build-menu.js`, one
+copy for the Worker, which reads every address through it
+(`site/src/builder.ts`), and for the page's script, which hides what the
+menus do not offer.
+
+| Menu | Field | Choices |
+|---|---|---|
+| About | `subject`, with `b` (a menu of the buyers by name in the page's language, the id its value; one for the subject and four to compare), `s` (a segment) and `o` (an organization's id or its profile's address, typed) | every buyer; one buyer; up to five buyers; one segment; one buyer in one segment; one organization; up to five organizations |
+| Rows | `rows` | fiscal year; fiscal quarter; segment; buyer; province of delivery; procurement method; competitive or not; organization; none (one figure) |
+| Figure | `measure` | value; records; average value; median value; organizations; the non-competitive share, by count and by value; the share of the value held by the 1, 5 and 10 organizations with the largest values; the change in value through amendments; the contracts ending by fiscal quarter |
+| Source | `source` | one of the four |
+| Period | `from`, `to` | the first and last fiscal year, at most 20 (`ULTRA_YEARS`); a longer span keeps its latest 20 and says so |
+| Show | `show` | one number (rows none), bars or a line (fiscal years or quarters), sorted bars (any other rows), a table (always) |
+| Rows shown | `top` | 5, 10 or 25: the buyers, organizations, segments or provinces with the largest values in the period, sorted by the figure |
+
+Without a query: every buyer, value by fiscal year, award notices, the
+latest ten fiscal years, as bars. A value no menu holds reads as that menu's
+default, as the views read theirs.
+
+**The rules.**
+
+- One source a view, so no figure adds two sources.
+- Segments, provinces of delivery and amendments need award notices or PSPC
+  contract history. The non-competitive share, the method and competitive or
+  not are not offered for grants, which flag neither. The contracts ending
+  follow the radar's rule (each contract once across the three contract
+  sources) whatever the source and period, and the line under the chart says
+  so.
+- A median, a count of organizations and the largest organizations' share
+  cannot be added: each is offered by fiscal year, or for one fiscal year when
+  the rows are not years. Fiscal quarters are offered for periods of five
+  fiscal years at most (`QUARTER_YEARS`).
+- A comparison holds buyers or organizations, never both, each once, at most
+  five (`SET_MAX`): one panel a subject on one scale (small multiples). Rows of
+  buyers for a set of buyers, or of organizations for a set of organizations,
+  are the set itself.
+- Provinces and segments are never totalled: a notice that names several
+  counts in each. A view by either has no total row and no share of a total,
+  and says why.
+- A supplier withheld as a person counts in every total and is named by no
+  row; the count of organizations leaves it out.
+- Every combination outside the matrix below is absent from the menus. The
+  page's script hides it; without the script, the page answers the form with
+  "This combination is not offered:" and the rule it breaks, and reads
+  nothing. A subject not chosen in full (no buyer, a buyer the list does not
+  hold, no segment, no organization) says what to choose.
+
+**The matrix and what each cell reads.** 210 of the 567 combinations of
+subject, rows and figure. "Cube" is `cube_bs`; every statement is a constant
+of `site/src/builder_sql.ts` but the three the views already send
+(`BUYER_QUARTERS_SQL`, `BUYER_DUE_SQL`, `SEGMENT_DUE_SQL`).
+
+| Rows | Value, records | Average, median | Organizations | Non-competitive share | Largest organizations' share | Amendments | Contracts ending |
+|---|---|---|---|---|---|---|---|
+| Fiscal year | cube for every buyer, a segment (`CELL_YEARS_SQL`), a buyer, a set of buyers, a buyer in a segment (`BUYERS_YEARS_SQL`); `records` for one organization or a set (`ORGS_YEARS_SQL`, `ORG_NAMES_SQL`) | cube | cube | cube; `records` for organizations | cube | cube; `records` for organizations | no |
+| Fiscal quarter | `records` for one buyer (`rec_buyer_quarters`), one segment (`SEGMENT_QUARTERS_SQL`) or a buyer in a segment (`BUYER_SEGMENT_QUARTERS_SQL`) | no | no | no | no | no | `rec_due` for a buyer or a segment, eight quarters; `rec_expiring` for a buyer in a segment, four quarters (`EXPIRING_QUARTERS_SQL`) |
+| Segment | cube added over the period, for every buyer (`SEGMENTS_SQL`), a buyer or a set (`BUYERS_SEGMENTS_SQL`) | cube; the median for one year | cube, one year | cube | cube, one year | cube | `rec_due` for every buyer (`DUE_SEGMENTS_SQL`); `rec_expiring` for one buyer (`EXPIRING_SEGMENTS_SQL`) |
+| Buyer | cube: the largest of every buyer or of a segment (`TOP_BUYERS_SQL`); a set's own buyers | as for segments | cube, one year | cube | cube, one year | cube | `rec_due` for every buyer (`DUE_BUYERS_SQL`); `rec_expiring` for one segment (`EXPIRING_BUYERS_SQL`) |
+| Province of delivery | `cube_place` for every record (`PLACE_ALL_SQL`), a segment (`PLACE_SEGMENT_SQL`), a buyer or a set (`PLACE_BUYERS_SQL`) | `cube_place`; the median for one year | no | by count only | no | no | no |
+| Procurement method | `records` for a buyer (`BUYER_METHODS_SQL`) or a segment (`SEGMENT_METHODS_SQL`) | no | no | no | no | no | no |
+| Competitive or not | cube, as by fiscal year, added; every subject but the organizations | no | no | no | no | no | no |
+| Organization | `records`: the largest of a buyer, a segment or a buyer in a segment (`BUYER_ORGS_SQL`, `SEGMENT_ORGS_SQL`, `BUYER_SEGMENT_ORGS_SQL`); a set's own organizations | no | no | `records` | no | `records` | no |
+| None (one figure) | as by fiscal year, added over the period | as by fiscal year | one year | as by fiscal year | one year | as by fiscal year | as by quarter, added |
+
+**A page view.** One batch of the records database: the state row,
+`cube_meta` when the view reads a cube, and the view's statement (two for
+organizations: their fiscal years and their names). Each is bound only to
+values the menus checked, reads through an index (`cube_bs_buyer`,
+`cube_bs_segment`, `cube_place_buyer` and `cube_place_segment` named with
+`INDEXED BY`, `records_buyer`, `records_org`, `records_segment`, the
+`rec_due` and `rec_expiring` indexes) and ends in a `LIMIT`: 20 fiscal years,
+five subjects, the 57 segments, 14 provinces (the thirteen and none named),
+25 rows of a ranked list, 20 quarters. The date in the line under the chart
+is `cube_meta`'s for a view of a cube, the records database's otherwise.
+
+**The figures are the views'.** Value: the counted values (`cents`); the
+average: their sum above zero over the records above zero, to the cent (the
+views' `averageOf`); the median: the cube's `med`, from the function that
+writes the views' summary rows; the non-competitive share: `n_nc` of the
+records, and `pos_nc` of the values above zero (`BUYER_COMPETITION_SQL`'s
+columns, `COMPETITION_COLUMNS`); the largest organizations' share: `top1`,
+`top5` and `top10` of the year's `cents`, the share the buyer view states;
+amendments: `GROWTH_COLUMNS`. Competitive or not counts the records, and as
+its value the values above zero, as the share does. `site/test/builder.test.ts`
+holds each against a figure worked out from the rows and against the
+analytics view's own page.
+
+**Who sees what.** An Ultra reader gets the view. A reader signed out, on
+Free or on Pro gets the menus and the line "The analytics builder is part of
+Ultra." with a link to the plans, and nothing is read from the records
+database; a submitted form shows the same. Every answer is
+`private, no-store` and the page is noindex.
+
+**The page.** Under the form: one chart (bars in the data hue or a line by
+fiscal year or quarter, sorted horizontal bars for any other rows, tiles for
+one number; a comparison is small multiples on one scale), its table (at
+most six columns, which fits its column from 700 px; below, each row is a
+labelled block), the notes the view needs, the line naming the source, the
+period and the data date, and the CSV link. The page's script
+(`site/public/builder.js`) hides what the menus do not offer and redraws the
+result as each menu changes: a GET of the form's address with the header
+`x-build-fragment`, answered with the result alone and the same header.
+Without the script, the form's button does the same. The page itself draws
+hidden, its controls disabled, every group of fields the view does not use:
+the buyers, segment or organizations of another subject, the box to compare
+of the other kind, the source and period of the contracts ending, the rows
+shown where the rows take no top N; the script only shows and hides them as
+the menus change, and a disabled control is not sent.
+
+**The CSV file.** `/analytics/build.csv` with the view's query: the
+subject's id and name, the row's key and label, the source and fiscal years
+(for the contracts ending, the date they count from), and the counts and
+amounts the figure rests on (`build-<subject>-<rows>-<figure>-<source>-<first>-<last>.csv`).
+Ultra only: any other request, and a combination the menus do not offer,
+gets the site's 404. It is a download: thirty a minute for an account on a
+paid plan (`PAID_DOWNLOAD_LIMIT`), ten an address otherwise
+(`DOWNLOAD_LIMIT`); sent `private, no-store`.
+
+**When the cubes are not there.** A records database without the three
+tables, or with `cube_meta` empty (the nightly has not filled the cubes yet),
+answers a view of a cube with "The builder's figures cannot be read right
+now." (503, never a 500), as does a database loading; a view that reads
+records alone still draws.
 
 ## Phase 3
 

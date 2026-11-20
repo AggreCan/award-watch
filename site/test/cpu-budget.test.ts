@@ -19,6 +19,8 @@ import { app } from "../src/index";
 import { FILES, TEST_NOW, testEnv } from "./assets";
 import { PA_BUYER_PAYEES, PA_BUYER_WORKS, PA_FREE_YEARS, PA_PROFILE_ROWS } from "../src/public_accounts";
 import { FIRST_FOLLOWS_SQL, RADAR_PAGE_ROWS } from "../src/records_tables";
+import { BUYERS_SEGMENTS_SQL, CUBE_META_SQL } from "../src/builder_sql";
+import { SEGMENT_CODES } from "../src/constants";
 import { homeApp } from "./home";
 import DND from "./fixtures/buyer-dnd-mdn.json";
 
@@ -1004,5 +1006,48 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
     expect(batches).toEqual([3]);
     const r = await signedInRatio(path, 16, accounts, '<ul class="plain dash-checks"', { RECORDS: dashRecords });
     expect(r, `${path} ${r.toFixed(2)}`).toBeLessThanOrEqual(TABLES_PAGE_BOUND);
+  }, 120_000);
+
+  // The analytics builder (B4a, 2026-11-19; pages/builder.tsx), its heaviest view: five buyers by segment, the 57
+  // segments of each read from the cube and the 25 largest of each drawn as sorted bars and one table of 125 rows,
+  // beside the five buyer menus at about production's size (360 buyers each). About three times the larger of two
+  // ratios measured then (in brackets), rounded up.
+  const BUILDER_BOUND = 25; // [8.20, 8.20]; with one buyer list of 360 options in place of the five menus, [6.60, 6.60]
+  it("keeps an Ultra account's builder view of five buyers by segment within its bound, its records read in one batch", async () => {
+    clearParsedCache();
+    clearClosingCache();
+    const accounts = ultraAccounts(await sha256Hex(SECRET));
+    const index = JSON.parse(BODIES["buyers/index.json"]) as { buyers: Record<string, unknown>[] };
+    const buyers = Array.from({ length: 360 }, (_, i) => ({ ...index.buyers[i % index.buyers.length], id: `buyer-${i}`, name_en: `Department number ${i}`, n_awards: 9 }));
+    const ids = buyers.slice(0, 5).map((b) => b.id as string);
+    const cell = (i: number) => ({
+      n: 40 + i, cents: 9_000_000_000 - i * 1_000_000, n_no_value: 1, n_nc: 7, n_unstated: 2, n_pos: 37, pos: 8_900_000_000 - i * 1_000_000,
+      pos_nc: 1_100_000_000, pos_unstated: 50_000_000, med: 1_234_567, n_orgs: 30, top1: 2_000_000_000, top5: 5_000_000_000, top10: 7_000_000_000,
+      n_amended: 9, n_compared: 8, n_grew: 5, first_cents: 900_000_000, last_cents: 1_000_000_000,
+    });
+    const segmentRows = ids.flatMap((id) => SEGMENT_CODES.map((code, i) => ({ id, sid: Number(code), ...cell(i) })));
+    const batches: number[] = [];
+    const records = stubDb((sql) => {
+      if (sql.includes("FROM rec_meta")) return [{ key: "state", value: "ready" }, { key: "as_of", value: "2026-10-31" }];
+      if (sql === CUBE_META_SQL) return [{ as_of: "2026-10-30" }];
+      if (sql === BUYERS_SEGMENTS_SQL) return segmentRows;
+      return [];
+    });
+    const counted = { ...records, batch: (list: D1PreparedStatement[]) => (batches.push(list.length), records.batch(list)) } as D1Database;
+    const assets = assetsOf({ ...FIT_BODIES, "buyers/index.json": JSON.stringify({ ...index, buyers }) }, "v1-builder-page");
+    const path = `/analytics/build?subject=buyers&${ids.map((id) => `b=${id}`).join("&")}&rows=segment&measure=noncompetitive&source=awards&from=2007&to=2026&top=25`;
+    const extra = { RECORDS: counted, BUILDER: "on", ASSETS: assets };
+    const first = await app.request(path, { headers: { "sec-fetch-mode": "navigate", cookie: COOKIE } },
+      { ...env, ACCOUNTS: accounts, ACCOUNTS_ENABLED: "true", ...extra });
+    const html = await first.text();
+    expect(first.status).toBe(200);
+    expect(html.match(/<ol class="rank-bars"/g)).toHaveLength(5);
+    expect(html.match(/<tr><td data-label="About">/g)).toHaveLength(5 * 25);
+    // Five buyer menus (the subject's and four to compare), each of the 360 buyers.
+    expect(html.match(/<option value="buyer-\d+"/g)).toHaveLength(5 * 360);
+    // The state row, cube_meta and the view's one statement, and nothing read apart from them.
+    expect(batches).toEqual([3]);
+    const r = await signedInRatio(path, 8, accounts, '<div id="build-result"', { ...extra, RECORDS: records });
+    expect(r, `${path} ${r.toFixed(2)}`).toBeLessThanOrEqual(BUILDER_BOUND);
   }, 120_000);
 });

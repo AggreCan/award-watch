@@ -22,7 +22,9 @@ Disallow: /buyers/*/analytics
 Disallow: /organizations/*/analytics
 Disallow: /segments/*/analytics
 # Their index stays open; a search on it (?q=) reads the search database.
+# The analytics builder is a page a reader fills in: each address is a view.
 Disallow: /analytics?
+Disallow: /analytics/build
 Allow: /analytics?lang=fr$
 # A filtered tender list, a paged or filtered ranking, a day of new notices
 # and a correction form opened from a profile (?organization=) each name the
@@ -52,6 +54,7 @@ Disallow: /buyers/*/analytics
 Disallow: /organizations/*/analytics
 Disallow: /segments/*/analytics
 Disallow: /analytics?
+Disallow: /analytics/build
 Allow: /analytics?lang=fr$
 Disallow: /tenders?
 Allow: /tenders?lang=fr$
@@ -97,6 +100,7 @@ Disallow: /buyers/*/analytics
 Disallow: /organizations/*/analytics
 Disallow: /segments/*/analytics
 Disallow: /analytics?
+Disallow: /analytics/build
 Allow: /analytics?lang=fr$
 Disallow: /tenders?
 Allow: /tenders?lang=fr$
