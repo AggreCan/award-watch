@@ -17,17 +17,19 @@
 // no evaluative word.
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
+import { MEASURES, ROWS, SOURCES, UNADDABLE, whyNot } from "../public/build-menu.js";
 import { LEAST, START_H } from "../public/dash-grid.js";
 import { BUILD_KINDS, buildRef, buildSizeKey } from "../src/account/build_views";
 import { PANEL_KINDS, TEASE_KINDS, specOf, teaseKinds } from "../src/account/dashboard";
 import { OPTS_MAX } from "../src/account/dashboard_rule";
 import { DASHBOARD_STRINGS } from "../src/account/dashboard_strings";
-import { LABEL_MAX, SET_DELIVERY_SQL, viewLabel } from "../src/account/saved_views";
+import { BUILD_LABEL_MAX, LABEL_MAX, NAME_MAX, SET_DELIVERY_SQL } from "../src/account/saved_views";
 import { VIEWS_DUE_SQL, runViewMail } from "../src/account/view_mail";
 import { BUILD_PATH, type BuildChoice, buildAddress, buildShape, figureChoice, figureOffered, readBuild, readBuildAddress } from "../src/builder";
 import { CUBE_META_SQL, CELL_YEARS_SQL, BUYERS_YEARS_SQL } from "../src/builder_sql";
 import { BUILDER_STRINGS } from "../src/builder_strings";
 import { fmtMoneyShort, rawEntry, t, type Key } from "../src/i18n";
+import { buildLabel, buildName, viewTitle } from "../src/pages/builder";
 import { bucketFor } from "../src/limits";
 import { EARLIEST_FY, STATE_SQL } from "../src/records_db";
 import {
@@ -352,6 +354,28 @@ describe("the tiles", () => {
     }
   });
 
+  it("draw the contracts ending as two charts, value then count, each a plot of the tile's own height, as the page does", async () => {
+    const r = await reader("tiles-ending");
+    const board = await freshBoard(r);
+    await putTile(r, board, "build", B("subject=buyer&b=pwgsc-tpsgc&rows=quarter&measure=ending&show=bars"), { x: 0, y: 0, w: 6, h: 15 });
+    const html = await text(await page(r, "/account/dashboard", on()));
+    const at = html.indexOf('data-title="Contracts ending by fiscal quarter"');
+    expect(at).toBeGreaterThan(-1);
+    const tile = html.slice(at, html.indexOf("</section>", at));
+    const stacks = tile.split('<div class="chart-stack">').slice(1);
+    expect(stacks).toHaveLength(2);
+    expect(stacks[0]).toContain('<div class="chart-title">Value of the contracts ending</div>');
+    expect(stacks[1]).toContain('<div class="chart-title">Contracts ending</div>');
+    // PSPC's two quarters that hold contracts ending (2 and 3 of them): a bar each in both charts.
+    for (const s of stacks) expect(s.match(/<title>/g)).toHaveLength(2);
+    // Each plot at the tile's own height, the same for both: the room the tile reckons for two plots in two stacks
+    // (dashboard_fit.ts buildFit), at least CHART_LEAST (64 px) each.
+    const heights = [...tile.matchAll(/<div class="chart-plot" style="height:(\d+)px">/g)].map((m) => Number(m[1]));
+    expect(heights).toHaveLength(2);
+    expect(heights[0]).toBe(heights[1]);
+    expect(heights[0]).toBeGreaterThanOrEqual(64);
+  });
+
   it("set two whole fiscal years against each other with the change and its sign, and the year to date never, in both languages", async () => {
     const r = await reader("tiles-figures");
     const board = await freshBoard(r);
@@ -464,13 +488,14 @@ describe("the builder's page", () => {
   it("saves the view as a saved view of kind build, named as typed or by the site, held to the plan's figure, and lists it", async () => {
     const r = await reader("page-save");
     const html = await text(await page(r, CHART, on()));
-    // The site's label: what the view is about and its title, then its source and period, cut to the saved views' bound.
-    const label = viewLabel("en", "Public Services and Procurement Canada: Value by fiscal year", { source: "history", first: 2022, last: 2026 });
-    expect(label.length).toBeLessThanOrEqual(LABEL_MAX);
-    expect(label.startsWith("Public Services and Procurement Canada: Value")).toBe(true);
+    // The site's label: what the view is about and its title, then its source and period (103 characters, whole
+    // within the builder's bound of 150); the field's placeholder, a name of at most 60 that fits it: the first two.
+    const label = "Public Services and Procurement Canada: Value by fiscal year, PSPC contract history, 2022-23 to 2026-27";
     expect(html).toContain('<div class="toolbar build-save"><form method="post" action="/account/views" class="save-view">');
     expect(html).toContain(`<input type="hidden" name="address" value="${CHART}"/>`);
-    expect(html).toContain(`placeholder="${label}"`);
+    expect(html).toContain('placeholder="Public Services and Procurement Canada: Value by fiscal year"');
+    // The hint, true of both: what the field takes and what an empty one is saved as.
+    expect(html).toContain("<p class=\"toolbar-note\" id=\"save-view-hint\">Up to 60 characters. Left empty, the view takes the site's label, of up to 150 characters.</p>");
     expect(bucketFor("POST", "/account/views")).toBe("edit");
     const saved = await post("/account/views", { csrf: r.csrf, address: CHART, name: "" }, { cookie: r.cookie, env: on() });
     expect(saved.status).toBe(303);
@@ -504,6 +529,75 @@ describe("the builder's page", () => {
     // The dashboard's Add select offers it as a tile of its own.
     const dash = await text(await page(r, "/account/dashboard", on()));
     expect(dash).toContain(`<optgroup label="${t("en", "dash.saved_builds")}"><option value="build:${CHART}">${label}</option>`);
+  });
+
+  it("labels a saved view by its figure, rows and source always, the subject's name cut first, in both languages", async () => {
+    // A buyer's name of 132 characters (written out), and three organizations of 51, 49 and 51.
+    const LONG = "Alpha Bravo Charlie Delta Echo Foxtrot Golf Hotel India Juliett Kilo Lima Mike November Oscar Papa Quebec Romeo Sierra Tango Uniform";
+    const ORGS3 = { "org-e000000002": "Northern Engineering and Environmental Services Ltd", "org-e000000003": "Atlantic Marine Construction and Dredging Company",
+      "org-e000000004": "Prairie Information Technology Consulting Group Inc" } as Record<string, string>;
+    const names = { buyer: () => LONG, org: (id: string) => ORGS3[id] ?? id };
+    const value = readAt(CHART);
+    const records = readAt(RECORDS_YEARS);
+    const orgs = readAt(B("subject=organizations&o=org-e000000002&o=org-e000000003&o=org-e000000004&rows=organization&measure=value&source=history&from=2022&to=2026&show=ranked"));
+    // Worked by hand: the label's other parts (": Value by fiscal year, PSPC contract history, 2022-23 to 2026-27", 65
+    // characters) leave 84 of the 150 for the name and its ellipsis, so the name is cut after "Mike" (79).
+    const EL = String.fromCharCode(0x2026);
+    expect(buildLabel("en", value, names)).toBe(`Alpha Bravo Charlie Delta Echo Foxtrot Golf Hotel India Juliett Kilo Lima Mike${EL}: Value by fiscal year, PSPC contract history, 2022-23 to 2026-27`);
+    expect(buildLabel("en", records, names)).toBe(`Alpha Bravo Charlie Delta Echo Foxtrot Golf Hotel India Juliett Kilo Lima Mike${EL}: Records by fiscal year, PSPC contract history, 2022-23 to 2026-27`);
+    expect(buildLabel("en", value, names)).not.toBe(buildLabel("en", records, names));
+    expect(norm(buildLabel("fr", value, names))).toBe(
+      `Alpha Bravo Charlie Delta Echo Foxtrot Golf Hotel India Juliett Kilo${EL} : Valeur par exercice, historique des contrats de SPAC, 2022-2023 à 2026-2027`);
+    expect(buildLabel("en", orgs, names)).toBe(
+      `Northern Engineering and Environmental Services Ltd, Atlantic Marine Construction${EL}: Value by organization, PSPC contract history, 2022-23 to 2026-27`);
+    expect(norm(buildLabel("fr", orgs, names))).toBe(
+      `Northern Engineering and Environmental Services Ltd, Atlantic${EL} : Valeur par organisation, historique des contrats de SPAC, 2022-2023 à 2026-2027`);
+    // The field's placeholder fits the field: the subject cut first, the figure and the rows whole.
+    expect(buildName("en", value, names)).toBe(`Alpha Bravo Charlie Delta Echo${EL}: Value by fiscal year`);
+    expect(buildName("en", records, names)).toBe(`Alpha Bravo Charlie Delta Echo${EL}: Records by fiscal year`);
+    // Every view the menus offer, in both languages, with names of 132 characters: within the bound, its title and its
+    // source whole, the period kept, and the name's first words (a room of twelve characters or more, cut on a word:
+    // the longest title, French "Part de la valeur détenue par les plus grandes organisations par exercice", keeps
+    // "Alpha Bravo").
+    let seen = 0;
+    for (const lang of ["en", "fr"] as const) {
+      for (const subject of ["buyer", "buyers", "organizations"] as const) {
+        for (const rows of ROWS) {
+          for (const measure of MEASURES) {
+            for (const source of SOURCES) {
+              const c = { ...value, subject, buyers: subject === "organizations" ? [] : ["pwgsc-tpsgc", "dfo-mpo"].slice(0, subject === "buyer" ? 1 : 2),
+                orgs: subject === "organizations" ? ["org-e000000002", "org-e000000003"] : [], rows, measure, source, first: 2007, last: 2026 } as BuildChoice;
+              const span = UNADDABLE.includes(measure) && rows !== "year" ? { first: 2026 } : rows === "quarter" ? { first: 2022 } : {};
+              const v = { ...c, ...span };
+              if (whyNot(v, 20)) continue;
+              seen++;
+              const label = norm(buildLabel(lang, v, { buyer: () => LONG, org: () => LONG }));
+              const where = `${lang} ${subject} ${rows} ${measure} ${source}`;
+              expect(Array.from(label).length, where).toBeLessThanOrEqual(BUILD_LABEL_MAX);
+              expect(label.startsWith("Alpha Bravo"), where).toBe(true);
+              expect(label, where).toContain(norm(viewTitle(lang, v)));
+              if (measure !== "ending") {
+                expect(label, where).toContain(norm(t(lang, `source.${source}` as Key)).slice(1));
+                expect(label.endsWith(lang === "fr" ? `${v.first}-${v.first + 1} à 2026-2027` : `${v.first}-${String(v.first + 1).slice(2)} to 2026-27`), where).toBe(true);
+              }
+              expect(Array.from(buildName(lang, v, { buyer: () => LONG, org: () => LONG })).length, where).toBeLessThanOrEqual(NAME_MAX);
+            }
+          }
+        }
+      }
+    }
+    expect(seen).toBeGreaterThan(100);
+    // Stored at the builder's bound, wider than an analytics view's: two views of one buyer, saved with no name,
+    // read apart by their figures.
+    expect(BUILD_LABEL_MAX).toBeGreaterThan(LABEL_MAX);
+    const r = await reader("page-labels");
+    for (const address of [CHART, RECORDS_YEARS]) {
+      expect((await post("/account/views", { csrf: r.csrf, address, name: "" }, { cookie: r.cookie, env: on() })).status).toBe(303);
+    }
+    expect((await viewRows(r)).map((v) => v.name).sort()).toEqual([
+      "Public Services and Procurement Canada: Records by fiscal year, PSPC contract history, 2022-23 to 2026-27",
+      "Public Services and Procurement Canada: Value by fiscal year, PSPC contract history, 2022-23 to 2026-27",
+    ]);
   });
 
   it("never sends a builder's view by email: the post leaves it off, and the delivery run takes up none of it", async () => {

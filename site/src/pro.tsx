@@ -245,7 +245,9 @@ export const PLAN_ROWS: readonly FeatureRow[] = [
 // so a card with it off keeps every byte: the analytics builder
 // (src/pages/builder.tsx), Ultra's alone (RULES builder), while BUILDER is
 // "on". The page's shell says so (layout.tsx Shell.builder), and PlanCards
-// reads it there; the landing page passes it to its own cards.
+// reads it there; the landing page passes it to its own cards. Its line
+// names the builder as the rail and the landing page do, then says what it
+// makes; the years it reads are the Analytics line's own figure.
 export const BUILDER_ROW: PlanRow = { feature: "builder", free: null, pro: null, ultra: { key: "plans.builder" } };
 
 // The seats a plan holds, the subscriber's own included (entitlements.ts

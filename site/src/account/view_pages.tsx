@@ -77,8 +77,10 @@ export async function saveViewControl(c: Context<AppEnv>, address: string, label
 // A row of the view's toolbar, under its period: the name and Save this view
 // (a flat button: a view keeps no filled one); the saved state; the plan's
 // figure reached; or, on a plan that keeps none, Save this view leading to
-// the saved views page, which says what keeps them.
-export const SaveViewRow: FC<{ lang: Lang; state: SaveViewState | null }> = ({ lang, state }) => {
+// the saved views page, which says what keeps them. hint: the line under the
+// field where the view's own differs (the analytics builder's, whose label runs
+// longer, pages/builder.tsx); views.name_hint otherwise.
+export const SaveViewRow: FC<{ lang: Lang; state: SaveViewState | null; hint?: string }> = ({ lang, state, hint }) => {
   if (!state) return null;
   const manage = <a href={VIEWS_PATH}>{t(lang, "views.manage")}</a>;
   if (state.saved) return <p class="toolbar-note save-view">{t(lang, "views.saved")} {manage}</p>;
@@ -105,7 +107,7 @@ export const SaveViewRow: FC<{ lang: Lang; state: SaveViewState | null }> = ({ l
           <button type="submit" class="btn">{t(lang, "views.save")}</button>
         </div>
       </div>
-      <p class="toolbar-note" id="save-view-hint">{t(lang, "views.name_hint")}</p>
+      <p class="toolbar-note" id="save-view-hint">{hint ?? t(lang, "views.name_hint")}</p>
     </form>
   );
 };

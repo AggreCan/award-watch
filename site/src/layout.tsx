@@ -508,7 +508,7 @@ export const ICONS_VERSION = 2;
 
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 78;
+export const STYLES_VERSION = 79;
 
 // The subscript after the wordmark for a signed-in reader, by plan: Ultra's
 // in its sapphire (public/styles.css .brand-plan-ultra), Pro's in the accent.
@@ -529,8 +529,13 @@ export const TopbarSearch: FC<{ lang: Lang; query?: string }> = ({ lang, query }
 // under every railed page and on the landing page (pages/landing.tsx).
 // lobbyingLoaded: the registry has been read, so the sources line names it.
 // on: the accounts switch. bugLink: a signed-in Pro reader (src/account/bugs.tsx);
-// nothing for anyone else, so public pages keep every byte.
-export const FooterRow: FC<{ lang: Lang; lobbyingLoaded: boolean; on: boolean; bugLink: boolean }> = ({ lang, lobbyingLoaded, on, bugLink }) => (
+// nothing for anyone else, so public pages keep every byte. builder: the rail
+// shows its Analytics builder item (the builder's switch on, plan.ts builderOn,
+// and the rail's account), so the footer links it where the rail's Browse group
+// is hidden (a phone); absent, the row keeps every byte.
+export const FooterRow: FC<{ lang: Lang; lobbyingLoaded: boolean; on: boolean; bugLink: boolean; builder?: boolean }> = ({
+  lang, lobbyingLoaded, on, bugLink, builder,
+}) => (
   <div class="footer-row">
     <span class="footer-sources">
       {t(lang, lobbyingLoaded ? "footer.sources" : "footer.sources_no_lobbying")}{" "}
@@ -543,6 +548,7 @@ export const FooterRow: FC<{ lang: Lang; lobbyingLoaded: boolean; on: boolean; b
       <a href="/rankings">{t(lang, "nav.rankings")}</a>
       {/* The rail's Browse group hides on a phone, where these links stand in for it; no chip here. */}
       <FooterAnalyticsLink lang={lang} on={on} />
+      {builder ? <a href="/analytics/build">{t(lang, "rail.builder")}</a> : null}
       <a href="/monthly">{t(lang, "footer.monthly")}</a>
       <a href="/methodology">{t(lang, "footer.methodology")}</a>
       <a href="/guides">{t(lang, "nav.guides")}</a>
@@ -621,7 +627,8 @@ export const Layout: FC<
             </TableUseContext.Provider>
             <footer class="site-footer">
               <FooterRow lang={lang} lobbyingLoaded={!!shell?.rail?.lobbyingLoaded} on={shell?.accountsOn ?? false}
-                bugLink={!!(shell?.account?.email && shell.account.plan && allowed({ plan: shell.account.plan }, "bug_reports"))} />
+                bugLink={!!(shell?.account?.email && shell.account.plan && allowed({ plan: shell.account.plan }, "bug_reports"))}
+                builder={!!shell?.builder && shell.account !== undefined} />
             </footer>
           </div>
         </div>

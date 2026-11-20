@@ -53,6 +53,12 @@ export const NAME_MAX = 60;
 // "Public Services and Procurement Canada, PSPC contract history, 2017-18 to
 // 2026-27" is 80 characters, and at 60 the label kept "Public Services and".
 export const LABEL_MAX = 100;
+// The same for a view of the analytics builder (pages/builder.tsx buildLabel), whose label names its figure and rows
+// as well: room for the longest of them in French ("Part de la valeur détenue par les plus grandes organisations par
+// acheteur", 73 characters) beside the longest source, a period of twenty fiscal years and some of the subject's name.
+export const BUILD_LABEL_MAX = 150;
+// The least of a subject's name a label keeps when it has to cut it.
+export const LABEL_NAME_LEAST = 12;
 // How long a run's row is kept.
 export const VIEW_DELIVERY_DAYS = 90;
 
@@ -114,7 +120,7 @@ export function cleanName(raw: unknown, max = NAME_MAX): string {
 
 // "Published contracts" mid-sentence: the first letter lowered unless the
 // word is an acronym ("PSPC contract history" stays).
-const midSentence = (s: string): string => (s.length > 1 && s[1] === s[1].toLowerCase() ? s.charAt(0).toLowerCase() + s.slice(1) : s);
+export const midSentence = (s: string): string => (s.length > 1 && s[1] === s[1].toLowerCase() ? s.charAt(0).toLowerCase() + s.slice(1) : s);
 
 const length = (s: string) => Array.from(s).length;
 
@@ -145,6 +151,20 @@ export function viewLabel(lang: Lang, name: string, frame: Pick<Frame, "source" 
   const head = Array.from(whole).slice(0, LABEL_MAX - 1).join("");
   const part = head.lastIndexOf(", ");
   return `${part > 0 ? head.slice(0, part) : cutOnWord(whole, LABEL_MAX - 1)}\u2026`;
+}
+
+// A label in the first of its forms that fits within max characters, each form the label with a subject's name in
+// its place: the name whole, or else cut on a word with an ellipsis while LABEL_NAME_LEAST characters of it or more
+// remain; so every other part of a form stays whole and only the name is shortened. null when no form holds that
+// much of the name (the builder's label, pages/builder.tsx buildLabel).
+export function fitName(name: string, forms: readonly ((name: string) => string)[], max: number): string | null {
+  const whole = cleanName(name, max);
+  for (const form of forms) {
+    if (length(form(whole)) <= max) return form(whole);
+    const room = max - length(form("")) - 1;
+    if (room >= LABEL_NAME_LEAST) return form(`${cutOnWord(whole, room)}…`);
+  }
+  return null;
 }
 
 // The name of what a view shows, as the site names it: a buyer's name, an
@@ -183,7 +203,7 @@ export async function addView(
   try {
     const q = pooled(who, ADD_VIEW_SQL, ADD_VIEW_GROUP_SQL);
     const res = await db.prepare(q.sql)
-      .bind(newId(), who.userId, v.kind, v.address, cleanName(v.name, LABEL_MAX), lang, now.toISOString(), savedViewCap(who.plan), ...q.binds).run();
+      .bind(newId(), who.userId, v.kind, v.address, cleanName(v.name, v.kind === "build" ? BUILD_LABEL_MAX : LABEL_MAX), lang, now.toISOString(), savedViewCap(who.plan), ...q.binds).run();
     if ((res.meta?.changes ?? 0) === 1) return "added";
     const same = await db.prepare("SELECT 1 AS x FROM saved_views WHERE user_id = ? AND address = ?").bind(who.userId, v.address).first();
     return same ? "exists" : "full";

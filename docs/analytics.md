@@ -874,9 +874,13 @@ own, `BUILDER` in `site/wrangler.jsonc`: anything but `"on"`, or the accounts
 switch off, and `/analytics/build` and `/analytics/build.csv` are the site's
 404, nothing links them, no plan card names the builder and every other page
 is as it was. On, the rail's Browse group lists "Analytics builder" after
-"Analytics" with the Ultra chip, the analytics index links it in its head,
-Ultra's plan card gains the line "Analytics builder: your own views" (the
-cards on `/pro`, the billing page, the tease panels and the landing page),
+"Analytics" with the Ultra chip, and the footer links it after "Analytics"
+(where the rail shows it; on a phone the rail's Browse group is hidden), the
+analytics index links it in its head, Ultra's plan card gains the line "Your
+own charts and tables, 20 fiscal years" (the figure read from `BUILD_YEARS`;
+the cards on `/pro`, the billing page, the tease panels and the landing
+page), the Ultra paragraph on `/pro` gains a sentence on the builder (its 20
+fiscal years and its comparison of up to 5 buyers or organizations),
 the Methodology page's analytics section gains a paragraph, and a buyer's and an organization's
 analytics view give an Ultra reader "Open in the builder" (the same subject,
 source and period, value by fiscal year). `robots.txt` closes
@@ -970,18 +974,36 @@ its value the values above zero, as the share does. `site/test/builder.test.ts`
 holds each against a figure worked out from the rows and against the
 analytics view's own page.
 
-**Who sees what.** An Ultra reader gets the view. A reader signed out, on
-Free or on Pro gets the menus and the line "The analytics builder is part of
-Ultra." with a link to the plans, and nothing is read from the records
-database; a submitted form shows the same. Every answer is
-`private, no-store` and the page is noindex.
+**Who sees what.** An Ultra reader gets the view, `private, no-store`. A
+reader signed out, on Free or on Pro gets, under the lead, what the builder
+does and that it comes with Ultra, with "See the plans" (the page's one
+filled button, to `/pro`); the menus inside one disabled fieldset, with no
+button; and one sample under the title "Sample: Value by fiscal year": the
+builder's default view (every buyer, value by fiscal year, award notices)
+over the 20 fiscal years to the data date's (`builder.ts sampleChoice`),
+drawn as an Ultra reader sees it, with no CSV link, no Add to dashboard and
+no Save. The address's query is not read for that reader, so the page is the
+same for everyone and reads one records batch (the state row, `cube_meta`
+and `CELL_YEARS_SQL`); signed out it keeps a page's public cache
+(`public, max-age=300`), signed in it is private. The page's script is not
+loaded for that reader. The page is noindex.
 
 **The page.** Under the form: one chart (bars in the data hue or a line by
 fiscal year or quarter, sorted horizontal bars for any other rows, tiles for
-one number; a comparison is small multiples on one scale), its table (at
+one number; a comparison is small multiples on one scale; the contracts
+ending of one subject by time are two charts, their value then their count,
+each on its own scale, as the views' due panel draws them; a row with no
+figure, such as "Method not stated" whose records publish no value, is left
+out of the sorted bars and kept in the table), its table (at
 most six columns, which fits its column from 700 px; below, each row is a
-labelled block), the notes the view needs, the line naming the source, the
-period and the data date, and the CSV link. The page's script
+labelled block; where a figure takes the widest column, its head stands over
+its numbers at the right), the notes the view needs, the line naming the source
+in lower case with its article ("Figures from the award notices", "Chiffres
+tirés de l'historique des contrats de SPAC"), the period and the data date,
+and the CSV link. A view with no record offers no CSV link, no Add to
+dashboard and no Save. Each figure is named alone in the Figure menu (the
+contracts ending as "Contracts ending", offered by fiscal quarter, segment,
+buyer and for the period), the rows only in the view's title. The page's script
 (`site/public/builder.js`) hides what the menus do not offer and redraws the
 result as each menu changes: a GET of the form's address with the header
 `x-build-fragment`, answered with the result alone and the same header.

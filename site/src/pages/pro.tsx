@@ -41,6 +41,9 @@ import {
   PLAN_ROWS, PlanCards, PriceLine, ProTag, SUBSCRIBE_PATH, type PlanReader, type ProPrice, checkoutPrice, dashboardsWording, planCards, planLine,
   ultraCheckoutPrice,
 } from "../pro";
+import { SET_MAX } from "../../public/build-menu.js";
+import { BUILD_YEARS } from "../builder";
+import { builderOn } from "../plan";
 import { CONTACT_EMAIL } from "./docs";
 import { MAX_YEARS, planYears } from "../records_db";
 import { type Faq, pageSeo, proJsonLd } from "../seo";
@@ -86,8 +89,10 @@ const seatWords = (lang: Lang, n: number): string => t(lang, n === 1 ? "seats.se
 // its price. The dashboards read as Ultra's plan card reads them. While the
 // seats' switch is on (seats), the text names the seats (PLAN_SEATS) and the
 // figures they share, the keys' figure read from KEYS_MAX.
+// While the builder's switch is on (builder, plan.ts builderOn), the paragraph ends on one sentence on the analytics
+// builder, its figures read from builder.ts (BUILD_YEARS) and build-menu.js (SET_MAX); with it off, not a byte moves.
 const dashboards = dashboardsWording("ultra");
-const UltraSection: FC<{ lang: Lang; ultra: ProPrice; seats?: boolean }> = ({ lang, ultra, seats }) => (
+const UltraSection: FC<{ lang: Lang; ultra: ProPrice; seats?: boolean; builder?: boolean }> = ({ lang, ultra, seats, builder }) => (
   <>
     <h2 id="ultra">{t(lang, "propage.ultra_title")}</h2>
     <p>
@@ -97,6 +102,7 @@ const UltraSection: FC<{ lang: Lang; ultra: ProPrice; seats?: boolean }> = ({ la
         dashboards: t(lang, dashboards.key, dashboards.vars?.(lang)),
         ...(seats ? { seats: seatWords(lang, PLAN_SEATS.ultra), others: fmtInt(memberSeats("ultra"), lang), keys: fmtInt(KEYS_MAX, lang) } : {}),
       })}
+      {builder ? ` ${t(lang, "propage.ultra_builder", { years: fmtInt(BUILD_YEARS, lang), n: fmtInt(SET_MAX, lang) })}` : null}
     </p>
     <p>{t(lang, "propage.ultra_who")}</p>
     <p class="pro-price">{t(lang, "propage.ultra_price", { monthly: decimal(lang, ultra.monthly), yearly: decimal(lang, ultra.yearly) })}</p>
@@ -163,7 +169,7 @@ export async function proPage(c: Context<AppEnv>): Promise<Response> {
             <li>{t(lang, "propage.who_bid")}</li>
             <li>{t(lang, "propage.who_research")}</li>
           </ul>
-          {ultra ? <UltraSection lang={lang} ultra={ultra} seats={seats} /> : null}
+          {ultra ? <UltraSection lang={lang} ultra={ultra} seats={seats} builder={builderOn(c.env)} /> : null}
           <h2 id="free">{t(lang, "propage.free_title")}</h2>
           <p>{t(lang, "propage.free_text")}</p>
           <h2 id="questions">{t(lang, "propage.faq_title")}</h2>

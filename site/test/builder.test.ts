@@ -32,7 +32,7 @@ import { STYLES_VERSION } from "../src/layout";
 import robotsFile from "../public/robots.txt?raw";
 import { get, grantPro, grantUltra, nbsp, newEmail, nextIp, onEnv, signIn, ultraEnv, useAccountsDb } from "./accounts-helpers";
 import { testEnv } from "./assets";
-import { DFO, DUE, EXPIRING, ORGS, ORG_NAMES, PROVS, PSPC, RECORDS, RECS, type Rec, cellOf, median, oid, seedBuilder } from "./builder-fixture";
+import { DFO, DND, DUE, EXPIRING, ORGS, ORG_NAMES, PROVS, PSPC, RECORDS, RECS, type Rec, cellOf, median, oid, seedBuilder } from "./builder-fixture";
 import { misfits, tablesIn } from "./table-fit";
 
 useAccountsDb();
@@ -147,7 +147,8 @@ describe("the switch", () => {
       expect(absent, path).toBe(off);
       expect(other, path).toBe(off);
       expect(off, path).not.toContain(`href="${PATH}"`);
-      expect(off, path).not.toContain("your own views");
+      expect(off, path).not.toContain("Analytics builder: your charts and tables");
+      expect(off, path).not.toContain("With the analytics builder");
       expect(off, path).not.toContain("Analytics builder");
     }
     // The landing page, its own document, with Ultra on sale and before.
@@ -156,7 +157,7 @@ describe("the switch", () => {
         (await app.request("/", { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": nextIp() } }, base(extra))).text();
       const off = await landing({ BUILDER: "off" });
       expect(await landing({ BUILDER: undefined })).toBe(off);
-      expect(off).not.toContain("your own views");
+      expect(off).not.toContain("Analytics builder: your charts and tables");
     }
   });
 
@@ -169,20 +170,35 @@ describe("the switch", () => {
       expect(rail).toContain(`<a class="rail-item" href="${PATH}"><span class="rail-label">Analytics builder</span><span class="ultra-tag">`);
       const query = await (await get("/analytics?q=defence", { cookie, env: ultraEnv({ ...ON, RECORDS }) })).text();
       expect(query).toContain(`<a href="${PATH}" class="btn">Analytics builder</a>`);
+      // The footer links it too, after Analytics, for the phone, where the rail's Browse group is hidden; in French as well.
+      for (const [path, label] of [["/overview", "Analytics builder"], ["/overview?lang=fr", "Générateur d’analyses"], ["/about", "Analytics builder"]]) {
+        const page = await (await get(path, { cookie, env: ultraEnv({ ...ON, RECORDS }) })).text();
+        const footer = page.slice(page.indexOf('<footer class="site-footer">'));
+        expect(footer, path).toMatch(new RegExp(`<a href="/analytics">[^<]+</a><a href="${PATH}">${label}</a><a href="/monthly">`));
+        expect(footer.match(/href="\/analytics\/build"/g), path).toHaveLength(1);
+      }
     }
+    // The landing page, which has no rail, keeps its footer without it.
+    const front = await (await app.request("/", { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": nextIp() } }, ultraEnv({ ...ON, RECORDS }))).text();
+    expect(front.slice(front.indexOf("footer"))).not.toContain(`href="${PATH}"`);
     // The rail marks the builder's own page as current.
     const own = (await view("")).html;
     expect(own).toContain(`<a class="rail-item" href="${PATH}" aria-current="page"><span class="rail-label">Analytics builder</span>`);
     // Ultra's card on /pro holds the line; Free's and Pro's mark it as theirs not to have.
     const pro = decode(await (await get("/pro", { env: ultraEnv({ ...ON, RECORDS }) })).text());
     expect(pro).toContain("<li><svg class=\"plan-mark\"");
-    expect(pro.match(/Analytics builder: your own views/g)?.length).toBe(3);
-    expect(pro.match(/<li class="plan-lacks">(?:(?!<\/li>).)*Analytics builder: your own views<\/span><\/li>/g)?.length).toBe(2);
+    expect(pro.match(/Analytics builder: your charts and tables/g)?.length).toBe(3);
+    expect(pro.match(/<li class="plan-lacks">(?:(?!<\/li>).)*Analytics builder: your charts and tables<\/span><\/li>/g)?.length).toBe(2);
+    // The Ultra paragraph ends on its sentence on the builder, its figures BUILD_YEARS (20) and SET_MAX (5); in French too.
+    expect(pro).toContain("With the analytics builder you choose what to count, how to group it, the source and up to 20 fiscal years, and compare up to 5 buyers or organizations side by side.</p>");
+    const proFr = nbsp(decode(await (await get("/pro?lang=fr", { env: ultraEnv({ ...ON, RECORDS }) })).text()));
+    expect(proFr).toContain("Avec le générateur d’analyses, vous choisissez quoi compter, comment le regrouper, la source et jusqu’à 20 exercices, et comparez jusqu’à 5 acheteurs ou organisations côte à côte.</p>");
+    expect(proFr.match(/Générateur d’analyses : graphiques, tableaux/g)?.length).toBe(3);
     // The landing page's Ultra card: on sale, its rows; before, in place of the planned line.
     const landing = async (env: object) => decode(await (await app.request("/", { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": nextIp() } }, env)).text());
-    expect(await landing(ultraEnv({ ...ON, RECORDS }))).toContain("<span>Analytics builder: your own views</span>");
+    expect(await landing(ultraEnv({ ...ON, RECORDS }))).toContain("<span>Analytics builder: your charts and tables</span>");
     const before = await landing(onEnv({ ...ON, RECORDS }));
-    expect(before).toContain("<span>Analytics builder: your own views</span>");
+    expect(before).toContain("<span>Analytics builder: your charts and tables</span>");
     expect(before).not.toContain("Planned: an analytics builder");
     expect(await landing(onEnv({ RECORDS }))).toContain("Planned: an analytics builder");
     const meth = decode(await (await get("/methodology", { env: onWith() })).text());
@@ -192,7 +208,12 @@ describe("the switch", () => {
   it("states the plan line from RULES: Ultra's alone, at most PLAN_LINE_MAX characters, never a comparison", () => {
     expect([RULES.free.builder, RULES.pro.builder, RULES.ultra.builder]).toEqual([false, false, true]);
     expect([allowed({ plan: "free" }, "builder"), allowed({ plan: "pro" }, "builder"), allowed({ plan: "ultra" }, "builder")]).toEqual([false, false, true]);
-    expect(BUILDER_ROW).toEqual({ feature: "builder", free: null, pro: null, ultra: { key: "plans.builder" } });
+    expect({ ...BUILDER_ROW, ultra: { key: BUILDER_ROW.ultra.key } }).toEqual({ feature: "builder", free: null, pro: null, ultra: { key: "plans.builder" } });
+    // The line names the builder as the rail does and says what it makes; it carries no figure of its own.
+    expect(planLine("en", BUILDER_ROW.ultra)).toBe("Analytics builder: your charts and tables");
+    expect(nbsp(planLine("fr", BUILDER_ROW.ultra)).replace("’", "'")).toBe("Générateur d'analyses : graphiques, tableaux");
+    expect(planLine("fr", BUILDER_ROW.ultra).length).toBeLessThanOrEqual(PLAN_LINE_MAX);
+    expect(BUILD_YEARS).toBe(ULTRA_YEARS);
     expect(PLAN_ROWS).not.toContain(BUILDER_ROW);
     expect(planRows(["free", "pro"], { builder: true })).toEqual(planRows(["free", "pro"]));
     expect(planRows(["free", "pro", "ultra"], { builder: true }).at(-1)).toBe(BUILDER_ROW);
@@ -206,22 +227,123 @@ describe("the switch", () => {
 
 // -- who sees what -------------------------------------------------------------------------------
 
+// A D1 binding that writes down every batch it runs, each statement's text and what it was bound to.
+function recordingBinds(db: D1Database): { binding: D1Database; batches: [string, unknown[]][][] } {
+  const batches: [string, unknown[]][][] = [];
+  const seen = new WeakMap<object, [string, unknown[]]>();
+  const binding = {
+    prepare(sql: string) {
+      const st = db.prepare(sql);
+      seen.set(st, [sql, []]);
+      const bind = st.bind.bind(st);
+      (st as { bind: unknown }).bind = (...args: unknown[]) => {
+        const bound = bind(...args);
+        seen.set(bound, [sql, args]);
+        return bound;
+      };
+      return st;
+    },
+    async batch(statements: D1PreparedStatement[]) {
+      batches.push(statements.map((s) => seen.get(s) ?? ["?", []]));
+      return db.batch(statements);
+    },
+  } as unknown as D1Database;
+  return { binding, batches };
+}
+
+const mainOf = (html: string) => html.slice(html.indexOf('<main id="main">'), html.indexOf("</main>"));
+const SAMPLE_ASKS = ["", "?subject=buyer&b=pwgsc-tpsgc&rows=year&measure=median&source=history&from=2024&to=2026&show=line", "?subject=all&rows=segment&measure=ending"];
+
 describe("a reader without Ultra", () => {
-  it("gets the menus and the line that the builder is part of Ultra, with the plans, and nothing read from the records", async () => {
+  it("gets what the builder does, the plans as the one filled button, the menus locked, and one sample whatever the address asks", async () => {
+    const r = await readers();
+    for (const lang of ["en", "fr"] as const) {
+      const mains: string[] = [];
+      for (const [who, cookie] of [["signed out", ""], ["free", r.free], ["pro", r.pro]] as const) {
+        for (const query of SAMPLE_ASKS) {
+          const rec = recordingBinds(RECORDS);
+          const ask = lang === "fr" ? (query ? `${query}&lang=fr` : "?lang=fr") : query;
+          const { res, html } = await view(ask, { cookie, env: onWith({ RECORDS: rec.binding }) });
+          expect(res.status, `${who} ${ask}`).toBe(200);
+          // Signed out, the public cache a page has; signed in, the page names the account and is private.
+          expect(res.headers.get("cache-control"), `${who} ${ask}`).toBe(who === "signed out" ? "public, max-age=300" : "private, no-store");
+          // One records batch: the state row, cube_meta and every buyer's cells by fiscal year, award notices (src 1),
+          // the BUILD_YEARS (20) fiscal years to the data date's (2026-27): 2007 to 2026.
+          expect(rec.batches, `${who} ${ask}`).toEqual([[[STATE_SQL, []], [CUBE_META_SQL, []], [CELL_YEARS_SQL, [0, 1, 2007, 2026]]]]);
+          const main = mainOf(html);
+          mains.push(main);
+          // The one filled button is the way to the plans; nothing in the page posts or downloads.
+          expect(html.match(/class="btn btn-primary"/g), ask).toHaveLength(1);
+          expect(main).toContain(`<a href="/pro" class="btn btn-primary">${lang === "fr" ? "Voir les forfaits" : "See the plans"}</a>`);
+          for (const absent of ["/analytics/build.csv", 'method="post"', 'id="build-result"', 'id="build-form"', "/builder.js", "Add to dashboard", "Save this view"]) {
+            expect(html, `${who} ${ask} ${absent}`).not.toContain(absent);
+          }
+          expect(main).not.toContain('class="pro-tag"');
+          expect(main).not.toContain('class="ultra-tag"');
+        }
+      }
+      // The same page for every reader and every address asked, in its language.
+      expect(new Set(mains).size, lang).toBe(1);
+      const main = decode(mains[0]);
+      if (lang === "en") {
+        expect(main).toContain("<p>The builder draws charts and tables of the figures you choose, over up to 20 fiscal years, and compares up to 5 buyers or organizations side by side. It comes with Ultra.</p>");
+        expect(main).toContain("<h2>Sample: Value by fiscal year</h2>");
+      } else {
+        expect(nbsp(main)).toContain("<p>Le générateur dessine des graphiques et des tableaux des chiffres que vous choisissez, sur au plus 20 exercices, et compare jusqu’à 5 acheteurs ou organisations côte à côte. Il fait partie d’Ultra.</p>");
+        expect(nbsp(main)).toContain("<h2>Exemple : Valeur par exercice</h2>");
+      }
+    }
+  });
+
+  it("draws the sample from the records as an Ultra reader's view of the same address, under its own title", async () => {
+    const sample = mainOf((await view("", { cookie: "" })).html);
+    const ultra = mainOf((await view("?subject=all&rows=year&measure=value&source=awards&from=2007&to=2026&show=bars")).html);
+    // Award notices, every buyer, each fiscal year: DFO's three records (300,000,000 + fy, 100,000,000 + fy and
+    // 50,000,000 cents) and PSPC's one (700,000,000 cents), 1,150,000,000 + 2 fy cents in four records. 2024-25:
+    // $11,500,040.48; 2025-26: $11,500,040.50; 2026-27: $11,500,040.52, each written to the dollar.
+    for (const [fy, value] of [["2024-25", "$11,500,040"], ["2025-26", "$11,500,041"], ["2026-27", "$11,500,041"]]) {
+      expect(sample).toContain(`<td data-label="Value" class="mono num">${value}</td><td data-label="Records" class="mono num">4</td>`);
+      expect(sample).toContain(fy);
+    }
+    expect(sample.match(/<tr><td data-label="Fiscal year"/g)).toHaveLength(3);
+    expect(sample).toContain("Every buyer");
+    expect(sample).toContain('class="chart-stack"');
+    // The panel is the Ultra reader's but for its title and the tools (the CSV file, Add to dashboard): every byte
+    // from the panel's body to its foot is the same.
+    const body = (m: string) => m.slice(m.indexOf('<p>Every buyer</p>'), m.indexOf('<div class="panel-foot">'));
+    expect(body(sample)).toBe(body(ultra));
+    expect(body(sample).length).toBeGreaterThan(1000);
+  });
+
+  it("locks every control of the form in one disabled fieldset, with no button to send it", async () => {
+    const r = await readers();
+    for (const cookie of ["", r.free, r.pro]) {
+      for (const lang of ["", "?lang=fr"]) {
+        const { html } = await view(lang, { cookie });
+        const start = html.indexOf('<form method="get" action="/analytics/build" class="toolbar build-form"');
+        const form = html.slice(start, html.indexOf("</form>", start) + "</form>".length);
+        expect(form).toMatch(/^<form method="get" action="\/analytics\/build" class="toolbar build-form" aria-label="[^"]+"><fieldset class="build-locked" disabled=""><div class="toolbar-fields">/);
+        expect(form.endsWith("</div></fieldset></form>")).toBe(true);
+        // The one fieldset closes only at the form's end, so every control is inside a disabled fieldset.
+        const outer = form.slice(form.indexOf('<fieldset class="build-locked"'));
+        expect(outer.match(/<fieldset\b/g)!.length).toBe(outer.match(/<\/fieldset>/g)!.length);
+        expect(form).not.toContain("<button");
+        expect(form).not.toContain('type="submit"');
+        // Fourteen menus (subject, buyer, segment, four buyers to compare, rows, figure, source, from, to, show, rows
+        // shown) and five boxes (an organization and four to compare).
+        expect(form.match(/<select\b/g)!.length).toBe(14);
+        expect(form.match(/<input\b/g)!.length).toBe(5);
+        // The menus show the sample's choices.
+        for (const [name, value] of [["subject", "all"], ["rows", "year"], ["measure", "value"], ["source", "awards"], ["from", "2007"], ["to", "2026"], ["show", "bars"]]) {
+          expect(form, name).toMatch(new RegExp(`<select name="${name}"[^>]*>(?:(?!</select>).)*<option value="${value}" selected="">`));
+        }
+      }
+    }
+  });
+
+  it("answers the preview's ask with an empty box and the file with the site's 404, reading nothing", async () => {
     const r = await readers();
     for (const cookie of [undefined, r.free, r.pro]) {
-      for (const query of ["", "?subject=buyer&b=pwgsc-tpsgc&rows=year&measure=median&source=history&from=2024&to=2026&show=line"]) {
-        const records = trap<D1Database>("the records database");
-        const { res, html } = await view(query, { cookie: cookie ?? "", env: onWith({ RECORDS: records.binding }) });
-        expect(res.status, query).toBe(200);
-        expect(res.headers.get("cache-control")).toBe("private, no-store");
-        expect(html).toContain('<form method="get" action="/analytics/build" class="toolbar build-form" id="build-form"');
-        expect(html).toContain('<p class="page-note">The analytics builder is part of Ultra. <a href="/pro">See the plans</a></p>');
-        expect(html).not.toContain('id="build-result"');
-        expect(html).not.toContain("/analytics/build.csv");
-        expect(html.match(/class="btn btn-primary"/g)).toHaveLength(1);
-        expect(records.used).toEqual([]);
-      }
       // The preview's ask: an empty box, nothing read.
       const records = trap<D1Database>("the records database");
       const frag = await view("?subject=all", { cookie: cookie ?? "", env: onWith({ RECORDS: records.binding }), headers: { "x-build-fragment": "1" } });
@@ -245,7 +367,7 @@ describe("an Ultra reader", () => {
     expect(html).toContain('<meta name="robots" content="noindex"/>');
     expect(html.match(/class="btn btn-primary"/g)).toHaveLength(1);
     expect(html).toContain("<h2>Value by fiscal year</h2>");
-    expect(html).toContain("Figures from Award notices, fiscal years 2017-18 to 2026-27, as of 2026-10-30.");
+    expect(html).toContain("Figures from the award notices, fiscal years 2017-18 to 2026-27, as of 2026-10-30.");
     expect(html).toContain('href="/analytics/build.csv?subject=all&amp;rows=year&amp;measure=value&amp;source=awards&amp;from=2017&amp;to=2026&amp;show=bars"');
     expect(html).toContain('class="chart-stack"');
     expect(html).toContain('<script type="module" src="/builder.js"></script>');
@@ -391,6 +513,21 @@ describe("the figures", () => {
     // 2027-09-30 falls in the fifth quarter from 2026-10-31: left out.
     const four = EXPIRING.filter((e) => e.buyer === "pwgsc-tpsgc" && e.segs.includes(" 82 ") && e.endd <= "2027-06-30");
     expect(both).toContain(`<td data-label="Contracts" class="mono num">${four.filter((e) => e.endd < "2027-01-01").length}</td>`);
+
+    // Drawn, two charts, as the views' due panel draws them: the value of the contracts ending on its own scale
+    // (110 px), then their count on another (80 px), each with a bar for the quarters that hold one: PSPC's Q3 2026-27
+    // (2 contracts, $7,500,000) and Q1 2027-28 (3 contracts, $1,250,000).
+    const drawn = (await view("?subject=buyer&b=pwgsc-tpsgc&rows=quarter&measure=ending&show=bars")).html;
+    const stacks = [...drawn.matchAll(/<div class="chart-stack">([\s\S]*?)<div class="chart-row" aria-hidden="true"><span><\/span><div class="chart-x">/g)].map((m) => m[1]);
+    expect(stacks).toHaveLength(2);
+    expect(stacks[0]).toContain('<div class="chart-title">Value of the contracts ending</div>');
+    expect(stacks[0]).toContain('style="height:110px"');
+    expect(stacks[1]).toContain('<div class="chart-title">Contracts ending</div>');
+    expect(stacks[1]).toContain('style="height:80px"');
+    for (const s of stacks) expect(s.match(/<title>/g), s.slice(0, 80)).toHaveLength(2);
+    // Each tip: the series and the quarter on one line, the count under it.
+    expect(stacks[1]).toMatch(/<title>Contracts ending, Q3 2026-27\s2 contracts<\/title>/);
+    expect(stacks[1]).toMatch(/<title>Contracts ending, Q1 2027-28\s3 contracts<\/title>/);
 
     const segs = (await view("?subject=all&rows=segment&measure=ending")).html;
     expect(segs).toContain(`<td data-label="Value" class="mono num">${money(2_000_000_00)}</td>`);
@@ -616,6 +753,87 @@ describe("the page", () => {
     expect([...html.matchAll(/<form method="post" action="([^"]+)"/g)].map((m) => m[1])).toEqual(["/account/dashboard/panels", "/account/dashboard/panels", "/account/views"]);
   });
 
+  it("names the source in lower case with its article, and the link by where it leads, in both languages", async () => {
+    const cases = [
+      ["awards", "Figures from the award notices, fiscal years 2024-25 to 2026-27", "Chiffres tirés des avis d’attribution, exercices 2024-2025 à 2026-2027"],
+      ["history", "Figures from the PSPC contract history, fiscal years 2024-25 to 2026-27", "Chiffres tirés de l’historique des contrats de SPAC, exercices 2024-2025 à 2026-2027"],
+      ["contracts", "Figures from the published contracts, fiscal years 2024-25 to 2026-27", "Chiffres tirés des contrats publiés, exercices 2024-2025 à 2026-2027"],
+      ["grants", "Figures from the grants and contributions, fiscal years 2024-25 to 2026-27", "Chiffres tirés des subventions et contributions, exercices 2024-2025 à 2026-2027"],
+    ] as const;
+    for (const [source, en, fr] of cases) {
+      const ask = `?subject=all&rows=year&measure=records&source=${source}&from=2024&to=2026`;
+      const eng = decode((await view(ask)).html);
+      expect(eng, source).toContain(en);
+      expect(eng).toContain('How the figures are counted: <a href="/methodology#analytics">the Analytics section of the Methodology page</a>.');
+      const fre = nbsp(decode((await view(`${ask}&lang=fr`)).html));
+      expect(fre, source).toContain(fr);
+      expect(fre).toContain('Méthode de calcul des chiffres : <a href="/methodology#analytics">la section Analyses de la page Méthodologie</a>.');
+    }
+  });
+
+  it("sets a figure's head over its numbers where it takes the widest column, and leaves a row with no figure out of the bars", async () => {
+    // Every buyer's value by fiscal year: no column of words, so the value takes the room left; its head is a figure's.
+    const years = (await view("?subject=all&rows=year&measure=value&source=awards&from=2024&to=2026")).html;
+    expect(years).toContain('<th class="k-main num"><button type="button" class="th-sort">Value</button></th>');
+    // The contracts ending by quarter: the count takes it.
+    const ending = (await view("?subject=buyer&b=pwgsc-tpsgc&rows=quarter&measure=ending&show=table")).html;
+    expect(ending).toContain('<th class="k-main num"><button type="button" class="th-sort">Contracts</button></th>');
+    // With a column of words, the words keep the room and no figure's head is main.
+    const segs = (await view("?subject=all&rows=segment&measure=value&source=history&from=2022&to=2026")).html;
+    expect(segs).not.toContain('class="k-main num"');
+    // PSPC's contract history by procurement method: open bidding and non-competitive records with values, and one
+    // record a year (2022-23 to 2026-27) naming no method and publishing no value. The bars: the two methods; the
+    // table: the three rows, the last "Method not stated" with its value not stated.
+    const methods = (await view("?subject=buyer&b=pwgsc-tpsgc&rows=method&measure=value&source=history&from=2022&to=2026&show=ranked")).html;
+    const bars = methods.slice(methods.indexOf('<ol class="rank-bars"'), methods.indexOf("</ol>"));
+    expect(bars.match(/<li /g)).toHaveLength(2);
+    expect(bars).toContain("Open bidding");
+    expect(bars).toContain("Non-competitive");
+    expect(bars).not.toContain("Method not stated");
+    expect(bars).not.toContain("Not stated");
+    expect(methods.match(/<tr><td data-label="Procurement method">/g)).toHaveLength(3);
+    const unstated = RECS.filter((x) => x.bid === PSPC && x.src === 2 && x.extra === 0 && x.meth === null);
+    expect(unstated.map((x) => x.cents)).toEqual([null, null, null, null, null]);
+    expect(methods).toContain(`<tr><td data-label="Procurement method">Method not stated</td><td data-label="Value" class="mono num">Not stated</td><td data-label="Records" class="mono num">${unstated.length}</td>`);
+  });
+
+  it("sets the form's fields level, the long menus wide, the boxes to compare two to a row with what each takes, each menu its row on a phone", async () => {
+    const orgs = (await view("?subject=organizations&o=org-a000000001&rows=year&measure=value&source=history")).html;
+    // The four boxes to compare, empty, each saying what it takes; the subject's own box has its hint instead.
+    expect(orgs.match(/<input type="text" name="o" value="" [^>]*placeholder="org-… or its page&#39;s address"\/>/g)).toHaveLength(4);
+    const form = orgs.slice(orgs.indexOf('<form method="get" action="/analytics/build"'), orgs.indexOf("</form>", orgs.indexOf('<form method="get" action="/analytics/build"')));
+    expect(form.match(/placeholder=/g)).toHaveLength(4);
+    const fr = nbsp(decode((await view("?lang=fr&subject=organizations&o=org-a000000001&rows=year&measure=value&source=history")).html));
+    expect(fr.match(/placeholder="org-… ou l’adresse de sa page"/g)).toHaveLength(4);
+    const buyer = (await view("?subject=buyer_segment&b=pwgsc-tpsgc&s=82&rows=year&measure=value&source=history")).html;
+    expect(buyer).toContain('<label class="field field-wide" data-for="buyer"><span class="field-label">Buyer</span><select name="b">');
+    expect(buyer).toContain('<label class="field field-wide" data-for="segment"><span class="field-label">Segment</span><select name="s">');
+    const styles = (env as unknown as { STYLES_CSS: string }).STYLES_CSS;
+    for (const rule of [
+      ".build-form .toolbar-fields { align-items: flex-start; }", ".build-form .toolbar-actions { align-self: flex-end; }",
+      ".toolbar-fields .field.field-wide { max-width: 480px; }", ".build-form fieldset.toolbar-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }",
+      "  .build-form .field:not(.field-code) { grid-column: 1 / -1; }\n  .build-form .toolbar-fields .field { max-width: none; }",
+    ]) expect(styles.replace(/\r\n/g, "\n"), rule).toContain(rule);
+  });
+
+  it("offers no action on a view with no record: no CSV file, no Add to dashboard, no figure to add, no Save", async () => {
+    // National Defence holds no award notice in the fixture (its records are published contracts and a grant).
+    const empty = "?subject=buyer&b=dnd-mdn&rows=year&measure=value&source=awards&from=2022&to=2026&show=bars";
+    expect(RECS.filter((x) => x.bid === DND && x.src === 1)).toEqual([]);
+    for (const lang of ["", "&lang=fr"]) {
+      for (const headers of [undefined, { "x-build-fragment": "1" }]) {
+        const { res, html } = await view(`${empty}${lang}`, { headers });
+        expect(res.status).toBe(200);
+        expect(html).toContain(lang ? "Aucun dossier pour cette vue et ces exercices." : "No record of this view in these fiscal years.");
+        for (const absent of ["/analytics/build.csv", 'method="post"', "/account/dashboard/panels", "/account/views", 'class="panel-tools"']) expect(html, `${lang} ${absent}`).not.toContain(absent);
+      }
+    }
+    // The same view with records offers all three, the figure's included (one subject by fiscal year).
+    const { html } = await view(empty.replace("dnd-mdn", "dfo-mpo"));
+    expect([...html.matchAll(/<form method="post" action="([^"]+)"/g)].map((m) => m[1])).toEqual(["/account/dashboard/panels", "/account/dashboard/panels", "/account/views"]);
+    expect(html).toContain("/analytics/build.csv?");
+  });
+
   it("gives the view as a CSV file, private, a download under the per-address limit, its rows and their counts", async () => {
     const { ultra } = await readers();
     const res = await get(`${CSV}?subject=all&rows=segment&measure=value&source=history&from=2022&to=2026`, { cookie: ultra, env: onWith() });
@@ -637,7 +855,7 @@ describe("the page", () => {
   it("reads in French, with no English left, no em or en dash, and every string in both languages", async () => {
     const { html } = await view("?lang=fr&subject=buyer&b=pwgsc-tpsgc&rows=segment&measure=noncompetitive&source=history&from=2022&to=2026");
     expect(html).toContain('<html lang="fr">');
-    for (const text of ["Générateur d\u2019analyses", "Part non concurrentielle, en nombre et en valeur", "Chiffres tirés de", "Afficher cette vue"]) expect(decode(html)).toContain(text);
+    for (const text of ["Générateur d\u2019analyses", "Part non concurrentielle, en nombre et en valeur", "Chiffres tirés de l\u2019historique des contrats de SPAC", "Afficher cette vue"]) expect(decode(html)).toContain(text);
     for (const english of ["Show this view", "Figures from", "Rows shown", "Every buyer", "not added together"]) expect(html).not.toContain(english);
     expect(html).not.toContain(EM_DASH);
     expect(html).not.toContain(EN_DASH);
@@ -726,14 +944,34 @@ describe("the form", () => {
       ["?subject=segment&s=82&rows=province&measure=records&source=history", ["segment", "period", "top"]],
     ];
     const all = ["buyer", "buyers", "segment", "org", "orgs", "period", "top"];
+    // An Ultra reader's form (a reader without Ultra sees the sample's, test "a reader without Ultra").
     for (const [query, shown] of cases) {
-      for (const cookie of [undefined, (await readers()).ultra]) {
-        const g = groups((await view(query, { cookie: cookie ?? "" })).html);
+      for (const cookie of [(await readers()).ultra]) {
+        const g = groups((await view(query, { cookie })).html);
         expect(Object.keys(g).sort(), query).toEqual([...all].sort());
         for (const name of all) {
           const on = shown.includes(name);
           expect(g[name], `${query} ${name}`).toEqual({ hidden: !on, disabled: !on });
         }
+      }
+    }
+  });
+
+  it("names each figure alone in its menu, the rows only in the view's title: the contracts ending by each of their rows", async () => {
+    // The contracts ending are offered by fiscal quarter, segment and buyer, and for the period (MATRIX); their menu
+    // name says nothing of quarters, as no other figure's names its rows.
+    expect(ROWS.filter((rows) => cellOffered(rows, "ending", "buyer") || cellOffered(rows, "ending", "all"))).toEqual(["quarter", "segment", "buyer", "none"]);
+    for (const [lang, option, titles] of [
+      ["en", "Contracts ending", ["Contracts ending by fiscal quarter", "Contracts ending by segment", "Contracts ending by buyer", "Contracts ending"]],
+      ["fr", "Contrats prenant fin", ["Contrats prenant fin par trimestre d’exercice", "Contrats prenant fin par segment", "Contrats prenant fin par acheteur", "Contrats prenant fin"]],
+    ] as const) {
+      const q = lang === "fr" ? "&lang=fr" : "";
+      const asks = ["?subject=buyer&b=pwgsc-tpsgc&rows=quarter&measure=ending", "?subject=all&rows=segment&measure=ending", "?subject=all&rows=buyer&measure=ending",
+        "?subject=buyer&b=pwgsc-tpsgc&rows=none&measure=ending&show=table"];
+      for (const [i, ask] of asks.entries()) {
+        const { html } = await view(`${ask}${q}`);
+        expect(html, ask).toContain(`<option value="ending" selected="">${option}</option>`);
+        expect(html, ask).toContain(`<h2>${titles[i]}</h2>`);
       }
     }
   });
@@ -787,15 +1025,18 @@ describe("the link from the views", () => {
         const at = lang === "fr" ? `${path}&lang=fr` : path;
         const html = await (await get(at, { cookie: r.ultra, env: onWith() })).text();
         expect(html, at).toContain(`<p class="toolbar-note"><a href="${href}">${lang === "fr" ? "Ouvrir dans le générateur" : "Open in the builder"}</a></p>`);
-        // Off, the page is as it was; on, a reader without Ultra gets the page as it is off but for the rail's item.
+        // Off, the page is as it was; on, a reader without Ultra gets the page as it is off but for the rail's item
+        // and the footer's link.
         const railItem = /<li><a class="rail-item" href="\/analytics\/build"(?: aria-current="page")?>(?:(?!<\/li>).)*<\/li>/;
+        const footerItem = /<a href="\/analytics\/build">[^<]+<\/a>/;
         for (const cookie of [r.ultra, r.pro, r.free, undefined]) {
           const off = await (await get(at, { cookie, env: onEnv({ RECORDS }) })).text();
           expect(off, at).not.toContain(PATH);
           if (cookie === r.ultra) continue;
           const on = await (await get(at, { cookie, env: onWith() })).text();
           expect(on, at).toMatch(railItem);
-          expect(on.replace(railItem, ""), at).toBe(off);
+          expect(on, at).toMatch(footerItem);
+          expect(on.replace(railItem, "").replace(footerItem, ""), at).toBe(off);
         }
       }
     }

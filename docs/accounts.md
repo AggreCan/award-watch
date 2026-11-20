@@ -4415,8 +4415,16 @@ from the builder's own reading, for a view its menus offer and a subject
 chosen in full, or it is refused (400); Pro, Free and every reader while the
 switch is off are refused too. Left unnamed it takes the site's label: what
 it is about and its title, then its source and period ("Public Services and
-Procurement Canada: Value by fiscal year, PSPC contract history, ..."), cut
-as an analytics view's is. It is kept by the same insert, counted with the
+Procurement Canada: Value by fiscal year, PSPC contract history, 2022-23 to
+2026-27"), at most 150 characters (`BUILD_LABEL_MAX`, kept at that bound by the
+insert for this kind alone). Past it the subject's name is cut on a word with
+an ellipsis, so the figure, the rows and the source always stay whole and two
+views of one subject never read the same; where the name would keep fewer
+than 12 characters (`LABEL_NAME_LEAST`) the period goes first
+(`saved_views.ts fitName`, `pages/builder.tsx buildLabel`). The Name field's
+placeholder is a name that fits its 60 characters, what the view is about and
+its title with the name cut first (`buildName`), and the hint under it says
+both bounds. It is kept by the same insert, counted with the
 others against the plan's figure (and a group's, `ADD_VIEW_GROUP_SQL`). It is
 never sent by email: its row has no select (it reads "Not sent by email."),
 `POST /account/views/:id` leaves it off (`SET_DELIVERY_SQL` holds a `build`

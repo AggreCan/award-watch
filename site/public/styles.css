@@ -1921,6 +1921,27 @@ a.refresh:hover .refresh-line { text-decoration: underline; text-underline-offse
 .toolbar > .save-view { margin: 0; border-top: 1px solid var(--border); }
 /* On the analytics builder (src/pages/builder.tsx), the row stands alone under the view's result. */
 .build-save > .save-view:first-child { border-top: 0; }
+/* The builder for a reader without Ultra: under the lead, what it does and the way to the plans; its menus in one
+   disabled fieldset, which takes no frame or padding of its own, the controls drawn in the muted ink. */
+.build-gate p { max-width: 88ch; margin: 8px 0 0; font-size: 14px; line-height: 24px; color: var(--ink); }
+.build-gate p + p { margin-top: 12px; }
+.toolbar fieldset.build-locked { padding: 0; }
+.build-locked select, .build-locked input { border-color: var(--border); color: var(--muted); cursor: default; }
+/* The builder's form (src/pages/builder.tsx Menus): a row's fields level at their labels (a hint under one field no
+   longer lowers the others), the button at the foot of its row; a menu of long names (a buyer's, a segment's) as wide
+   as a text field; the menus and boxes to compare, two to a row. On a phone each menu takes its row, so a long name
+   reads whole, From and To sharing one, and the boxes to compare one to a row. */
+.build-form .toolbar-fields { align-items: flex-start; }
+.build-form .toolbar-actions { align-self: flex-end; }
+.field-wide { flex: 2 1 240px; }
+.toolbar-fields .field.field-wide { max-width: 480px; }
+.build-form fieldset.toolbar-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.build-form fieldset.toolbar-fields .field { max-width: none; }
+@media (max-width: 699px) {
+  .build-form .field:not(.field-code) { grid-column: 1 / -1; }
+  .build-form .toolbar-fields .field { max-width: none; }
+  .build-form fieldset.toolbar-fields { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* Weekly briefings (src/account/briefing_pages.tsx): the Subscribe control in
    its panel on a segment or buyer page. */

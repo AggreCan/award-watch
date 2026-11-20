@@ -7,8 +7,15 @@
 // the BUILDER switch is off.
 
 export const BUILDER_STRINGS = {
-  // The plan cards' row, on Ultra's card only (src/pro.tsx BUILDER_ROW), while the switch is on.
-  "plans.builder": { en: "Analytics builder: your own views", fr: "Générateur d'analyses : vos propres vues" },
+  // The plan cards' row, on Ultra's card only (src/pro.tsx BUILDER_ROW), while the switch is on: what the builder
+  // makes, and its {n} fiscal years (builder.ts BUILD_YEARS).
+  "plans.builder": { en: "Analytics builder: your charts and tables", fr: "Générateur d'analyses : graphiques, tableaux" },
+  // The Ultra paragraph's sentence on the builder (src/pages/pro.tsx UltraSection), while the switch is on: {years}
+  // BUILD_YEARS, {n} SET_MAX.
+  "propage.ultra_builder": {
+    en: "With the analytics builder you choose what to count, how to group it, the source and up to {years} fiscal years, and compare up to {n} buyers or organizations side by side.",
+    fr: "Avec le générateur d'analyses, vous choisissez quoi compter, comment le regrouper, la source et jusqu'à {years} exercices, et comparez jusqu'à {n} acheteurs ou organisations côte à côte.",
+  },
   // The Methodology page's paragraph on the builder (src/pages/methodology.tsx), while the switch is on.
   "methodology.analytics_builder": {
     en: "The analytics builder, part of Ultra, counts by the same rules, from figures the nightly counts ahead for each buyer, segment, province of delivery, source and fiscal year. A median, a count of organizations and the largest organizations' share are never added across fiscal years; provinces and segments are never added together, since one notice can name several; a supplier withheld as a person counts in the totals and is named by no row.",
@@ -28,8 +35,14 @@ export const BUILDER_STRINGS = {
     en: "Federal procurement figures by buyer, segment, organization, province and fiscal year, as you choose them.",
     fr: "Chiffres de l'approvisionnement fédéral par acheteur, segment, organisation, province et exercice, selon vos choix.",
   },
-  "build.gate": { en: "The analytics builder is part of Ultra.", fr: "Le générateur d'analyses fait partie d'Ultra." },
+  // For a reader without Ultra, under the lead: what the builder does ({years} BUILD_YEARS, {n} SET_MAX) and that it
+  // comes with Ultra, then the way to the plans (the page's one filled button), then the sample under its title.
+  "build.gate_text": {
+    en: "The builder draws charts and tables of the figures you choose, over up to {years} fiscal years, and compares up to {n} buyers or organizations side by side. It comes with Ultra.",
+    fr: "Le générateur dessine des graphiques et des tableaux des chiffres que vous choisissez, sur au plus {years} exercices, et compare jusqu'à {n} acheteurs ou organisations côte à côte. Il fait partie d'Ultra.",
+  },
   "build.gate_link": { en: "See the plans", fr: "Voir les forfaits" },
+  "build.sample_title": { en: "Sample: {title}", fr: "Exemple : {title}" },
   "build.unavailable": { en: "The builder's figures cannot be read right now.", fr: "Les chiffres du générateur ne peuvent pas être lus pour le moment." },
   "build.unavailable_title": { en: "Figures Not Available Right Now", fr: "Chiffres non disponibles pour le moment" },
   "build.form": { en: "Choose the view", fr: "Choisir la vue" },
@@ -90,7 +103,6 @@ export const BUILDER_STRINGS = {
   "build.title_nc": { en: "Non-competitive share", fr: "Part non concurrentielle" },
   "build.title_largest": { en: "Share of the value held by the largest organizations", fr: "Part de la valeur détenue par les plus grandes organisations" },
   "build.measure_amendments": { en: "Change in value through amendments", fr: "Variation de la valeur par modifications" },
-  "build.measure_ending": { en: "Contracts ending by fiscal quarter", fr: "Contrats prenant fin par trimestre d'exercice" },
 
   "build.show_bars": { en: "Bars", fr: "Barres" },
   "build.show_line": { en: "Line", fr: "Courbe" },
@@ -119,7 +131,17 @@ export const BUILDER_STRINGS = {
   },
 
   // -- the result ---------------------------------------------------------------------------------------
-  "build.as_of": { en: "Figures from {source}, fiscal years {first} to {last}, as of {date}.", fr: "Chiffres tirés de {source}, exercices {first} à {last}, au {date}." },
+  // {source} is the source as the line reads it, in lower case with its article (build.from_*): "Figures from the
+  // award notices", "Chiffres tirés de l'historique des contrats de SPAC".
+  "build.as_of": { en: "Figures from {source}, fiscal years {first} to {last}, as of {date}.", fr: "Chiffres tirés {source}, exercices {first} à {last}, au {date}." },
+  "build.from_awards": { en: "the award notices", fr: "des avis d'attribution" },
+  "build.from_history": { en: "the PSPC contract history", fr: "de l'historique des contrats de SPAC" },
+  "build.from_contracts": { en: "the published contracts", fr: "des contrats publiés" },
+  "build.from_grants": { en: "the grants and contributions", fr: "des subventions et contributions" },
+  // The link in the line under a view, to the Methodology page's section on analytics, named for where it leads.
+  "build.rules_link": { en: "the Analytics section of the Methodology page", fr: "la section Analyses de la page Méthodologie" },
+  // The empty boxes of a comparison of organizations: what each takes.
+  "build.org_placeholder": { en: "org-… or its page's address", fr: "org-… ou l'adresse de sa page" },
   "build.as_of_ending": {
     en: "Contracts ending by the radar's rule, each contract once across the three contract sources, as of {date}.",
     fr: "Contrats prenant fin selon la règle du radar, chaque contrat une seule fois dans les trois sources de contrats, au {date}.",
@@ -181,6 +203,12 @@ export const BUILDER_STRINGS = {
   // The site's label of a saved view of the builder, before its source and period (pages/builder.tsx buildLabel):
   // what it is about, then its title.
   "build.label_name": { en: "{subject}: {title}", fr: "{subject} : {title}" },
+  // Under the builder's Save field (account/view_pages.tsx SaveViewRow): {n} the most a typed name holds (NAME_MAX),
+  // {max} the most the site's label holds (BUILD_LABEL_MAX). The placeholder is a name that fits the field.
+  "build.name_hint": {
+    en: "Up to {n} characters. Left empty, the view takes the site's label, of up to {max} characters.",
+    fr: "Jusqu'à {n} caractères. Laissé vide, la vue prend l'étiquette du site, d'au plus {max} caractères.",
+  },
   // A saved view of the builder on /account/views (account/view_pages.tsx): its email, which is not offered.
   "build.view_no_mail": { en: "Not sent by email.", fr: "Non envoyée par courriel." },
 } as const;

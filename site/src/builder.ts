@@ -95,6 +95,14 @@ export function readBuild(url: URL, current: number): BuildChoice {
   };
 }
 
+// The one view a reader without the builder sees, whatever the address asks (pages/builder.tsx): the builder's
+// default view (every buyer's award notice value by fiscal year, as bars) over the widest period it reads, the
+// BUILD_YEARS fiscal years to the data date's.
+export function sampleChoice(current: number): BuildChoice {
+  const c = readBuild(new URL(BUILD_PATH, "https://sample.invalid"), current);
+  return { ...c, first: Math.max(EARLIEST_FY, current - BUILD_YEARS + 1), last: current };
+}
+
 // What a subject names: its buyers, its segment, its organizations.
 export const usesBuyers = (s: Subject): boolean => s === "buyer" || s === "buyers" || s === "buyer_segment";
 export const usesSegment = (s: Subject): boolean => s === "segment" || s === "buyer_segment";

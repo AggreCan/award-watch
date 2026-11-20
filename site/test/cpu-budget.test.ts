@@ -1196,6 +1196,56 @@ describe("CPU budget per route (a synthetic guard, not a production number)", ()
     expect(r, `${path} ${r.toFixed(2)}`).toBeLessThanOrEqual(BUILDER_BOUND);
   }, 120_000);
 
+  // The analytics builder for a reader without Ultra (2026-11-20; pages/builder.tsx Sample), signed out: what it does,
+  // its menus locked at the sample's choices beside five buyer menus at about production's size (360 buyers each), and
+  // the sample (every buyer's award notice value by fiscal year over the 20 fiscal years to the data date's: a chart
+  // and a table of 20 rows), its records one batch of three statements answered from memory. A public page, so the
+  // loop is its own (no session). About three times the larger of two ratios measured then (in brackets), rounded up.
+  const BUILDER_SAMPLE_BOUND = 22; // [6.12, 7.18]
+  it("keeps the builder's sample for a reader without Ultra within its bound, public, its records read in one batch", async () => {
+    clearParsedCache();
+    clearClosingCache();
+    const index = JSON.parse(BODIES["buyers/index.json"]) as { buyers: Record<string, unknown>[] };
+    const buyers = Array.from({ length: 360 }, (_, i) => ({ ...index.buyers[i % index.buyers.length], id: `buyer-${i}`, name_en: `Department number ${i}`, n_awards: 9 }));
+    const years = Array.from({ length: 20 }, (_, i) => ({
+      fy: 2007 + i, n: 40 + i, cents: 9_000_000_000 - i * 1_000_000, n_no_value: 1, n_nc: 7, n_unstated: 2, n_pos: 37, pos: 8_900_000_000 - i * 1_000_000,
+      pos_nc: 1_100_000_000, pos_unstated: 50_000_000, med: 1_234_567, n_orgs: 30, top1: 2_000_000_000, top5: 5_000_000_000, top10: 7_000_000_000,
+      n_amended: 9, n_compared: 8, n_grew: 5, first_cents: 900_000_000, last_cents: 1_000_000_000,
+    }));
+    const batches: number[] = [];
+    const records = stubDb((sql) => {
+      if (sql.includes("FROM rec_meta")) return [{ key: "state", value: "ready" }, { key: "as_of", value: "2026-10-31" }];
+      if (sql === CUBE_META_SQL) return [{ as_of: "2026-10-30" }];
+      if (sql === CELL_YEARS_SQL) return years;
+      return [];
+    });
+    const counted = { ...records, batch: (list: D1PreparedStatement[]) => (batches.push(list.length), records.batch(list)) } as D1Database;
+    const assets = assetsOf({ ...FIT_BODIES, "buyers/index.json": JSON.stringify({ ...index, buyers }) }, "v1-builder-sample");
+    const sampleEnv = { ...env, ASSETS: assets, ACCOUNTS: stubDb(() => []), ACCOUNTS_ENABLED: "true", BUILDER: "on" };
+    const request = (db: D1Database) => app.request("/analytics/build", {
+      headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": `198.18.${100 + ((address >> 8) % 100)}.${(address++ % 250) + 1}` },
+    }, { ...sampleEnv, RECORDS: db });
+    const first = await request(counted);
+    const html = await first.text();
+    expect(first.status).toBe(200);
+    expect(first.headers.get("cache-control")).toBe("public, max-age=300");
+    expect(html).toContain("<h2>Sample: Value by fiscal year</h2>");
+    expect(html.match(/<tr><td data-label="Fiscal year"/g)).toHaveLength(20);
+    expect(html.match(/<option value="buyer-\d+"/g)).toHaveLength(5 * 360);
+    // The state row, cube_meta and the sample's one statement, and nothing read apart from them.
+    expect(batches).toEqual([3]);
+    const go = async () => (await request(records)).arrayBuffer();
+    for (let i = 0; i < 3; i++) await go();
+    const route: number[] = [];
+    const yard: number[] = [];
+    for (let b = 0; b < 5; b++) {
+      yard.push(await batch(yardstick, 16));
+      route.push(await batch(go, 8));
+    }
+    const r = median(route) / median(yard);
+    expect(r, `/analytics/build (signed out, the sample) ${r.toFixed(2)}`).toBeLessThanOrEqual(BUILDER_SAMPLE_BOUND);
+  }, 120_000);
+
   // A dashboard of 24 views of the analytics builder (B4b, 2026-11-20; account/build_views.tsx): twelve views drawn
   // at their size (charts of one to three panels over 20 fiscal years, sorted bars of 25 of 57 segments and of the
   // largest buyers, a province list, two buyers' segments, tables, figures) and twelve latest figures, every cube
