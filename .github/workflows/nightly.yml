@@ -70,7 +70,9 @@
 # (docs/link-sampling.md), save the database (in parts), the public files
 # (the static bundle, also in parts, and the CSV downloads) and the review
 # files back to R2 (the organization merges list on the 1st and the 16th
-# only, under its data date), export the accounts database to R2 on Sundays,
+# only, under its data date), report the yearly download files R2 still
+# holds that tonight's export no longer writes, export the accounts database
+# to R2 on Sundays,
 # keep the audience counts of the finished days
 # in R2 when the analytics token exists, count the alert sign-ups in the forms database,
 # count the account funnel's day and keep it in R2's private views/ prefix for the
@@ -103,9 +105,15 @@
 #   item); the database is still saved, and the next retry deploys again. An
 #   answer from the edge (403, a challenge page) proves nothing and changes
 #   nothing.
-# - A stage that fails is recorded and the run goes on; the export is checked
-#   before it is deployed, so broken or empty data is never published and the
-#   site keeps its last good deploy.
+# - A stage that fails is recorded and the run goes on; the export and the
+#   database are checked before anything is deployed, so broken or empty data
+#   is never published and the site keeps its last good deploy.
+# - A database that fails its check (SQLite's quick_check, or a table that
+#   lost more rows than nightly.MIN_SHARE allows: a source file cut short, a
+#   changed layout) is neither synced, saved nor deployed, even when the
+#   export passed, since the export is computed from it. The site keeps the
+#   last deploy's data and code, the run is not ok, so the retries run it
+#   again, and the next run restores the last good backup.
 # - The database is checked before it is saved, and last night's backup is
 #   kept as the previous one before it is replaced.
 # - The status file is written whatever happened, so the site's daily check
@@ -163,6 +171,11 @@
 # - A weekly export of the accounts database that fails is an item needing
 #   attention (accounts_backup: failed) and stops nothing; R2 keeps the
 #   earlier weeks' copies, and the next Sunday exports again.
+# - The check of the old download files in R2 never stops the run and
+#   deletes nothing while it reports (downloads_prune in the run status). A
+#   listing that fails is a notice; a refusal (more stale files than one
+#   night may remove, or an upload that looks like a broken export) is an
+#   item needing attention.
 #
 # Secrets on the project account: CLOUDFLARE_API_TOKEN (Workers + R2 + D1),
 # CLOUDFLARE_ACCOUNT_ID; the tests job hands them only to the step that
@@ -682,9 +695,17 @@ jobs:
           "$WRANGLER" d1 execute awardwatch-records --remote --yes --file "$out/finish.sql"
           python -m awardwatch_pipeline records-synced --db ../data/awardwatch.sqlite --manifest "$out/manifest.json"
 
+      # Only when both checks passed. The export is computed from tonight's
+      # database, so a database that failed its check (db_ok false) deploys
+      # nothing, as the two syncs and the save already skip for it: the
+      # version record, the deploy and every step that waits on the deploy
+      # skip with this one.
+      # The site keeps the last deploy's data and code, the run status says
+      # nothing was deployed and why, and the next run restores the last
+      # good backup.
       - name: Bundle the static data for the site
         id: bundle
-        if: ${{ !cancelled() && steps.verify.outputs.export_ok == 'true' }}
+        if: ${{ !cancelled() && steps.verify.outputs.export_ok == 'true' && steps.verify.outputs.db_ok == 'true' }}
         run: |
           rm -rf site/public/data
           cp -r data/out/static site/public/data
@@ -1102,6 +1123,39 @@ jobs:
             echo "::error::not saved to R2 after three tries:$failed"
           fi
           if [ -n "$failed" ] || [ -n "$split_failed" ]; then exit 1; fi
+
+      # Nothing else ever removes a file under downloads/, and the yearly
+      # files' names change over time (a part a year no longer needs, an
+      # after-<year> file whose year moved), so a file tonight's export no
+      # longer writes stays in R2 and stays downloadable. prune-downloads
+      # lists downloads/ through the R2 REST API (Wrangler has no listing
+      # command) with the job's token, every page of it, and compares it with
+      # the files the step above sent from data/out/csv: a stale object is a
+      # yearly file by the site's own pattern (YEARLY_DOWNLOAD) that tonight
+      # did not send; SHA256SUMS and the other files never are. It also
+      # counts the objects under the download route's other prefix, and never
+      # touches them. It reports only (nightly.PRUNE_MODE "report"): the
+      # stale files by name in a notice of the run status, nothing deleted.
+      # It acts only after an upload that saved every file (anything else is
+      # "skipped"), and refuses (an item needing attention, nothing deleted)
+      # more than nightly.PRUNE_CAP (30) stale files, or an upload without
+      # SHA256SUMS or with fewer yearly files than a whole export writes
+      # (nightly.PRUNE_FLOOR). A listing that fails or is cut short is
+      # "failed" and deletes nothing. "failed" is written first, so a step
+      # stopped anywhere reads as failed. It never stops the run.
+      - name: Report or remove the old download files in R2
+        id: prune_downloads
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          UPLOAD_OUTCOME: ${{ steps.save_files.outcome }}
+        run: |
+          out=data/out/downloads_prune
+          mkdir -p "$out"
+          echo "failed" > "$out/last_outcome.txt"
+          python -m awardwatch_pipeline.nightly prune-downloads --csv data/out/csv --upload-outcome "$UPLOAD_OUTCOME" \
+            --out-dir "$out"
 
       # The names the person test withheld from tonight's records (the
       # CanadaBuys stages list them in data/out/review/<stage>-persons.txt,
@@ -1541,11 +1595,16 @@ jobs:
       # ("inspected <n>", "up to date", "no sample", "no credentials", "not
       # permitted", "rate limited", "failed") are words; a failure or a
       # refusal is a notice, never an item needing attention.
+      # downloads_prune is the check of the old download files' outcome
+      # ("none stale", "<n> stale (reported)", "<n> deleted" once it deletes,
+      # "refused", "failed", "skipped" or "not run"); the stale files' names
+      # are in its notice, never in LAST_RUN.md, and "refused" is an item
+      # needing attention. It never changes ok.
       # Written whatever happened above. The roll-up,
       # Search Console, report, IndexNow, rollback, the two same-day steps,
-      # the link sample, the funnel save and the accounts export write
-      # "failed" before they start, so a step stopped by its time limit still
-      # reads as failed.
+      # the link sample, the funnel save, the accounts export and the check
+      # of the old download files write "failed" before they start, so a step
+      # stopped by its time limit still reads as failed.
       - name: Write the run status
         if: ${{ always() }}
         run: |
@@ -1566,6 +1625,8 @@ jobs:
             --interest data/out/interest/count.json \
             --funnel-outcome data/out/funnel/last_outcome.txt \
             --accounts-backup-outcome data/out/accounts_backup/last_outcome.txt --tests data/out/tests/outcome.json \
+            --downloads-prune-outcome data/out/downloads_prune/last_outcome.txt \
+            --downloads-prune-summary data/out/downloads_prune/summary.json \
             --restore data/out/restore.json --smoke data/out/deploy/smoke.json \
             --rollback-outcome data/out/deploy/rollback.txt --version-before data/out/deploy/version_before.txt \
             --checks data/out/checks.json \
@@ -1636,6 +1697,11 @@ jobs:
           if [ -f data/out/records/last_outcome.txt ]; then
             echo "" >> LAST_RUN.md
             echo "Records database: $(cat data/out/records/last_outcome.txt)" >> LAST_RUN.md
+          fi
+          # The outcome word alone; the stale files' names stay in the run status.
+          if [ -f data/out/downloads_prune/last_outcome.txt ]; then
+            echo "" >> LAST_RUN.md
+            echo "Old download files in R2: $(cat data/out/downloads_prune/last_outcome.txt)" >> LAST_RUN.md
           fi
           # The run's notices, one per line with its full text (nothing when
           # there are none); a fault here leaves them out of the record only.

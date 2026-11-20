@@ -74,6 +74,12 @@ one, and always leaves a status file the site's daily check can read.
             and line kept in R2's private views/ prefix, and on the night
             the monthly report is written that line with the month's
             figures joined on (funnel.with_month). None prints a figure.
+  prune-downloads
+            after an upload of the public files that saved every one: list
+            downloads/ in R2 and find the yearly files tonight's export no
+            longer writes (stale). PRUNE_MODE "report" (as shipped) names
+            them in a notice and deletes nothing; "delete" removes each.
+            Writes the outcome word and the record the status reads.
 
 Backups travel in parts. Wrangler refuses a single R2 upload above 300 MiB,
 and the database holds every published contract and grant agreement, so its
@@ -93,8 +99,9 @@ joins it. It has never been saved as one file, so there is no single-file
 form to read.
 
 The R2 transfers stay in the workflow, apart from the weekly snapshot's
-listing and download, which Wrangler has no command for; these commands read
-the files the workflow leaves. verify, status, gate, live-version, smoke and
+listing and download and the prune's listing and removals, which Wrangler
+has no command for; these commands read the files the workflow leaves.
+verify, status, gate, live-version, smoke and
 checks report what they find in their output and never stop the run. The
 gate and attention commands run before the pipeline is installed, so this
 module imports only the standard library at load; the audience and Search
@@ -223,6 +230,11 @@ ORG_REVIEW_OBJECT = "review/organization-merges-{date}.txt"
 # the night runs the commit that was live). A blocked night runs no refresh,
 # so it writes no status.
 TESTS_VERDICTS = ("passed", "fallback")
+
+# The checks' stage on a night whose database failed its check (db_ok false)
+# and that deployed nothing: the workflow's bundle, and so the deploy, wait on
+# db_ok as well as export_ok. The check's own reasons follow.
+DB_HELD_BACK = "nothing was deployed because the database check failed: "
 
 STEP_DETAIL = {
     "restore": "the database could not be restored, so nothing else ran",
@@ -672,6 +684,7 @@ def run_status(
     org_review: str | None = None, org_review_record: dict[str, Any] | None = None,
     funnel: str | None = None, accounts_backup: str | None = None, tests: Any = None,
     search_detail: str | None = None, index_sample: str | None = None,
+    downloads_prune: str | None = None, downloads_prune_record: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """status.json for the site's daily check. Every input may be missing: the
     status then says what is missing rather than failing to be written.
@@ -769,7 +782,26 @@ def run_status(
     credentials", "not permitted", "rate limited", "failed"); "not run" when
     the step did not run. Words only. A failed import, and an index sample
     refused, limited or failed, are each a notice, never an item needing
-    attention: neither touches what the site publishes."""
+    attention: neither touches what the site publishes.
+
+    A night whose database failed its check (verify_result db_ok false) and
+    that deployed nothing says so on the checks' stage (DB_HELD_BACK before
+    the check's own reasons): the run is not ok, so the retries run it
+    again, and the next run restores the last good backup.
+
+    A night on which the search or the records database was synced and
+    tonight's pages did not go live (the deploy failed, or was rolled back)
+    adds one notice, resilience.databases_ahead's words: the two databases
+    are a night ahead of the pages until the next deploy. The item the
+    failed deploy raises carries the same line (resilience.attention_items).
+
+    downloads_prune is the outcome word of the prune of old download files
+    (prune_downloads: "none stale", "<n> stale (reported)", "<n> deleted",
+    "refused", "failed", "skipped"; "not run" when the step did not run) and
+    downloads_prune_record the summary.json it wrote, whose notice (the
+    stale files by name) joins the notices. Never in LAST_RUN.md's notices,
+    which carry the word alone. "refused" is an item needing attention;
+    nothing here changes ok."""
     stages: list[dict[str, Any]] = []
     notices: list[dict[str, str]] = []
     for name, result in steps.items():
@@ -796,7 +828,10 @@ def run_status(
         finally:
             conn.close()
     if verify_result and verify_result.get("problems"):
-        stages.append({"source": "checks", "ok": False, "detail": "; ".join(verify_result["problems"])[:200]})
+        detail = "; ".join(verify_result["problems"])
+        if verify_result.get("db_ok") is False and steps.get("deploy") != "success":
+            detail = DB_HELD_BACK + detail
+        stages.append({"source": "checks", "ok": False, "detail": detail[:200]})
     stamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
     began = resilience._parse_iso(started)
     verdict = smoke.get("verdict") if isinstance(smoke, dict) else None
@@ -822,6 +857,9 @@ def run_status(
     link_notices = ([{"source": "link_sample", "detail": LINK_BROKEN_NOTICE.format(n=len(broken))}] if broken
                     else [{"source": "link_sample", "detail": LINK_FAILED_NOTICE}] if link_sample == "failed" else [])
     review_notice = org_review_notice(org_review, org_review_record)
+    ahead = resilience.databases_ahead({"search_sync": search, "records_sync": records, "steps": steps,
+                                        "deploy_rolled_back": rolled == "rolled back"})
+    prune_notice = downloads_prune_notice(downloads_prune, downloads_prune_record)
     return {
         "run_at": stamp,
         # When the stages started, read by the gate and the daily check.
@@ -855,6 +893,8 @@ def run_status(
         "accounts_backup": accounts_backup or "not run",
         # Which commit the night ran, and why (the tests job).
         "tests": tests_outcome(tests),
+        # The prune of old download files in R2: an outcome word.
+        "downloads_prune": downloads_prune or "not run",
         # Whether the alert sign-ups were counted, never the counts: the
         # monthly report in R2 carries them.
         "interest": "counted" if interest else "failed" if interest_tried else "not run",
@@ -877,7 +917,9 @@ def run_status(
         + ([{"source": "funnel", "detail": FUNNEL_NOTICE}] if funnel == "failed" else [])
         + ([{"source": "search_console_detail", "detail": SEARCH_DETAIL_NOTICE}] if search_detail == "failed" else [])
         + ([{"source": "index_sample", "detail": INDEX_SAMPLE_NOTICES[index_sample]}]
-           if index_sample in INDEX_SAMPLE_NOTICES else []),
+           if index_sample in INDEX_SAMPLE_NOTICES else [])
+        + ([{"source": "deploy", "detail": ahead}] if ahead else [])
+        + ([{"source": resilience.PRUNE_SOURCE, "detail": prune_notice}] if prune_notice else []),
         "ok": all(s["ok"] for s in stages) and verdict != "broken",
     }
 
@@ -1084,6 +1126,199 @@ def read_byte_count(path: str | None) -> int | None:
     return int(text) if text and text.isascii() and text.isdigit() else None
 
 
+# -- old download files in R2 (prune-downloads) -------------------------------
+#
+# The nightly puts each public CSV file under downloads/ and nothing else ever
+# removes one. The yearly files' names change over time (a -3 part a year no
+# longer needs, an after-<year> file whose year moved), so a file tonight's
+# export no longer writes stays in R2 and stays downloadable through the site,
+# stale data shown as current. A removal cannot be undone, so the prune ships
+# reporting only.
+
+# "report": name the stale files in a notice and delete nothing (the value to
+# ship). "delete": remove each stale object. Any other value deletes nothing.
+PRUNE_MODE = "report"
+DOWNLOADS_PREFIX = "downloads/"
+# The other prefix the site's download route serves (site/src/index.tsx
+# downloadAllowed); nothing in the repository writes it. Counted for the
+# report, never touched.
+MIRROR_PREFIX = "mirror/"
+# The yearly names the site serves, as site/src/pages/data.tsx writes
+# YEARLY_DOWNLOAD (written out here because this module loads only the
+# standard library; test_downloads_prune holds the two equal). Matched whole.
+YEARLY_DOWNLOAD_RE = re.compile(
+    r"^(awards|history|contracts|grants)-(?:[0-9]{4}|before-[0-9]{4}|after-[0-9]{4}|undated)(?:-[2-9])?\.csv$")
+# The checksum file the export writes last (export.SUMS); the upload sends it with the CSV files.
+DOWNLOAD_SUMS = "SHA256SUMS"
+# More stale objects than this in one night is a fault (a broken export, a
+# renamed set of files), never a cleanup: the prune refuses. 30, because the
+# bucket held 21 stale files when this was written (the awards of 1996 to
+# 2011 and of five later years, left by the first two nights), and a whole
+# export writes 84 yearly files, so a renamed set would be far past it.
+PRUNE_CAP = 30
+# Fewer yearly files than this in tonight's upload says the export is broken:
+# a whole export writes one a year for each of four sources, from 2004, 2005,
+# 2009 and 2012 (export.FIRST_YEAR). The prune refuses.
+PRUNE_FLOOR = 30
+# The notice names at most this many stale files, then "and N others".
+PRUNE_NAMED = 10
+PRUNE_OUTCOME = "last_outcome.txt"
+PRUNE_SUMMARY = "summary.json"
+# The notice for a prune that wrote "failed" and no record of its own (a fault before it finished).
+PRUNE_FAILED_NOTICE = "the check of old download files in R2 did not finish; nothing was deleted"
+# Notices LAST_RUN.md leaves out: it carries the prune's outcome word on a line of its own, never file names.
+NOT_IN_LAST_RUN = (resilience.PRUNE_SOURCE,)
+
+
+def uploaded_names(csv_dir: Path) -> set[str]:
+    """The names the upload step sent from the export's CSV folder, picked as
+    its loop picks them: every *.csv file (not a hidden one, which the shell's
+    glob leaves out) and SHA256SUMS. Empty when the folder is missing."""
+    if not csv_dir.is_dir():
+        return set()
+    names = {p.name for p in csv_dir.iterdir()
+             if p.name.endswith(".csv") and not p.name.startswith(".") and p.is_file()}
+    if (csv_dir / DOWNLOAD_SUMS).is_file():
+        names.add(DOWNLOAD_SUMS)
+    return names
+
+
+def stale_downloads(keys: Any, tonight: set[str]) -> list[str]:
+    """The stale names, sorted: a key exactly downloads/<name>, <name> a yearly
+    file the site serves, and not a name tonight's upload sent. Nothing else is
+    ever stale: not SHA256SUMS, not the other files, not a key outside
+    downloads/ or with a further slash."""
+    stale: set[str] = set()
+    for key in keys or []:
+        if not isinstance(key, str) or not key.startswith(DOWNLOADS_PREFIX):
+            continue
+        name = key[len(DOWNLOADS_PREFIX):]
+        if "/" not in name and YEARLY_DOWNLOAD_RE.fullmatch(name) and name not in tonight:
+            stale.add(name)
+    return sorted(stale)
+
+
+def _named(names: list[str]) -> str:
+    rest = len(names) - PRUNE_NAMED
+    shown = ", ".join(names[:PRUNE_NAMED])
+    return f"{shown} and {rest} other{'s' if rest != 1 else ''}" if rest > 0 else shown
+
+
+def _files(n: int) -> str:
+    return f"{n} yearly file{'s' if n != 1 else ''}"
+
+
+def prune_downloads(r2: resilience.R2Rest | None, csv_dir: Path, upload_outcome: str | None, *,
+                    mode: str | None = None) -> dict[str, Any]:
+    """Compare the objects under downloads/ with the files tonight's upload
+    sent (uploaded_names of the export's CSV folder) and act by mode
+    (PRUNE_MODE by default). Returns the record the status reads: outcome,
+    mode, notice (None when there is nothing to say), stale, deleted,
+    not_deleted, mirror_objects (the count under mirror/, or None when it was
+    not read).
+
+    Outcomes: "skipped" (the upload did not save every file: nothing is
+    listed); "refused" (tonight's set is empty, lacks SHA256SUMS or holds
+    fewer than PRUNE_FLOOR yearly files, or more than PRUNE_CAP objects are
+    stale: nothing is deleted); "failed" (no token, or the listing failed or
+    was cut short: nothing is deleted); "none stale"; in report mode "<n>
+    stale (reported)"; in delete mode "<n> deleted", with ", <m> not deleted"
+    when a removal failed (the others still go). Never raises; a message
+    from R2 never carries the token (R2Rest scrubs it)."""
+    deleting = (PRUNE_MODE if mode is None else mode) == "delete"
+    record: dict[str, Any] = {"outcome": "failed", "mode": "delete" if deleting else "report", "notice": None,
+                              "stale": [], "deleted": [], "not_deleted": [], "mirror_objects": None}
+    try:
+        _prune(record, r2, csv_dir, upload_outcome, deleting)
+    except Exception as exc:
+        done = len(record["deleted"])
+        record.update(outcome="failed", notice=(f"the check stopped on a fault ({type(exc).__name__}); "
+                                                + (f"{_files(done)} had been deleted: {_named(record['deleted'])}"
+                                                   if done else "nothing was deleted")))
+    if record["notice"]:
+        record["notice"] = record["notice"][:NOTICE_PART_MAX]
+    return record
+
+
+def _prune(record: dict[str, Any], r2: resilience.R2Rest | None, csv_dir: Path, upload_outcome: str | None,
+           deleting: bool) -> None:
+    if upload_outcome != "success":
+        record["outcome"] = "skipped"
+        return
+    tonight = uploaded_names(csv_dir)
+    yearly = [n for n in tonight if YEARLY_DOWNLOAD_RE.fullmatch(n)]
+    if not tonight:
+        why = "tonight's upload sent no file"
+    elif DOWNLOAD_SUMS not in tonight:
+        why = f"tonight's upload sent no {DOWNLOAD_SUMS}, which the export writes last"
+    elif len(yearly) < PRUNE_FLOOR:
+        why = f"tonight's upload sent {_files(len(yearly))}, fewer than the {PRUNE_FLOOR} a whole export writes"
+    else:
+        why = None
+    if why:
+        record.update(outcome="refused", notice=f"refused, nothing deleted: {why}")
+        return
+    if r2 is None:
+        record["notice"] = "no token to list the bucket with; nothing was deleted"
+        return
+    try:
+        keys = [o.get("key") for o in r2.list(DOWNLOADS_PREFIX, whole=True)]
+    except resilience.R2Error as exc:
+        record["notice"] = f"the listing of {DOWNLOADS_PREFIX} failed, so nothing was deleted ({exc})"
+        return
+    stale = stale_downloads(keys, tonight)
+    record["stale"] = stale
+    try:
+        record["mirror_objects"] = sum(1 for o in r2.list(MIRROR_PREFIX, whole=True)
+                                       if isinstance(o.get("key"), str) and o["key"].startswith(MIRROR_PREFIX))
+        n = record["mirror_objects"]
+        mirror = f"{n} object{'s' if n != 1 else ''} under {MIRROR_PREFIX} (never touched)"
+    except resilience.R2Error:
+        mirror = f"the objects under {MIRROR_PREFIX} could not be counted"
+    found = f"{_files(len(stale))} under {DOWNLOADS_PREFIX} that tonight's export no longer writes"
+    if len(stale) > PRUNE_CAP:
+        record.update(outcome="refused", notice=(f"refused, nothing deleted: {found}, more than the {PRUNE_CAP} one "
+                                                 f"night may remove: {_named(stale)}; {mirror}"))
+        return
+    if not deleting:
+        if stale:
+            record.update(outcome=f"{len(stale)} stale (reported)",
+                          notice=f"report only, nothing deleted: {found}: {_named(stale)}; {mirror}")
+        else:
+            record.update(outcome="none stale",
+                          notice=(f"report only, nothing deleted: no yearly file under {DOWNLOADS_PREFIX} that "
+                                  f"tonight's export no longer writes; {mirror}"))
+        return
+    if not stale:
+        record["outcome"] = "none stale"
+        return
+    for name in stale:
+        try:
+            r2.delete(DOWNLOADS_PREFIX + name)
+            record["deleted"].append(name)
+        except resilience.R2Error as exc:
+            record["not_deleted"].append(name)
+            log.warning("prune-downloads: %s", exc)
+    done, left = record["deleted"], record["not_deleted"]
+    record["outcome"] = f"{len(done)} deleted" + (f", {len(left)} not deleted" if left else "")
+    parts = [f"deleted {_files(len(done))} under {DOWNLOADS_PREFIX} that tonight's export no longer writes: "
+             f"{_named(done)}"] if done else []
+    if left:
+        parts.append(f"not deleted, the removal failed (the next run tries again): {_named(left)}")
+    record["notice"] = "; ".join(parts + [mirror])
+
+
+def downloads_prune_notice(outcome: str | None, record: Any) -> str | None:
+    """The notice for the run status: the record's own when it describes this
+    outcome, PRUNE_FAILED_NOTICE for "failed" without one, else None."""
+    if not outcome:
+        return None
+    if isinstance(record, dict) and record.get("outcome") == outcome:
+        notice = record.get("notice")
+        return notice[:NOTICE_PART_MAX] if isinstance(notice, str) and notice else None
+    return PRUNE_FAILED_NOTICE if outcome == "failed" else None
+
+
 # -- pack -------------------------------------------------------------------
 
 # Only plain secondary indexes: a primary key or a UNIQUE constraint is part of
@@ -1270,6 +1505,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--accounts-backup-outcome", default=None,
                    help="the weekly export of the accounts database's outcome file (a word)")
     s.add_argument("--tests", default=None, help="the outcome.json of the tests job's decision")
+    s.add_argument("--downloads-prune-outcome", default=None,
+                   help="the prune of old download files' outcome file (a word)")
+    s.add_argument("--downloads-prune-summary", default=None, help="the summary.json prune-downloads wrote")
     s.add_argument("--restore", default=None, help="the restore record")
     s.add_argument("--smoke", default=None, help="the smoke test's result file")
     s.add_argument("--rollback-outcome", default=None, help="the rollback step's outcome file")
@@ -1407,6 +1645,17 @@ def build_parser() -> argparse.ArgumentParser:
     fn.add_argument("--summary", default=None, help="the roll-up's views/summary.csv, for the day's audience figures")
     fn.add_argument("--out", required=True, help="folder holding funnel.csv as downloaded; funnel_line.txt and "
                                                  "outcome.txt go beside it")
+    # The old download files in R2 (prune_downloads): the listing through the
+    # R2 REST API with the run's token (CLOUDFLARE_API_TOKEN and
+    # CLOUDFLARE_ACCOUNT_ID from the environment, never an argument).
+    pd = sub.add_parser("prune-downloads", help="find the yearly files under downloads/ that tonight's export no "
+                                                "longer writes; report them (PRUNE_MODE report) or delete them")
+    pd.add_argument("--csv", required=True, help="the export's CSV folder, whose files the upload step sent")
+    pd.add_argument("--upload-outcome", default=None,
+                    help="the outcome of the step that uploaded them; anything but success skips the prune")
+    pd.add_argument("--out-dir", required=True, help=f"where {PRUNE_OUTCOME} and {PRUNE_SUMMARY} are written")
+    pd.add_argument("--bucket", default=os.environ.get("BUCKET") or resilience.DATA_BUCKET,
+                    help=f"the R2 bucket (default $BUCKET, else {resilience.DATA_BUCKET})")
     return parser
 
 
@@ -1420,7 +1669,7 @@ def main(argv: list[str] | None = None) -> int:
         "attention": _attention, "notices": _notice_section, "site-bundle-check": _site_bundle_check,
         "indexnow": _indexnow, "rollup-views": _rollup_views, "import-search-console": _import_search_console,
         "views-report": _views_report, "org-review": _org_review, "funnel-sql": _funnel_sql, "funnel": _funnel,
-        "figures-line": _figures_line,
+        "figures-line": _figures_line, "prune-downloads": _prune_downloads,
     }
     return handlers[args.command](args)
 
@@ -1535,7 +1784,9 @@ def _status(args: argparse.Namespace) -> int:
                         org_review=_read(args.org_review_outcome), org_review_record=_read_json(args.org_review_summary),
                         funnel=_read(args.funnel_outcome), accounts_backup=_read(args.accounts_backup_outcome),
                         tests=_read_json(args.tests), search_detail=_read(args.search_detail_outcome),
-                        index_sample=_read(args.index_sample_outcome))
+                        index_sample=_read(args.index_sample_outcome),
+                        downloads_prune=_read(args.downloads_prune_outcome),
+                        downloads_prune_record=_read_json(args.downloads_prune_summary))
     _write_json(Path(args.out), status)
     print(json.dumps(status, indent=1))
     return 0
@@ -1644,8 +1895,13 @@ def _attention(args: argparse.Namespace) -> int:
 
 
 def _notice_section(args: argparse.Namespace) -> int:
-    """The run's notices for LAST_RUN.md, one per line; nothing when there are none."""
-    notices = resilience.notice_items(_read_json(args.status))
+    """The run's notices for LAST_RUN.md, one per line; nothing when there are none. The sources in NOT_IN_LAST_RUN
+    are left out: the record carries their outcome word on a line of its own."""
+    status = _read_json(args.status)
+    if isinstance(status, dict) and isinstance(status.get("notices"), list):
+        status = {**status, "notices": [n for n in status["notices"]
+                                        if not (isinstance(n, dict) and n.get("source") in NOT_IN_LAST_RUN)]}
+    notices = resilience.notice_items(status)
     if notices:
         print("Notices from this run (information; nothing failed):")
         print()
@@ -1786,6 +2042,47 @@ def _figures_line(args: argparse.Namespace) -> int:
     had_day = day_line is not None and funnel.is_figures_line(day_line)
     print("figures-line: the month joined to " + ("tonight's line" if had_day else "a line without the day's figures"))
     return 0
+
+
+def _bucket(bucket: str) -> resilience.R2Rest | None:
+    """The bucket through the run's token, when CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are in the
+    environment (always in the workflow); None otherwise."""
+    token = (os.environ.get("CLOUDFLARE_API_TOKEN") or "").strip()
+    account = (os.environ.get("CLOUDFLARE_ACCOUNT_ID") or "").strip()
+    if not token or not account:
+        return None
+    try:
+        return resilience.R2Rest(_session(), account, token, bucket)
+    except Exception as exc:
+        log.warning("prune-downloads: the bucket cannot be read (%s)", type(exc).__name__)
+        return None
+
+
+def _prune_downloads(args: argparse.Namespace) -> int:
+    """Writes the outcome word to last_outcome.txt and the record to summary.json in --out-dir; logs the outcome
+    and the notice, never a token. Exit 1 when the outcome is "failed" or "refused" (the step shows red; it is
+    allowed to fail), else 0. Nothing reaches the bucket unless the upload saved every file."""
+    r2 = _bucket(args.bucket) if args.upload_outcome == "success" else None
+    try:
+        record = prune_downloads(r2, Path(args.csv), args.upload_outcome)
+    finally:
+        try:
+            if r2 is not None:
+                r2.http.close()
+        except Exception:
+            pass
+    out = Path(args.out_dir)
+    try:
+        out.mkdir(parents=True, exist_ok=True)
+        (out / PRUNE_SUMMARY).write_bytes(json.dumps(record, indent=1).encode("utf-8"))
+        (out / PRUNE_OUTCOME).write_bytes(f"{record['outcome']}\n".encode("utf-8"))
+    except OSError as exc:
+        log.error("prune-downloads: the outcome could not be written (%s)", type(exc).__name__)
+        return 1
+    log.info("prune-downloads: %s (mode %s)", record["outcome"], record["mode"])
+    if record["notice"]:
+        log.info("prune-downloads: %s", record["notice"])
+    return 1 if record["outcome"] in ("failed", "refused") else 0
 
 
 def _summary(lines: list[str]) -> None:

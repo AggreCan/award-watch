@@ -377,6 +377,81 @@ Deployments, the version listed as live before, Rollback), or
 `npx wrangler rollback <version id>` from `site/` with the token in the
 environment.
 
+## What the nightly deploys, and the files it leaves in R2
+
+### A database that fails its check deploys nothing
+
+The nightly checks tonight's database and tonight's export
+(`python -m awardwatch_pipeline.nightly verify`). The database fails when
+SQLite's `quick_check` does, or when a table lost more rows than
+`nightly.MIN_SHARE` allows (a source file cut short, a changed layout). The
+export is computed from that database, so the bundle, and with it the deploy,
+runs only when both checks pass. Such a night also skips the two D1 syncs
+and the save of the database to R2, as it did before.
+
+The site keeps the last deploy's data and code. The run status's `checks`
+stage reads "nothing was deployed because the database check failed:" and
+the check's own reason, and the run's items needing attention carry the same
+line. The run is not ok, so the 16:30 and 20:30 UTC starts run the night
+again, and each restores the last good backup from R2.
+
+### The search and records databases can be a night ahead of the pages
+
+The nightly syncs the search and records databases before the deploy, on
+purpose: the hourly delivery run starts once the deployed `stats.json` says
+the data date is today and then reads the records database, so the database
+must hold that day's rows by then. When a sync went through (`synced`) and
+the deploy then failed, or the live check rolled it back, the databases hold
+tonight's rows while the pages are last night's, until the next deploy that
+goes through. The run status says so in a notice (source `deploy`) naming
+which of the two databases were synced, and the item the failed or
+rolled-back deploy raises carries the same line. Nothing is undone; the
+retry deploys again.
+
+### Old download files in R2
+
+The nightly uploads the public CSV files under `downloads/`, and nothing
+removes one. A yearly file the export no longer writes (a `-3.csv` part a
+year no longer needs, an `after-<year>.csv` file whose year moved) stays in
+R2, and the download route still serves it, because its name matches the
+yearly pattern (`site/src/pages/data.tsx`, `YEARLY_DOWNLOAD`).
+
+The step "Report or remove the old download files in R2" runs
+`python -m awardwatch_pipeline.nightly prune-downloads` after the upload. It
+lists `downloads/` through the R2 REST API, every page of it, and calls an
+object stale when its key is `downloads/<name>`, `<name>` matches the yearly
+pattern, and tonight's upload did not send it. `SHA256SUMS`, the other
+files, a key with a further slash and a key outside `downloads/` are never
+stale. It also counts the objects under `mirror/`, which the download route
+serves and nothing in the repository writes, and never touches them.
+
+`nightly.PRUNE_MODE` ships as `"report"`: the run status gets a notice that
+names the stale files (ten at most, then the count of the rest) and gives the
+count under `mirror/`, and nothing is deleted. Set to `"delete"`, it removes
+each stale object and names what it removed; a removal that fails is named
+and the others still go. To switch, change the constant, the step's comment
+in `nightly.yml` and this section in one commit, with the test that holds the
+shipped value.
+
+| When | Outcome |
+|---|---|
+| The upload of the public files did not save every file | `skipped`; nothing is listed |
+| Tonight's upload sent no file, no `SHA256SUMS`, or fewer than 30 yearly files (`PRUNE_FLOOR`) | `refused`; nothing is listed or deleted; an item needing attention |
+| More than 30 objects are stale (`PRUNE_CAP`) | `refused`; nothing is deleted; an item needing attention |
+| The listing failed, was cut short with no cursor to continue, or did not end | `failed`; nothing is deleted; a notice |
+| No token in the environment | `failed` |
+| Otherwise | `none stale`, `<n> stale (reported)`, or once it deletes `<n> deleted` |
+
+The outcome word is `downloads_prune` in `status.json` and a line of
+`LAST_RUN.md`. The file names stay in the run status's notice, which the
+daily check's email and the run log carry; `LAST_RUN.md` gets the word alone.
+The step never stops the run and never changes the run's `ok`.
+
+The listing uses the nightly's own token, `CLOUDFLARE_API_TOKEN`, as the
+weekly restore's listing does, so the report needs no new permission.
+Removing an object is an R2 write, the permission the token's uploads
+(`wrangler r2 object put`) already use.
+
 ## The forms database
 
 The forms database (`award-watch`) takes its schema by hand, never from a

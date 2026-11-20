@@ -419,8 +419,8 @@ def test_status_has_exactly_the_fields_the_site_and_the_gate_read(tmp_path):
                            "intraday_lookup_bytes", "link_sample", "link_sample_broken", "organization_review",
                            "views_rollup", "search_console", "search_console_detail", "index_sample",
                            "views_report", "indexnow", "funnel", "accounts_backup",
-                           "tests", "interest", "restore", "smoke", "smoke_detail", "version_before", "rollback",
-                           "deploy_rolled_back", "checks", "notices", "ok"}
+                           "tests", "downloads_prune", "interest", "restore", "smoke", "smoke_detail",
+                           "version_before", "rollback", "deploy_rolled_back", "checks", "notices", "ok"}
     # No outcome file: the search database step did not run. The site's check reads the field.
     assert status["search_sync"] == "not run" and status["ok"] is True
 
@@ -1531,3 +1531,188 @@ def test_every_r2_and_d1_call_in_both_deploying_workflows_carries_remote():
         for line in code(path.read_text(encoding="utf-8")).splitlines():
             for call in re.findall(r'"\$WRANGLER" ((?:r2|d1) .*)', line):
                 assert "--remote" in call, f"{path.name}: {line.strip()}"
+
+
+# -- a night whose database failed its check deploys nothing ------------------------------------
+
+BUNDLE_IF = ("if: ${{ !cancelled() && steps.verify.outputs.export_ok == 'true' "
+             "&& steps.verify.outputs.db_ok == 'true' }}")
+AFTER_BUNDLE = "if: ${{ !cancelled() && steps.bundle.outcome == 'success' }}"
+DB_FELL = "tenders fell from 2 to 1 rows"
+# The steps' outcomes on such a night as the workflow passes them to the status.
+HELD = {"restore": "success", "pipeline": "success", "verify": "success", "deploy": "skipped", "save_db": "skipped",
+        "save_files": "skipped"}
+
+
+def test_the_bundle_and_so_the_deploy_wait_on_both_checks():
+    refresh = jobs_of(WORKFLOW.read_text(encoding="utf-8"))["refresh"]
+    blocks = {step_id(s): s for s in steps_of(refresh) if step_id(s)}
+    # The bundle as it was, its condition aside: the same name, the same three commands, no other line.
+    assert [line.strip() for line in code(blocks["bundle"]).splitlines() if line.strip()] == [
+        "name: Bundle the static data for the site", "id: bundle", BUNDLE_IF, "run: |",
+        "rm -rf site/public/data", "cp -r data/out/static site/public/data",
+        "tar -czf data/out/static.tar.gz -C data/out static"]
+    # The steps after it keep their own conditions, so on such a night they skip with it: the version record and
+    # the deploy wait on the bundle; the smoke test, the buyer lookup, IndexNow and the save of the public files
+    # on the deploy; the rollback on the smoke test.
+    for name in ("version", "deploy"):
+        assert f"\n        {AFTER_BUNDLE}\n" in blocks[name], name
+    for name in ("smoke", "intraday_lookup", "indexnow", "save_files"):
+        assert "steps.deploy.outcome == 'success'" in blocks[name], name
+    assert "steps.smoke.outputs.verdict == 'broken'" in blocks["rollback"]
+    # The two syncs, the link sample and the save already waited on db_ok; the bundle is the one new reader.
+    assert code(refresh).count("steps.verify.outputs.db_ok == 'true'") == 5
+    for name in ("search", "records", "bundle", "link_sample", "save_db"):
+        assert "steps.verify.outputs.db_ok == 'true'" in blocks[name], name
+    # Nothing else about the deploy changed: its folder, its three tries.
+    deploy = code(blocks["deploy"])
+    assert "working-directory: site" in deploy and 'if npx wrangler deploy "$@"; then exit 0; fi' in deploy
+
+
+def test_a_night_whose_database_failed_its_check_says_nothing_was_deployed_and_runs_again(tmp_path, monkeypatch):
+    # The verify command's own record of such a night: the database lost rows, the export passed.
+    db = tmp_path / "awardwatch.sqlite"
+    make_db(db, tenders=1)
+    write_export(tmp_path / "static")
+    restore = tmp_path / "restore.json"
+    restore.write_text(json.dumps({"source": "backup", "counts": {"organizations": 3, "tenders": 2}}))
+    gh = tmp_path / "gh_output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(gh))
+    verified = tmp_path / "verify.json"
+    assert nightly.main(["verify", "--db", str(db), "--static", str(tmp_path / "static"), "--restore", str(restore),
+                         "--out", str(verified)]) == 0
+    assert gh.read_text() == "db_ok=false\nexport_ok=true\n"
+    started = tmp_path / "run_started.txt"
+    started.write_text("2026-10-22T12:44:10Z")
+    out = tmp_path / "status.json"
+    steps = [arg for name, outcome in HELD.items() for arg in ("--step", f"{name}={outcome}")]
+    assert nightly.main(["status", "--db", str(db), "--started-file", str(started), "--verify", str(verified),
+                         *steps, "--out", str(out)]) == 0
+    status = json.loads(out.read_text(encoding="utf-8"))
+    said = f"nothing was deployed because the database check failed: {DB_FELL}"
+    assert nightly.DB_HELD_BACK + DB_FELL == said
+    assert status["stages"] == [{"source": "checks", "ok": False, "detail": said}]
+    assert status["ok"] is False and status["steps"]["deploy"] == "skipped"
+    assert resilience.attention_items(status) == [f"checks: {said}"]
+    # Not ok and not deployed: the 16:30 and 20:30 starts run the night again.
+    for hhmm in ("16:30", "20:30"):
+        assert resilience.gate(status, datetime.fromisoformat(f"2026-10-22T{hhmm}:00+00:00"))[0] is False
+
+
+def test_the_check_s_own_reasons_follow_and_other_nights_keep_their_words(tmp_path):
+    db = tmp_path / "awardwatch.sqlite"
+    make_db(db)
+
+    def checks(verified, steps):
+        status = nightly.run_status(db, "2000-01-01T00:00:00Z", verified, steps)
+        return [s["detail"] for s in status["stages"] if s["source"] == "checks"]
+
+    broken = "the database failed its integrity check: row 7 missing from index"
+    assert checks({"db_ok": False, "export_ok": True, "problems": [broken]}, HELD) == [nightly.DB_HELD_BACK + broken]
+    # Both checks failed: the database's reasons first, as verify lists them.
+    assert checks({"db_ok": False, "export_ok": False, "problems": [DB_FELL, "stats.json is missing"]}, HELD) == [
+        f"{nightly.DB_HELD_BACK}{DB_FELL}; stats.json is missing"]
+    # The export alone failed: the words it had.
+    assert checks({"db_ok": True, "export_ok": False, "problems": ["stats.json is missing"]}, HELD) == [
+        "stats.json is missing"]
+    # A status that says the deploy went through is never told otherwise.
+    assert checks({"db_ok": False, "export_ok": True, "problems": [DB_FELL]}, {**HELD, "deploy": "success"}) == [DB_FELL]
+    # The stage keeps its 200 characters, the words first.
+    long = checks({"db_ok": False, "export_ok": True, "problems": ["x" * 300]}, HELD)[0]
+    assert len(long) == 200 and long.startswith(nightly.DB_HELD_BACK)
+
+
+# -- the search and records databases a night ahead of the pages ---------------------------------
+
+BOTH_FAILED = ("the search and records databases were synced tonight, but tonight's deploy did not go through, so "
+               "they are a night ahead of the pages until the next deploy")
+RECORDS_FAILED = ("the records database was synced tonight, but tonight's deploy did not go through, so it is a "
+                  "night ahead of the pages until the next deploy")
+SEARCH_ROLLED = ("the search database was synced tonight, but tonight's deploy was rolled back, so it is a night "
+                 "ahead of the pages until the next deploy")
+BOTH_ROLLED = ("the search and records databases were synced tonight, but tonight's deploy was rolled back, so they "
+               "are a night ahead of the pages until the next deploy")
+VERSION = "0a1b2c3d-1111-4222-8333-444455556666"
+
+
+def test_databases_synced_before_a_deploy_that_did_not_go_live_are_a_night_ahead(tmp_path):
+    db = tmp_path / "awardwatch.sqlite"
+    make_db(db)
+
+    def status(steps, **kw):
+        return nightly.run_status(db, "2000-01-01T00:00:00Z", {"problems": []}, steps, **kw)
+
+    def ahead(record):
+        return [n["detail"] for n in record["notices"] if n["source"] == "deploy"]
+
+    ran = {"restore": "success", "pipeline": "success", "verify": "success"}
+    failed = {**ran, "deploy": "failure", "save_files": "skipped"}
+    deploy_item = f"workflow deploy: {nightly.STEP_DETAIL['deploy']}"
+    # Both synced and the deploy failed: one notice, and one line on the item the failed deploy raises.
+    both = status(failed, search="synced", records="synced")
+    assert both["notices"] == [{"source": "deploy", "detail": BOTH_FAILED}]
+    assert resilience.attention_items(both) == [f"{deploy_item}; {BOTH_FAILED}"]
+    # One synced: named alone.
+    one = status(failed, search="nothing to send", records="synced")
+    assert ahead(one) == [RECORDS_FAILED] and resilience.attention_items(one) == [f"{deploy_item}; {RECORDS_FAILED}"]
+    # Rolled back after the smoke test found the site broken: the rollback's item carries the line.
+    broken = {"verdict": "broken", "detail": "/ answered 500 and 500"}
+    for search, records, words in (("synced", "nothing to send", SEARCH_ROLLED), ("synced", "synced", BOTH_ROLLED)):
+        rolled = status({**ran, "deploy": "success"}, search=search, records=records, smoke=broken,
+                        rollback="rolled back", version_before=VERSION)
+        assert ahead(rolled) == [words]
+        [item] = resilience.attention_items(rolled)
+        assert item.startswith("Deploy rolled back:") and item.endswith(f"and a later run tries again; {words}")
+    # The deploy went through and stayed: nothing to say.
+    fine = status({**ran, "deploy": "success"}, search="synced", records="synced",
+                  smoke={"verdict": "ok", "detail": "5 pages answered 200"})
+    assert fine["notices"] == [] and resilience.attention_items(fine) == []
+    # Broken and not rolled back: the pages are tonight's, so the databases are not ahead of them.
+    stuck = status({**ran, "deploy": "success"}, search="synced", records="synced", smoke=broken,
+                   rollback="no version recorded")
+    assert ahead(stuck) == [] and not any("night ahead" in i for i in resilience.attention_items(stuck))
+    # No sync applied: nothing to say, and the failed deploy's item as it was.
+    for search, records in (("nothing to send", "nothing to send"), ("failed", "failed"), (None, None),
+                            ("not run", "no database")):
+        quiet = status(failed, search=search, records=records)
+        assert ahead(quiet) == [], (search, records)
+        assert deploy_item in resilience.attention_items(quiet), (search, records)
+    # The bundle failed after the syncs, so the deploy never ran and raises no item: the notice says it.
+    skipped = status({**ran, "deploy": "skipped"}, search="synced", records="synced")
+    assert ahead(skipped) == [BOTH_FAILED] and resilience.attention_items(skipped) == []
+    # A status without the deploy's outcome says nothing; the run's ok is never changed by the notice.
+    assert status(ran, search="synced", records="synced")["notices"] == []
+    assert both["ok"] is False and skipped["ok"] is True
+    # Fixed words, no figure.
+    for words in (BOTH_FAILED, RECORDS_FAILED, SEARCH_ROLLED, BOTH_ROLLED):
+        assert not re.search(r"[0-9]", words), words
+
+
+def test_the_workflow_passes_what_the_notice_needs_and_moves_no_step(tmp_path, capsys):
+    text = WORKFLOW.read_text(encoding="utf-8")
+    names = [line.strip()[len("- name: "):] for line in text.splitlines() if line.strip().startswith("- name: ")]
+    order = ["Check the database and the export", "Sync the search database", "Sync the records database",
+             "Bundle the static data for the site", "Record the live Worker version",
+             "Deploy the Worker with the new data as assets", "Check the live site",
+             "Roll the Worker back when the deploy broke the site"]
+    assert [names.index(n) for n in order] == list(range(names.index(order[0]), names.index(order[0]) + len(order)))
+    status = step(text, "Write the run status")
+    for flag in ("--search-outcome data/out/search/last_outcome.txt", "--records-outcome data/out/records/last_outcome.txt",
+                 '--step "deploy=${{ steps.deploy.outcome }}"', "--smoke data/out/deploy/smoke.json",
+                 "--rollback-outcome data/out/deploy/rollback.txt"):
+        assert flag in status, flag
+    # The command reads them from the files the steps write.
+    db = tmp_path / "awardwatch.sqlite"
+    make_db(db)
+    for name in ("search", "records"):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "last_outcome.txt").write_text("synced\n", encoding="utf-8")
+    out = tmp_path / "status.json"
+    assert nightly.main(["status", "--db", str(db), "--search-outcome", str(tmp_path / "search" / "last_outcome.txt"),
+                         "--records-outcome", str(tmp_path / "records" / "last_outcome.txt"),
+                         "--step", "deploy=failure", "--out", str(out)]) == 0
+    assert json.loads(out.read_text(encoding="utf-8"))["notices"] == [{"source": "deploy", "detail": BOTH_FAILED}]
+    # Words only, so LAST_RUN.md's notices carry it too.
+    capsys.readouterr()
+    assert nightly.main(["notices", "--status", str(out)]) == 0
+    assert f"- deploy: {BOTH_FAILED}\n" in capsys.readouterr().out

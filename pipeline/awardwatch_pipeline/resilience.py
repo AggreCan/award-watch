@@ -17,7 +17,9 @@ nightly.py calls these from its command line; the workflow calls nightly.py.
                 static bundle saved in R2 (static.tar.gz, in parts) with the
                 ones the live site serves.
   R2Rest        list the bucket and download one object through Cloudflare's
-                REST API, for the weekly snapshot the restore falls back to.
+                REST API, for the weekly snapshot the restore falls back to;
+                list a prefix whole and remove one object, for the prune of
+                old download files (nightly prune-downloads).
   run_checks    once a month, the expiry dates of the tokens and the domain.
   attention_items, issue_texts
                 the items the run's last step reports, and the text of the
@@ -514,9 +516,10 @@ class R2Error(Exception):
 
 
 class R2Rest:
-    """The two R2 calls Wrangler has no command for: a listing, and the
-    download of an object found by it. Same token as the rest of the run
-    (CLOUDFLARE_API_TOKEN, R2 edit on the project account)."""
+    """The R2 calls Wrangler has no command for: a listing, the download of an
+    object found by it, and the removal of one (the prune of old download
+    files, when nightly.PRUNE_MODE is "delete"). Same token as the rest of the
+    run (CLOUDFLARE_API_TOKEN, R2 edit on the project account)."""
 
     def __init__(self, http: Any, account: str, token: str, bucket: str, timeout: float = 120) -> None:
         self.http, self.account, self.token, self.bucket, self.timeout = http, account, token, bucket, timeout
@@ -534,7 +537,12 @@ class R2Rest:
             text = f"{what} answered HTTP {_status_code(resp)}{_api_errors(resp)}"
         return R2Error(_scrub(text, self.token, self.account))
 
-    def list(self, prefix: str) -> list[dict[str, Any]]:
+    def list(self, prefix: str, *, whole: bool = False) -> list[dict[str, Any]]:
+        """Every object under prefix, page after page. With whole, an answer
+        that says the listing goes on (is_truncated) but gives no cursor to
+        continue it raises R2Error instead of ending the list there: the prune
+        of old download files must see every object. The weekly restore keeps
+        the reading it has."""
         objects: list[dict[str, Any]] = []
         cursor = None
         for _ in range(MAX_LIST_PAGES):
@@ -560,6 +568,8 @@ class R2Rest:
             info = payload.get("result_info") if isinstance(payload.get("result_info"), dict) else {}
             cursor = info.get("cursor") if info.get("is_truncated") else None
             if not cursor:
+                if whole and info.get("is_truncated"):
+                    raise R2Error("the listing was cut short and gave no cursor to continue it")
                 return objects
         raise R2Error(f"the listing did not end after {MAX_LIST_PAGES} pages")
 
@@ -658,6 +668,17 @@ class R2Rest:
             raise self._fail(f"the upload of {key}", exc) from None
         if _status_code(resp) not in (200, 201):
             raise self._fail(f"the upload of {key}", resp=resp)
+
+    def delete(self, key: str) -> None:
+        """Remove one object (the path Wrangler's own r2 object delete takes).
+        Raises R2Error for any answer but 200 or 204."""
+        url = f"{self._base()}/{quote(key, safe='/')}"
+        try:
+            resp = self.http.delete(url, headers=self._headers(), timeout=self.timeout)
+        except Exception as exc:
+            raise self._fail(f"the removal of {key}", exc) from None
+        if _status_code(resp) not in (200, 204):
+            raise self._fail(f"the removal of {key}", resp=resp)
 
 
 def r2_from_env(bucket: str | None = None) -> R2Rest | None:
@@ -860,12 +881,65 @@ def tests_item(tests: Any) -> str | None:
             f"{ran or 'an unknown commit'}, the commit that was live")
 
 
+def databases_ahead(status: Any) -> str | None:
+    """The fixed words for a night on which the search or the records database
+    was synced (its outcome "synced") while tonight's pages did not go live:
+    the deploy step's outcome is known and not success (failed, cancelled, or
+    skipped after the bundle failed), or the deploy was rolled back. The two
+    databases are synced before the deploy on purpose (the hourly delivery run
+    reads the records database once the deployed data date is today), so they
+    hold tonight's rows while the pages are last night's until the next
+    deploy. None on any other night. Names which of the two were synced."""
+    if not isinstance(status, dict):
+        return None
+    synced = [name for name, field in (("search", "search_sync"), ("records", "records_sync"))
+              if status.get(field) == "synced"]
+    if not synced:
+        return None
+    steps = status.get("steps") if isinstance(status.get("steps"), dict) else {}
+    deploy = steps.get("deploy")
+    rolled = status.get("deploy_rolled_back") is True
+    if not rolled and not (isinstance(deploy, str) and deploy and deploy != "success"):
+        return None
+    why = "tonight's deploy was rolled back" if rolled else "tonight's deploy did not go through"
+    if len(synced) == 2:
+        return (f"the search and records databases were synced tonight, but {why}, so they are a night ahead "
+                f"of the pages until the next deploy")
+    return (f"the {synced[0]} database was synced tonight, but {why}, so it is a night ahead of the pages "
+            f"until the next deploy")
+
+
+# The source of the prune's notice (nightly.prune_downloads) in status.json.
+PRUNE_SOURCE = "downloads_prune"
+
+
+def prune_item(status: dict[str, Any]) -> str | None:
+    """The item for a prune of old download files that refused to act
+    (status.json downloads_prune "refused"): its notice, which says why and
+    names the files; None for any other outcome."""
+    if status.get(PRUNE_SOURCE) != "refused":
+        return None
+    detail = next((n["detail"] for n in status.get("notices") or []
+                   if isinstance(n, dict) and n.get("source") == PRUNE_SOURCE and isinstance(n.get("detail"), str)),
+                  "refused, nothing deleted")
+    return f"Old download files in R2: {detail}"
+
+
 def attention_items(status: Any) -> list[str]:
     """What the run's last step lists. An empty list means a clean run."""
     if not isinstance(status, dict):
         return ["no run status was written"]
-    items = [f"{x.get('source')}: {x.get('detail', '')}" for x in status.get("stages") or []
-             if isinstance(x, dict) and not x.get("ok")]
+    # A deploy that did not go live after a sync: one line on the item the
+    # deploy raises (its failed step, or its rollback), said once.
+    ahead = databases_ahead(status)
+    items = []
+    for x in status.get("stages") or []:
+        if not isinstance(x, dict) or x.get("ok"):
+            continue
+        item = f"{x.get('source')}: {x.get('detail', '')}"
+        if ahead and x.get("source") == "workflow deploy":
+            item, ahead = f"{item}; {ahead}", None
+        items.append(item)
     if status.get("search_sync") == "failed":
         items.append("Search database sync: failed (sent again next run)")
     if status.get("records_sync") == "failed":
@@ -892,12 +966,15 @@ def attention_items(status: Any) -> list[str]:
     tests = tests_item(status.get("tests"))
     if tests:
         items.append(tests)
+    prune = prune_item(status)
+    if prune:
+        items.append(prune)
     if status.get("smoke") == "broken":
         detail = status.get("smoke_detail") or "server errors"
         if status.get("deploy_rolled_back") is True:
             items.append(f"Deploy rolled back: the site answered with server errors after the deploy ({detail}); "
                          f"the Worker is back on version {status.get('version_before') or 'unknown'}, "
-                         f"with the previous data, and a later run tries again")
+                         f"with the previous data, and a later run tries again" + (f"; {ahead}" if ahead else ""))
         else:
             items.append(f"Deploy broken: the site answered with server errors after the deploy ({detail}) "
                          f"and was not rolled back ({status.get('rollback') or 'not run'})")
