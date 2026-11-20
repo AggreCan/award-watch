@@ -318,11 +318,13 @@ html.js .theme-toggle { display: inline-flex; }
    script; --scrub (seconds) holds it at a moment and .is-paused stops it.
    Sized in its own width (container units), so it is the same picture at
    every width. The builder's form in its order (Buyer, Rows, Source, Show):
-   the source is set, the rows kept by fiscal year, the buyer chosen, and the
-   bars draw; Show turns to Line and then to Table; the result's Add to
+   the reader opens Source and picks one, opens Buyer and picks one, and the
+   bars draw; opens Show and picks Line, then Table; the result's Add to
    dashboard puts the table on a dashboard, whose tile is dragged to the top
-   and widened. Every rule is scoped to .bd, whose class names (.pv, .ln and
-   the others) the map card uses too. */
+   and widened. A menu opens under its field at a click, its highlight follows
+   the pointer down its options, and a click on one closes it with that value;
+   a ring marks each click. Every rule is scoped to .bd, whose class names
+   (.pv, .ln and the others) the map card uses too. */
 .bd { --dur: 24s; position: relative; width: 100%; aspect-ratio: 100 / 72; container-type: inline-size; overflow: hidden;
   background: var(--paper); border: 1px solid var(--line-2); border-radius: var(--r); }
 .bd * { animation-duration: var(--dur); animation-timing-function: linear; animation-iteration-count: infinite;
@@ -335,7 +337,8 @@ html.js .theme-toggle { display: inline-flex; }
 @keyframes bd-sc-b { 0%, 71% { opacity: 0; } 74%, 97.5% { opacity: 1; } 100% { opacity: 0; } }
 .bd .sc-h { position: absolute; left: 4cqw; top: 3.2cqw; margin: 0; font-family: var(--display); font-weight: 800; font-size: 1.35em; letter-spacing: -.01em; }
 
-/* The menus: the source chosen first (8.5%), the rows opened and kept (18.5%), the buyer chosen (24.5%), then Show. */
+/* The fields: Source opened at 7% and its value picked at 12%, Buyer opened at 18% and picked at 23%, Show opened at
+   40% and 55.5% and picked at 44% (Line) and 59% (Table). A field is ringed from the click that opens its menu. */
 .bd .fld { position: absolute; left: 4cqw; width: 34cqw; }
 .bd .fld-l { display: block; height: 3.4cqw; font-size: .74em; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .bd .fld-b { position: relative; height: 6cqw; display: flex; align-items: center; padding: 0 1.6cqw; background: var(--page);
@@ -348,30 +351,60 @@ html.js .theme-toggle { display: inline-flex; }
 .bd .f3 { top: 34.4cqw; }
 .bd .f4 { top: 46.6cqw; }
 .bd .f3 .fld-b { animation-name: bd-focus1; }
-.bd .f2 .fld-b { animation-name: bd-focus2; }
 .bd .f1 .fld-b { animation-name: bd-focus3; }
-@keyframes bd-focus1 { 0%, 8% { border-color: var(--line-2); } 8.5%, 15.5% { border-color: var(--em); } 16%, 100% { border-color: var(--line-2); } }
-@keyframes bd-focus2 { 0%, 18% { border-color: var(--line-2); } 18.5%, 21.5% { border-color: var(--em); } 22%, 100% { border-color: var(--line-2); } }
-@keyframes bd-focus3 { 0%, 24% { border-color: var(--line-2); } 24.5%, 27% { border-color: var(--em); } 27.5%, 100% { border-color: var(--line-2); } }
+@keyframes bd-focus1 { 0%, 6.9% { border-color: var(--line-2); } 7%, 13.5% { border-color: var(--em); } 14%, 100% { border-color: var(--line-2); } }
+@keyframes bd-focus3 { 0%, 17.9% { border-color: var(--line-2); } 18%, 24.5% { border-color: var(--em); } 25%, 100% { border-color: var(--line-2); } }
 .bd .f3 .ph { animation-name: bd-ph1; }
 .bd .f1 .ph { animation-name: bd-ph3; }
-@keyframes bd-ph1 { 0%, 8.5% { opacity: 1; } 8.7%, 97.5% { opacity: 0; } 100% { opacity: 1; } }
-@keyframes bd-ph3 { 0%, 24.5% { opacity: 1; } 24.7%, 97.5% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes bd-ph1 { 0%, 12% { opacity: 1; } 12.2%, 97.5% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes bd-ph3 { 0%, 23% { opacity: 1; } 23.2%, 97.5% { opacity: 0; } 100% { opacity: 1; } }
 .bd .f3 .val { animation-name: bd-val1; }
 .bd .f1 .val { animation-name: bd-val3; }
-@keyframes bd-val1 { 0%, 8.5% { opacity: 0; } 8.7%, 96.5% { opacity: 1; } 97.5%, 100% { opacity: 0; } }
-@keyframes bd-val3 { 0%, 24.5% { opacity: 0; } 24.7%, 96.5% { opacity: 1; } 97.5%, 100% { opacity: 0; } }
-/* Show is a menu, as the builder's is: Bars, then Line (43%), then Table (56.5%), each chosen with a click. */
+@keyframes bd-val1 { 0%, 12% { opacity: 0; } 12.2%, 96.5% { opacity: 1; } 97.5%, 100% { opacity: 0; } }
+@keyframes bd-val3 { 0%, 23% { opacity: 0; } 23.2%, 96.5% { opacity: 1; } 97.5%, 100% { opacity: 0; } }
+/* Show is a menu, as the builder's is: Bars, then Line (44%), then Table (59%), each picked from its open menu. */
 .bd .sh span:not(.caret) { position: absolute; left: 1.6cqw; }
 .bd .sh .s1 { animation-name: bd-show1; }
 .bd .sh .s2 { animation-name: bd-show2; }
 .bd .sh .s3 { animation-name: bd-show3; }
-@keyframes bd-show1 { 0%, 42.5% { opacity: 1; } 43%, 96.5% { opacity: 0; } 97.5%, 100% { opacity: 1; } }
-@keyframes bd-show2 { 0%, 42.5% { opacity: 0; } 43%, 56% { opacity: 1; } 56.5%, 100% { opacity: 0; } }
-@keyframes bd-show3 { 0%, 56% { opacity: 0; } 56.5%, 96.5% { opacity: 1; } 97.5%, 100% { opacity: 0; } }
+@keyframes bd-show1 { 0%, 44% { opacity: 1; } 44.2%, 96.5% { opacity: 0; } 97.5%, 100% { opacity: 1; } }
+@keyframes bd-show2 { 0%, 44% { opacity: 0; } 44.2%, 59% { opacity: 1; } 59.2%, 100% { opacity: 0; } }
+@keyframes bd-show3 { 0%, 59% { opacity: 0; } 59.2%, 96.5% { opacity: 1; } 97.5%, 100% { opacity: 0; } }
 .bd .f4 .fld-b { animation-name: bd-focus4; }
-@keyframes bd-focus4 { 0%, 41% { border-color: var(--line-2); } 41.5%, 43.5% { border-color: var(--em); } 44%, 54.5% { border-color: var(--line-2); }
-  55%, 57% { border-color: var(--em); } 57.5%, 100% { border-color: var(--line-2); } }
+@keyframes bd-focus4 { 0%, 39.9% { border-color: var(--line-2); } 40%, 45.5% { border-color: var(--em); } 46%, 55.4% { border-color: var(--line-2); }
+  55.5%, 60.5% { border-color: var(--em); } 61%, 100% { border-color: var(--line-2); } }
+
+/* An open menu, under its field: the options the builder offers, each a row of 4.2cqw, the first .6cqw under the
+   menu's top. The highlight (.hl) is one bar that steps from row to row as the pointer crosses them: it starts on
+   the value the field holds and ends on the one picked. In Buyer's the other buyers are placeholders with no name
+   (.e), as the dashboard's other tiles are. */
+.bd .mn { position: absolute; left: 4cqw; z-index: 3; min-width: 34cqw; padding: .6cqw; background: var(--page); border: 1px solid var(--line-2);
+  border-radius: 1.2cqw; }
+.bd .mn span { position: relative; display: flex; align-items: center; height: 4.2cqw; padding: 0 1cqw; font-weight: 500; white-space: nowrap; }
+.bd .mn .e .sk { flex: none; }
+.bd .mn .hl { position: absolute; left: .6cqw; right: .6cqw; top: .6cqw; height: 4.2cqw; border-radius: .8cqw; background: var(--em-soft); }
+.bd .m3 { top: 44.3cqw; animation-name: bd-m3; }
+.bd .m1 { top: 19.9cqw; animation-name: bd-m1; }
+.bd .m4 { top: 56.5cqw; animation-name: bd-m4; }
+@keyframes bd-m3 { 0%, 7% { opacity: 0; transform: translateY(-.8cqw); } 7.6%, 12% { opacity: 1; transform: translateY(0); }
+  12.4%, 100% { opacity: 0; transform: translateY(-.8cqw); } }
+@keyframes bd-m1 { 0%, 18% { opacity: 0; transform: translateY(-.8cqw); } 18.6%, 23% { opacity: 1; transform: translateY(0); }
+  23.4%, 100% { opacity: 0; transform: translateY(-.8cqw); } }
+@keyframes bd-m4 { 0%, 40% { opacity: 0; transform: translateY(-.8cqw); } 40.6%, 44% { opacity: 1; transform: translateY(0); }
+  44.4%, 55.5% { opacity: 0; transform: translateY(-.8cqw); } 56.1%, 59% { opacity: 1; transform: translateY(0); }
+  59.4%, 100% { opacity: 0; transform: translateY(-.8cqw); } }
+/* Source: from Award notices over the second option to the third (the pointer goes down from 8.5% to 11%). */
+.bd .m3 .hl { animation-name: bd-hl3; }
+@keyframes bd-hl3 { 0%, 9.92% { transform: translateY(0); } 9.93%, 10.64% { transform: translateY(4.2cqw); } 10.65%, 13% { transform: translateY(8.4cqw); }
+  13.1%, 100% { transform: translateY(0); } }
+/* Buyer: from the empty choice over two buyers to the fourth row (19.5% to 22%). */
+.bd .m1 .hl { animation-name: bd-hl1; }
+@keyframes bd-hl1 { 0%, 20.6% { transform: translateY(0); } 20.61%, 21.16% { transform: translateY(4.2cqw); } 21.17%, 21.72% { transform: translateY(8.4cqw); }
+  21.73%, 24% { transform: translateY(12.6cqw); } 24.1%, 100% { transform: translateY(0); } }
+/* Show: from Bars to Line (41.5% to 43%); opened again on Line, over Bars and Line to Table (56.5% to 58.2%). */
+.bd .m4 .hl { animation-name: bd-hl4; }
+@keyframes bd-hl4 { 0%, 42.69% { transform: translateY(0); } 42.7%, 56.97% { transform: translateY(4.2cqw); } 56.98%, 57.46% { transform: translateY(0); }
+  57.47%, 57.95% { transform: translateY(4.2cqw); } 57.96%, 61% { transform: translateY(8.4cqw); } 61.1%, 100% { transform: translateY(0); } }
 /* The form's own button, filled as the builder's is; the preview needs no press of it. */
 .bd .go { position: absolute; left: 4cqw; top: 60.6cqw; width: 34cqw; height: 6.4cqw; display: flex; align-items: center; justify-content: center;
   background: var(--em); color: var(--em-ink); border-radius: 1.2cqw; font-weight: 600; }
@@ -381,9 +414,9 @@ html.js .theme-toggle { display: inline-flex; }
 .bd .pv-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 0 5cqw; text-align: center;
   color: var(--muted); animation-name: bd-pv-empty; }
 .bd .pv-empty .pv-t { color: var(--ink); text-align: left; }
-@keyframes bd-pv-empty { 0%, 24.5% { opacity: 1; } 26.5%, 97.5% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes bd-pv-empty { 0%, 23% { opacity: 1; } 25%, 97.5% { opacity: 0; } 100% { opacity: 1; } }
 .bd .pv-chart { position: absolute; inset: 0; animation-name: bd-pv-chart; }
-@keyframes bd-pv-chart { 0%, 25% { opacity: 0; } 27%, 96.5% { opacity: 1; } 97.5%, 100% { opacity: 0; } }
+@keyframes bd-pv-chart { 0%, 23.5% { opacity: 0; } 25.5%, 96.5% { opacity: 1; } 97.5%, 100% { opacity: 0; } }
 .bd .pv-t { position: absolute; left: 2.4cqw; right: 2.4cqw; top: 2.2cqw; margin: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bd .pv-c { position: absolute; left: 2.4cqw; right: 2.4cqw; bottom: 1.8cqw; margin: 0; font-size: .78em; color: var(--muted); white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; }
@@ -394,10 +427,10 @@ html.js .theme-toggle { display: inline-flex; }
 .bd .add { flex: none; color: var(--em); font-weight: 600; animation-name: bd-press; }
 @keyframes bd-press { 0%, 67% { transform: scale(1); } 68% { transform: scale(.94); } 69.5%, 100% { transform: scale(1); } }
 .bd .pv svg { position: absolute; left: 1.4cqw; top: 9cqw; width: 51.2cqw; height: 40cqw; overflow: visible; animation-name: bd-svg; }
-@keyframes bd-svg { 0%, 55% { opacity: 1; } 57%, 96.5% { opacity: 0; } 97.5%, 100% { opacity: 1; } }
+@keyframes bd-svg { 0%, 59% { opacity: 1; } 61%, 96.5% { opacity: 0; } 97.5%, 100% { opacity: 1; } }
 .bd .pv-table { position: absolute; left: 2.4cqw; right: 2.4cqw; top: 9.4cqw; height: 40cqw; display: grid; grid-template-rows: repeat(9, 1fr); font-size: .78em;
   animation-name: bd-pv-table; }
-@keyframes bd-pv-table { 0%, 56.5% { opacity: 0; } 58.5%, 96.5% { opacity: 1; } 97.5%, 100% { opacity: 0; } }
+@keyframes bd-pv-table { 0%, 59.5% { opacity: 0; } 61.5%, 96.5% { opacity: 1; } 97.5%, 100% { opacity: 0; } }
 .bd .tr { display: grid; grid-template-columns: 1.9fr 1.6fr .85fr; gap: .5cqw; align-items: center; border-bottom: 1px solid var(--line);
   font-variant-numeric: tabular-nums; }
 .bd .tr span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -408,14 +441,14 @@ html.js .theme-toggle { display: inline-flex; }
 .bd .tk { fill: var(--muted); font: 500 8.5px var(--body); }
 /* Every bar in the one accent; they grow one after another and dim together under the line. */
 .bd .bar { fill: var(--em); transform-box: fill-box; transform-origin: 50% 100%; animation-name: bd-bar; animation-delay: calc(var(--scrub, 0) * -1s + var(--i) * .22s); }
-@keyframes bd-bar { 0%, 26.5% { transform: scaleY(0); animation-timing-function: cubic-bezier(.2, .7, .2, 1); } 29.5%, 96.5% { transform: scaleY(1); }
+@keyframes bd-bar { 0%, 25% { transform: scaleY(0); animation-timing-function: cubic-bezier(.2, .7, .2, 1); } 28%, 96.5% { transform: scaleY(1); }
   97.5%, 100% { transform: scaleY(0); } }
 .bd .bars { animation-name: bd-bars; }
-@keyframes bd-bars { 0%, 41.5% { opacity: 1; } 43%, 96.5% { opacity: .16; } 97.5%, 100% { opacity: 1; } }
+@keyframes bd-bars { 0%, 44% { opacity: 1; } 45.5%, 96.5% { opacity: .16; } 97.5%, 100% { opacity: 1; } }
 .bd .ln { fill: none; stroke: var(--em); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; stroke-dasharray: 1; animation-name: bd-ln; }
-@keyframes bd-ln { 0%, 43% { stroke-dashoffset: 1; } 49%, 96.5% { stroke-dashoffset: 0; } 97.5%, 100% { stroke-dashoffset: 1; } }
+@keyframes bd-ln { 0%, 45% { stroke-dashoffset: 1; } 51%, 96.5% { stroke-dashoffset: 0; } 97.5%, 100% { stroke-dashoffset: 1; } }
 .bd .pt { fill: var(--em); stroke: var(--page); stroke-width: 2; animation-name: bd-pt; }
-@keyframes bd-pt { 0%, 48.5% { opacity: 0; } 50%, 96.5% { opacity: 1; } 97.5%, 100% { opacity: 0; } }
+@keyframes bd-pt { 0%, 50.5% { opacity: 0; } 52%, 96.5% { opacity: 1; } 97.5%, 100% { opacity: 0; } }
 
 /* The dashboard: the table arrives as a tile, is dragged to the top (the
    others move down) and widened from its corner; the two other tiles are
@@ -460,23 +493,42 @@ html.js .theme-toggle { display: inline-flex; }
 @keyframes bd-mark { 0%, 79.5% { opacity: 0; width: 44.5cqw; } 80.5%, 84% { opacity: .9; width: 44.5cqw; } 85% { opacity: 0; width: 44.5cqw; }
   85.1%, 89.5% { opacity: 0; width: 92cqw; } 90.5%, 93.5% { opacity: .9; width: 92cqw; } 95%, 99.9% { opacity: 0; width: 92cqw; } 100% { opacity: 0; width: 44.5cqw; } }
 
-/* The pointer, over both scenes, in the ink with a rim of the page. */
+/* The pointer, over both scenes, in the ink with a rim of the page. It rests at a field's right, clear of the
+   value; down an open menu it moves at one speed, which is what the highlights' steps are timed to. */
 .bd .cur { position: absolute; left: 0; top: 0; z-index: 5; width: 3cqw; height: 3cqw; animation-name: bd-cur; }
 .bd .cur svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .bd .cur path { fill: var(--ink); stroke: var(--page); stroke-width: 1.4; stroke-linejoin: round; }
 @keyframes bd-cur {
-  0%, 5% { transform: translate(74cqw, 60cqw); animation-timing-function: ease-in-out; }
-  8.5%, 15% { transform: translate(20cqw, 41cqw); animation-timing-function: ease-in-out; }
-  18.5%, 21% { transform: translate(20cqw, 28.8cqw); animation-timing-function: ease-in-out; }
-  24.5%, 38% { transform: translate(20cqw, 16.6cqw); animation-timing-function: ease-in-out; }
-  41.5%, 52% { transform: translate(21cqw, 53.2cqw); animation-timing-function: ease-in-out; }
-  55%, 64% { transform: translate(22cqw, 53.6cqw); animation-timing-function: ease-in-out; }
+  0%, 3% { transform: translate(74cqw, 60cqw); animation-timing-function: ease-in-out; }
+  6.5%, 8.5% { transform: translate(30cqw, 40.5cqw); animation-timing-function: linear; }
+  11%, 14% { transform: translate(30cqw, 55.1cqw); animation-timing-function: ease-in-out; }
+  17.5%, 19.5% { transform: translate(30cqw, 16.1cqw); animation-timing-function: linear; }
+  22%, 36% { transform: translate(30cqw, 34.9cqw); animation-timing-function: ease-in-out; }
+  39.5%, 41.5% { transform: translate(30cqw, 52.7cqw); animation-timing-function: linear; }
+  43%, 53% { transform: translate(30cqw, 63.1cqw); animation-timing-function: ease-in-out; }
+  55%, 56.5% { transform: translate(30cqw, 52.7cqw); animation-timing-function: linear; }
+  58.2%, 64% { transform: translate(30cqw, 67.3cqw); animation-timing-function: ease-in-out; }
   67%, 76% { transform: translate(85cqw, 16cqw); animation-timing-function: ease-in-out; }
   79% { transform: translate(6.2cqw, 43.6cqw); animation-timing-function: ease-in-out; }
   85%, 86.5% { transform: translate(6.2cqw, 13.6cqw); animation-timing-function: ease-in-out; }
   89.5% { transform: translate(47cqw, 36.6cqw); animation-timing-function: ease-in-out; }
   94.5%, 97.5% { transform: translate(94.5cqw, 36.6cqw); animation-timing-function: ease-in-out; }
   100% { transform: translate(74cqw, 60cqw); }
+}
+/* A ring at the pointer's tip at each click: a menu opened (7%, 18%, 40%, 55.5%), an option picked (12%, 23%, 44%,
+   59%), Add to dashboard pressed (68%). */
+.bd .cur .ck { position: absolute; left: -1.1cqw; top: -1.25cqw; width: 3cqw; height: 3cqw; border: .3cqw solid var(--em); border-radius: 50%;
+  animation-name: bd-ck; }
+@keyframes bd-ck {
+  0%, 6.99% { opacity: 0; transform: scale(.3); } 7% { opacity: .9; transform: scale(.3); } 8.4%, 11.99% { opacity: 0; transform: scale(1); }
+  12% { opacity: .9; transform: scale(.3); } 13.4%, 17.99% { opacity: 0; transform: scale(1); }
+  18% { opacity: .9; transform: scale(.3); } 19.4%, 22.99% { opacity: 0; transform: scale(1); }
+  23% { opacity: .9; transform: scale(.3); } 24.4%, 39.99% { opacity: 0; transform: scale(1); }
+  40% { opacity: .9; transform: scale(.3); } 41.4%, 43.99% { opacity: 0; transform: scale(1); }
+  44% { opacity: .9; transform: scale(.3); } 45.4%, 55.49% { opacity: 0; transform: scale(1); }
+  55.5% { opacity: .9; transform: scale(.3); } 56.9%, 58.99% { opacity: 0; transform: scale(1); }
+  59% { opacity: .9; transform: scale(.3); } 60.4%, 67.99% { opacity: 0; transform: scale(1); }
+  68% { opacity: .9; transform: scale(.3); } 69.4%, 100% { opacity: 0; transform: scale(1); }
 }
 /* A reader who asks for less motion sees the finished dashboard, held still. */
 @media (prefers-reduced-motion: reduce) {
@@ -526,6 +578,8 @@ html.js .theme-toggle { display: inline-flex; }
 .lp-plan-acts { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; padding-top: 6px; }
 .lp-plan-ultra .lp-btn { border-color: var(--sap); color: var(--sap); }
 .lp-plans-note { margin-top: 16px; font-size: 13px; line-height: 20px; color: var(--muted); max-width: 72ch; }
+/* The line that says the plans swipe: shown on a phone alone (the 640 px block). */
+.lp-plans-swipe { display: none; margin: -16px 0 16px; font-size: 14px; line-height: 20px; color: var(--muted); }
 /* Ultra's form in its button's place (src/pages/landing.tsx UltraBox): the address over the card's button,
    then, once posted, the line that says it is kept on the card's soft tint. A post without the script
    lands on the card's anchor, clear of the sticky nav. */
@@ -591,6 +645,14 @@ html.js .theme-toggle { display: inline-flex; }
   .lp-search { flex-direction: column; }
   .lp-marquee::before, .lp-marquee::after { width: 40px; }
   .lp-plan-list li > span { white-space: normal; }
+  /* On a phone the plans sit side by side and the reader swipes from one to
+     the next (the operator's ruling of 2026-11-20): a card takes most of the
+     width, so the next one shows at the edge, and a line above says so. The
+     row scrolls inside its own box; the page itself never scrolls sideways. */
+  .lp-plans { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; padding-bottom: 16px; scrollbar-width: thin; }
+  .lp-plan { flex: 0 0 86%; scroll-snap-align: center; }
+  .lp-plan-acts { margin-top: auto; }
+  .lp-plans-swipe { display: block; }
   /* A long button label wraps rather than push the page wider; the nav's stay on one line. */
   .lp-btn { white-space: normal; text-align: center; }
   .lp-nav .lp-btn { white-space: nowrap; }

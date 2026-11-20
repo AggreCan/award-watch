@@ -131,6 +131,16 @@ cards only. Every piece the switch changes is
 listed in `LANDING_SWITCH_PIECES` (`site/test/home.ts`); the switch guards
 strip them and hold the rest of the page equal in both states.
 
+On a phone (640 px and under) the three cards sit side by side and the
+reader swipes from one to the next (the operator's ruling of 2026-11-20). A
+card takes 86% of the width, so the next shows at the edge; the row scrolls
+inside its own box and snaps to a card, and the page never scrolls sideways.
+The line "Swipe to see each plan." (`landing.plans_swipe`) shows above the
+cards on a phone alone. The plan cards wherever `PlanCards` draws them (the
+Pro page, the billing page, the dashboard's and the seats page's offers)
+swipe the same way at 699 px and under (`public/styles.css`, `.plan-cards`),
+and a line of a narrow card wraps. `site/test/plans-swipe.test.ts` holds both.
+
 ## The builder's band
 
 A band that shows the analytics builder and the dashboard at work, behind
@@ -171,14 +181,30 @@ heads of two other tiles (the Add a Tile kinds "Saved search: open notices"
 and "Contracts ending") and the new tile's head, table and foot (the
 source and period as `analytics.lead` writes them, "4 of 8", Open). One
 timeline of 24 seconds, pure CSS (`public/landing.css`, the block "the
-builder's band"), no script: the reader sets the source to Published
-contracts, opens Rows and keeps Fiscal year, then chooses the buyer (until
-then the result says "Choose a buyer from the list to see its figures.", as
-the builder's does), and the bars draw; Show turns to Line, then to Table;
-the result's Add to dashboard puts the table on a dashboard as a tile showing
+builder's band"), no script: the reader opens Source and picks Published
+contracts, opens Buyer and picks the buyer (until then the result says
+"Choose a buyer from the list to see its figures.", as the builder's does),
+and the bars draw; opens Show and picks Line, then opens it again and picks
+Table; the result's Add to dashboard puts the table on a dashboard as a tile showing
 its first four rows, which is dragged by its grip to the top while the other
 tiles move down, and widened from its corner; "Saved." The two other tiles
-are placeholders with no figure. `--scrub` (seconds) on `.bd` holds the
+are placeholders with no figure.
+
+A menu opens under its field at a click, and a click on an option closes it
+with that value; a ring at the pointer's tip marks each click. An open menu
+lists what the builder's own menu offers for the band's view, in the
+builder's order: Source's from `sourcesFor` and Show's from `showsFor`
+(`public/build-menu.js`, through `menuSources` and `menuShows`). Buyer's
+lists the empty choice and the buyer by name (row `BUYER_ROW`) among rows
+with no name, because the page reads one buyer's file and no list of buyers.
+A highlight steps down the options with the pointer, from the value the
+field holds to the row picked; the stylesheet's steps and the pointer's
+stops are set to the rows in `MENU_ROWS`, and
+`site/test/landing-builder.test.ts` holds those rows against the builder's
+menus, so a change to what the builder offers fails there until the
+stylesheet follows. Nothing in the picture is typed: the builder's Buyer,
+Source and Show are menus (the builder's one typed field is an
+organization's id, which the band's view does not use). `--scrub` (seconds) on `.bd` holds the
 timeline at a moment and `.is-paused` stops it, for a test or a capture; a
 reader who asks for reduced motion sees the finished dashboard as a still
 (`--scrub: 23`).
@@ -213,7 +239,8 @@ The band's rules joined `landing.css` while the band is behind its switch,
 so the page without it names `landing.css?v=LANDING_VERSION` and a page with
 the band adds `&builder=1` (`BUILDER_STYLES`) to the address. The landing
 pass of 2026-11-20 changed those rules (the Show menu, the result's Add to
-dashboard, the tile's foot) and raised `LANDING_VERSION` to 7. When the band
+dashboard, the tile's foot) and raised `LANDING_VERSION` to 7; the open
+menus and the plans' swipe on a phone came the same day under version 8. When the band
 is on for good, fold the mark into a new `LANDING_VERSION`.
 
 **Switching it on (the operator's step).** Together with the builder: in

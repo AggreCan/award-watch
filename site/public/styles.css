@@ -2091,8 +2091,23 @@ th[aria-sort="descending"] .th-sort::after {
   display: flex; flex-wrap: wrap; align-content: flex-start; gap: 8px; margin: auto 16px 8px; padding-top: var(--plan-buttons-above);
 }
 .plan-card .plan-note { margin: 0 16px 8px; font-size: 12px; line-height: 18px; color: var(--muted); }
+/* On a phone the plan cards sit side by side and the reader swipes from one
+   to the next (the operator's ruling of 2026-11-20): a card takes most of the
+   width, so the next one shows at the edge, and a lone card takes it all. The
+   cards stay columns of the one grid, so their rows still line up. The row
+   scrolls inside its own box; the page itself never scrolls sideways. */
 @media (max-width: 699px) {
-  .plan-cards { grid-template-columns: minmax(0, 1fr); }
+  .plan-cards {
+    grid-template-columns: none; grid-template-rows: repeat(var(--plan-card-rows, 1), auto); grid-auto-flow: column; grid-auto-columns: 86%;
+    column-gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: thin;
+  }
+  .plan-cards:has(> .plan-card:only-child) { grid-auto-columns: 100%; }
+  .plan-card { scroll-snap-align: center; }
+  /* A card this narrow cut most lines short with an ellipsis: here a line
+     wraps, and the rows of the one grid keep every card's lines level. */
+  .plan-card .plan-list li { align-items: flex-start; white-space: normal; line-height: 18px; padding: 4px 0; }
+  .plan-card .plan-list li > span { white-space: normal; overflow: visible; text-overflow: clip; padding: 0; margin: 0; }
+  .plan-card .plan-list .plan-mark { margin-top: 3px; }
 }
 /* Every browser the site supports has subgrid; one without it keeps the
    flex column above (the cards one height, the buttons at the foot). Here

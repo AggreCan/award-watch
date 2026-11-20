@@ -4623,6 +4623,7 @@ const STRINGS = {
   // The plans, with the accounts switch on only.
   "landing.plans_eyebrow": { en: "Plans", fr: "Forfaits" },
   "landing.plans_heading": { en: "Start free. Upgrade when you bid.", fr: "Commencez gratuitement. Passez à Pro quand vous soumissionnez." },
+  "landing.plans_swipe": { en: "Swipe to see each plan.", fr: "Balayez pour voir chaque forfait." },
   "landing.plans_sub": {
     en: "The record pages are free to read. Pro is for people who bid on federal work or track who wins it.",
     fr: "Les pages des dossiers se lisent gratuitement. Pro s'adresse à qui soumissionne pour des marchés fédéraux ou suit qui les remporte.",

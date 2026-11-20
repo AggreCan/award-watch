@@ -75,14 +75,15 @@ import {
   ultraCheckoutPrice, ultraLineKeys, ultraLines,
 } from "../pro";
 import { seatsOn } from "../account/seats";
-import { type BuildChoice, buildLink, buildProblem, readBuildAddress } from "../builder";
+import { SHOWS, showsFor, sourcesFor } from "../../public/build-menu.js";
+import { type BuildChoice, type Show, buildLink, buildProblem, readBuildAddress } from "../builder";
 import { CUBE_META_SQL, type Model, buildPlan } from "../builder_sql";
 import { builderOn } from "../plan";
 import { EARLIEST_FY, MAX_YEARS, fiscalLabel, fiscalYearOf, readRecords } from "../records_db";
 import { DAILY_RUNS_UTC } from "../refresh";
 import { landingSeo } from "../seo";
 import { newestFirst } from "./awards";
-import { viewTitle } from "./builder";
+import { SHOW_KEY, viewTitle } from "./builder";
 import { soonestFirst } from "./expiring";
 import { FeedLinks } from "./feeds";
 import { homePage } from "./home";
@@ -94,7 +95,7 @@ import { money, provincesText } from "./shared";
 
 // The stylesheet's version: bump it with any change to public/landing.css so
 // a cached copy is never paired with new markup.
-export const LANDING_VERSION = 7;
+export const LANDING_VERSION = 8;
 
 // The stylesheet's address. The builder's band (below) brought rules that the
 // page without it never uses, so that page names the stylesheet as it always
@@ -515,14 +516,30 @@ const SKELETONS: readonly (readonly number[])[] = [[86, 64, 78, 52, 70], [72, 90
 // this view button), the result's title, its subject, its Add to dashboard,
 // its table and its line on the source, the period and the data date; the
 // dashboard's title, its Saved status, its tiles' heads and a tile's foot. The
-// reader sets the source, keeps the rows by fiscal year, chooses the buyer
+// reader opens Source and picks the view's, opens Buyer and picks the buyer
 // (until then the result says to choose one, as the builder's does), and the
-// bars draw; Show turns to Line and then Table; Add to dashboard puts the
+// bars draw; opens Show and picks Line, then Table; Add to dashboard puts the
 // table on a dashboard as a tile, dragged by its grip to the top and widened
-// from its corner. Every figure is the view's, written by the builder's own
+// from its corner. An open menu lists what the builder's own menu offers for
+// this view (public/build-menu.js sourcesFor, showsFor), in the builder's
+// order; Buyer's lists the empty choice and the buyer by name among rows with
+// no name, since the page reads no other buyer. The stylesheet's highlights
+// and the pointer are set to the rows these lists give (MENU_ROWS, held by
+// test/landing-builder.test.ts).
+// Every figure is the view's, written by the builder's own
 // formatters (the axis in the short form, the table in whole dollars); the
 // bars, the line and the gridlines share one scale (src/landing_chart.ts).
 // Hidden from assistive technology, which reads the description after it.
+// The open menus' options for a view: Source's and Show's as the builder offers them, in the order its menus draw them.
+export const menuSources = (choice: BuildChoice): string[] => sourcesFor(choice);
+export const menuShows = (choice: BuildChoice): Show[] => (SHOWS as Show[]).filter((s) => showsFor(choice.rows, choice.measure).includes(s));
+// Buyer's open menu: the empty choice, then rows of these widths with no name around the buyer, which is the row at BUYER_ROW.
+export const BUYER_ROW = 3;
+const BUYER_BLANKS: readonly number[] = [58, 74, 66, 46];
+// The row each pick is on, which public/landing.css times its highlights and the pointer to: the source's among the
+// sources, the buyer's, Line's and Table's among the ways to show.
+export const MENU_ROWS = { source: 2, buyer: BUYER_ROW, line: 1, table: 2 } as const;
+
 const BuildStage: FC<{ lang: Lang; build: BuildFigures }> = ({ lang, build }) => {
   const { years, choice, asOf } = build;
   const name = pick(lang, build.name_en, build.name_fr) ?? build.name_en;
@@ -541,6 +558,7 @@ const BuildStage: FC<{ lang: Lang; build: BuildFigures }> = ({ lang, build }) =>
   const newest = [...years].reverse();
   const tileRows = newest.slice(0, BUILD_TILE_ROWS);
   const skeleton = (widths: readonly number[]) => <div class="tile-bd">{widths.map((w) => <div class="sk" style={`width:${w}%`}></div>)}</div>;
+  const blank = (w: number) => <span class="e"><i class="sk" style={`width:${w}%`}></i></span>;
   return (
     <div class="lp-stage">
       <div class="bd" aria-hidden="true">
@@ -556,6 +574,11 @@ const BuildStage: FC<{ lang: Lang; build: BuildFigures }> = ({ lang, build }) =>
             <div class="fld-b sh"><span class="s1">{t(lang, "build.show_bars")}</span><span class="s2">{t(lang, "build.show_line")}</span>
               <span class="s3">{t(lang, "build.show_table")}</span><span class="caret"></span></div></div>
           <div class="go">{t(lang, "build.apply")}</div>
+          {/* The open menus, each under its field: the highlight, then the options. */}
+          <div class="mn m3"><i class="hl"></i>{menuSources(choice).map((s) => <span>{sourceLabel(lang, s)}</span>)}</div>
+          <div class="mn m1"><i class="hl"></i><span>{t(lang, "build.buyer_choose")}</span>
+            {BUYER_BLANKS.slice(0, BUYER_ROW - 1).map(blank)}<span>{name}</span>{BUYER_BLANKS.slice(BUYER_ROW - 1).map(blank)}</div>
+          <div class="mn m4"><i class="hl"></i>{menuShows(choice).map((s) => <span>{t(lang, SHOW_KEY[s])}</span>)}</div>
           <div class="pv">
             {/* Before a buyer is chosen: the result's title and what it asks for, as the builder's result says it. */}
             <div class="pv-empty"><p class="pv-t">{title}</p>{t(lang, "build.choose_buyer")}</div>
@@ -601,7 +624,7 @@ const BuildStage: FC<{ lang: Lang; build: BuildFigures }> = ({ lang, build }) =>
             <i class="corner"></i>
           </div></div>
         </div>
-        <div class="cur"><svg viewBox="0 0 24 24"><path d={POINTER_PATH} /></svg></div>
+        <div class="cur"><i class="ck"></i><svg viewBox="0 0 24 24"><path d={POINTER_PATH} /></svg></div>
       </div>
       <p class="visually-hidden">{t(lang, "landing.build_aria", { source, buyer: name, first, last })}</p>
     </div>
@@ -772,6 +795,8 @@ const Plans: FC<{
         <p class="lp-eyebrow">{t(lang, "landing.plans_eyebrow")}</p>
         <h2 id="lp-plans-h">{t(lang, "landing.plans_heading")}</h2>
         <p class="lp-sub">{t(lang, "landing.plans_sub")}</p>
+        {/* Shown on a phone alone, where the plans sit side by side (public/landing.css). */}
+        <p class="lp-plans-swipe">{t(lang, "landing.plans_swipe")}</p>
         <div class="lp-plans">
           <div class="lp-plan">
             <h3 class="lp-plan-nm">{t(lang, "plans.free")}</h3>

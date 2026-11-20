@@ -100,7 +100,7 @@ const MEASURE_KEY: Readonly<Record<Measure, Key>> = {
 const FROM_KEY: Readonly<Record<MoneySource, Key>> = {
   awards: "build.from_awards", history: "build.from_history", contracts: "build.from_contracts", grants: "build.from_grants",
 };
-const SHOW_KEY: Readonly<Record<Show, Key>> = {
+export const SHOW_KEY: Readonly<Record<Show, Key>> = {
   bars: "build.show_bars", line: "build.show_line", ranked: "build.show_ranked", number: "build.show_number", table: "build.show_table",
 };
 // The TBS method codes as the record tables name them (pages/records.tsx).

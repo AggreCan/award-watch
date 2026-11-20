@@ -19,11 +19,11 @@ import { type Key, allKeys, fmtInt, fmtMoney, fmtMoneyShort, rawEntry, sourceLab
 import { app } from "../src/index";
 import { CHART_TICKS, PLOT_BASE, PLOT_LEFT, PLOT_RIGHT, PLOT_TOP, buildChart, tickStep } from "../src/landing_chart";
 import {
-  BAND_RETRY_MS, BUILDER_STYLES, BUILD_BUYER, BUILD_MIN_YEARS, BUILD_SOURCE, BUILD_TILE_ROWS, BUILD_YEARS, LANDING_VERSION, bandChoice,
-  builderDemoOn,
-  dashboardLine, landingStylesheet,
+  BAND_RETRY_MS, BUILDER_STYLES, BUILD_BUYER, BUILD_MIN_YEARS, BUILD_SOURCE, BUILD_TILE_ROWS, BUILD_YEARS, BUYER_ROW, LANDING_VERSION, MENU_ROWS,
+  bandChoice, builderDemoOn,
+  dashboardLine, landingStylesheet, menuShows, menuSources,
 } from "../src/pages/landing";
-import { viewTitle } from "../src/pages/builder";
+import { SHOW_KEY, viewTitle } from "../src/pages/builder";
 import { PLAN_ROWS, planLine } from "../src/pro";
 import { STATE_SQL, fiscalLabel } from "../src/records_db";
 import { decode, nbsp, onEnv, useAccountsDb } from "./accounts-helpers";
@@ -108,7 +108,8 @@ const fyText = (lang: "en" | "fr", fy: number) => (fy === CURRENT ? t(lang, "ana
 
 // Every word the picture shows, by its key: the builder's and the dashboard's own. The report lists them.
 const PICTURE_KEYS: readonly Key[] = [
-  "build.title", "build.buyer", "build.buyer_choose", "build.rows", "build.rows_year", "col.source", "source.awards", "source.contracts", "build.show",
+  "build.title", "build.buyer", "build.buyer_choose", "build.rows", "build.rows_year", "col.source", "source.awards", "source.history",
+  "source.contracts", "source.grants", "build.show",
   "build.show_bars", "build.show_line", "build.show_table", "build.apply", "build.choose_buyer", "col.value", "build.by_year", "dash.add_here",
   "analytics.col_fy", "col.records", "build.as_of", "analytics.to_date", "dash.title", "dash.status_saved", "dash.kind_tenders", "dash.kind_radar",
   "analytics.lead", "dash.shown", "dash.open",
@@ -198,6 +199,18 @@ describe("the band", () => {
       expect(section).toContain(`<div class="fld f3"><span class="fld-l">${w("col.source")}</span><div class="fld-b"><span class="ph">${sourceLabel(lang, "awards")}</span><span class="val">${source}</span>`);
       expect(section).toContain(`<div class="fld f4"><span class="fld-l">${w("build.show")}</span><div class="fld-b sh"><span class="s1">${w("build.show_bars")}</span><span class="s2">${w("build.show_line")}</span><span class="s3">${w("build.show_table")}</span>`);
       expect(section).toContain(`<div class="go">${w("build.apply")}</div>`);
+      // The open menus, each under its field: the highlight, then what the builder's own menu offers for this view, in its order.
+      const options = (words: readonly string[]) => words.map((s) => `<span>${s}</span>`).join("");
+      expect(section).toContain(`<div class="mn m3"><i class="hl"></i>${options(menuSources(CHOICE).map((s) => nbsp(sourceLabel(lang, s))))}</div>`);
+      expect(section).toContain(`<div class="mn m4"><i class="hl"></i>${options(menuShows(CHOICE).map((s) => w(SHOW_KEY[s])))}</div>`);
+      // Buyer's: the empty choice first and the buyer at BUYER_ROW, by name; every other row a placeholder with no word.
+      const rows = [.../<div class="mn m1"><i class="hl"><\/i>(.*?)<\/div>/.exec(section)![1].matchAll(/<span(?: class="e")?>(.*?)<\/span>/g)].map((m) => m[0]);
+      expect(rows).toHaveLength(6);
+      expect(rows[0]).toBe(`<span>${w("build.buyer_choose")}</span>`);
+      expect(rows[BUYER_ROW]).toBe(`<span>${name}</span>`);
+      for (const [i, r] of rows.entries()) if (i !== 0 && i !== BUYER_ROW) expect(r, String(i)).toMatch(/^<span class="e"><i class="sk" style="width:\d+%"><\/i><\/span>$/);
+      // The pointer carries the ring that marks a click.
+      expect(section).toContain('<div class="cur"><i class="ck"></i><svg viewBox="0 0 24 24">');
       // The result: what it says before a buyer is chosen, its title (the builder's own), what it is about, Add to dashboard, its line.
       expect(section).toContain(`<div class="pv-empty"><p class="pv-t">${nbsp(viewTitle(lang, CHOICE))}</p>${w("build.choose_buyer")}</div>`);
       expect(viewTitle(lang, CHOICE)).toBe(`${t(lang, "col.value")} ${t(lang, "build.by_year")}`);
@@ -503,8 +516,37 @@ describe("the stylesheet", () => {
     for (const rule of [".bd .sh .s1 { animation-name: bd-show1; }", ".bd .sh .s2 { animation-name: bd-show2; }", ".bd .sh .s3 { animation-name: bd-show3; }",
       ".bd .add { flex: none; color: var(--em); font-weight: 600; animation-name: bd-press; }"]) expect(block, rule).toContain(rule);
     expect(block).not.toMatch(/\.seg\b|bd-type|bd-dl\b/);
+    // No field is typed into: the builder's Buyer, Source and Show are menus, and the picture opens each one.
+    for (const menu of ["m1", "m3", "m4"]) {
+      expect(block).toMatch(new RegExp(`\\.bd \\.${menu} \\{ top: [\\d.]+cqw; animation-name: bd-${menu}; \\}`));
+      expect(block).toContain(`.bd .${menu} .hl { animation-name: bd-hl${menu.slice(1)}; }`);
+    }
+    expect(block).toContain(".bd .cur .ck {");
     // The marker's width changes only out of sight (a defect the operator saw in the first draft).
     expect(block).toMatch(/@keyframes bd-mark \{[\s\S]*?85% \{ opacity: 0; width: 44\.5cqw; \}\s*85\.1%, 89\.5% \{ opacity: 0; width: 92cqw; \}/);
+  });
+
+  it("steps each menu's highlight a row at a time, from the value the field holds to the row picked", () => {
+    // The rows the picks are on, as the builder's own menus give them for the band's view.
+    expect(menuSources(CHOICE)).toEqual(["awards", "history", "contracts", "grants"]);
+    expect(menuSources(CHOICE).indexOf(BUILD_SOURCE)).toBe(MENU_ROWS.source);
+    expect(menuShows(CHOICE)).toEqual(["bars", "line", "table"]);
+    expect(menuShows(CHOICE).indexOf("line")).toBe(MENU_ROWS.line);
+    expect(menuShows(CHOICE).indexOf("table")).toBe(MENU_ROWS.table);
+    expect(MENU_ROWS.buyer).toBe(BUYER_ROW);
+    // A row is 4.2cqw high, the highlight one row; the rows it stands on, in the order of the timeline.
+    expect(block).toMatch(/\.bd \.mn span \{[^}]*height: 4\.2cqw;/);
+    expect(block).toMatch(/\.bd \.mn \.hl \{[^}]*height: 4\.2cqw;/);
+    const steps = (name: string) => {
+      const frames = new RegExp(`@keyframes ${name} \\{((?:[^{}]*\\{[^}]*\\})*)\\s*\\}`).exec(block)?.[1] ?? "";
+      return [...frames.matchAll(/translateY\(([\d.]+)(?:cqw)?\)/g)].map((m) => Math.round(Number(m[1]) / 4.2));
+    };
+    // Source: Award notices, over the second, to the third; back to the first once the menu has closed.
+    expect(steps("bd-hl3")).toEqual([0, 1, MENU_ROWS.source, 0]);
+    // Buyer: the empty choice, over two rows, to the buyer.
+    expect(steps("bd-hl1")).toEqual([0, 1, 2, MENU_ROWS.buyer, 0]);
+    // Show: Bars to Line; opened again on Line, the pointer comes down over Bars and Line to Table.
+    expect(steps("bd-hl4")).toEqual([0, MENU_ROWS.line, 0, MENU_ROWS.line, MENU_ROWS.table, 0]);
   });
 
   it("scopes every rule to the band and colours it with the page's tokens, each set in all three theme blocks", () => {
