@@ -1313,7 +1313,8 @@ so it covers both days.
   time), `data_date` (the date `stats.json` gave; NULL when the run stopped
   before reading one), `outcome` (`done`, `capped`, `limited`, `fault`,
   `not_today`, `no_data`, `no_mail`), `sent` and `failed` (the messages sent
-  and the ones the mail service refused, across the five parts, a grouped
+  and the ones the mail service refused, across the six parts (the sixth,
+  the seat notices, only while the seats' switch is on), a grouped
   message once),
   `left_due` (the items still due when it ended: those that waited, and
   from the one a stop or a fault was at, the rest of that part's list whose
@@ -2900,19 +2901,21 @@ the Seats page of a holder and of a member, leaving a seat and removing a
 member, the plan cards' seats row, `/pro`'s and the landing card's lines, the
 Terms' Seats section, the privacy page's paragraph, the lines a control reads
 where the subscription is full, the delete page's line, and the console's
-actions on a seat (*What the seats say elsewhere*). While that switch is off
+actions on a seat (*What the seats say elsewhere*), and the seat notices by
+email with the billing and refund pages' lines on the seats a holder gives
+(*The seat notices*). While that switch is off
 nothing creates a seat: there is no route under `/account/seats` or
 `/account/seat` and no line about seats on any page, and with no seat row
-every page, post, feed, API answer and email reads as before. Not built yet:
-the seat notices by email, and the billing and refund pages' lines on the
-seats a holder gives. The code is `site/src/account/entitlements.ts`
+every page, post, feed, API answer and email reads as before. The code is `site/src/account/entitlements.ts`
 (`planFor`, `withSeats`, `seatsReady`), `site/src/account/seats.ts`,
 `site/src/account/seats_pages.tsx`, `site/src/account/seats_lines.tsx`,
-`site/src/account/seats_strings.ts`, `site/src/account/pool.ts` and
+`site/src/account/seats_strings.ts`, `site/src/account/seat_mail.ts`,
+`site/src/account/pool.ts` and
 `site/src/account/pool_lines.tsx`; the tests are `site/test/seats.test.ts`,
 `site/test/seats-unchanged.test.ts`, `site/test/seats-pool.test.ts`,
 `site/test/seats-service.test.ts`, `site/test/seats-switch.test.ts`,
-`site/test/seats-invite.test.ts` and `site/test/seats-words.test.ts`.
+`site/test/seats-invite.test.ts`, `site/test/seats-words.test.ts` and
+`site/test/seat-mail.test.ts`.
 
 ### The table
 
@@ -3136,7 +3139,8 @@ while it is off nothing is read. While it is off, or on without the table:
   the seats row, and `/pro`, the landing page, the Terms, the privacy page,
   the delete page and the Ultra message read as before;
 - no invitation is sent (the console's actions on a seat are the one thing
-  the switch does not gate: see *The console* below);
+  the switch does not gate: see *The console* below), and no seat notice: the
+  delivery run asks the variable and reads no seat for them;
 - a control at its figure reads the line it read before, whoever reads it;
 - the limiter counts those addresses as pages.
 
@@ -3278,7 +3282,7 @@ pages, and no statement takes an account id from a form.
 
 Remove (`GET` then `POST /account/seats/:id/remove` with `confirm=yes`, bound
 to the holder) ends the seat `removed`; the member is on its own plan from its
-next read and is told by the seat notices (to come). Leave (`GET` then `POST
+next read and is told by the seat notices (*The seat notices*). Leave (`GET` then `POST
 /account/seat/leave`, `confirm=yes`, bound to the member) ends it `left` with
 `told` at 0, since the page itself said so. Audit `seat_removed`,
 `seat_left`, no detail.
@@ -3378,6 +3382,82 @@ with it off, every one of these reads as before.
   the subscription of (holder)."; an account that gives seats reads how many
   end with it, invitations included. A member's subscription line no longer
   names the seat's plan as its own.
+
+### The seat notices
+
+While the switch is on, the delivery run has a sixth part, after the saved
+views (`seat_mail.ts runSeatNotices`), inside the run's cap of messages, the
+day's ceiling and the query budget, and counted in the run's row as every
+part's messages are. It tells a seat's member, by one message to its own
+address in its mail language (`users.lang`), when what the seat gives it
+changes:
+
+| Message | Subject | When |
+|---|---|---|
+| lost | "Your seat on Award Watch no longer gives Ultra" | the seat gave the plan and gives none now: the holder's plan ended (cancelled at its period's end and past its grace, a renewal not paid, Refund now), was revoked or disputed, moved to Pro, or the holder was blocked |
+| back | "Your seat on Award Watch gives Ultra again" | the seat gives the plan again: the holder moved back to Ultra or bought it again (no new join is counted) |
+| ended | "Your seat on Award Watch has ended" | the holder removed the member, the holder's account was deleted, or the operator ended the seat |
+
+The message says what changed and from which day, the plan the account is
+on now and that what it keeps is saved (lost and ended), and links the
+account's page and the plan and billing page. It never says why the holder's
+plan changed (that is the holder's billing), names no address and no other
+account's figure, and carries no stop link and no `List-Unsubscribe`: it is
+one message about one change to the account's own plan, sent once (headers:
+From, Reply-To the contact address, `Auto-Submitted: auto-generated`). It
+goes out through the run's path (`sendWithHeaders`), so a sending limit's
+refusal stops the run as it stops the other parts.
+
+Nobody else is told: a member who left (the page said so) or deleted its
+account, a member whose account is blocked or no longer active (passed over,
+as the other parts pass such accounts over, and told when that changes), an
+invitation (no member, the operator's cancellation among them), and a member
+with Ultra of its own (the operator's grant) while that lasts.
+
+How it decides, in the seats table's own columns: `told` is what the member
+was last told (1 the seat gives the plan, which taking it says; 0 it gives
+none, or it ended) and `told_at` when; an ended seat has been told its end
+once `told_at` is at or after `ended_at`, so a member told "lost" and then
+removed reads "ended" too, as the removal page promises. Each run reads
+(`SEATS_DUE_SQL`, at most `SEATS_RUN_MAX`, 200) the live seats and the seats
+ended `removed`, `closed` or `operator` whose end is not yet told, of
+members that are active and not blocked: the ended ones first, then the live
+ones a holder at a time from a point that changes each run, so every
+holder's are read in turn when more than 200 are live. For a live seat it
+reads the holder's plan once a run (`planFor`, whose group names the members
+the holder's own plan covers); a seat whose `told` already says what is
+true costs nothing more. A seat to tell reads its member's plan (`planFor`),
+which decides the message and names the plan: what the site serves the
+member is what the message says. A plan that cannot be read from the
+database now (`planFor`'s last known plan) tells nobody anything, and the
+seat waits for the next run. The message is claimed before its send by
+writing `told` and `told_at` in a statement that holds only while the row is
+as the run read it (`SEAT_CLAIM_SQL`), and given back when the send does not
+go (`SEAT_RELEASE_SQL`); a refusal that is not a sending limit counts as
+failed and the seat waits for the next run. Without the seats table the part
+reads one statement, sends nothing, and the run's report says so. No column
+or table is added.
+
+Before the act, on the holder's billing page, while the switch is on and the
+holder's plan covers at least one other seat (the session's own group, read
+with nothing more): the subscription's panel, whose Manage button opens
+Stripe's page where it is cancelled, says "When the plan ends, the 2 people
+in your other seats return to their own plans, with what they keep saved."
+(`billing.seats_ends`); the Move to Pro panel says "Pro has 1 seat. When the
+move takes effect, the 2 people in your other seats return to their own
+plans, with what they keep saved, and each gets one message."
+(`billing.seats_down`); and the refund's confirmation says "The refund ends
+Ultra at once for this account and for the 2 people in its other seats."
+(`refund.seats`). Each has a form for one person. With the switch off, or no
+other seat covered, the page is as before.
+
+`site/test/seat-mail.test.ts` holds every row of the seats design's table of
+the subscription's and the seat's edges that tells a person (each told once,
+nothing twice) and every one that tells nobody, the claim given back, the
+run's cap, the day's ceiling and the query budget, the run's row, a fault
+after a send, a plan not read, the switch off and the table missing, and the
+billing lines in both languages; the mail suite renders the three messages
+in both languages through the part itself.
 
 ### The console
 

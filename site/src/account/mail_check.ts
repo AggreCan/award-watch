@@ -48,6 +48,7 @@ import { SAVED_VIEW_MAX } from "./entitlements";
 import { GROUP_TAGS_MAX, type GroupKind, groupStopPath } from "./group_stop";
 import { matchDigestBlock } from "./fit_mail";
 import { sameHash, sha256Hex } from "./secrets";
+import { seatNotice } from "./seat_mail";
 import { SEAT_INVITE_DAYS, seatsOn } from "./seats";
 import { type MailMessage, type Sender, addressNotice, inviteMessage, senderFor, signInMessage } from "./sender";
 import { CODE_MINUTES } from "./signin";
@@ -68,9 +69,12 @@ export const MAIL_CHECK_MARK = "[mail check]";
 // "invite" is a seat's invitation (sender.ts inviteMessage), sent here whatever
 // the seats' switch, its holder MAIL_CHECK_HOLDER and its link an id and a
 // secret of zeros, which the join page answers as an invitation that is not.
+// "seat" is a seat notice (seat_mail.ts seatNotice), the one a member reads when
+// the seat no longer gives the plan, also whatever the switch: it names no
+// address and carries no stop link.
 export const MAIL_CHECK_TEMPLATES = [
   "sign_in", "tenders_daily", "expiring_weekly", "records", "group", "watch", "briefing", "briefing_group", "view", "view_group", "weekly",
-  "accounts_open", "ultra_open", "address_notice", "invite",
+  "accounts_open", "ultra_open", "address_notice", "invite", "seat",
 ] as const;
 export type MailCheckTemplate = (typeof MAIL_CHECK_TEMPLATES)[number];
 
@@ -393,6 +397,8 @@ export async function mailCheckMessages(
     address_notice: () => addressNotice(lang, to, site),
     invite: () => inviteMessage(lang, to, MAIL_CHECK_HOLDER, siteLink(site, `/account/seats/join?i=${ZERO}&t=${ZERO}${ZERO}`, lang),
       new Date(now.getTime() + SEAT_INVITE_DAYS * 86_400_000).toISOString(), site),
+    // The seat no longer gives Ultra, so the account is on Free from the day of the run.
+    seat: () => seatNotice({ lang, to, site, kind: "lost", plan: "free", date: day }),
   };
   const out: MailCheckMessage[] = [];
   for (const template of MAIL_CHECK_TEMPLATES) {

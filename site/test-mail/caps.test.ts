@@ -1,7 +1,7 @@
 // The caps on what the site sends, and their arithmetic, through the log
 // sender where a run sends (docs/mail.md): the delivery job's one cap shared
-// by the saved searches, the watch mail, the briefings, the weekly email and
-// the saved views, and the weekly email's own ceiling; the rows a message
+// by the saved searches, the watch mail, the briefings, the weekly email, the
+// saved views and the seat notices, and the weekly email's own ceiling; the rows a message
 // lists and the line that counts the rest, the week's matching notices at
 // each plan's figure among them; the subject's length; the
 // accounts-open and Ultra runs' cap a run, run again until no address waits;
@@ -15,6 +15,7 @@ import { BRIEFINGS_RUN_MAX, SECTION_ROWS } from "../src/account/briefings";
 import { ROWS_MAX, RUN_MESSAGES_MAX, roomAfter } from "../src/account/deliveries";
 import { VIEW_MAIL_ROWS, viewDigest } from "../src/account/digests";
 import { VIEWS_RUN_MAX } from "../src/account/view_mail";
+import { SEATS_RUN_MAX } from "../src/account/seat_mail";
 import {
   SUBJECT_MAX, WEEKLY_LINES, type WatchGroup, briefingDigest, fitCounts, fitSubject, recordsDigest, tenderDigest, watchDigest, weeklyDigest,
 } from "../src/account/digests";
@@ -59,10 +60,12 @@ describe("the caps", () => {
     expect(WEEKLY_RUN_MAX).toBe(100);
     expect(WEEKLY_LINES).toBe(5);
     expect(SUBJECT_MAX).toBe(100);
-    expect(MAIL_CHECK_TEMPLATES).toHaveLength(15);
+    expect(MAIL_CHECK_TEMPLATES).toHaveLength(16);
     // A seat's invitation: a holder's in any 24 hours, to one address in 30 days, and the days its link works.
     expect([SEAT_INVITES_PER_DAY, SEAT_INVITES_PER_ADDRESS, SEAT_WINDOW_DAYS, SEAT_INVITE_DAYS]).toEqual([10, 2, 30, 7]);
     expect(VIEWS_RUN_MAX).toBe(1000);
+    // Seats the seat notices read in one run.
+    expect(SEATS_RUN_MAX).toBe(200);
     expect(VIEW_MAIL_ROWS).toBe(5);
     expect([RULES.free.match_mail, RULES.pro.match_mail]).toEqual([3, 10]);
   });
@@ -82,26 +85,31 @@ describe("the delivery job's one cap", () => {
     expect(roomAfter({ sent: 120, failed: 3 }, { sent: 77, failed: 0 }, { sent: 40, failed: 1 }, { sent: 50, failed: 0 })).toBe(9);
     expect(roomAfter({ sent: 120, failed: 3 }, { sent: 77, failed: 0 }, { sent: 40, failed: 1 }, null)).toBe(59);
     expect(roomAfter({ sent: 200, failed: 0 }, { sent: 50, failed: 0 }, { sent: 40, failed: 0 }, { sent: 20, failed: 0 })).toBe(0);
+    // The seat notices get what the five before them left, a part that did not run counted as none.
+    expect(roomAfter({ sent: 120, failed: 3 }, { sent: 77, failed: 0 }, { sent: 40, failed: 1 }, { sent: 50, failed: 0 }, { sent: 4, failed: 1 })).toBe(4);
+    expect(roomAfter({ sent: 120, failed: 3 }, { sent: 77, failed: 0 }, { sent: 40, failed: 1 }, null, null)).toBe(59);
+    expect(roomAfter({ sent: 200, failed: 0 }, { sent: 50, failed: 0 }, { sent: 40, failed: 0 }, { sent: 5, failed: 0 }, { sent: 6, failed: 0 })).toBe(0);
   });
 
-  it("holds the five parts together to RUN_MESSAGES_MAX, each stopping at the room it is given, the weekly email at its own ceiling too", () => {
+  it("holds the six parts together to RUN_MESSAGES_MAX, each stopping at the room it is given, the weekly email at its own ceiling too", () => {
     // Each part sends until it has as many as it wants or reaches its room
     // (the `>= room` rule of deliveries.ts, watch_mail.ts, briefings.ts,
     // weekly.ts, whose room is also held to WEEKLY_RUN_MAX, and view_mail.ts).
     const part = (want: number, room: number) => ({ sent: Math.min(want, room), failed: 0 });
-    for (const [a, b, c, d, e] of [
-      [10, 20, 30, 40, 50], [290, 20, 30, 5, 5], [100, 50, 5, 400, 60], [0, 0, 0, 400, 400], [301, 1, 1, 1, 1], [100, 50, 50, 150, 10],
-      [0, 0, 0, 0, 350], [150, 0, 0, 0, 200],
+    for (const [a, b, c, d, e, f] of [
+      [10, 20, 30, 40, 50, 4], [290, 20, 30, 5, 5, 4], [100, 50, 5, 400, 60, 8], [0, 0, 0, 400, 400, 4], [301, 1, 1, 1, 1, 1],
+      [100, 50, 50, 150, 10, 0], [0, 0, 0, 0, 350, 4], [150, 0, 0, 0, 200, 4], [0, 0, 0, 0, 0, 350], [150, 0, 0, 0, 140, 20],
     ]) {
       const searches = part(a, RUN_MESSAGES_MAX);
       const watch = part(b, roomAfter(searches));
       const briefings = part(c, roomAfter(searches, watch));
       const weekly = part(d, Math.min(roomAfter(searches, watch, briefings), WEEKLY_RUN_MAX));
       const views = part(e, roomAfter(searches, watch, briefings, weekly));
-      const total = searches.sent + watch.sent + briefings.sent + weekly.sent + views.sent;
-      const at = `${a}, ${b}, ${c}, ${d}, ${e}`;
+      const seats = part(f, roomAfter(searches, watch, briefings, weekly, views));
+      const total = searches.sent + watch.sent + briefings.sent + weekly.sent + views.sent + seats.sent;
+      const at = `${a}, ${b}, ${c}, ${d}, ${e}, ${f}`;
       expect(weekly.sent, at).toBeLessThanOrEqual(WEEKLY_RUN_MAX);
-      expect(total, at).toBe(Math.min(a + b + c + Math.min(d, WEEKLY_RUN_MAX) + e, RUN_MESSAGES_MAX));
+      expect(total, at).toBe(Math.min(a + b + c + Math.min(d, WEEKLY_RUN_MAX) + e + f, RUN_MESSAGES_MAX));
       expect(total).toBeLessThanOrEqual(RUN_MESSAGES_MAX);
     }
   });

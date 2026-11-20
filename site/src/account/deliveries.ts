@@ -87,7 +87,9 @@
 // reads and sends nothing while Ultra is not on sale. The briefings and the
 // saved views group per account as the saved searches do: more than
 // GROUP_OVER of an account's with something to send in one run go as one
-// message, counted once.
+// message, counted once. Last, while the seats' switch is on (and never read
+// while it is off), the seat notices (seat_mail.ts runSeatNotices): one
+// message to a seat's member when what the seat gives it changes.
 //
 // Every message a part sent or tried is counted before the writes after it,
 // in the report the run hands the part, so a part that faults midway (in
@@ -122,6 +124,8 @@ import { survivorOf } from "./watches";
 import {
   BRIEFING_WAIT_WHY, type BriefingReport, briefingActive, briefingCounts, emptyBriefingReport, madeBefore, runBriefings, sharedCap,
 } from "./briefings";
+import { SEAT_WAIT_WHY, type SeatReport, emptySeatReport, runSeatNotices, seatActive, seatCounts } from "./seat_mail";
+import { seatsSwitched } from "./seats";
 import { DELIVERABLE_KINDS, DELIVERY_ROW_DAYS } from "./searches";
 import { randomHex } from "./secrets";
 import { type MailMessage, senderFor } from "./sender";
@@ -167,9 +171,10 @@ export const WEEK_DAYS = 7;
 // The messages a run may still send once the parts named have run: the cap
 // less every message they sent or tried, never below zero. The watch mail
 // gets roomAfter(the saved searches), the briefings roomAfter(the saved
-// searches, the watch mail), the weekly email roomAfter(all three) and the
-// saved views roomAfter(all four), so the five parts share the one cap
-// (test-mail/caps.test.ts holds the arithmetic).
+// searches, the watch mail), the weekly email roomAfter(all three), the
+// saved views roomAfter(all four) and the seat notices roomAfter(all five),
+// so the six parts share the one cap (test-mail/caps.test.ts holds the
+// arithmetic).
 export const roomAfter = (...parts: ({ sent: number; failed: number } | null | undefined)[]): number =>
   Math.max(0, RUN_MESSAGES_MAX - parts.reduce((n, p) => n + (p ? p.sent + p.failed : 0), 0));
 // Refusals that mean the account's sending is spent for now: the run stops
@@ -348,7 +353,7 @@ export const DELIVERIES_PRUNE_SQL =
 const daysBefore = (now: Date, days: number) => new Date(now.getTime() - days * 86_400_000).toISOString();
 
 const partsSum = (r: RunReport, key: "sent" | "failed") =>
-  r[key] + (r.watch?.[key] ?? 0) + (r.briefing?.[key] ?? 0) + (r.weekly?.[key] ?? 0) + (r.views?.[key] ?? 0);
+  r[key] + (r.watch?.[key] ?? 0) + (r.briefing?.[key] ?? 0) + (r.weekly?.[key] ?? 0) + (r.views?.[key] ?? 0) + (r.seats?.[key] ?? 0);
 
 // Why the run stopped early (its stop or its fault), else why items waited;
 // fixed words, dates and counts, never an account or an address.
@@ -358,6 +363,7 @@ function runDetail(r: RunReport): string | null {
     : r.briefing?.records ? BRIEFING_WAIT_WHY[r.briefing.records]
     : r.weekly?.records ? WEEKLY_WAIT_WHY[r.weekly.records]
     : r.views?.records ? VIEW_WAIT_WHY[r.views.records]
+    : r.seats?.records ? SEAT_WAIT_WHY[r.seats.records]
     : null;
   const why = r.why ?? (wait && r.left > 0 ? `waiting: ${wait}` : null);
   return why ? why.slice(0, RUN_DETAIL_MAX) : null;
@@ -470,6 +476,9 @@ export interface RunReport {
   // The saved views' part (view_mail.ts); absent or null when the run did not
   // reach it or Ultra is not on sale.
   views?: ViewReport | null;
+  // The seat notices' part (seat_mail.ts); absent when the run did not reach it
+  // or the seats' switch is off.
+  seats?: SeatReport | null;
   // Items still due when the run ended (Tally): 0 when it finished.
   left: number;
   // Why it stopped early or never began (a stop, a fault, a missing setting,
@@ -1424,11 +1433,32 @@ async function deliver(env: Env, now: Date, tally: Tally, report: RunReport): Pr
       return partFault("the saved views");
     }
   }
+  // The seat notices, only while the seats' switch is on: off, the run asks the variable and reads nothing more. As
+  // for the saved views, the weekly email's own ceiling does not hold them.
+  const seatRoom = roomAfter(report, report.watch, report.briefing, report.weekly, report.views);
+  if (seatsSwitched(env) && (!stop || (report.outcome === "capped" && seatRoom > 0 && !queries.spent))) {
+    const part = emptySeatReport();
+    try {
+      const seats = await runSeatNotices(env, {
+        site, dataDate, now, room: seatRoom, capText, queries, tally,
+        ceiling: ceilingAfter(report, report.watch, report.briefing, report.weekly, report.views), report: part,
+      });
+      report.seats = seats.report;
+      if (seats.stop) {
+        stop = seats.stop;
+        if (report.outcome === "done") report.outcome = seats.capped ? "capped" : "limited";
+      }
+    } catch {
+      report.seats = part;
+      return partFault("the seat notices");
+    }
+  }
   if (report.outcome === "fault") {
     if (report.watch && watchActive(report.watch)) log(`${dataDate}: ${watchCounts(report.watch)}`);
     if (report.briefing && briefingActive(report.briefing)) log(`${dataDate}: ${briefingCounts(report.briefing)}`);
     if (report.weekly && weeklyActive(report.weekly)) log(`${dataDate}: ${weeklyCounts(report.weekly)}`);
     if (report.views && viewActive(report.views)) log(`${dataDate}: ${viewCounts(report.views)}`);
+    if (report.seats && seatActive(report.seats)) log(`${dataDate}: ${seatCounts(report.seats)}`);
     return { ...report, why: fault };
   }
   const after = stop === ceilingWords ? "; the rest waits for the next UTC day" : ", the next hour goes on";
@@ -1457,4 +1487,5 @@ const counts = (r: RunReport) =>
   (r.watch && watchActive(r.watch) ? `; ${watchCounts(r.watch)}` : "") +
   (r.briefing && briefingActive(r.briefing) ? `; ${briefingCounts(r.briefing)}` : "") +
   (r.weekly && weeklyActive(r.weekly) ? `; ${weeklyCounts(r.weekly)}` : "") +
-  (r.views && viewActive(r.views) ? `; ${viewCounts(r.views)}` : "");
+  (r.views && viewActive(r.views) ? `; ${viewCounts(r.views)}` : "") +
+  (r.seats && seatActive(r.seats) ? `; ${seatCounts(r.seats)}` : "");

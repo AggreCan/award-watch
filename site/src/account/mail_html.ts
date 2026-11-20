@@ -2,7 +2,8 @@
 // (docs/mail.md, "The shell"): the sign-in code, the saved-search
 // deliveries, the records counts, the watch mail, the weekly briefing, the
 // grouped messages of saved searches, briefings and saved views, the
-// accounts-open and Ultra messages and the address-change notice. Built from
+// accounts-open and Ultra messages, the address-change notice, and a seat's
+// invitation and its notices (sender.ts, seat_mail.ts). Built from
 // design/email (build.py and its templates, approved by the operator): a
 // 600 px column of tables with every style inline, since some clients drop
 // <style> for some senders; no web font, since most clients ignore one and

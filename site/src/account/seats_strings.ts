@@ -1,9 +1,11 @@
 // The seats' strings (docs/accounts.md, Seats; seats_pages.tsx, sender.ts
-// inviteMessage), in English and French, spread into the site's dictionary
+// inviteMessage, seat_mail.ts seatNotice, billing.tsx), in English and French, spread into the site's dictionary
 // (src/i18n.ts) as the accounts module's are. French follows the dictionary's
 // rules: plain spaces and straight apostrophes here, the Canadian French forms
-// added when read. None of these reach a page while the seats' switch is off
-// (seats.ts seatsOn). A line names a plan's own figure, read from
+// added when read. None of these reach a reader's page or message while the
+// seats' switch is off (seats.ts seatsOn); the console's actions on a seat and
+// the live mail check (the invitation and a seat notice, to the operator's test
+// inbox) use theirs whatever the switch. A line names a plan's own figure, read from
 // entitlements.ts PLAN_SEATS and the constants of seats.ts, never a comparison.
 
 export const SEATS_STRINGS = {
@@ -328,5 +330,61 @@ export const SEATS_STRINGS = {
   "admin.msg_seat_nothing": {
     en: "Nothing changed: that seat or invitation is no longer open.",
     fr: "Rien n'a changé : ce siège ou cette invitation n'est plus ouvert.",
+  },
+
+  // -- slice D: the seat notices (seat_mail.ts seatNotice) and the holder's lines before the act -------------------------
+  // One message to a seat's member when what the seat gives changes, in the member's mail language. The subject is
+  // the heading too. {plan} the plan the account is on now (account.plan_free, pro.tag, ultra.tag), {date} the day
+  // the change took effect (YYYY-MM-DD). Nothing here says why the holder's plan changed: that is the holder's billing.
+  "seatmail.subject_lost": { en: "Your seat on Award Watch no longer gives Ultra", fr: "Votre siège Award Watch ne donne plus Ultra" },
+  "seatmail.subject_back": { en: "Your seat on Award Watch gives Ultra again", fr: "Votre siège Award Watch donne de nouveau Ultra" },
+  "seatmail.subject_ended": { en: "Your seat on Award Watch has ended", fr: "Votre siège Award Watch a pris fin" },
+  "seatmail.lost": {
+    en: "The subscription your seat is on no longer gives it a plan, so your account is on the {plan} plan from {date}.",
+    fr: "L'abonnement dont relève votre siège ne lui donne plus de forfait; votre compte est donc au forfait {plan} à compter du {date}.",
+  },
+  "seatmail.ended": {
+    en: "Your seat has ended, so your account is on the {plan} plan from {date}.",
+    fr: "Votre siège a pris fin; votre compte est donc au forfait {plan} à compter du {date}.",
+  },
+  "seatmail.kept": {
+    en: "Everything your account keeps is saved. Past the {plan} plan's figures it is unavailable until a plan covers it again; nothing is deleted.",
+    fr: "Tout ce que garde votre compte est enregistré. Au-delà des chiffres du forfait {plan}, il est indisponible jusqu'à ce qu'un forfait le couvre de nouveau; rien n'est supprimé.",
+  },
+  "seatmail.back": {
+    en: "The subscription your seat is on gives it Ultra again, from {date}. What your account keeps is back in service as the subscription's figures have room.",
+    fr: "L'abonnement dont relève votre siège lui donne de nouveau Ultra, à compter du {date}. Ce que garde votre compte revient en service selon la place dans les chiffres de l'abonnement.",
+  },
+  "seatmail.open": { en: "Open your account", fr: "Ouvrir votre compte" },
+  "seatmail.why": {
+    en: "You receive this because your account holds, or held, a seat on an Award Watch subscription.",
+    fr: "Vous recevez ce message parce que votre compte occupe, ou occupait, un siège d'un abonnement Award Watch.",
+  },
+  // The billing page (billing.tsx), while the switch is on and the holder's plan covers at least one other seat: {n}
+  // the people in the seats it covers now (the session's own group), {pro_seats} Pro's own figure ("1 seat"). The
+  // move to Pro's panel, the subscription's panel (where Stripe's page cancels it) and the refund's confirmation.
+  "billing.seats_down": {
+    en: "Pro has {pro_seats}. When the move takes effect, the {n} people in your other seats return to their own plans, with what they keep saved, and each gets one message.",
+    fr: "Pro compte {pro_seats}. Quand le passage prendra effet, les {n} personnes de vos autres sièges reviendront à leur propre forfait, avec ce qu'elles conservent enregistré, et chacune recevra un seul message.",
+  },
+  "billing.seats_down_one": {
+    en: "Pro has {pro_seats}. When the move takes effect, the person in your other seat returns to their own plan, with what they keep saved, and gets one message.",
+    fr: "Pro compte {pro_seats}. Quand le passage prendra effet, la personne de votre autre siège reviendra à son propre forfait, avec ce qu'elle conserve enregistré, et recevra un seul message.",
+  },
+  "billing.seats_ends": {
+    en: "When the plan ends, the {n} people in your other seats return to their own plans, with what they keep saved.",
+    fr: "Quand le forfait prendra fin, les {n} personnes de vos autres sièges reviendront à leur propre forfait, avec ce qu'elles conservent enregistré.",
+  },
+  "billing.seats_ends_one": {
+    en: "When the plan ends, the person in your other seat returns to their own plan, with what they keep saved.",
+    fr: "Quand le forfait prendra fin, la personne de votre autre siège reviendra à son propre forfait, avec ce qu'elle conserve enregistré.",
+  },
+  "refund.seats": {
+    en: "The refund ends Ultra at once for this account and for the {n} people in its other seats.",
+    fr: "Le remboursement met fin à Ultra aussitôt pour ce compte et pour les {n} personnes de ses autres sièges.",
+  },
+  "refund.seats_one": {
+    en: "The refund ends Ultra at once for this account and for the person in its other seat.",
+    fr: "Le remboursement met fin à Ultra aussitôt pour ce compte et pour la personne de son autre siège.",
   },
 } as const;

@@ -29,13 +29,13 @@
 
 import type { Context } from "hono";
 import type { AppEnv, Env } from "../env";
-import { decimal, t, tj, type Key, type Lang } from "../i18n";
+import { decimal, fmtInt, t, tj, tn, type Key, type Lang } from "../i18n";
 import { PageHead, Panel } from "../layout";
 import { CONTACT_EMAIL } from "../contact";
 import { PlanCards, planCards, type PlanReader } from "../pro";
 import { type ChargeState, operatorStripe } from "./admin_stripe";
 import { audit } from "./audit";
-import { type PaidPlan, type Plan, entitlementWrites, isPaidPlan, memberSeats, planFor, planRank, withTiers } from "./entitlements";
+import { PLAN_SEATS, type PaidPlan, type Plan, entitlementWrites, isPaidPlan, memberSeats, planFor, planRank, withTiers } from "./entitlements";
 import { type DeleteFacts, accountPage, overviewPlanLine, planLine } from "./pages";
 import { seatsInUse, seatsOn } from "./seats";
 import {
@@ -258,6 +258,9 @@ const Hidden = ({ account, lang }: { account: Account; lang: Lang }) => (
   </>
 );
 
+// A plan's own figure of seats as a line says it ("1 seat", "5 seats").
+const seatWords = (lang: Lang, n: number): string => t(lang, n === 1 ? "seats.seat_one" : "seats.seat_many", { n: fmtInt(n, lang) });
+
 // A paid plan's name as the lines that name it say it ("Pro", "Ultra").
 export const planName = (lang: Lang, plan: Plan): string => t(lang, plan === "ultra" ? "ultra.tag" : "pro.tag");
 
@@ -270,7 +273,9 @@ const readerOf = (plan: Plan): PlanReader => (plan === "ultra" ? "ultra" : plan 
 // ticked. Neither button is filled: the page's one filled button stays
 // Manage the subscription, and a refund is not what the page invites. plan
 // is the paid plan's name, which the lines say ends.
-const RefundPanel = ({ lang, account, step, plan }: { lang: Lang; account: Account; step: "offer" | "confirm"; plan: string }) => (
+// seats: the people in the other seats the plan covers, while the seats'
+// switch is on (billingPage); the confirmation names them when there are any.
+const RefundPanel = ({ lang, account, step, plan, seats = 0 }: { lang: Lang; account: Account; step: "offer" | "confirm"; plan: string; seats?: number }) => (
   <Panel title={t(lang, "terms.pro_refund_title")} id="refund" class="panel-form">
     {step === "offer" ? (
       <>
@@ -281,6 +286,7 @@ const RefundPanel = ({ lang, account, step, plan }: { lang: Lang; account: Accou
       <form method="post" action="/account/billing/refund" class="stack">
         <Hidden account={account} lang={lang} />
         <p>{t(lang, "billing.refund_confirm_text", { plan })}</p>
+        {seats > 0 ? <p>{tn(lang, "refund.seats_one", "refund.seats", seats, { n: fmtInt(seats, lang) })}</p> : null}
         <label class="account-check">
           <input type="checkbox" name="confirm" value="yes" required />
           <span>{t(lang, "billing.refund_confirm", { plan })}</span>
@@ -299,13 +305,21 @@ const RefundPanel = ({ lang, account, step, plan }: { lang: Lang; account: Accou
 // the subscription's Manage button stays the page's filled one.
 export type Move = "up" | "down";
 
-const MovePanel = ({ lang, account, move, ultra }: { lang: Lang; account: Account; move: Move; ultra: Readonly<Record<Interval, string>> | null }) => (
+// seats: the people in the other seats the plan covers, while the seats'
+// switch is on; a move down names them, since Pro holds no seat but the
+// subscriber's.
+const MovePanel = (
+  { lang, account, move, ultra, seats = 0 }: { lang: Lang; account: Account; move: Move; ultra: Readonly<Record<Interval, string>> | null; seats?: number },
+) => (
   <Panel title={t(lang, move === "up" ? "billing.panel_move" : "plans.move_pro")} id="move" class="panel-form">
     <p>
       {move === "up" && ultra
         ? t(lang, "billing.move_text", { monthly: figure(lang, ultra.monthly), yearly: figure(lang, ultra.yearly) })
         : t(lang, "billing.move_down_text")}
     </p>
+    {move === "down" && seats > 0 ? (
+      <p>{tn(lang, "billing.seats_down_one", "billing.seats_down", seats, { n: fmtInt(seats, lang), pro_seats: seatWords(lang, PLAN_SEATS.pro) })}</p>
+    ) : null}
     <form method="post" action="/account/billing/change">
       <Hidden account={account} lang={lang} />
       <input type="hidden" name="plan" value={move === "up" ? "ultra" : "pro"} />
@@ -336,7 +350,11 @@ export function billingView(
     // seat gives the plan, the plan line names the holder rather than the
     // holder's end), and whether the
     // head links the Seats page. Absent, the page is as it was before seats.
-    seats?: { member: boolean; link: boolean } | null;
+    // others: the people in the other seats the account's plan covers now (its
+    // own group, from the session's read); above none, the subscription's, the
+    // move down's and the refund's panels say what ending or moving does to
+    // them (the seats design's 5.5).
+    seats?: { member: boolean; link: boolean; others?: number } | null;
   },
 ) {
   const { offer, row, canManage } = state;
@@ -363,6 +381,7 @@ export function billingView(
   // period's end): the period's end is when the subscription ends, without
   // renewal, and while the plan runs a line says so and how to undo it.
   const ending = !!row?.cancel_at_period_end && !!row.current_period_end;
+  const others = state.seats?.others ?? 0;
   return (
     <>
       <PageHead lang={lang} title={t(lang, "billing.title")}
@@ -392,14 +411,16 @@ export function billingView(
           </dl>
           {ending && paid ? <p>{t(lang, "billing.ends_note", { plan: vars.plan, date: day(row.current_period_end) })}</p> : null}
           <p>{t(lang, manageKey)}</p>
+          {/* Stripe's page, which the button opens, is where the subscription is cancelled. */}
+          {others > 0 ? <p>{tn(lang, "billing.seats_ends_one", "billing.seats_ends", others, { n: fmtInt(others, lang) })}</p> : null}
           <form method="post" action="/account/billing/portal">
             <Hidden account={account} lang={lang} />
             <button type="submit" class="btn btn-primary">{t(lang, "billing.manage")}</button>
           </form>
         </Panel>
       ) : null}
-      {move ? <MovePanel lang={lang} account={account} move={move} ultra={ultra} /> : null}
-      {live && state.refund ? <RefundPanel lang={lang} account={account} step={state.refund} plan={vars.plan} /> : null}
+      {move ? <MovePanel lang={lang} account={account} move={move} ultra={ultra} seats={others} /> : null}
+      {live && state.refund ? <RefundPanel lang={lang} account={account} step={state.refund} plan={vars.plan} seats={others} /> : null}
       {/* Free beside Pro (and Ultra while it is on sale), the account's own plan marked; a plan's link leads to its Subscribe
           panel below, or, while a subscription can still bill and that panel is not drawn, to the subscription's own panel. */}
       <Panel title={t(lang, ultra ? "billing.panel_plans" : "billing.panel_pro")}>
@@ -490,9 +511,13 @@ export async function billingPage(
   const noticeKey = refundNotice(asked) ?? (ultra || who.plan === "ultra" ? moveNotice(c.req.query("move") ?? "") : null);
   const notice = noticeKey ? t(lang, noticeKey, { plan: planName(lang, isPaidPlan(who.plan) ? who.plan : "pro") }) : null;
   const lastPlan = !isPaidPlan(who.plan) && liveSubscription(row) ? await subscriptionPlan(c.env, who.userId, row!.subscription_id) : null;
-  // While the seats' switch is on: a member's billing, and the link to the Seats page for a member or an account that gives seats.
+  // While the seats' switch is on: a member's billing, the link to the Seats page for a member or an account that gives
+  // seats, and the people in the other seats the account's own plan covers (its group, as the session read it; nothing read).
   const seats = (await seatsOn(c.env))
-    ? { member: !!who.seat, link: !!who.seat || memberSeats(who.plan) > 0 || (await seatsInUse(c.env, who.userId)) > 0 }
+    ? {
+      member: !!who.seat, link: !!who.seat || memberSeats(who.plan) > 0 || (await seatsInUse(c.env, who.userId)) > 0,
+      others: who.group && who.group.position === 0 ? who.group.ids.length - 1 : 0,
+    }
     : null;
   const view = billingView(lang, who, {
     offer: source.offer(), canManage: source.kind !== "stub", row, line, errors: extra.errors, refund, notice,

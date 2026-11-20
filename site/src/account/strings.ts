@@ -2598,6 +2598,7 @@ export const ACCOUNT_STRINGS = {
   "admin.mail_check_t_ultra_open": { en: "The Ultra message", fr: "Le message Ultra" },
   "admin.mail_check_t_address": { en: "The address-change notice", fr: "L'avis de changement d'adresse" },
   "admin.mail_check_t_invite": { en: "A seat's invitation", fr: "L'invitation à un siège" },
+  "admin.mail_check_t_seat": { en: "A seat's notice, the seat no longer giving Ultra", fr: "L'avis d'un siège, qui ne donne plus Ultra" },
   "admin.mail_check_t_weekly": { en: "The weekly email", fr: "Le courriel hebdomadaire" },
 
   // -- the weekly email (src/account/weekly.ts, digests.ts weeklyDigest; docs/accounts.md, Weekly email) --

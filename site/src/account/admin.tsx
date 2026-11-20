@@ -1682,7 +1682,7 @@ const MAIL_CHECK_NAME: Record<MailCheckTemplate, Key> = {
   records: "admin.mail_check_t_records", group: "admin.mail_check_t_group", watch: "admin.mail_check_t_watch", briefing: "admin.mail_check_t_briefing",
   briefing_group: "admin.mail_check_t_briefing_group", view: "admin.mail_check_t_view", view_group: "admin.mail_check_t_view_group",
   weekly: "admin.mail_check_t_weekly", accounts_open: "admin.mail_check_t_accounts_open", ultra_open: "admin.mail_check_t_ultra_open",
-  address_notice: "admin.mail_check_t_address", invite: "admin.mail_check_t_invite",
+  address_notice: "admin.mail_check_t_address", invite: "admin.mail_check_t_invite", seat: "admin.mail_check_t_seat",
 };
 
 // What the check sends and where, never the address itself, and the form.

@@ -9,7 +9,8 @@
 // largest records, and with neither), the week's matching notices in the weekly email and in the watch
 // mail (Free and Pro, with the disclaimer and the Terms' https address in
 // both parts), the accounts-open and Ultra
-// messages (through their console run), the address-change notice, and the
+// messages (through their console run), the address-change notice, a seat's
+// invitation and its three notices (through the delivery run's part), and the
 // live check's own messages (src/account/mail_check.ts), which the route
 // sends to the test inbox only once they pass here.
 import { describe, expect, it } from "vitest";
@@ -20,10 +21,12 @@ import {
   MAIL_CHECK_HOLDER, MAIL_CHECK_LISTS, MAIL_CHECK_MARK, MAIL_CHECK_TEMPLATES, type MailCheckTemplate, mailCheckMessages,
 } from "../src/account/mail_check";
 import { weekOpening } from "../src/account/org_claim";
+import { runSeatNotices } from "../src/account/seat_mail";
+import { removeSeat } from "../src/account/seats";
 import { addressNotice } from "../src/account/sender";
 import { t, tn, type Lang } from "../src/i18n";
 import { INSERT_INTEREST, newToken } from "../src/pages/interest";
-import { DB, csrf, decode, grantUltra, lastMail, nbsp, newEmail, onEnv, post, signIn, useAccountsDb } from "../test/accounts-helpers";
+import { ACCOUNTS, DB, csrf, decode, grantUltra, lastMail, nbsp, newEmail, onEnv, post, signIn, useAccountsDb } from "../test/accounts-helpers";
 import {
   DAY, MATCH_NAME, SAMPLE_ADDRESS, SITE, STOP, expiringInput, matchesInput, tenderInput, viewInput, weeklyInput,
 } from "../test/mail-fixtures";
@@ -37,7 +40,7 @@ const LANGS = ["en", "fr"] as const;
 const CHECK_SHAPE: Record<MailCheckTemplate, keyof typeof SHAPES> = {
   sign_in: "sign_in", tenders_daily: "digest_daily", expiring_weekly: "digest_weekly", records: "digest_daily", group: "group", watch: "watch",
   briefing: "briefing", briefing_group: "briefing_group", view: "view_weekly", view_group: "view_group", weekly: "weekly",
-  accounts_open: "accounts_open", ultra_open: "ultra_open", address_notice: "address_notice", invite: "invite",
+  accounts_open: "accounts_open", ultra_open: "ultra_open", address_notice: "address_notice", invite: "invite", seat: "seat",
 };
 
 // What every message carrying the week's matching notices holds in both
@@ -244,6 +247,62 @@ describe.each(LANGS)("every message, in %s", (lang) => {
     expect(link?.[0].startsWith("/account/seats/join"), "the link in the text part").toBe(true);
     expect(m.text).toContain(`${LOCAL}${link?.[0]}`);
     expect(link?.[1] === "&lang=fr").toBe(lang === "fr");
+  });
+
+  it("a seat's three notices (no longer gives Ultra, gives it again, has ended), as the delivery run's part sends them, in the member's language", async () => {
+    // A holder on Ultra and a member in its seat, every row written at a fixed time before the part's runs.
+    const at = (s: string) => `2026-${s}.000Z`;
+    const id = () => crypto.randomUUID().replace(/-/g, "");
+    const holder = { id: id(), email: newEmail(`seat-notice-holder-${lang}`) };
+    const member = { id: id(), email: newEmail(`seat-notice-member-${lang}`) };
+    const ultra = id();
+    const seat = id();
+    await ACCOUNTS.batch([
+      ACCOUNTS.prepare("INSERT INTO users (id, email, created_at, lang, status, plan) VALUES (?, ?, ?, 'en', 'active', 'free')")
+        .bind(holder.id, holder.email, at("09-01T00:00:00")),
+      // The member's mail language is the message's.
+      ACCOUNTS.prepare("INSERT INTO users (id, email, created_at, lang, status, plan) VALUES (?, ?, ?, ?, 'active', 'free')")
+        .bind(member.id, member.email, at("09-01T00:00:00"), lang),
+      ACCOUNTS.prepare("INSERT INTO entitlements (id, user_id, plan, source, starts_at, ends_at, reference, created_at) VALUES (?, ?, 'pro', 'manual', ?, NULL, 'test', ?)")
+        .bind(ultra, holder.id, at("10-01T00:00:00"), at("10-01T00:00:00")),
+      ACCOUNTS.prepare("INSERT INTO entitlement_tiers (entitlement_id, tier) VALUES (?, 'ultra')").bind(ultra),
+      ACCOUNTS.prepare(
+        "INSERT INTO seats (id, holder_id, lang, invited_at, expires_at, member_id, joined_at, told, told_at) VALUES (?, ?, 'en', ?, ?, ?, ?, 1, ?)",
+      ).bind(seat, holder.id, at("10-15T00:00:00"), at("10-22T00:00:00"), member.id, at("10-15T00:00:00"), at("10-15T00:00:00")),
+    ]);
+    const env = onEnv({ SEATS: "on" }) as never;
+    // The part on a local run: its messages leave through the log sender, as every message here does.
+    const part = (now: string) => runSeatNotices(env, { site: LOCAL, dataDate: now.slice(0, 10), now: new Date(now), room: 300, capText: "the cap" });
+    const notice = async (kind: "lost" | "back" | "ended", now: string, plan: string) => {
+      const { report } = await part(now);
+      expect(report?.[kind], kind).toBe(1);
+      const row = await lastMail(member.email);
+      expect(row?.to_addr).toBe(member.email);
+      const m = { to: member.email, subject: row!.subject, text: row!.text, html: row!.html, lang: row!.lang as Lang };
+      expect(m.subject).toBe(t(lang, `seatmail.subject_${kind}`));
+      checkMessage(m, shapeOf("seat", `seat notice, ${kind}`, LOCAL), lang);
+      expect(nbsp(m.text)).toContain(nbsp(kind === "back" ? t(lang, "seatmail.back", { date: now.slice(0, 10) })
+        : t(lang, kind === "lost" ? "seatmail.lost" : "seatmail.ended", { plan, date: now.slice(0, 10) })));
+      // It names no address, not the holder's either.
+      expect(`${m.subject}${m.text}${m.html}`).not.toContain(holder.email);
+      expect(`${m.subject}${m.text}${m.html}`).not.toContain(member.email);
+    };
+    // The holder's plan ends: the seat no longer gives Ultra.
+    await ACCOUNTS.prepare("UPDATE entitlements SET ends_at = ? WHERE id = ?").bind(at("11-08T12:00:00"), ultra).run();
+    await notice("lost", at("11-08T16:00:00"), t(lang, "account.plan_free"));
+    // Ultra again: the seat gives it again.
+    const again = id();
+    await ACCOUNTS.batch([
+      ACCOUNTS.prepare("INSERT INTO entitlements (id, user_id, plan, source, starts_at, ends_at, reference, created_at) VALUES (?, ?, 'pro', 'manual', ?, NULL, 'test', ?)")
+        .bind(again, holder.id, at("11-09T10:00:00"), at("11-09T10:00:00")),
+      ACCOUNTS.prepare("INSERT INTO entitlement_tiers (entitlement_id, tier) VALUES (?, 'ultra')").bind(again),
+    ]);
+    await notice("back", at("11-09T16:00:00"), t(lang, "ultra.tag"));
+    // The holder removes the member: the seat has ended.
+    expect(await removeSeat(env, holder.id, seat, new Date(at("11-10T10:00:00")))).toBe(member.email);
+    await notice("ended", at("11-10T16:00:00"), t(lang, "account.plan_free"));
+    // Each said once.
+    expect((await part(at("11-10T17:00:00"))).report?.sent).toBe(0);
   });
 
   it("the live check's messages: one of each template, marked, to the one address", async () => {

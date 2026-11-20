@@ -382,13 +382,14 @@ export function checkMessage(m: Sent, shape: Shape, lang: Lang, o: { others?: re
     const stop = shape.group ? whole[0] : stops[0];
     if (stop.startsWith("https://")) expect(headers, `${what}: List-Unsubscribe`).toEqual(deliveryHeaders(stop));
     else expect(headers["List-Unsubscribe"], `${what}: no List-Unsubscribe for an http link`).toBeUndefined();
-    if (shape.manage) {
-      const manage = siteLink(shape.site, shape.manage, lang);
-      expect(inHtml.has(manage) && inText.has(manage), `${what}: the manage link ${manage}`).toBe(true);
-    }
   } else {
     expect(stops, `${what}: no stop link`).toEqual([]);
     expect(headers["List-Unsubscribe"], `${what}: no List-Unsubscribe`).toBeUndefined();
+  }
+  // The page that manages it, in both parts: a list message's, and a seat notice's plan and billing page.
+  if (shape.manage) {
+    const manage = siteLink(shape.site, shape.manage, lang);
+    expect(inHtml.has(manage) && inText.has(manage), `${what}: the manage link ${manage}`).toBe(true);
   }
 }
 
@@ -432,6 +433,9 @@ export const SHAPES = {
   // A seat's invitation (sender.ts inviteMessage): one message about one invitation, no stop link and no
   // List-Unsubscribe; it names its holder's address (checkMessage's named).
   invite: { list: false, why: "invite.why" },
+  // A seat notice (seat_mail.ts seatNotice): one message about one change to the account's own plan, sent once, no
+  // stop link and no List-Unsubscribe; its footer links the plan and billing page.
+  seat: { list: false, why: "seatmail.why", manage: "/account/billing" },
 } as const satisfies Record<string, Omit<Shape, "name" | "site">>;
 
 export const shapeOf = (kind: keyof typeof SHAPES, name: string, site: string): Shape => ({ ...SHAPES[kind], name, site });

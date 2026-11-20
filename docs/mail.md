@@ -24,8 +24,8 @@ check runs neither suite.
 Every message the site sends to a reader is laid out in one shell,
 `site/src/account/mail_html.ts`: the sign-in code, the saved-search
 deliveries, the records counts, the watch mail, the weekly briefing, the
-weekly email, a saved analytics view, the accounts-open and Ultra messages
-and the address-change notice. A new message
+weekly email, a saved analytics view, the accounts-open and Ultra messages,
+the address-change notice, and a seat's invitation and its notices. A new message
 is built with it as well; no message writes its own `<html>`.
 
 | Part | What it holds |
@@ -130,7 +130,8 @@ Each in English and in French.
 | The Ultra message | its console run (kind `ultra`), and with an https stop link |
 | The address-change notice | the console's notice |
 | A seat's invitation, in the language the holder chose, naming the holder's address and no other but the site's own | the Seats page itself, `POST /account/seats/invite`, with the seats' switch on |
-| The live check's fifteen messages | `site/src/account/mail_check.ts` |
+| A seat's three notices to its member (the seat no longer gives Ultra, gives it again, has ended), in the member's mail language, naming no address | the delivery run's sixth part itself, `runSeatNotices` in `site/src/account/seat_mail.ts`, with the seats' switch on, after the holder's plan ends, after Ultra returns and after a removal |
+| The live check's sixteen messages | `site/src/account/mail_check.ts` |
 
 The operator's own alerts (the daily check's email and the bug reports, both
 through the `ALERTS` binding to the operator's address) are not reader mail
@@ -176,6 +177,10 @@ and keep their own tests.
   (the saved searches page, the watches page, the saved views page, or the
   account page for the weekly email) where it has one, and the line saying
   why the reader received it.
+- A seat's invitation and a seat notice carry no stop link and no
+  `List-Unsubscribe`: each is one message about one invitation or one change
+  to the account's own plan, sent once. A seat notice links the plan and
+  billing page in its footer, in both parts.
 - With an https stop link, the message carries `List-Unsubscribe` naming the
   contact address and that same link, and `List-Unsubscribe-Post:
   List-Unsubscribe=One-Click`. With an http link (a local run) it carries
@@ -198,7 +203,7 @@ and keep their own tests.
 
 | Cap | Figure | Held |
 |---|---|---|
-| Messages in one delivery run (saved searches, then watch mail, then briefings, then the weekly email, then saved views) | `RUN_MESSAGES_MAX`, 300 | `roomAfter`: each part gets the cap less what the parts before it sent or tried, never below zero (a part that did not run counts as none), and the five never pass 300 together |
+| Messages in one delivery run (saved searches, then watch mail, then briefings, then the weekly email, then saved views, then the seat notices) | `RUN_MESSAGES_MAX`, 300 | `roomAfter`: each part gets the cap less what the parts before it sent or tried, never below zero (a part that did not run counts as none), and the six never pass 300 together |
 | Weekly emails in one delivery run | `WEEKLY_RUN_MAX`, 100 | the weekly email's room is the shared room held to 100; the run stops there and the next hour (or the next data date of the week) goes on |
 | Watches one weekly email names | `WEEKLY_LINES`, 5 | eight watches with news name five, one line each, and count three more on a line to the watches page |
 | Matching notices one message lists | `RULES.free.match_mail`, 3; `RULES.pro.match_mail`, 10 | 2, 3 and 25 matches on Free list 2, 3 and 3; 9, 10 and 25 on Pro list 9, 10 and 10; the rest is counted in both parts only when there is one, and the subject counts every match |
@@ -211,10 +216,11 @@ and keep their own tests.
 | Largest records in one saved view's message | `VIEW_MAIL_ROWS`, 5 | nine records list five; a twenty-year view lists its twenty fiscal years, the newest first |
 | Records in one grouped saved views message | `GROUP_ROWS_MAX`, 30, at most `GROUP_SECTION_ROWS`, 5, a section | a section names the view's newest fiscal year and lists its largest records; 50 views list 30 records over 6 sections and the other 44 one line each, about 43,000 characters of HTML in English and 45,000 in French (`test-mail/view-group.test.ts`) |
 | Saved views one run reads | `VIEWS_RUN_MAX`, 1000 | the next hour reads the rest |
+| Seats the seat notices read in one run | `SEATS_RUN_MAX`, 200 | the ended seats not yet told first, then the live seats a holder at a time from a point that changes each run; the next hour reads them again (`site/test/seat-mail.test.ts`, the default suite) |
 | Lists named in the accounts-open message | `LISTS_SHOWN`, 10 | twelve lists name ten and count two more |
 | Messages in one accounts-open or Ultra run | `ANNOUNCE_MAX`, 300 | runs capped at 2 send at most 2 each, each address once; what waited less what a run sent is what waits after it; account holders are passed over (accounts-open only) |
 | Sign-in codes an address may ask for in an hour | `CODES_PER_HOUR`, 5 | the sixth request answers 429 and sends nothing |
-| Messages in one live check | one per template, 15 | all to the one address, nothing to any other; without `MAIL_ADDRESS` the weekly email is reported `stubbed` and not sent |
+| Messages in one live check | one per template, 16 | all to the one address, nothing to any other; without `MAIL_ADDRESS` the weekly email is reported `stubbed` and not sent |
 
 One more ceiling holds the delivery job across a UTC day rather than a run:
 `MAIL_DAILY_QUOTA` less `MAIL_DAILY_RESERVE` (1,000 less 40 as shipped), the
@@ -276,6 +282,10 @@ sender a reader's message goes through (`sendWithHeaders` in
     zeros, which the invitation's page answers as a link that has expired; sent
     whatever the seats' switch, since the check proves the way out and the
     switch holds only the Seats page's own sends
+16. a seat notice (`seat_mail.ts seatNotice`), the one a member reads when
+    the seat no longer gives Ultra, the account on Free from the day of the
+    run; it names no address, has no stop link, and is sent whatever the
+    seats' switch, as the invitation is
 
 Each subject starts with `[mail check]`, the same tag in both languages, so
 the message is never taken for a reader's and an inbox rule can file it. The
@@ -363,7 +373,7 @@ address.
 | Cloudflare Access stopped the request | check the service token secrets and the Service Auth policy (step 3) |
 | The site answered 404 | the switch is off, `OPERATOR_EMAILS` is unset, Access's token did not check out, or the repository's token is not the Worker's |
 | The Worker has no test address | add the secret `MAIL_TEST_TO` and deploy (step 1) |
-| n of 15 templates were not sent | read the run summary: a `refused` reason is Email Sending's code, `stubbed` means the binding or `MAIL_FROM` is missing, or for the weekly email that `MAIL_ADDRESS` is not set (`docs/accounts.md`, Weekly email) |
+| n of 16 templates were not sent | read the run summary: a `refused` reason is Email Sending's code, `stubbed` means the binding or `MAIL_FROM` is missing, or for the weekly email that `MAIL_ADDRESS` is not set (`docs/accounts.md`, Weekly email) |
 
 ### Setting up
 
@@ -394,7 +404,7 @@ address.
 
 After each run, in the test inbox:
 
-- Twelve messages arrived (eleven while `MAIL_ADDRESS` is unset, since the
+- Sixteen messages arrived (fifteen while `MAIL_ADDRESS` is unset, since the
   weekly email is then not sent), each subject starting with `[mail check]`, none in
   spam. A template the run reported `sent` that did not arrive is a delivery
   problem past Email Sending: look in spam, then at the address's
