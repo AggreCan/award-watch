@@ -9,7 +9,7 @@ import { planFor } from "../src/account/entitlements";
 import { STRIPE_VERSION, readEvent, signatureValid } from "../src/account/stripe";
 import { app } from "../src/index";
 import { testEnv } from "./assets";
-import { ACCOUNTS, csrf, decode, get, newEmail, nbsp, nextIp, onEnv, post, signIn, useAccountsDb, userId } from "./accounts-helpers";
+import { ACCOUNTS, csrf, decode, get, newEmail, nbsp, nextIp, onEnv, post, signIn, useAccountsDb, userId, withoutSeats } from "./accounts-helpers";
 
 useAccountsDb();
 
@@ -351,6 +351,70 @@ describe("the webhook's notices", () => {
       expect(await planOf(email)).toMatchObject({ plan: "pro" });
       expect((await binding(email))?.customer_id).toBe(cus);
     }
+  });
+
+  it("invoice.paid for an account that holds a seat ends the seat with the grant or grants nothing; no seat, or no seats table, as before", async () => {
+    const seatOf = (id: string) =>
+      ACCOUNTS.prepare("SELECT ended_at, ended_why, told FROM seats WHERE id = ?").bind(id).first<{ ended_at: string | null; ended_why: string | null; told: number }>();
+    const changes = async (user: string) =>
+      ((await ACCOUNTS.prepare("SELECT detail FROM audit WHERE user_id = ? AND event = 'plan_changed' ORDER BY id").bind(user).all<{ detail: string | null }>())
+        .results ?? []).map((r) => r.detail);
+    // A subscription that lapsed, a seat taken since: the account has no plan of its own and a live seat.
+    const holderEmail = newEmail("late-holder");
+    await signIn(holderEmail, { env: payEnv() });
+    const holder = await userId(holderEmail);
+    const email = newEmail("late-member");
+    await signIn(email, { env: payEnv() });
+    const user = await userId(email);
+    const seat = `${Date.now().toString(16).padStart(16, "0")}${"5ea7".repeat(4)}`;
+    await ACCOUNTS.prepare(
+      "INSERT INTO seats (id, holder_id, email, token_hash, lang, invited_at, expires_at, member_id, joined_at) VALUES (?, ?, NULL, NULL, 'en', ?, ?, ?, ?)",
+    ).bind(seat, holder, iso(nowS() - 2 * DAY_S), iso(nowS() + 5 * DAY_S), user, iso(nowS() - DAY_S)).run();
+    const { sub, cus } = ids();
+    const periodEnd = nowS() + 30 * DAY_S;
+    const paid = invoicePaid(sub, cus, periodEnd, user);
+
+    // The seat's end refused inside the batch (a planted trigger): no plan is written either, and the notice
+    // answers 500, so it comes again.
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await ACCOUNTS.prepare(
+      `CREATE TRIGGER planted_late_fault BEFORE UPDATE OF ended_at ON seats WHEN OLD.member_id = '${user}' BEGIN SELECT RAISE(ABORT, 'planted fault'); END`,
+    ).run();
+    try {
+      expect((await deliver(paid)).status).toBe(500);
+    } finally {
+      await ACCOUNTS.prepare("DROP TRIGGER IF EXISTS planted_late_fault").run();
+    }
+    expect(await rows(email)).toEqual([]);
+    expect(await seatOf(seat)).toEqual({ ended_at: null, ended_why: null, told: 1 });
+    expect(await changes(user)).toEqual([]);
+
+    // The same notice again: the plan and the seat's end together, told kept so the seat notices tell the member.
+    expect((await deliver(paid)).status).toBe(200);
+    expect(await rows(email)).toEqual([expect.objectContaining({ plan: "pro", source: "stripe", reference: sub, ends_at: iso(periodEnd + GRACE_DAYS * DAY_S) })]);
+    const ended = await seatOf(seat);
+    expect(ended).toMatchObject({ ended_why: "operator", told: 1 });
+    expect(ended?.ended_at).toMatch(/^[0-9]{4}-[0-9]{2}-[0-9]{2}T/);
+    expect(await changes(user)).toEqual(["stripe renewed, granted, seat ended"]);
+    expect(await changes(holder)).toEqual([]);
+    expect(await planOf(email)).toMatchObject({ plan: "pro" });
+
+    // An account with no seat reads as it did, and so does a database without the seats table.
+    const plain = newEmail("late-plain");
+    await signIn(plain, { env: payEnv() });
+    const plainId = await userId(plain);
+    const other = ids();
+    expect((await deliver(invoicePaid(other.sub, other.cus, periodEnd, plainId))).status).toBe(200);
+    expect(await changes(plainId)).toEqual(["stripe renewed, granted"]);
+    const bare = newEmail("late-no-table");
+    await signIn(bare, { env: payEnv() });
+    const bareId = await userId(bare);
+    const third = ids();
+    await withoutSeats(async () => {
+      expect((await deliver(invoicePaid(third.sub, third.cus, periodEnd, bareId))).status).toBe(200);
+    });
+    expect(await changes(bareId)).toEqual(["stripe renewed, granted"]);
+    expect(await rows(bare)).toEqual([expect.objectContaining({ plan: "pro", reference: third.sub })]);
   });
 
   it("invoice.paid for no known account, or for a subscription already ended, grants nothing", async () => {

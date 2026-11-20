@@ -3049,12 +3049,27 @@ or one too few (letting one item past the figure). A newcomer's items come
 last in the order below, so an item let past the figure that way is saved and
 unavailable, and the figure in service holds.
 
-Known, left as it is: an account that holds a seat and has an Ultra grant of
-its own is in no group itself (its own plan wins), while the holder's
-`planFor`, which does not read a member's own plan, still lists it in the
-holder's group. Its items count in the holder's pool, and its own adds
-count against its own figures alone. Only the operator's grant to an
-account in a seat makes this happen.
+No account holds a live seat and a paid plan of its own. Such an account
+would be in no group itself (its own plan wins) while the holder's
+`planFor`, which does not read a member's own plan, still listed it in the
+holder's group, its items counted in the holder's pool. A take refuses an
+account with a paid plan and checkout refuses a member, and the two ways a
+plan could still reach an account in a seat both end the seat in the
+batch that writes the plan: the operator's grant (*The console* below) and
+a payment notice's grant (next paragraph).
+
+A payment notice can write a plan for an account in a seat in two cases: a
+subscription that lapsed, a seat taken since, then the overdue invoice
+paid; or a checkout opened before the seat and paid after it. When
+`billing.tsx grant` writes a row for an account with no live row of its
+own, and the seats table is on the database, its batch carries
+`seats.ts GRANT_ENDS_SEAT_SQL`: the plan and the seat's end are written
+together or not at all (a fault answers 500 and the notice comes again).
+The seat ends `operator` with `told` kept, so the seat notices tell the
+member it ended and name the plan the account is on, and the account's
+`plan_changed` row reads "stripe renewed, granted, seat ended". The two
+other branches of that grant (a live row extended, a live row switched)
+meet an account that already has a plan of its own, which holds no seat.
 
 No account is in a group until a seat is given. With no seat row, every
 account sends today's statements, and the limiter keys every download as
@@ -3512,9 +3527,10 @@ panel is left out and neither is sent. The accounts table has a Seat column
 and filter (*Operator console*, *The accounts table*).
 
 A member cannot buy a plan (checkout refuses it) and a take refuses an
-account with a paid plan, so the operator's grant is the one way an account
-could hold a live seat and a plan of its own, and be counted in its
-holder's pool while out of its group. The grant closes it. For an account
+account with a paid plan, so the operator's grant is one of the two ways an
+account could hold a live seat and a plan of its own, and be counted in its
+holder's pool while out of its group (the other is a late payment, closed
+the same way by the payment notice's grant). The grant closes it. For an account
 that holds a seat, the grant's post first answers a page that names the
 subscription's holder (linked to its console page), says the grant ends the
 seat at once and that the person is told the seat ended, and lists the

@@ -35,9 +35,9 @@ import { CONTACT_EMAIL } from "../contact";
 import { PlanCards, planCards, type PlanReader } from "../pro";
 import { type ChargeState, operatorStripe } from "./admin_stripe";
 import { audit } from "./audit";
-import { PLAN_SEATS, type PaidPlan, type Plan, entitlementWrites, isPaidPlan, memberSeats, planFor, planRank, withTiers } from "./entitlements";
+import { PLAN_SEATS, type PaidPlan, type Plan, entitlementWrites, isPaidPlan, memberSeats, planFor, planRank, seatsReady, withTiers } from "./entitlements";
 import { type DeleteFacts, accountPage, overviewPlanLine, planLine } from "./pages";
-import { seatsInUse, seatsOn } from "./seats";
+import { GRANT_ENDS_SEAT_SQL, seatsInUse, seatsOn } from "./seats";
 import {
   INTERVALS, type Interval, type Notice, type PaymentSource, type SubscriptionState, isInterval, paymentSource, ultraOnSale,
 } from "./payments";
@@ -972,8 +972,9 @@ type Want = { plan: PaidPlan; confirmed: boolean } | null;
 // is extended (never shortened); one of the other plan is switched in a
 // batch (the old row ends now, the new one runs to the later of the old
 // row's end and endsAt, "stripe moved to <plan>"); a row is written when none
-// is live. An unconfirmed want never raises a plan above the live row's (or
-// above Pro when none is live).
+// is live, and with it any live seat the account holds ends (", seat ended").
+// An unconfirmed want never raises a plan above the live row's (or above Pro
+// when none is live).
 async function grant(run: Run, user: UserRow, subscriptionId: string, endsAt: string, why: string, want: Want): Promise<void> {
   if (endsAt <= run.at) return;
   const live = await liveRow(run, user.id, subscriptionId);
@@ -986,10 +987,18 @@ async function grant(run: Run, user: UserRow, subscriptionId: string, endsAt: st
   } else if (live) {
     await switchPlan(run, user, subscriptionId, live, plan, later(live.ends_at, endsAt));
   } else {
-    await run.db.batch(entitlementWrites(run.db, {
+    // An account with a paid plan of its own cannot take a seat, so this branch alone can meet one: a subscription
+    // that lapsed, a seat taken since, then the overdue invoice paid (or a checkout opened before the seat and
+    // paid after it). The seat ends in the grant's batch, as the console's grant ends one (admin_ops.ts
+    // grantPlan): the plan and the seat's end are written together or not at all, the account is never counted
+    // in a subscription's figures while served from its own, and the seat notices tell the member it ended.
+    const seats = await seatsReady(run.env, run.now);
+    const writes = entitlementWrites(run.db, {
       id: newId(), userId: user.id, plan, source: "stripe", startsAt: run.at, endsAt, reference: subscriptionId, createdAt: run.at,
-    }));
-    await audit(run.env, user.id, "plan_changed", `stripe ${why}, granted`, run.now);
+    });
+    const done = await run.db.batch(seats ? [...writes, run.db.prepare(GRANT_ENDS_SEAT_SQL).bind(run.at, user.id)] : writes);
+    const ended = seats ? (done[done.length - 1]?.results ?? []).length : 0;
+    await audit(run.env, user.id, "plan_changed", `stripe ${why}, granted${ended > 0 ? ", seat ended" : ""}`, run.now);
   }
   await planFor(run.env, user, run.now);
 }

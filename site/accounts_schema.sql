@@ -656,8 +656,9 @@ CREATE INDEX IF NOT EXISTS idx_view_deliveries_sent ON view_deliveries(sent_at);
 -- token_hash in the same statement. A decline or a cancellation sets ended_at and ended_why and
 -- clears token_hash; an invitation that ran out needs no write. A seat ends with ended_at and
 -- ended_why: left, removed, deleted (the member's account), closed (the holder's account) or
--- operator. One live seat a person, held by idx_seats_member_live, which a second join made at the
--- same moment cannot pass. Nothing here names a plan, a price, a subscription or a count: planFor
+-- operator (the console's End this seat, or a paid plan of the member's own granted while it
+-- held the seat, by the console or by a late payment). One live seat a person, held by
+-- idx_seats_member_live, which a second join made at the same moment cannot pass. Nothing here names a plan, a price, a subscription or a count: planFor
 -- (entitlements.ts) reads the holder's own entitlements and the group's seats beside the member's
 -- rows, and every pooled figure is counted from the tables that hold the items. told is what the
 -- seat notices last told the member (1: the seat gives the plan, which taking it says; 0: it gives

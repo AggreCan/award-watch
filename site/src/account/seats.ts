@@ -473,5 +473,7 @@ export async function memberSeatOf(env: Env, userId: string): Promise<MemberSeat
 // holds ends, operator, as the console's End this seat ends one (told kept, so the seat notices tell the end), the
 // ones it ended returned for their audit rows. A seat taken after the read above ends in the same transaction as the
 // grant. Through idx_seats_member_live; at most one row (one live seat a person).
+// The payment notices' grant (billing.tsx grant) sends the same statement when it writes a plan for an account
+// that had none: a late payment for a lapsed subscription is the other way an account could hold both.
 export const GRANT_ENDS_SEAT_SQL =
   "UPDATE seats SET ended_at = ?1, ended_why = 'operator' WHERE member_id = ?2 AND ended_at IS NULL RETURNING id, holder_id";
