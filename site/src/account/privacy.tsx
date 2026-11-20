@@ -5,6 +5,7 @@ import { EVENT_DAYS } from "./billing";
 import { VIEW_DELIVERY_DAYS } from "./saved_views";
 import { DELIVERY_ROW_DAYS } from "./searches";
 import { SESSIONS_MAX } from "./session";
+import { SEAT_KEEP_DAYS } from "./seats";
 import { BUG_REPORT_DAYS } from "./signin";
 import { WATCH_DELIVERY_DAYS } from "./watches";
 
@@ -25,7 +26,10 @@ export const HISTORY_DAYS = 30;
 // dashboard keeps, and what a saved view sent by email keeps beside it. The
 // signed-in browsers' sentence follows the session's own, its figures read
 // from session.ts and audit.ts (the sweep's AUDIT_DAYS).
-export const AccountsPrivacy: FC<{ lang: Lang; dashboard?: boolean }> = ({ lang, dashboard }) => (
+// seats: the seats' switch is on (seats.ts seatsOn), so the section says what
+// an invitation and a seat keep, who sees what, and for how long (the sweep's
+// SEAT_KEEP_DAYS), after the browsers' sentence.
+export const AccountsPrivacy: FC<{ lang: Lang; dashboard?: boolean; seats?: boolean }> = ({ lang, dashboard, seats }) => (
   <>
     <p>{t(lang, "account.privacy_kept", { days: DELIVERY_ROW_DAYS })}</p>
     <p>{t(lang, "account.privacy_mail")}</p>
@@ -40,6 +44,7 @@ export const AccountsPrivacy: FC<{ lang: Lang; dashboard?: boolean }> = ({ lang,
     <p>{t(lang, "bugs.privacy", { days: BUG_REPORT_DAYS })}</p>
     <p>{t(lang, "account.privacy_secrets")}</p>
     <p>{t(lang, "account.privacy_sessions", { cap: fmtInt(SESSIONS_MAX, lang), days: fmtInt(AUDIT_DAYS, lang) })}</p>
+    {seats ? <p>{t(lang, "seats.privacy", { days: fmtInt(SEAT_KEEP_DAYS, lang) })}</p> : null}
     <p>{t(lang, "account.privacy_not_kept")}</p>
     <p>{t(lang, "account.privacy_delete")}</p>
     <p>{t(lang, "account.privacy_backup", { weeks: fmtInt(BACKUP_WEEKS, lang), days: fmtInt(HISTORY_DAYS, lang) })}</p>

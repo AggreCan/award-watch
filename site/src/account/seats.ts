@@ -189,13 +189,24 @@ export async function holderSeats(env: Env, holderId: string, now: Date = new Da
       "SELECT id, email, invited_at, expires_at FROM seats WHERE holder_id = ?1 AND member_id IS NULL AND ended_at IS NULL AND expires_at > ?2 " +
       "ORDER BY invited_at, id",
     ).bind(holderId, at),
-    db.prepare("SELECT COUNT(*) AS n FROM seats WHERE holder_id = ?1 AND joined_at > ?2").bind(holderId, plusDays(now, -SEAT_WINDOW_DAYS)),
+    db.prepare(JOINS_SQL).bind(holderId, plusDays(now, -SEAT_WINDOW_DAYS)),
   ]);
   return {
     seats: (seats.results ?? []) as LiveSeat[],
     invitations: (invitations.results ?? []) as OpenInvitation[],
     joins: Number((joins.results?.[0] as { n?: number } | undefined)?.n ?? 0),
   };
+}
+
+// The joins of a holder's window, ended rows counted, as TAKE_SQL counts them
+// (?1 the holder, ?2 SEAT_WINDOW_DAYS ago), through idx_seats_holder.
+export const JOINS_SQL = "SELECT COUNT(*) AS n FROM seats WHERE holder_id = ?1 AND joined_at > ?2";
+
+// The joins the take would count now: the join page's GET reads them, so it
+// offers Take the seat only where the take could pass.
+export async function joinsInWindow(env: Env, holderId: string, now: Date = new Date()): Promise<number> {
+  const row = await env.ACCOUNTS!.prepare(JOINS_SQL).bind(holderId, plusDays(now, -SEAT_WINDOW_DAYS)).first<{ n: number }>();
+  return Number(row?.n ?? 0);
 }
 
 // The seats an account gives that are in use, its own aside: the live seats
@@ -394,3 +405,44 @@ export async function seatsOfAccount(env: Env, userId: string, now = new Date())
 }
 
 const cmp = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+// -- the console's actions ---------------------------------------------------------------
+// The operator's own (admin.tsx, behind the console's guard, a confirmation and
+// an audit row), on a holder's row by the row's id and the holder's id, both from
+// the console's own address: the account page's id and the row's, never a form.
+
+// One row of a holder's, as the console's confirmation shows it: the member's
+// id and address once taken, the invited address while an invitation; null for
+// an id that is not one of this holder's rows.
+export type ConsoleSeat = {
+  id: string; member_id: string | null; member_email: string | null; email: string | null; expires_at: string; ended_at: string | null;
+};
+export async function consoleSeat(env: Env, holderId: string, id: string): Promise<ConsoleSeat | null> {
+  if (!ID_RE.test(id)) return null;
+  return env.ACCOUNTS!.prepare(
+    "SELECT s.id, s.member_id, u.email AS member_email, s.email, s.expires_at, s.ended_at FROM seats s LEFT JOIN users u ON u.id = s.member_id " +
+    "WHERE s.id = ?1 AND s.holder_id = ?2",
+  ).bind(id, holderId).first<ConsoleSeat>();
+}
+
+// The operator's end of a live seat (ended operator): the member back on its own
+// plan from its next read; told stays as it was, so the seat notices tell the
+// member the seat ended. The member's id, for its own audit row, when a seat
+// was ended; null otherwise, whatever the id names.
+export async function operatorEndSeat(env: Env, holderId: string, id: string, now: Date = new Date()): Promise<string | null> {
+  const row = await env.ACCOUNTS!.prepare(
+    "UPDATE seats SET ended_at = ?1, ended_why = 'operator' WHERE id = ?2 AND holder_id = ?3 AND member_id IS NOT NULL AND ended_at IS NULL RETURNING member_id",
+  ).bind(now.toISOString(), id, holderId).first<{ member_id: string }>();
+  return row?.member_id ?? null;
+}
+
+// The operator's cancellation of an invitation not yet taken (ended operator): its
+// link's hash cleared, so the link stops at once. The address stays on the row
+// until the sweep, as the holder's own cancellation leaves it, so the
+// per-address count still holds it. True when one was cancelled.
+export async function operatorCancelInvitation(env: Env, holderId: string, id: string, now: Date = new Date()): Promise<boolean> {
+  const res = await env.ACCOUNTS!.prepare(
+    "UPDATE seats SET ended_at = ?1, ended_why = 'operator', token_hash = NULL WHERE id = ?2 AND holder_id = ?3 AND member_id IS NULL AND ended_at IS NULL",
+  ).bind(now.toISOString(), id, holderId).run();
+  return (res.meta?.changes ?? 0) === 1;
+}

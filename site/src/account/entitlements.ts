@@ -436,7 +436,11 @@ function seatPlan(userId: string, rows: readonly PlanRow[], now: Date): SeatPlan
 // One statement whatever the account: PLAN_ROWS_SQL, or today's
 // ENTITLEMENTS_SQL while the seats table is missing. A covered member's cache
 // says pro with the holder's end, as an Ultra holder's does.
-export async function planFor(env: Env, user: PlanHolder, now: Date = new Date()): Promise<PlanState> {
+//
+// write false: the same read with no cache write, for a request that must write
+// nothing at all (the seat invitation's page, a GET a link opens, reads its
+// holder's plan; seats_pages.tsx joinPage).
+export async function planFor(env: Env, user: PlanHolder, now: Date = new Date(), write = true): Promise<PlanState> {
   const db = env.ACCOUNTS;
   if (!db) return { ...lastKnownPlan(user, now), source: "last_known" };
   let read: { rows: PlanRow[]; seats: boolean };
@@ -452,7 +456,7 @@ export async function planFor(env: Env, user: PlanHolder, now: Date = new Date()
   // Without the seats table every row is the account's own.
   const { state, seat, group }: SeatPlan = read.seats ? seatPlan(user.id, read.rows, now) : { state: planFromRows(read.rows, now) };
   const cached = cachedPlanOf(state.plan);
-  if (cached !== user.plan || state.until !== user.plan_until) {
+  if (write && (cached !== user.plan || state.until !== user.plan_until)) {
     try {
       await db.prepare("UPDATE users SET plan = ?, plan_until = ? WHERE id = ?").bind(cached, state.until, user.id).run();
     } catch {

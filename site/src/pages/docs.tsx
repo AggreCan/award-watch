@@ -9,11 +9,14 @@ import type { Context } from "hono";
 import type { FC } from "hono/jsx";
 import { loadStats } from "../data";
 import type { AppEnv } from "../env";
-import { t, tj, type Key, type Lang } from "../i18n";
+import { fmtInt, t, tj, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, page } from "../layout";
 import { OGL_URL, pageSeo, type PageKey } from "../seo";
 import { AccountsPrivacy, PaymentsPrivacy } from "../account/privacy";
+import { PLAN_SEATS, memberSeats } from "../account/entitlements";
 import { ultraOnSale } from "../account/payments";
+import { SEAT_INVITE_DAYS, SEAT_WINDOW_DAYS, joinsAllowed, seatsOn } from "../account/seats";
+import { SESSIONS_MAX } from "../account/session";
 import { accountsEnabled } from "../account/switch";
 import { CONTACT_EMAIL } from "../contact";
 import { followsPanelOn } from "../lines";
@@ -134,11 +137,34 @@ const PAID_TERMS: [Key, Key][] = [
   ["terms.pro_changes_title", "terms.pro_changes"],
 ];
 
+// The paid plans' parts while the seats' switch is on as well (account/seats.ts
+// seatsOn; the seats design's 6.3): Seats after What the Paid Plans Include,
+// and the abuse paragraph naming a seat beside an account. With the switch off
+// the paid terms above stand word for word. These wait on the lawyer's read.
+const SEATS_TERMS: [Key, Key][] = PAID_TERMS.flatMap(([title, body]): [Key, Key][] =>
+  body === "terms.pro_includes_ultra" ? [[title, body], ["terms.pro_seats_title", "terms.pro_seats"]]
+    : body === "terms.pro_abuse_ultra" ? [[title, "terms.pro_abuse_seats"]]
+    : [[title, body]]);
+
+// The figures the Seats section names, read when the page is drawn: each plan's
+// own seats, the seats a subscriber gives, the link's days, the joins and their
+// window, and the signed-in browsers an account keeps.
+const seatsFigures = (lang: Lang): Record<string, string> => {
+  const seats = (n: number) => t(lang, n === 1 ? "seats.seat_one" : "seats.seat_many", { n: fmtInt(n, lang) });
+  return {
+    pro_seats: seats(PLAN_SEATS.pro), ultra_seats: seats(PLAN_SEATS.ultra), others: fmtInt(memberSeats("ultra"), lang),
+    days: fmtInt(SEAT_INVITE_DAYS, lang), joins: fmtInt(joinsAllowed("ultra"), lang), window: fmtInt(SEAT_WINDOW_DAYS, lang),
+    devices: fmtInt(SESSIONS_MAX, lang),
+  };
+};
+
 export async function termsPage(c: Context<AppEnv>): Promise<Response> {
   const ultra = await ultraOnSale(c.env);
   const followsOn = followsPanelOn(c.env);
   const accountsOpen = accountsEnabled(c.env);
-  const parts = ultra ? PAID_TERMS : PRO_TERMS;
+  // The Seats section only beside Ultra's terms, which it describes; nothing is read for it while its switch is off.
+  const seats = ultra && (await seatsOn(c.env).catch(() => false));
+  const parts = ultra ? (seats ? SEATS_TERMS : PAID_TERMS) : PRO_TERMS;
   return doc(c, "terms", "terms.title", "terms.lead", (lang) => [
     { id: "use", title: "terms.toc_use", body: <p>{t(lang, "terms.use")}</p> },
     {
@@ -187,7 +213,7 @@ export async function termsPage(c: Context<AppEnv>): Promise<Response> {
           {parts.map(([title, body]) => (
             <>
               <h3>{t(lang, title)}</h3>
-              <p>{t(lang, body, { email: CONTACT_EMAIL })}</p>
+              <p>{t(lang, body, body === "terms.pro_seats" ? seatsFigures(lang) : { email: CONTACT_EMAIL })}</p>
             </>
           ))}
         </>
@@ -202,10 +228,12 @@ export async function privacyPage(c: Context<AppEnv>): Promise<Response> {
   const accounts = accountsEnabled(c.env);
   // Once Ultra can be bought the accounts section also says what a dashboard keeps.
   const dashboard = accounts && (await ultraOnSale(c.env));
+  // While the seats' switch is on, what an invitation and a seat keep (account/privacy.tsx); nothing is read for it while off.
+  const seats = accounts && (await seatsOn(c.env).catch(() => false));
   const logos = !!c.env.BRANDFETCH_CLIENT_ID;
   return doc(c, "privacy", "privacy.title", "privacy.lead", (lang) => [
     accounts
-      ? { id: "accounts", title: "account.privacy_toc", body: <AccountsPrivacy lang={lang} dashboard={dashboard} /> }
+      ? { id: "accounts", title: "account.privacy_toc", body: <AccountsPrivacy lang={lang} dashboard={dashboard} seats={seats} /> }
       : { id: "accounts", title: "privacy.toc_accounts", body: <p>{t(lang, "privacy.accounts")}</p> },
     ...(accounts ? [{ id: "payments", title: "billing.privacy_toc", body: <PaymentsPrivacy lang={lang} ultra={dashboard} /> } satisfies Section] : []),
     { id: "browser", title: "privacy.toc_browser", body: <p>{t(lang, "privacy.cookie")}</p> },

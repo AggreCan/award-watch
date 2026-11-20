@@ -19,7 +19,7 @@
 
 import { useContext, type FC } from "hono/jsx";
 import { KEYS_MAX } from "./account/api_keys";
-import { PLANS, RULES, type CountedFeature, type Feature, type Plan } from "./account/entitlements";
+import { PLANS, PLAN_SEATS, RULES, type CountedFeature, type Feature, type Plan } from "./account/entitlements";
 import { paymentSource, ultraOnSale } from "./account/payments";
 import { stripeOffer, stripeOffers } from "./account/stripe";
 import { KEY_PER_DAY, keyQuota } from "./api_keyed_spec";
@@ -105,8 +105,12 @@ export type Wording = { key: Key; vars?: (lang: Lang) => Record<string, string> 
 // Pro's); a row Pro has not is Ultra's alone (the dashboards, the saved views
 // by email), its feature one Ultra gives a figure or a yes Pro does not. Every card draws every row it is shown
 // with in this order, so the lists line up across the cards; a row only
-// Ultra has is drawn only beside Ultra's card (planRows).
-export type PlanRow = { feature: Feature; free: Wording | null; pro: Wording | null; ultra: Wording };
+// Ultra has is drawn only beside Ultra's card (planRows). The seats' row
+// (SEATS_ROW) names "seats" in place of a feature: its figure is
+// entitlements.ts PLAN_SEATS, kept out of RULES.
+export type PlanRow = { feature: Feature | "seats"; free: Wording | null; pro: Wording | null; ultra: Wording };
+// A row of PLAN_ROWS, whose feature is always one of RULES's.
+export type FeatureRow = PlanRow & { feature: Feature };
 
 // The longest a row's line may run, in characters, in either language: one
 // line at a card's narrowest (300 px, 13 px type, the mark beside it). The
@@ -156,7 +160,7 @@ export function dashboardsWording(plan: Plan): Wording {
   return { key, vars: (lang) => ({ n: fmtInt(RULES[plan].dashboards, lang), tiles: fmtInt(RULES[plan].dashboard_tiles, lang) }) };
 }
 
-export const PLAN_ROWS: readonly PlanRow[] = [
+export const PLAN_ROWS: readonly FeatureRow[] = [
   { feature: "intraday", free: { key: "plans.free_tenders" }, ...same({ key: "plans.pro_tenders", vars: (lang) => ({ h: sameDayHours(lang) }) }) },
   {
     feature: "radar_depth",
@@ -243,13 +247,32 @@ export const PLAN_ROWS: readonly PlanRow[] = [
 // "on". The page's shell says so (layout.tsx Shell.builder), and PlanCards
 // reads it there; the landing page passes it to its own cards.
 export const BUILDER_ROW: PlanRow = { feature: "builder", free: null, pro: null, ultra: { key: "plans.builder" } };
-export type PlanSwitches = { builder?: boolean };
+
+// The seats a plan holds, the subscriber's own included (entitlements.ts
+// PLAN_SEATS, the operator's ruling of 2026-11-16), each plan its own
+// figure: one seat in the singular, several with the words the operator
+// ruled for them ("5 seats sharing these figures"), since the plan's other
+// figures are the subscription's, shared by its seats (account/pool.ts).
+export function seatsWording(plan: Plan): Wording {
+  const n = PLAN_SEATS[plan];
+  return { key: n === 1 ? "plans.seat_one" : "plans.seats_shared", vars: count(() => PLAN_SEATS[plan]) };
+}
+
+// The seats' row, behind the seats' switch (account/seats.ts seatsOn): drawn
+// first, before PLAN_ROWS, only while the switch is on, so a card with it off
+// keeps every byte. Every plan has it, Free included ("1 seat", the one
+// counted row where Pro's figure is Free's); Ultra's wording is its own, so the
+// row is one of Ultra's own lines (ultraOwnRows) while it is drawn. The page's
+// shell says the switch is on (layout.tsx Shell.seats), and PlanCards reads it
+// there; the landing page passes it to its own cards.
+export const SEATS_ROW: PlanRow = { feature: "seats", free: seatsWording("free"), pro: seatsWording("pro"), ultra: seatsWording("ultra") };
+export type PlanSwitches = { builder?: boolean; seats?: boolean };
 
 // The rows a set of cards draws: those one of its plans has, so the two
 // cards drawn while Ultra is not on sale keep their rows, and a row only
 // Ultra has comes with Ultra's card.
 export function planRows(plans: readonly Plan[], on: PlanSwitches = {}): readonly PlanRow[] {
-  const rows = on.builder ? [...PLAN_ROWS, BUILDER_ROW] : PLAN_ROWS;
+  const rows: readonly PlanRow[] = [...(on.seats ? [SEATS_ROW] : []), ...PLAN_ROWS, ...(on.builder ? [BUILDER_ROW] : [])];
   return rows.filter((r) => plans.some((p) => r[p] !== null));
 }
 
@@ -274,9 +297,16 @@ export const ULTRA_OWN_ROWS: readonly PlanRow[] = PLAN_ROWS.filter((r) => r.pro 
 // from RULES and the constants and never typed.
 export const ULTRA_LINES: readonly Key[] = ULTRA_OWN_ROWS.map((r) => r.ultra.key);
 
+// Ultra's own rows as a page or a message draws them: the seats' row first
+// while the seats' switch is on (on.seats), then ULTRA_OWN_ROWS; and their keys.
+export function ultraOwnRows(on: PlanSwitches = {}): readonly PlanRow[] {
+  return on.seats ? [SEATS_ROW, ...ULTRA_OWN_ROWS] : ULTRA_OWN_ROWS;
+}
+export const ultraLineKeys = (on: PlanSwitches = {}): readonly Key[] => ultraOwnRows(on).map((r) => r.ultra.key);
+
 export function ultraLines(lang: Lang, keys: readonly Key[] = ULTRA_LINES): string[] {
   return keys.map((key) => {
-    const row = PLAN_ROWS.find((r) => r.ultra.key === key);
+    const row = [SEATS_ROW, ...PLAN_ROWS].find((r) => r.ultra.key === key);
     return row ? planLine(lang, row.ultra) : t(lang, key);
   });
 }
@@ -404,7 +434,8 @@ const PlanCardView: FC<{ lang: Lang; card: PlanCard; rows: readonly PlanRow[] }>
 // row at one height across them (public/styles.css .plan-cards). Three fit
 // side by side where the column allows it; two and one below.
 export const PlanCards: FC<{ lang: Lang; plans: readonly PlanCard[] }> = ({ lang, plans }) => {
-  const rows = planRows(plans.map((c) => c.plan), { builder: !!useContext(RailContext)?.builder });
+  const shell = useContext(RailContext);
+  const rows = planRows(plans.map((c) => c.plan), { builder: !!shell?.builder, seats: !!shell?.seats });
   return (
     <div class="plan-cards" style={`--plan-rows:${rows.length};--plan-card-rows:${cardRows(rows.length)}`}>
       {plans.map((card) => <PlanCardView lang={lang} card={card} rows={rows} />)}

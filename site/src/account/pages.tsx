@@ -26,6 +26,7 @@ import { FEEDS_MAX, type FeedKind } from "./feeds";
 import type { PoolLine } from "./pool";
 import { PoolLines, PoolMark, poolCount, poolOver } from "./pool_lines";
 import { DELIVERY, type Delivery, type InterestRow, type LastDelivery, type SavedSearch, paidCapLine } from "./searches";
+import { PoolFull } from "./seats_lines";
 import type { SeatsRow } from "./seats_pages";
 import { type Account, type LiveSession, SESSIONS_MAX } from "./session";
 import { CODE_MINUTES } from "./signin";
@@ -47,9 +48,10 @@ export async function accountPage(c: Context<AppEnv>, title: string, body: unkno
 const Errors: FC<{ lang: Lang; errors?: Key[] }> = ({ lang, errors }) =>
   errors?.length ? <ul class="errors" role="alert">{errors.map((e) => <li>{t(lang, e)}</li>)}</ul> : null;
 
-// A line saying what the last action did, already in the page's language.
-const Notice: FC<{ message?: string | null }> = ({ message }) =>
-  message ? <p class="account-notice" role="status">{message}</p> : null;
+// A line saying what the last action did, already in the page's language: text,
+// or a line with a link in it (seats_lines.tsx poolFullLine, the holder's).
+const Notice: FC<{ message?: unknown }> = ({ message }) =>
+  message ? <p class="account-notice" role="status">{message as any}</p> : null;
 
 const Csrf: FC<{ account: Account }> = ({ account }) => <input type="hidden" name="csrf" value={account.csrf} />;
 
@@ -683,6 +685,8 @@ const CalendarPanel: FC<{ lang: Lang; account: Account; view: CalendarView }> = 
       </>}>
       <p>{t(lang, "calfeed.lead")}</p>
       {view.pool ? <PoolLines lang={lang} figure="feeds" line={view.pool.line} past={view.pool.past} /> : null}
+      {/* In a group at the subscription's figure, while the seats' switch is on: why no row offers a feed (seats_lines.tsx). */}
+      {view.pool && full ? <PoolFull lang={lang} who={account} figure="feeds" cap={FEEDS_MAX} p /> : null}
       {view.rows.length ? (
         <div class="table-wrap">
           {/* Sorted in the page by the feed's name; the address cell holds a form, with nothing to sort by. */}
@@ -720,7 +724,7 @@ const CalendarPanel: FC<{ lang: Lang; account: Account; view: CalendarView }> = 
 export function searchesView(
   lang: Lang, account: Account,
   state: {
-    searches: (SavedSearch & { last?: LastDelivery | null })[]; cap: number; pending: InterestRow[]; notice?: string | null;
+    searches: (SavedSearch & { last?: LastDelivery | null })[]; cap: number; pending: InterestRow[]; notice?: unknown;
     errors?: Key[]; url?: string; calendar?: CalendarView | null;
     // The weekly briefings' panel (briefing_pages.tsx) and how many the account holds: they share the cap.
     briefings?: { n: number; panel: unknown } | null;
@@ -831,8 +835,9 @@ export function searchesView(
       {state.calendar ? <CalendarPanel lang={lang} account={account} view={state.calendar} /> : null}
       <Panel title={t(lang, "account.panel_add")} class="panel-form">
         <Errors lang={lang} errors={state.errors} />
+        {/* In a group, while the seats' switch is on, the subscription is full: whom to ask (seats_lines.tsx). */}
         {full ? (
-          <p>{capLine}</p>
+          <p>{pool ? <PoolFull lang={lang} who={account} figure="searches" cap={cap} otherwise={capLine} /> : capLine}</p>
         ) : (
           <form method="post" action="/account/searches" class="stack">
             <Csrf account={account} />
@@ -995,7 +1000,8 @@ export function keysView(
         {!canCreate ? (
           <p>{t(lang, "account.keys_pro")} <a href="/account/billing">{t(lang, "billing.link_plans")}</a></p>
         ) : full ? (
-          pool ? null : <p>{t(lang, "account.keys_limit", { n: KEYS_MAX })}</p>
+          // In a group the count is said above; while the seats' switch is on, the subscription is full (seats_lines.tsx).
+          pool ? <PoolFull lang={lang} who={account} figure="keys" cap={KEYS_MAX} p /> : <p>{t(lang, "account.keys_limit", { n: KEYS_MAX })}</p>
         ) : (
           <form method="post" action="/account/keys" class="stack">
             <Csrf account={account} />
@@ -1072,8 +1078,11 @@ export function keysView(
 // paid: the plan a subscription of the account pays for (its own paid plan,
 // or the one its bound subscription last paid for), null for none; refund:
 // the billing page offers Refund now (billing.tsx refundState), which a line
-// points to, since deleting refunds nothing.
-export type DeleteFacts = { paid: "pro" | "ultra" | null; refund: boolean };
+// points to, since deleting refunds nothing. While the seats' switch is on
+// (seats_pages.tsx deleteSeatFacts): holder, the address of the subscription
+// whose seat the account holds, from its own session; gives, how many seats it
+// gives (live seats and open invitations), each ended with it.
+export type DeleteFacts = { paid: "pro" | "ultra" | null; refund: boolean; holder?: string; gives?: number };
 
 export function deleteView(lang: Lang, account: Account, errors?: Key[], facts: DeleteFacts = { paid: null, refund: false }) {
   const plan = facts.paid ? t(lang, facts.paid === "ultra" ? "ultra.tag" : "pro.tag") : null;
@@ -1088,6 +1097,8 @@ export function deleteView(lang: Lang, account: Account, errors?: Key[], facts: 
             page: <a href={`/account/billing${lang === "fr" ? "?lang=fr" : ""}#refund`}>{t(lang, "account.delete_refund_page")}</a>,
           })}</p>
         ) : null}
+        {facts.holder ? <p>{t(lang, "account.delete_seat", { holder: facts.holder })}</p> : null}
+        {facts.gives ? <p>{tn(lang, "account.delete_seats_one", "account.delete_seats", facts.gives, { n: fmtInt(facts.gives, lang) })}</p> : null}
         <ul class="account-list">
           <li>{plan ? t(lang, "account.delete_subscription", { plan }) : t(lang, "account.delete_subscription_any")}</li>
           <li>{t(lang, "account.delete_searches")}</li>

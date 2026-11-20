@@ -577,15 +577,22 @@ describe("the console's Seats panel", () => {
     const gone = await account("c-gone");
     await seat(h.id, gone.id, -20, { ended: -2, why: "left" });
     const panel = panelOf(await userPage(op, h.id))!;
+    // Beside a seat row the panel has its actions column (whatever the seats' switch says: a live seat gives the plan
+    // either way, so the operator can always end one), and an address may break after its "@" and dots to keep the
+    // table in its box.
+    const broken = (address: string) => address.split(/(?<=[@.])/).join("<wbr/>");
     expect(panel).toContain("3 of 5 seats: this account, 1 members, 1 invitations open");
-    expect(panel).toContain(`<a href="/admin/users/${m.id}">${m.email}</a>`);
+    expect(panel).toContain(`<a href="/admin/users/${m.id}">${broken(m.email)}</a>`);
     expect(panel).toContain("Taken, gives the plan");
-    expect(panel).toContain(invitee);
+    expect(panel).toContain(broken(invitee));
     expect(panel).toContain(`Invited, link works until ${day(6)}`);
-    expect(panel).toContain(stale);
+    expect(panel).toContain(broken(stale));
     expect(panel).toContain("Invitation expired");
-    expect(panel).toContain(`<span class="muted"><a href="/admin/users/${gone.id}">${gone.email}</a></span>`);
+    expect(panel).toContain(`<span class="muted"><a href="/admin/users/${gone.id}">${broken(gone.email)}</a></span>`);
     expect(panel).toContain('<span class="muted">left</span>');
+    // One action a row still open: the live seat's and the open invitation's, none for the expired or the ended.
+    expect(panel.match(/\/seats\/[0-9a-f]{32}\/end"/g)).toHaveLength(1);
+    expect(panel.match(/\/seats\/[0-9a-f]{32}\/invite-cancel"/g)).toHaveLength(1);
     // The member's page names the holder and whether the seat gives the plan, in both languages.
     expect(panelOf(await userPage(op, m.id))).toContain(
       `A seat on <a href="/admin/users/${h.id}">${h.email}</a> since <span class="mono">${day(-10)}</span>; it gives Ultra now`,

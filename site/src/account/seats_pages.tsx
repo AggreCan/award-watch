@@ -20,7 +20,11 @@
 // member's reads the same counts over its own group and shows the totals and
 // its own. No statement takes an account id from a form. The join page's What
 // Fits is the pool's own rule (pool.ts allowanceIn over readPool), so it
-// says what the pool then serves.
+// says what the pool then serves. The join page's GET writes nothing at all:
+// it reads the holder's plan without bringing its cache up to date (planFor
+// with write false), and it offers Take the seat only where the take could
+// pass (the holder's plan has a seat for it, the holder is not blocked, the
+// window's joins are not spent), so the GET and the take say the same.
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
@@ -44,8 +48,9 @@ import { THINGS } from "./pool_lines";
 import { isBlocked } from "./admin_ops";
 import {
   type HolderSeats, type Invitation, type InviteRefusal, SEAT_INVITE_DAYS, cancelInvitation, declineInvitation, dropInvitation, holderSeats,
-  invite, joinsAllowed, leaveSeat, readInvitation, removeSeat, seatMember, seatsInUse, seatsOn, takeSeat,
+  invite, joinsAllowed, joinsInWindow, leaveSeat, readInvitation, removeSeat, seatMember, seatsInUse, seatsOn, takeSeat,
 } from "./seats";
+import { breakable } from "./seats_lines";
 import { inviteMessage, senderFor } from "./sender";
 import { type Account, readSession } from "./session";
 
@@ -114,21 +119,39 @@ export async function seatsRow(c: Context<AppEnv>, who: Account, now: Date = new
   return used > 0 ? { kind: "fewer" } : null;
 }
 
+// -- the delete page ---------------------------------------------------------------------------------
+
+// What the delete page says of seats, while the switch is on: the address of
+// the subscription whose seat the account holds (its own session's, read
+// nothing), or how many seats the account gives (its live seats and open
+// invitations, one statement), each ended with the account (seats.ts
+// endSeatsOf). Nothing, and nothing read, while the switch is off or for an
+// account with no seat on either side.
+export async function deleteSeatFacts(c: Context<AppEnv>, who: Account, now: Date = new Date()): Promise<{ holder?: string; gives?: number }> {
+  if (!(await seatsOn(c.env, now))) return {};
+  if (who.seat) return { holder: who.seat.holderEmail };
+  const gives = await seatsInUse(c.env, who.userId, now);
+  return gives > 0 ? { gives } : {};
+}
+
 // -- the pool's table ------------------------------------------------------------------------------
 
 type PoolColumn = { label: string; id: string };
 
 // One row a pooled figure: its total against the plan's figure, then each
 // column's own count (the holder's and each member's for the holder, the
-// member's own for a member). Counts only.
+// member's own for a member). Counts only. A column is headed by a person's
+// address, so on a phone its label runs before its value rather than in the
+// narrow label column (public/styles.css .seats-pool), and an address breaks
+// only where the line cannot hold it whole.
 const PoolTable: FC<{ lang: Lang; pool: Pool; plan: Plan; columns: readonly PoolColumn[] }> = ({ lang, pool, plan, columns }) => (
   <div class="table-wrap">
-    <table class="restack">
+    <table class="restack seats-pool">
       <thead>
         <tr>
           <th>{t(lang, "seats.pool_col_figure")}</th>
           <th class="num">{t(lang, "seats.pool_col_total")}</th>
-          {columns.map((col) => <th class="num">{col.label}</th>)}
+          {columns.map((col) => <th class="num">{breakable(col.label)}</th>)}
         </tr>
       </thead>
       <tbody>
@@ -160,6 +183,8 @@ type HolderState = {
 function holderView(lang: Lang, who: Account, s: HolderState) {
   const room = memberSeats(s.plan);
   const covered = new Set(s.group?.ids.slice(1) ?? []);
+  // Live seats the plan does not cover now (more people than its member seats): in the seats table, not in the pool's.
+  const outside = s.seats.seats.filter((r) => !covered.has(r.member_id)).length;
   const used = 1 + s.seats.seats.length + s.seats.invitations.length;
   const emailOf = new Map(s.seats.seats.map((r) => [r.member_id, r.member_email]));
   // A plan with fewer seats than the account gives: Pro holds one; no paid plan holds none.
@@ -239,6 +264,7 @@ function holderView(lang: Lang, who: Account, s: HolderState) {
             { label: t(lang, "seats.you", { email: who.email }), id: who.userId },
             ...s.group.ids.slice(1).map((id) => ({ label: emailOf.get(id) ?? "", id })),
           ]} />
+          {outside > 0 ? <p class="muted small">{t(lang, "seats.pool_uncovered")}</p> : null}
         </Panel>
       ) : null}
       {room > 0 ? (
@@ -464,13 +490,18 @@ export type Fit = { figure: PoolFigure; own: number; fits: number; left: number 
 // own plan reads it, the account placed after its members, and each figure's
 // allowance by the pool's own rule (pool.ts allowanceIn over one
 // POOL_COUNTS_SQL), the account's items by creation served first, as the pool
-// then serves them. null when the holder's plan has no seat for it now. Reads
-// the holder's plan (planFor) and the counts; writes nothing of the seat.
-export async function whatFits(c: Context<AppEnv>, inv: Invitation, joiner: Account): Promise<Fit[] | null> {
-  const holder = await planFor(c.env, { id: inv.holderId, plan: inv.holderPlan, plan_until: inv.holderUntil });
+// then serves them. null when the take would refuse it now (join.no_room): the
+// holder's plan has no seat for it, the holder is blocked, or the window's
+// joins are spent, as TAKE_SQL and joinPost hold them. Reads the holder's plan
+// (planFor with write false: a GET a link opens writes nothing at all), the
+// block, the joins and the counts.
+export async function whatFits(c: Context<AppEnv>, inv: Invitation, joiner: Account, now: Date = new Date()): Promise<Fit[] | null> {
+  const holder = await planFor(c.env, { id: inv.holderId, plan: inv.holderPlan, plan_until: inv.holderUntil }, now, false);
   const plan: Plan = holder.seat ? "free" : holder.plan;
   const ids = holder.group?.ids ?? [inv.holderId];
   if (memberSeats(plan) === 0 || ids.length - 1 >= memberSeats(plan) || ids.length >= POOL_SLOTS) return null;
+  if (await isBlocked(c.env, { id: inv.holderId })) return null;
+  if ((await joinsInWindow(c.env, inv.holderId, now)) >= joinsAllowed(plan)) return null;
   const group: Group = { holderId: inv.holderId, ids: [...ids, joiner.userId], position: ids.length };
   const pool = await readPool(c.env.ACCOUNTS!, group);
   return POOL_FIGURES.map((figure) => {

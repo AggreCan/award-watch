@@ -2897,19 +2897,22 @@ sweep, the console's read, the pool at the inserts (*The pool*), the pool
 in service (*In service*), and, behind a switch of their own that ships off
 (*The seats' switch*), the invitation and its message, the invitation's page,
 the Seats page of a holder and of a member, leaving a seat and removing a
-member. While that switch is off nothing creates a seat: there is no route
-under `/account/seats` or `/account/seat` and no line about seats on any
-page, and with no seat row every page, post, feed, API answer and email
-reads as before. Not built yet: the plan cards' row, `/pro`'s and the
-landing card's lines, the Terms' Seats section, the privacy page's paragraph,
-the console's actions on a seat, and the seat notices by email. The code is
-`site/src/account/entitlements.ts` (`planFor`, `withSeats`, `seatsReady`),
-`site/src/account/seats.ts`, `site/src/account/seats_pages.tsx`,
+member, the plan cards' seats row, `/pro`'s and the landing card's lines, the
+Terms' Seats section, the privacy page's paragraph, the lines a control reads
+where the subscription is full, the delete page's line, and the console's
+actions on a seat (*What the seats say elsewhere*). While that switch is off
+nothing creates a seat: there is no route under `/account/seats` or
+`/account/seat` and no line about seats on any page, and with no seat row
+every page, post, feed, API answer and email reads as before. Not built yet:
+the seat notices by email, and the billing and refund pages' lines on the
+seats a holder gives. The code is `site/src/account/entitlements.ts`
+(`planFor`, `withSeats`, `seatsReady`), `site/src/account/seats.ts`,
+`site/src/account/seats_pages.tsx`, `site/src/account/seats_lines.tsx`,
 `site/src/account/seats_strings.ts`, `site/src/account/pool.ts` and
 `site/src/account/pool_lines.tsx`; the tests are `site/test/seats.test.ts`,
 `site/test/seats-unchanged.test.ts`, `site/test/seats-pool.test.ts`,
-`site/test/seats-service.test.ts`, `site/test/seats-switch.test.ts` and
-`site/test/seats-invite.test.ts`.
+`site/test/seats-service.test.ts`, `site/test/seats-switch.test.ts`,
+`site/test/seats-invite.test.ts` and `site/test/seats-words.test.ts`.
 
 ### The table
 
@@ -3123,17 +3126,23 @@ while it is off nothing is read. While it is off, or on without the table:
   404 page, the same answer as an address the accounts module does not know,
   before anything else is read;
 - no page names a seat: the overview has no Seats row, the billing page no
-  Seats link, and a seat's member keeps its Subscribe panel;
-- no invitation is sent;
+  Seats link, and a seat's member keeps its Subscribe panel; no plan card has
+  the seats row, and `/pro`, the landing page, the Terms, the privacy page,
+  the delete page and the Ultra message read as before;
+- no invitation is sent (the console's actions on a seat are the one thing
+  the switch does not gate: see *The console* below);
+- a control at its figure reads the line it read before, whoever reads it;
 - the limiter counts those addresses as pages.
 
 `site/test/seats-switch.test.ts` holds every page of a signed-out reader and
 of a Free, Pro and Ultra account, Ultra off sale and on sale, the table
 present and absent, to the bytes main drew before the switch existed
 (`site/test/seats-switch-today.ts`, captured from main), and holds every
-seats address to the 404 with nothing more read. With the switch on, a
-reader who gives and holds no seat reads every page as before; an Ultra
-account's overview gains the Seats row and its billing page the Seats link.
+seats address to the 404 with nothing more read. With the switch on, the
+same test takes out of each page exactly what *What the seats say
+elsewhere* adds (the cards' seats row, `/pro`'s Ultra text and question, the
+Terms' section and phrase, the privacy paragraph, an Ultra account's
+overview row and billing link) and holds what is left to the same bytes.
 The operator sets it `"on"` once the lawyer's read of the Terms' Seats
 section and of the invitation is done.
 
@@ -3203,8 +3212,15 @@ scanner that opens the link uses nothing up. Then, by reader:
 - signed in as another address: whose the invitation is, and nothing to press;
 - an account holding a seat elsewhere, or with a paid plan of its own: why it
   cannot take one, and Decline;
+- the take would refuse it now (the holder's plan has no member seat for it,
+  its seats are all taken, the holder is blocked, or the 30 days' joins are
+  spent): "This subscription has no seat for you now.", and Decline;
 - otherwise What Fits and Take the seat (the page's filled button) beside
   Decline.
+
+The GET writes nothing at all: it reads the holder's plan with `planFor`'s
+write turned off (`planFor(env, user, now, false)`), so not even the
+holder's cached plan columns change when a link is opened.
 
 What Fits is the pool's own rule (`seats_pages.tsx whatFits`): the holder's
 group as its own plan reads it now, the reader placed after its members, and
@@ -3237,8 +3253,11 @@ each live seat, "Taken" or "Taken, without the plan for now", with Remove,
 then each open invitation with until when its link works and Cancel), "n of 5
 seats", the joins line, "What the Subscription Holds" (each pooled figure's
 total against the plan's figure and each account's count, in columns headed
-by address, and how many items are past the figures when any are), and
-"Invite a Person". For Free or Pro: the seats each plan has and the plan
+by address, and how many items are past the figures when any are; a person
+in a seat the plan does not cover now is in the people's table and not
+counted here, which a line under the table says), and "Invite a Person". On
+a phone the figures' table puts each label before its value, so an address
+is never broken in the middle. For Free or Pro: the seats each plan has and the plan
 cards; an account that still gives seats its plan does not hold (a holder that
 moved down or lapsed) also sees those people, with Remove, and the line on
 what that means for them. For a member: its seat (whose subscription, whether
@@ -3307,6 +3326,53 @@ The sweep (`signin.ts sweep`, in a try block of its own) deletes a row 30
 days after it ends, and an invitation never taken 30 days after it was sent
 (`SEAT_KEEP_DAYS`); a live seat stays whatever its age.
 
+### What the seats say elsewhere
+
+Each only while the switch is on (`seatsOn`; the page's shell carries it as
+`Shell.seats`, the landing page and the Ultra message read it themselves);
+with it off, every one of these reads as before.
+
+- **The plan cards.** A row first on every card (`pro.tsx SEATS_ROW`, drawn by
+  `planRows(plans, { seats })`): each plan's own figure from `PLAN_SEATS`,
+  "1 seat" on Free and Pro, "5 seats sharing these figures" on Ultra ("1
+  siège", "5 sièges qui partagent ces chiffres"). Free and Pro have the same
+  figure, the one counted row where Pro's is not above Free's
+  (`test/pro-mark.test.ts` holds it to Free <= Pro < Ultra). Every card has
+  it: `/pro`, the billing page, the tease panels, the dashboard's and the saved
+  views' pages, the Seats page, the landing page; Ultra's line is one of
+  Ultra's own (`ultraOwnRows`), so the landing page's waiting Ultra card and
+  the Ultra message (`announce.tsx ultraMessageLines`, the console's preview
+  and the mail check) list it too.
+- **`/pro`.** The Ultra section's text names the seats and which figures the
+  people in them share (`propage.ultra_text_seats`, the keys' figure read from
+  `KEYS_MAX`), and the questions gain "Can several people use one
+  subscription?", in the page and in its FAQ markup; both only while Ultra is
+  on sale, as the section is.
+- **The Terms.** While Ultra is on sale, a Seats section after What the Paid
+  Plans Include (`terms.pro_seats`, every figure read when drawn: the plans'
+  seats, the invitation's days, the joins and their window, the signed-in
+  browsers), and the abuse paragraph names a seat beside an account
+  (`terms.pro_abuse_seats`). Both wait on the lawyer's read.
+- **The privacy page.** A paragraph after the signed-in browsers' sentence
+  (`seats.privacy`): what an invitation and a seat keep and for how long
+  (`SEAT_KEEP_DAYS`), who sees which addresses and counts, and what a
+  deletion does to them.
+- **A control at the subscription's figure.** For an account in a group, the
+  line that said "this account" (`seats_lines.tsx`): a member reads "The
+  subscription's (figure) (things) are all in use. Ask (holder), who holds the
+  subscription, or remove one of yours.", the holder's address from the
+  member's own session; the holder reads that the Seats page shows how many
+  each seat holds, with the page linked. Save this search and Add a Search,
+  Follow, Save this briefing, Save this view, Create a key, the calendar
+  feeds' panels, and the notices a refused post returns to (a search, a
+  briefing, a watch, a calendar feed, a new dashboard; the dashboard's in
+  words alone). The briefings' panel says a briefing counts toward the
+  subscription's figure. An account in no group reads every line as before.
+- **The delete page.** A member reads "Deleting the account ends your seat on
+  the subscription of (holder)."; an account that gives seats reads how many
+  end with it, invitations included. A member's subscription line no longer
+  names the seat's plan as its own.
+
 ### The console
 
 An account's page (`/admin/users/<id>`) shows a Seats panel when a seat row
@@ -3316,8 +3382,28 @@ leading to that account's page, or the invited address; whether the seat
 gives the plan now, waits as an invitation, has expired or has ended; when
 it was sent, taken and ended, and why), the ended rows of the last 30 days
 muted. For a member: "A seat on (the holder's address) since (date); it
-gives Ultra now", or "it gives no plan now". The panel has no button. It
-reads nothing while the table is not on the database.
+gives Ultra now", or "it gives no plan now". It reads nothing while the
+table is not on the database.
+
+Whenever an account has a seat row, the seats' switch on or off, a holder's
+rows gain a last column: End this seat
+on each live seat, Cancel this invitation on each invitation still open.
+Each is a page (`GET /admin/users/<id>/seats/<seat id>/end` or
+`.../invite-cancel`) that names the subscriber and the person or the invited
+address, says what it does and asks for the box; its post (the console's
+Origin and CSRF checks, `confirm=yes`) is bound to the holder the address
+names. Ending a seat sets it `operator`: the member is on its own plan from
+its next read and nothing of theirs is deleted. Cancelling an invitation
+sets it `operator` and clears its link's hash, so the link stops at once;
+the address stays on the row until the sweep, as the holder's own
+cancellation leaves it. Each writes `operator_seat_ended` (on the holder and
+on the member) or `operator_invite_cancelled` (on the holder), the detail
+naming the operator by id alone: no address and no seat id. A row no longer
+open answers "Nothing changed: that seat or invitation is no longer open."
+The switch plays no part here: a live seat gives its member the plan whether
+the switch is on or off (the plan is read from the seat's row), so ending one
+is always open to the operator. Without the seats table both addresses are
+the site's 404, and an account no seat row names has no such column.
 
 ### Operator step
 

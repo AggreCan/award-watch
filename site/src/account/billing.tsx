@@ -639,7 +639,8 @@ export async function moveBetweenPlans(c: Context<AppEnv>, who: Account, fields:
 // no payment table; a fault reading them names the account's own plan only
 // and offers no pointer.
 export async function deleteFacts(env: Env, who: Account): Promise<DeleteFacts> {
-  const own = isPaidPlan(who.plan) ? who.plan : null;
+  // A seat's plan is its holder's subscription, never this account's: a covered member names none of its own.
+  const own = isPaidPlan(who.plan) && !who.seat?.covered ? who.plan : null;
   if (paymentSource(env).kind === "stub") return { paid: own, refund: false };
   try {
     const row = await paymentRow(env, who.userId);

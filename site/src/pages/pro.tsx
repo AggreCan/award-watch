@@ -18,11 +18,18 @@
 // For", the question on moving between the plans, the refund's answer naming
 // both plans, and Ultra's offers in the Product markup. Otherwise it is what
 // it was before Ultra, byte for byte.
+//
+// While the seats' switch is on as well (account/seats.ts seatsOn), the
+// Ultra section names the seats and says which figures they share, and the
+// questions gain one on several people using one subscription; with it off,
+// the page is what it was before seats, byte for byte.
 
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
 import { SampleLine } from "../account/briefing_pages";
-import { RULES, type Feature } from "../account/entitlements";
+import { KEYS_MAX } from "../account/api_keys";
+import { PLAN_SEATS, RULES, type Feature, memberSeats } from "../account/entitlements";
+import { seatsOn } from "../account/seats";
 import { railAccount } from "../account/session";
 import { accountsEnabled } from "../account/switch";
 import { keyQuota } from "../api_keyed_spec";
@@ -49,8 +56,9 @@ export function proIncludes(lang: Lang): { feature: Feature; text: string }[] {
 // The questions, word for word as the page shows them and as the FAQPage
 // markup carries them. The price question only with a price; while Ultra is
 // on sale (ultra holds its figures), the move between the plans after
-// cancelling, and the refund's answer naming both plans.
-export function proFaq(lang: Lang, price: ProPrice | null, ultra: ProPrice | null = null): Faq[] {
+// cancelling, and the refund's answer naming both plans; while the seats'
+// switch is on too (seats), the seats' question after the move's.
+export function proFaq(lang: Lang, price: ProPrice | null, ultra: ProPrice | null = null, seats = false): Faq[] {
   const qa = (q: Key, a: string): Faq => ({ q: t(lang, q), a });
   return [
     ...(price
@@ -62,23 +70,32 @@ export function proFaq(lang: Lang, price: ProPrice | null, ultra: ProPrice | nul
     qa("propage.q_source", t(lang, "propage.a_source")),
     qa("propage.q_cancel", t(lang, "propage.a_cancel")),
     ...(ultra ? [qa("propage.q_move", t(lang, "propage.a_move"))] : []),
+    ...(ultra && seats ? [qa("propage.q_seats", t(lang, "propage.a_seats", {
+      pro_seats: seatWords(lang, PLAN_SEATS.pro), ultra_seats: seatWords(lang, PLAN_SEATS.ultra), others: fmtInt(memberSeats("ultra"), lang),
+    }))] : []),
     qa("propage.q_refund", t(lang, ultra ? "propage.a_refund_ultra" : "propage.a_refund", { email: CONTACT_EMAIL })),
     qa("propage.q_seller", t(lang, "propage.a_seller")),
   ];
 }
 
+// A plan's own figure of seats, "1 seat" or "5 seats" (account/seats_strings.ts).
+const seatWords = (lang: Lang, n: number): string => t(lang, n === 1 ? "seats.seat_one" : "seats.seat_many", { n: fmtInt(n, lang) });
+
 // Ultra's section of the page, while it is on sale: what it holds, with
 // Ultra's own figures from the plans and the constants, whom it is for, and
-// its price. The dashboards read as Ultra's plan card reads them.
+// its price. The dashboards read as Ultra's plan card reads them. While the
+// seats' switch is on (seats), the text names the seats (PLAN_SEATS) and the
+// figures they share, the keys' figure read from KEYS_MAX.
 const dashboards = dashboardsWording("ultra");
-const UltraSection: FC<{ lang: Lang; ultra: ProPrice }> = ({ lang, ultra }) => (
+const UltraSection: FC<{ lang: Lang; ultra: ProPrice; seats?: boolean }> = ({ lang, ultra, seats }) => (
   <>
     <h2 id="ultra">{t(lang, "propage.ultra_title")}</h2>
     <p>
-      {t(lang, "propage.ultra_text", {
+      {t(lang, seats ? "propage.ultra_text_seats" : "propage.ultra_text", {
         searches: fmtInt(RULES.ultra.saved_searches, lang), watches: fmtInt(RULES.ultra.watchlists, lang), years: fmtInt(planYears("ultra"), lang),
         day: fmtInt(keyQuota("ultra")?.perDay ?? 0, lang),
         dashboards: t(lang, dashboards.key, dashboards.vars?.(lang)),
+        ...(seats ? { seats: seatWords(lang, PLAN_SEATS.ultra), others: fmtInt(memberSeats("ultra"), lang), keys: fmtInt(KEYS_MAX, lang) } : {}),
       })}
     </p>
     <p>{t(lang, "propage.ultra_who")}</p>
@@ -110,9 +127,11 @@ export async function proPage(c: Context<AppEnv>): Promise<Response> {
   const stats = await loadStats(c.env).catch(() => null);
   const price = checkoutPrice(c.env);
   const ultra = await ultraCheckoutPrice(c.env);
+  // The seats' switch: nothing is read for it while it is off.
+  const seats = await seatsOn(c.env).catch(() => false);
   const account = await railAccount(c).catch(() => undefined);
   const reader: Reader = !account?.email ? "out" : account.plan === "pro" || account.plan === "ultra" ? account.plan : "free";
-  const faq = proFaq(lang, price, ultra);
+  const faq = proFaq(lang, price, ultra, seats);
   const base = pageSeo("pro", lang);
   const seo = { ...base, jsonLd: proJsonLd(lang, { price, ultra, description: base.description, faq }) };
   const title = t(lang, "propage.title");
@@ -144,7 +163,7 @@ export async function proPage(c: Context<AppEnv>): Promise<Response> {
             <li>{t(lang, "propage.who_bid")}</li>
             <li>{t(lang, "propage.who_research")}</li>
           </ul>
-          {ultra ? <UltraSection lang={lang} ultra={ultra} /> : null}
+          {ultra ? <UltraSection lang={lang} ultra={ultra} seats={seats} /> : null}
           <h2 id="free">{t(lang, "propage.free_title")}</h2>
           <p>{t(lang, "propage.free_text")}</p>
           <h2 id="questions">{t(lang, "propage.faq_title")}</h2>

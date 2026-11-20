@@ -48,7 +48,7 @@ import { SAVED_VIEW_MAX } from "./entitlements";
 import { GROUP_TAGS_MAX, type GroupKind, groupStopPath } from "./group_stop";
 import { matchDigestBlock } from "./fit_mail";
 import { sameHash, sha256Hex } from "./secrets";
-import { SEAT_INVITE_DAYS } from "./seats";
+import { SEAT_INVITE_DAYS, seatsOn } from "./seats";
 import { type MailMessage, type Sender, addressNotice, inviteMessage, senderFor, signInMessage } from "./sender";
 import { CODE_MINUTES } from "./signin";
 import { accountsEnabled } from "./switch";
@@ -279,9 +279,10 @@ export function mailCheckMatches(lang: Lang, site: string, day: string) {
 // mark and stay under SUBJECT_MAX with it (digests.ts fitSubject). Exported for the mail suite (site/test-mail/), which checks these
 // before the route ever sends them. address is the sender's mailing address
 // (weekly.ts mailAddress); without one the weekly email is left out, as the
-// delivery run leaves it unsent.
+// delivery run leaves it unsent. seats: the seats' switch is on (seats.ts
+// seatsOn), so the Ultra message names the seats as the console's run would.
 export async function mailCheckMessages(
-  lang: Lang, to: string, site: string, now: Date = new Date(), address: string | null = null,
+  lang: Lang, to: string, site: string, now: Date = new Date(), address: string | null = null, seats = false,
 ): Promise<MailCheckMessage[]> {
   const day = now.toISOString().slice(0, 10);
   const yesterday = addDays(day, -1);
@@ -388,7 +389,7 @@ export async function mailCheckMessages(
       matches: mailCheckMatches(lang, site, day),
     }),
     accounts_open: () => accountsOpenMessage(lang, to, [t(lang, "interest.label_tenders_all")], announceLinks(site, lang, ZERO)),
-    ultra_open: () => ultraOpenMessage(lang, to, ultraLinks(site, lang, ZERO)),
+    ultra_open: () => ultraOpenMessage(lang, to, ultraLinks(site, lang, ZERO), seats),
     address_notice: () => addressNotice(lang, to, site),
     invite: () => inviteMessage(lang, to, MAIL_CHECK_HOLDER, siteLink(site, `/account/seats/join?i=${ZERO}&t=${ZERO}${ZERO}`, lang),
       new Date(now.getTime() + SEAT_INVITE_DAYS * 86_400_000).toISOString(), site),
@@ -415,7 +416,7 @@ export async function runMailCheck(
 ): Promise<MailCheckRun> {
   const sender = senderFor(env, requestUrl).kind;
   const results: MailCheckResult[] = [];
-  const messages = await mailCheckMessages(o.lang, o.to, o.site, o.now ?? new Date(), mailAddress(env));
+  const messages = await mailCheckMessages(o.lang, o.to, o.site, o.now ?? new Date(), mailAddress(env), await seatsOn(env).catch(() => false));
   for (const template of MAIL_CHECK_TEMPLATES) {
     const message = messages.find((m) => m.template === template)?.message;
     if (!message) {

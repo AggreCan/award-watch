@@ -29,6 +29,7 @@ import { RULES, allowed, savedViewCap } from "./entitlements";
 import type { PoolLine } from "./pool";
 import { PoolLines, PoolMark, poolCount } from "./pool_lines";
 import { VIEW_DELIVERY, type SavedKind, type SavedView, type ViewDelivery, type ViewRun, NAME_MAX, viewState } from "./saved_views";
+import { PoolFull } from "./seats_lines";
 import { type Account, readSession } from "./session";
 import { accountsEnabled } from "./switch";
 
@@ -86,8 +87,8 @@ export const SaveViewRow: FC<{ lang: Lang; state: SaveViewState | null }> = ({ l
   }
   if (state.n >= state.cap) {
     // In a group the views are the subscription's: what it holds, and how many are this account's.
-    const full = state.mine !== undefined ? poolCount(lang, "views", { total: state.n, own: state.mine, cap: state.cap, allowance: state.cap })
-      : t(lang, "views.full", { cap: fmtInt(state.cap, lang) });
+    const full = <PoolFull lang={lang} who={state.account} figure="views" cap={state.cap} otherwise={state.mine !== undefined ? poolCount(lang, "views", { total: state.n, own: state.mine, cap: state.cap, allowance: state.cap })
+      : t(lang, "views.full", { cap: fmtInt(state.cap, lang) })} />;
     return <p class="toolbar-note save-view">{full} {manage}</p>;
   }
   return (

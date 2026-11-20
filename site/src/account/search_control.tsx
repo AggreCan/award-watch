@@ -34,6 +34,7 @@ import { ProNote } from "../pro";
 import { RULES, allowed } from "./entitlements";
 import { ultraOnSale } from "./payments";
 import { type Delivery, capFor, paidCapLine, searchState } from "./searches";
+import { PoolFull } from "./seats_lines";
 import { type Account, readSession } from "./session";
 import { accountsEnabled } from "./switch";
 
@@ -131,10 +132,13 @@ const Saved: FC<{ lang: Lang; state: SaveState; detached: boolean }> = ({ lang, 
 // At the cap: a Free account gets the searches page's own gate note (pages.tsx
 // CapNote, with the Pro chip, as the watches' cap does); a paid one what it
 // holds of its figure (searches.ts paidCapLine: Ultra's figure while Ultra is
-// on sale above it) and the searches page, no chip.
+// on sale above it) and the searches page, no chip. An account in a group,
+// while the seats' switch is on, reads that the subscription is full and
+// whom to ask (seats_lines.tsx), n being the group's.
 const Cap: FC<{ lang: Lang; state: SaveState }> = ({ lang, state }) => state.pro ? (
   <p class="muted small">
-    {paidCapLine(lang, state.n, state.cap, state.ultra ?? null)} <Manage lang={lang} />
+    <PoolFull lang={lang} who={state.account} figure="searches" cap={state.cap} otherwise={paidCapLine(lang, state.n, state.cap, state.ultra ?? null)} />{" "}
+    <Manage lang={lang} />
   </p>
 ) : (
   <ProNote lang={lang}>

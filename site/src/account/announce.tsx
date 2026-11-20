@@ -50,12 +50,13 @@ import { t, tn, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, page } from "../layout";
 import { CONTACT_EMAIL } from "../pages/docs";
 import { ULTRA_KIND } from "../pages/interest";
-import { ULTRA_LINES, ultraLines } from "../pro";
+import { SEATS_ROW, ULTRA_LINES, ultraLines } from "../pro";
 import { STOP_CODES, ceilingText, dayRoom, sendWithHeaders, writeConsoleRun } from "./deliveries";
 import { deliveryHeaders } from "./digests";
 import { button, escapeHtml, list, mutedLink, para, shell } from "./mail_html";
 import { ultraOnSale } from "./payments";
 import { randomHex, sha256Hex } from "./secrets";
+import { seatsOn } from "./seats";
 import type { MailMessage } from "./sender";
 
 export const ANNOUNCE_MAX = 300;
@@ -192,8 +193,11 @@ export function ultraMessageAllowed(env: Env): Promise<boolean> {
 }
 
 // What the message lists under "Ultra includes everything in Pro, with
-// these figures:": the Ultra card's own lines, the matching notices left out.
+// these figures:": the Ultra card's own lines, the matching notices left out;
+// while the seats' switch is on (seats.ts seatsOn), the seats' line first, as
+// Ultra's card draws it (src/pro.tsx SEATS_ROW).
 export const ULTRA_MESSAGE_LINES: readonly Key[] = ULTRA_LINES.filter((k) => k !== "plans.matches" && k !== "plans.match_mail");
+export const ultraMessageLines = (seats: boolean): readonly Key[] => (seats ? [SEATS_ROW.ultra.key, ...ULTRA_MESSAGE_LINES] : ULTRA_MESSAGE_LINES);
 
 // The Ultra message's two links: the plans page and the link off the lists.
 export function ultraLinks(base: string, lang: Lang, token: string): UltraLinks {
@@ -205,13 +209,14 @@ export function ultraLinks(base: string, lang: Lang, token: string): UltraLinks 
 // holds with its own figures, the plans page as the button, the
 // only-message line with the link off the lists, and the shell's footer with
 // why it came; the preheader is the asked-to-be-told line. Every line is the
-// site's own; nothing in it was typed by a visitor.
-export function ultraOpenMessage(lang: Lang, to: string, links: UltraLinks): MailMessage & { headers: Record<string, string> } {
+// site's own; nothing in it was typed by a visitor. seats: the seats' switch
+// is on, so the seats' line leads what Ultra holds.
+export function ultraOpenMessage(lang: Lang, to: string, links: UltraLinks, seats = false): MailMessage & { headers: Record<string, string> } {
   const plans = t(lang, "announce.ultra_plans");
   const stop = t(lang, "announce.stop_link");
   const tagline = `${t(lang, "site.name")} · ${t(lang, "site.tagline")}`;
   const link = (label: string, url: string) => t(lang, "digest.text_link", { label, url });
-  const holds = ultraLines(lang, ULTRA_MESSAGE_LINES);
+  const holds = ultraLines(lang, ultraMessageLines(seats));
   const text = [
     t(lang, "announce.ultra_lead"),
     t(lang, "announce.ultra_asked"),
@@ -275,8 +280,10 @@ export async function runAnnouncement(
   const ultra = kind === "ultra";
   const ceiling = env.ACCOUNTS ? mailCeiling(env) : null;
   const room = ceiling ? await dayRoom(env, ceiling, now) : null;
+  // The Ultra message names the seats while their switch is on; nothing is read for it otherwise.
+  const seats = ultra && (await seatsOn(env).catch(() => false));
   try {
-    await sendRun(env, base, requestUrl, at, max, kind, ultra, room, report);
+    await sendRun(env, base, requestUrl, at, max, kind, ultra, room, report, seats);
   } finally {
     if (report.sent + report.failed > 0 && env.ACCOUNTS) {
       const what = ultra ? "the Ultra message from the console" : "the accounts-open message from the console";
@@ -291,6 +298,7 @@ export async function runAnnouncement(
 
 async function sendRun(
   env: Env, base: string, requestUrl: string, at: string, max: number, kind: AnnounceKind, ultra: boolean, room: number | null, report: AnnounceReport,
+  seats = false,
 ): Promise<void> {
   let cursor = "";
   pages: while (report.sent + report.failed < max) {
@@ -318,7 +326,7 @@ async function sendRun(
       if (!claimed.meta?.changes) continue;
       const lang: Lang = w.lang === "fr" ? "fr" : "en";
       const message = ultra
-        ? ultraOpenMessage(lang, w.email, ultraLinks(base, lang, w.token))
+        ? ultraOpenMessage(lang, w.email, ultraLinks(base, lang, w.token), seats)
         : accountsOpenMessage(lang, w.email, lists.get(w.email) ?? [], announceLinks(base, lang, w.token));
       const result = await sendWithHeaders(env, requestUrl, message);
       if (result.sent) {

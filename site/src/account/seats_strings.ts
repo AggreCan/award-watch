@@ -227,4 +227,106 @@ export const SEATS_STRINGS = {
     en: "You receive this because a subscriber typed this address on the Seats page of their account.",
     fr: "Vous recevez ce message parce qu'un abonné a saisi cette adresse à la page Sièges de son compte.",
   },
+
+  // -- slice C2: what the seats say elsewhere, while the switch is on -----------------------------------
+  // The holder's pool table, when a live seat its plan does not cover is left out of it (seats_pages.tsx).
+  "seats.pool_uncovered": {
+    en: "The people in seats without the plan for now are not counted here: what they keep is under their own plan's figures.",
+    fr: "Les personnes des sièges sans le forfait pour le moment ne sont pas comptées ici : ce qu'elles conservent relève des chiffres de leur propre forfait.",
+  },
+  // The plan cards' row (src/pro.tsx SEATS_ROW), each plan's own figure from entitlements.ts PLAN_SEATS: a
+  // plan of one seat in the singular, a plan of several with the words the operator ruled (2026-11-16).
+  "plans.seat_one": { en: "{n} seat", fr: "{n} siège" },
+  "plans.seats_shared": { en: "{n} seats sharing these figures", fr: "{n} sièges qui partagent ces chiffres" },
+  // /pro's Ultra section and its question (src/pages/pro.tsx), while the switch is on: {seats} and
+  // {ultra_seats} a plan's own figure ("5 seats"), {pro_seats} Pro's ("1 seat"), {others} the member
+  // seats, {keys} account/api_keys.ts KEYS_MAX.
+  "propage.ultra_text_seats": {
+    en: "Ultra includes everything in Pro, with these figures: {seats}, yours and {others} for people you invite, each with their own sign-in; {searches} saved searches and briefings by email, {watches} watches, {keys} API keys of {day} requests a day each and {dashboards}, shared by the people in its seats; and {years} fiscal years of analytics for each of them.",
+    fr: "Ultra comprend tout ce que comprend Pro, avec ces chiffres : {seats}, le vôtre et {others} pour les personnes que vous invitez, chacune avec sa propre connexion; {searches} recherches et bulletins par courriel, {watches} suivis, {keys} clés d'API de {day} requêtes par jour chacune et {dashboards}, partagés entre les personnes de ses sièges; et {years} exercices d'analyses pour chacune d'elles.",
+  },
+  "propage.q_seats": { en: "Can several people use one subscription?", fr: "Plusieurs personnes peuvent-elles utiliser un même abonnement?" },
+  "propage.a_seats": {
+    en: "Pro has {pro_seats}, yours. Ultra has {ultra_seats}: yours and {others} you give by invitation from your account's Seats page. Each person signs in with their own address and keeps their own searches, watches and dashboards. The figures for what is kept (saved searches and briefings, watches, saved views, dashboards, API keys and calendar feeds) are the subscription's, shared by all of you, yours served first. You see each person's count of each, and nothing of what they are.",
+    fr: "Pro compte {pro_seats}, le vôtre. Ultra compte {ultra_seats} : le vôtre et {others} que vous attribuez par invitation depuis la page Sièges de votre compte. Chaque personne se connecte avec sa propre adresse et garde ses propres recherches, suivis et tableaux de bord. Les chiffres de ce qui est conservé (recherches enregistrées et bulletins, suivis, vues enregistrées, tableaux de bord, clés d'API et flux de calendrier) sont ceux de l'abonnement, partagés entre vous tous, les vôtres en premier. Vous voyez combien chaque personne en détient de chacun, et rien de leur contenu.",
+  },
+  // The Terms' Seats section (src/pages/docs.tsx PAID_TERMS, after What the Paid Plans Include) and the abuse
+  // paragraph with the seat named, while Ultra is on sale and the switch is on. Every figure is read when the
+  // page is drawn: {pro_seats} and {ultra_seats} the plans' own (PLAN_SEATS), {others} the member seats, {days}
+  // seats.ts SEAT_INVITE_DAYS, {joins} joinsAllowed("ultra"), {window} SEAT_WINDOW_DAYS, {devices} session.ts
+  // SESSIONS_MAX. These wait on the lawyer's read before the switch goes on.
+  "terms.pro_seats_title": { en: "Seats", fr: "Sièges" },
+  "terms.pro_seats": {
+    en: "A seat is for one named person, with an Award Watch account and a sign-in of their own. Pro has {pro_seats}, the subscriber's. Ultra has {ultra_seats}: the subscriber's, and {others} the subscriber may give to other people by invitation from the account's Seats page; an invitation's link works for {days} days. The plan's figures for saved searches and briefings, watches, saved views, dashboards, API keys, calendar feeds, downloads a minute and bug reports a day are the subscription's, shared by the subscriber and the people in its seats; its other figures are each person's. When the accounts of a subscription together hold more than one of those figures, the subscriber's items are served first, then each seat's in the order the seat was taken, each account's oldest first; the items past the figure are kept, nothing is deleted, and they may be unavailable until there is room. No account sees what another keeps: the subscriber sees each seat's address, whether it gives the plan, and how many saved searches and briefings, watches, saved views, dashboards, API keys and calendar feeds it holds; a person in a seat sees the subscriber's address, the subscription's totals and their own counts. A person holds at most one seat, and an account with a paid plan of its own cannot take one. The subscriber may remove a person from a seat, and a person may leave one, at any time; at most {joins} people may join one subscription in any {window} days. Billing, the refund of the first payment and cancellation are the subscriber's alone. A seat gives the plan while the subscriber's plan holds it: when the subscription ends or moves to a plan with fewer seats, the accounts in the seats it no longer holds return to their own plan, and what they keep stays, under that plan's figures, until a plan covers it again. Deleting the subscriber's account ends every seat it gives; deleting a person's account ends their seat. An account stays signed in on at most {devices} browsers at a time. Letting more than one person use a seat is sharing an account, under Ending Service for Abuse below.",
+    fr: "Un siège est destiné à une personne nommée, qui a son propre compte Award Watch et sa propre connexion. Pro compte {pro_seats}, celui de l'abonné. Ultra compte {ultra_seats} : celui de l'abonné et {others} que l'abonné peut attribuer à d'autres personnes par invitation, depuis la page Sièges du compte; le lien d'une invitation fonctionne pendant {days} jours. Les chiffres du forfait pour les recherches enregistrées et les bulletins, les suivis, les vues enregistrées, les tableaux de bord, les clés d'API, les flux de calendrier, les téléchargements par minute et les signalements de bogue par jour sont ceux de l'abonnement, partagés entre l'abonné et les personnes de ses sièges; ses autres chiffres sont ceux de chaque personne. Quand les comptes d'un abonnement détiennent ensemble plus que l'un de ces chiffres, les éléments de l'abonné passent en premier, puis ceux de chaque siège dans l'ordre où il a été pris, les plus anciens de chaque compte d'abord; les éléments au-delà du chiffre sont conservés, rien n'est supprimé, et ils peuvent être indisponibles jusqu'à ce qu'il y ait de la place. Aucun compte ne voit ce qu'un autre conserve : l'abonné voit l'adresse de chaque siège, si celui-ci donne le forfait, et combien de recherches enregistrées et de bulletins, de suivis, de vues enregistrées, de tableaux de bord, de clés d'API et de flux de calendrier il détient; la personne d'un siège voit l'adresse de l'abonné, les totaux de l'abonnement et ses propres nombres. Une personne occupe au plus un siège, et un compte qui a son propre forfait payant ne peut pas en prendre un. L'abonné peut retirer une personne d'un siège, et une personne peut quitter un siège, en tout temps; au plus {joins} personnes peuvent se joindre à un même abonnement sur toute période de {window} jours. La facturation, le remboursement du premier paiement et l'annulation relèvent de l'abonné seul. Un siège donne le forfait tant que le forfait de l'abonné le comprend : quand l'abonnement prend fin ou passe à un forfait comptant moins de sièges, les comptes des sièges qu'il ne comprend plus reviennent à leur propre forfait, et ce qu'ils conservent reste, sous les chiffres de ce forfait, jusqu'à ce qu'un forfait le couvre de nouveau. La suppression du compte de l'abonné met fin à chaque siège qu'il donne; la suppression du compte d'une personne met fin à son siège. Un compte reste connecté dans au plus {devices} navigateurs à la fois. Laisser plus d'une personne utiliser un siège revient à partager un compte, au sens de Fin du service en cas d'abus ci-dessous.",
+  },
+  "terms.pro_abuse_seats": {
+    en: "Allwater may suspend or end an account and its subscription for abuse, including breaking these Terms, automated access beyond the published limits, sharing or reselling an account or a seat, getting around a limit or a payment, or use that harms the site or other people. When service ends for abuse, the current period is not refunded. If Allwater ends a paid plan for any other reason, it refunds the unused part of the current period.",
+    fr: "Allwater peut suspendre ou fermer un compte et son abonnement en cas d'abus, notamment le non-respect des présentes conditions, un accès automatisé au-delà des limites publiées, le partage ou la revente d'un compte ou d'un siège, le contournement d'une limite ou d'un paiement, ou un usage qui nuit au site ou à autrui. Lorsque le service prend fin pour abus, la période en cours n'est pas remboursée. Si Allwater met fin à un forfait payant pour toute autre raison, elle rembourse la partie inutilisée de la période en cours.",
+  },
+  // The privacy page's seats paragraph (account/privacy.tsx), while the switch is on: {days} seats.ts
+  // SEAT_KEEP_DAYS, the sweep's (signin.ts sweep, SEATS_SWEEP_SQL).
+  "seats.privacy": {
+    en: "Ultra's seats. An invitation keeps the address it was sent to, the account that sent it, its language, when it was sent, when its link stops working, and when it was taken, declined or cancelled; its link's secret is kept only as a hash. The invited address receives one message, which names the subscriber's address. The address is cleared when the invitation is taken; otherwise the invitation, with its address, is deleted {days} days after it was sent. A seat keeps which account holds it, on which subscriber's account, when it began and ended and why, and is deleted {days} days after it ends. Within a subscription, counts are shown and not stored: the subscriber sees how many saved searches and briefings, watches, saved views, dashboards, API keys and calendar feeds each seat holds, and a person in a seat sees the subscription's totals and their own; no one sees what another's are. The person in a seat sees the subscriber's address, and the subscriber each seat's. Deleting an account ends the seats it gives or holds, clears the address on its invitations and deletes the invitations sent to its address; an invitation already cancelled or declined keeps its address until it is deleted, {days} days after it was sent.",
+    fr: "Les sièges d'Ultra. Une invitation conserve l'adresse à laquelle elle a été envoyée, le compte qui l'a envoyée, sa langue, le moment de son envoi, celui où son lien cesse de fonctionner, et celui où elle a été acceptée, refusée ou annulée; le secret de son lien n'est conservé que sous forme de hachage. L'adresse invitée reçoit un seul message, qui nomme l'adresse de l'abonné. L'adresse est effacée quand l'invitation est acceptée; sinon, l'invitation et son adresse sont supprimées {days} jours après son envoi. Un siège conserve quel compte l'occupe, sur le compte de quel abonné, quand il a commencé et pris fin et pourquoi, et il est supprimé {days} jours après sa fin. Au sein d'un abonnement, des nombres sont montrés, sans être conservés : l'abonné voit combien de recherches enregistrées et de bulletins, de suivis, de vues enregistrées, de tableaux de bord, de clés d'API et de flux de calendrier chaque siège détient, et la personne d'un siège voit les totaux de l'abonnement et les siens; personne ne voit le contenu de ceux des autres. La personne d'un siège voit l'adresse de l'abonné, et l'abonné celle de chaque siège. La suppression d'un compte met fin aux sièges qu'il donne ou occupe, efface l'adresse de ses invitations et supprime les invitations envoyées à son adresse; une invitation déjà annulée ou refusée garde son adresse jusqu'à sa suppression, {days} jours après son envoi.",
+  },
+  // A control that refuses because the subscription is full (seats_lines.tsx; the seats design's 3.4 and 5.9),
+  // in place of the line that says "this account": a member reads whom to ask, the holder ({holder} read from the
+  // member's own session, never a form) and the holder where each seat's counts are, {seats} the Seats page
+  // (a link where the line is markup, pool.full_seats as words where it is a plain notice). {things} is one of
+  // pool.f_*, {cap} the plan's figure.
+  "pool.full": {
+    en: "The subscription's {cap} {things} are all in use. Ask {holder}, who holds the subscription, or remove one of yours.",
+    fr: "Cet abonnement a atteint son chiffre de {cap} {things}. Adressez-vous à {holder}, qui détient l'abonnement, ou retirez un élément parmi les vôtres.",
+  },
+  "pool.full_holder": {
+    en: "The subscription's {cap} {things} are all in use. {seats} shows how many each seat holds; remove one of yours, or ask a person in a seat to remove one of theirs.",
+    fr: "Cet abonnement a atteint son chiffre de {cap} {things}. {seats} indique combien chaque siège en détient; retirez un élément parmi les vôtres, ou demandez à une personne d'un siège de retirer un élément parmi les siens.",
+  },
+  "pool.full_seats": { en: "The Seats page", fr: "La page Sièges" },
+  // The briefings' panel on the searches page for an account in a group, in place of briefing.list_lead.
+  "briefing.list_lead_pool": {
+    en: "A briefing counts toward the subscription's figure of saved searches and briefings, shared by the people in its seats. Each one is sent on Mondays, in the language of the page it was added from.",
+    fr: "Un bulletin compte dans le chiffre de recherches enregistrées et de bulletins de l'abonnement, partagé entre les personnes de ses sièges. Chacun est envoyé le lundi, dans la langue de la page où il a été ajouté.",
+  },
+  // The delete page (pages.tsx deleteView), while the switch is on: what deleting the account does to the seat it
+  // holds ({holder} from its own session) and to the seats it gives ({n}: its live seats and open invitations,
+  // seats.ts SEATS_IN_USE_SQL, as the Seats page counts them).
+  "account.delete_seat": {
+    en: "Deleting the account ends your seat on the subscription of {holder}.",
+    fr: "La suppression du compte met fin à votre siège de l'abonnement de {holder}.",
+  },
+  "account.delete_seats": {
+    en: "Deleting the account ends the {n} seats it gives, invitations included; each person keeps their own account.",
+    fr: "La suppression du compte met fin aux {n} sièges qu'il donne, invitations comprises; chaque personne garde son propre compte.",
+  },
+  "account.delete_seats_one": {
+    en: "Deleting the account ends the seat it gives, or the invitation to it; the person keeps their own account.",
+    fr: "La suppression du compte met fin au siège qu'il donne, ou à l'invitation à ce siège; la personne garde son propre compte.",
+  },
+  // The console's actions on a holder's seats (admin.tsx), each through its own page and box, while the switch is
+  // on; the Seats panel stays read-only while it is off.
+  "admin.seat_end": { en: "End this seat", fr: "Mettre fin à ce siège" },
+  "admin.seat_end_title": { en: "End This Seat", fr: "Mettre fin au siège" },
+  "admin.seat_end_lead": {
+    en: "The person in the seat returns to their own plan at once. Nothing of theirs is deleted, and the subscription's figures have room again.",
+    fr: "La personne du siège revient aussitôt à son propre forfait. Rien de ce qui lui appartient n'est supprimé, et les chiffres de l'abonnement ont de nouveau de la place.",
+  },
+  "admin.seat_end_button": { en: "End the seat", fr: "Mettre fin au siège" },
+  "admin.invite_end": { en: "Cancel this invitation", fr: "Annuler cette invitation" },
+  "admin.invite_end_title": { en: "Cancel This Invitation", fr: "Annuler l'invitation" },
+  "admin.invite_end_lead": {
+    en: "The invitation's link stops working at once. Its address stays on the row until the sweep, {days} days after it was sent, as when the subscriber cancels it.",
+    fr: "Le lien de l'invitation cesse aussitôt de fonctionner. Son adresse reste sur la ligne jusqu'au nettoyage, {days} jours après son envoi, comme lorsque l'abonné l'annule.",
+  },
+  "admin.invite_end_button": { en: "Cancel the invitation", fr: "Annuler l'invitation" },
+  "admin.seat_field_person": { en: "Person in the seat", fr: "Personne du siège" },
+  "admin.seat_field_invited": { en: "Invited address", fr: "Adresse invitée" },
+  "admin.seat_field_holder": { en: "Subscriber", fr: "Abonné" },
+  "admin.msg_seat_ended": { en: "The seat was ended.", fr: "Le siège a pris fin." },
+  "admin.msg_invite_cancelled": { en: "The invitation was cancelled.", fr: "L'invitation a été annulée." },
+  "admin.msg_seat_nothing": {
+    en: "Nothing changed: that seat or invitation is no longer open.",
+    fr: "Rien n'a changé : ce siège ou cette invitation n'est plus ouvert.",
+  },
 } as const;

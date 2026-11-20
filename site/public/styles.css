@@ -919,6 +919,9 @@ td { padding: 8px; vertical-align: top; border-bottom: 1px solid var(--border); 
 th:first-child, td:first-child { padding-left: 16px; }
 th:last-child, td:last-child { padding-right: 16px; }
 th.num { text-align: right; }
+/* The Seats page's pool table (src/account/seats_pages.tsx): a count ("103 of 100") stays on one line; the people's
+   addresses heading its columns break after their "@" and dots (wbr), so its columns share the width. */
+.seats-pool td.num { white-space: nowrap; }
 /* Widths by kind, padding included; src/columns.tsx holds the same numbers
    to work out each table's least width, and a test keeps the two equal. */
 .k-date { width: 112px; }
@@ -1596,6 +1599,13 @@ tr[data-phone-cut] { display: none !important; }
     display: flow-root; position: relative; min-height: 28px; padding: 4px 0 4px 7.5rem; border: 0; text-align: left; white-space: normal;
   }
   .restack td::before { content: attr(data-label); float: left; width: 7rem; margin-left: -7.5rem; color: var(--muted); font-size: 12px; line-height: 20px; overflow-wrap: break-word; }
+  /* The Seats page's pool table (src/account/seats_pages.tsx): its columns are headed by people's addresses, which the
+     7rem label column broke in the middle at 360 px. Its label runs before its value instead, an inline block of its
+     own, so a line breaks between the two before it breaks an address, and inside an address only where a line cannot
+     hold it whole. */
+  .restack.seats-pool td, .restack.seats-pool td:first-child, .restack.seats-pool td:last-child { padding-left: 0; }
+  .restack.seats-pool td::before { float: none; display: inline-block; width: auto; max-width: 100%; margin: 0 8px 0 0; vertical-align: top; overflow-wrap: anywhere; }
+  .restack.seats-pool td.num { white-space: normal; }
   /* A cell spanning the row (an empty state) has no label and takes the full width. */
   .restack td[colspan], .restack td[colspan]:first-child { padding-left: 0; }
   .restack td[colspan]::before { content: none; }

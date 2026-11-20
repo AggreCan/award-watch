@@ -26,6 +26,7 @@ import { type CalendarRow, FeedCell, Honeypot } from "./pages";
 import { ultraOnSale } from "./payments";
 import type { PoolLine } from "./pool";
 import { PoolMark, poolCount, poolOver } from "./pool_lines";
+import { PoolFull } from "./seats_lines";
 import { type Account, readSession } from "./session";
 import { accountsEnabled } from "./switch";
 import {
@@ -131,9 +132,11 @@ export const WatchControl: FC<{ lang: Lang; state: ControlState | null; kind: Wa
   // The claimed organization's page keeps its button at the cap: its watch is
   // the one outside the cap (watches.ts ADD_WATCH_SQL), until the account is over it.
   if (state.free ? state.n > state.cap : state.n >= state.cap) {
+    // In a group, while the seats' switch is on, the subscription's watches are full (seats_lines.tsx).
     return state.mail ? (
       <p class="watch-control muted small">
-        {paidWatchCapLine(lang, state.n, state.cap, state.ultra ?? null)} <a href="/account/watches">{t(lang, "watches.manage")}</a>
+        <PoolFull lang={lang} who={state.account} figure="watches" cap={state.cap} otherwise={paidWatchCapLine(lang, state.n, state.cap, state.ultra ?? null)} />{" "}
+        <a href="/account/watches">{t(lang, "watches.manage")}</a>
       </p>
     ) : (
       <ProNote lang={lang}>
@@ -240,7 +243,10 @@ const CalendarPanel: FC<{ lang: Lang; account: Account; calendar: WatchCalendar 
       <p class="muted small">{t(lang, "calfeed.watch_horizon")}</p>
       <p class="muted small">{t(lang, "calfeed.watch_instruments")}</p>
       {calendar.feed ? <FeedCell lang={lang} account={account} feed={calendar.feed} /> : calendar.full ? (
-        <p class="muted small">{calendar.pool ? poolCount(lang, "feeds", calendar.pool) : t(lang, "calfeed.cap", { n: fmtInt(FEEDS_MAX, lang) })}</p>
+        <>
+          <p class="muted small">{calendar.pool ? poolCount(lang, "feeds", calendar.pool) : t(lang, "calfeed.cap", { n: fmtInt(FEEDS_MAX, lang) })}</p>
+          {calendar.pool ? <PoolFull lang={lang} who={account} figure="feeds" cap={FEEDS_MAX} p="muted small" /> : null}
+        </>
       ) : (
         <form method="post" action="/account/calendar" class="account-inline">
           <Csrf account={account} />
@@ -257,7 +263,7 @@ const CalendarPanel: FC<{ lang: Lang; account: Account; calendar: WatchCalendar 
 export function watchesView(
   lang: Lang, account: Account,
   state: {
-    watches: Watch[]; read: EventsRead | null; days: readonly string[]; mail: MailRow | null; notice?: string | null;
+    watches: Watch[]; read: EventsRead | null; days: readonly string[]; mail: MailRow | null; notice?: unknown;
     moved?: number; merged?: number; calendar?: WatchCalendar | null;
     // The claimed organization's id after the merges (org_claim.ts followClaimedId); its watch is outside the cap.
     claimed?: string | null;
@@ -297,7 +303,7 @@ export function watchesView(
     <>
       <PageHead lang={lang} title={t(lang, "watches.title")} lead={t(lang, "watches.lead")}
         actions={<a href="/account" class="btn">{t(lang, "account.title")}</a>} />
-      {state.notice ? <p class="account-notice" role="status">{state.notice}</p> : null}
+      {state.notice ? <p class="account-notice" role="status">{state.notice as any}</p> : null}
       {state.moved ? <p class="account-notice" role="status">{t(lang, "watches.moved_note", { n: fmtInt(state.moved, lang) })}</p> : null}
       {state.merged ? <p class="account-notice" role="status">{t(lang, "watches.merged_note", { n: fmtInt(state.merged, lang) })}</p> : null}
       <Panel title={t(lang, "watches.panel_mail")} class="panel-form">

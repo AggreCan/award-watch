@@ -30,6 +30,7 @@ import { briefingDigest, briefingParts } from "./digests";
 import { allowed } from "./entitlements";
 import { FONT, type MailScheme, escapeHtml, siteLink } from "./mail_html";
 import { PoolMark } from "./pool_lines";
+import { PoolFull, usePooled } from "./seats_lines";
 import { mailSender } from "./sender";
 import { type Account, readSession } from "./session";
 import { accountsEnabled } from "./switch";
@@ -116,9 +117,11 @@ export const BriefingPanel: FC<{ lang: Lang; state: BriefingControlState | null;
       </>
     );
   } else if (state.n >= state.cap) {
+    // In a group, while the seats' switch is on, the subscription's searches and briefings are full (seats_lines.tsx).
     body = (
       <p class="muted small">
-        {t(lang, "briefing.control_cap", { n: fmtInt(state.n, lang), cap: fmtInt(state.cap, lang) })}{" "}
+        <PoolFull lang={lang} who={state.account} figure="searches" cap={state.cap}
+          otherwise={t(lang, "briefing.control_cap", { n: fmtInt(state.n, lang), cap: fmtInt(state.cap, lang) })} />{" "}
         <a href="/account/searches">{t(lang, "briefing.manage")}</a>
       </p>
     );
@@ -178,7 +181,8 @@ export const BriefingsPanel: FC<{
   return (
     <Panel title={t(lang, "briefing.list_title")} id="briefings" count={fmtInt(briefings.length, lang)}
       tools={<a href="/pro/briefing-sample">{t(lang, "briefing.sample_link")}</a>}>
-      <p class="muted small">{t(lang, "briefing.list_lead")}</p>
+      {/* In a group, while the seats' switch is on, the figure a briefing counts toward is the subscription's. */}
+      <p class="muted small">{t(lang, usePooled(account) ? "briefing.list_lead_pool" : "briefing.list_lead")}</p>
       {briefings.length ? (
         <div class="table-wrap">
           <table class="restack">

@@ -11,6 +11,7 @@ import {
 import { type Plan, allowed } from "./account/entitlements";
 import { DASHBOARD_PATH, dashboardInRail } from "./account/dashboard_rule";
 import { type RailAccount, railAccount } from "./account/session";
+import { seatsOn } from "./account/seats";
 import { accountsEnabled } from "./account/switch";
 import { builderOn } from "./plan";
 import { ProTag, UltraTag } from "./pro";
@@ -257,9 +258,13 @@ export const MetaTags: FC<{ seo?: Seo; lang: Lang; title: string }> = ({ seo, la
 // builder: the analytics builder's switch is on (plan.ts builderOn): the
 // rail's item and Ultra's plan line (pro.tsx PlanCards); absent otherwise,
 // so no page changes while it is off.
+// seats: the seats' switch is on (account/seats.ts seatsOn): the plan cards'
+// seats row (pro.tsx PlanCards) and the lines a control reads where the
+// subscription is full (account/seats_lines.tsx); absent otherwise, and
+// nothing is read for it while the switch is off.
 export type Shell = {
   rail: RailCounts | null; here: string; account?: RailAccount; now?: number; accountsOn?: boolean; stamps?: RefreshStamps;
-  dashboard?: boolean; builder?: boolean;
+  dashboard?: boolean; builder?: boolean; seats?: boolean;
   // The request's query string ("?a=b", or ""), for the language toggle (langToggle); "" on any
   // answer but a 200, so an error page (the site's 404 above all) reads the same whatever was asked.
   search?: string;
@@ -503,7 +508,7 @@ export const ICONS_VERSION = 2;
 
 // The stylesheet's version: bump it with any change to public/styles.css so a
 // cached copy is never paired with new markup.
-export const STYLES_VERSION = 76;
+export const STYLES_VERSION = 77;
 
 // The subscript after the wordmark for a signed-in reader, by plan: Ultra's
 // in its sapphire (public/styles.css .brand-plan-ultra), Pro's in the accent.
@@ -663,6 +668,7 @@ export async function page(c: Context<AppEnv>, body: unknown, status = 200): Pro
   if (account) shell.account = account;
   if (account && (await dashboardInRail(c.env, account.plan))) shell.dashboard = true;
   if (builderOn(c.env)) shell.builder = true;
+  if (await seatsOn(c.env).catch(() => false)) shell.seats = true;
   if (account?.email) c.header("Cache-Control", "private, no-store");
   return c.html(html`<!doctype html>${(<RailContext.Provider value={shell}>{body as any}</RailContext.Provider>) as any}`, status as any);
 }
@@ -754,6 +760,7 @@ export async function publicPage(c: Context<AppEnv>, body: unknown, status = 200
   if (shell.accountsOn) shell.account = { email: null, plan: null };
   if (shell.account && (await dashboardInRail(c.env, null))) shell.dashboard = true;
   if (builderOn(c.env)) shell.builder = true;
+  if (await seatsOn(c.env).catch(() => false)) shell.seats = true;
   c.header("Cache-Control", status === 200 ? `public, max-age=${maxAge}` : "no-store");
   return c.html(html`<!doctype html>${(<RailContext.Provider value={shell}>{body as any}</RailContext.Provider>) as any}`, status as any);
 }

@@ -99,6 +99,7 @@ import { buildContext, buildRef, buildSizeKey, buildTile, buildsOn, isBuildKind 
 import { BOARD_NAME_MAX, anchorOf, boardLabels } from "./dashboard_add";
 import { ANALYTIC_BODIES, ROWS_MAX, analyticFit, analyticKey, analyticPlot, tileFit } from "./dashboard_fit";
 import { DASHBOARD_PATH, FIND_PATH, OPTS_MAX, STARTER_PATH, boardCap, boardPath, holdsDashboard, missingTiles, tileCap } from "./dashboard_rule";
+import { poolFullNotice } from "./seats_lines";
 import { EVENT_KEY, watchEventLines } from "./digests";
 import { allowed, matchCap, type Plan } from "./entitlements";
 import {
@@ -2104,7 +2105,7 @@ export async function dashboardPage(c: Context<AppEnv>, who: Account, board: str
     const named = tabsOf(lang, h, shown).find((x) => x.id === to)?.label ?? "";
     return m === "tables" ? tablesNotice(lang, { n: countIn(c, "n"), of: countIn(c, "of"), there: countIn(c, "there"), full: countIn(c, "full") }, cap)
       : m === "started" ? tn(lang, "dash.started_one", "dash.started", countIn(c, "n"), { n: fmtInt(countIn(c, "n"), lang) })
-      : NOTICE[m] ? t(lang, NOTICE[m], { cap: fmtInt(cap, lang), n: fmtInt(BRIEFING_PANELS_MAX, lang), boards: fmtInt(boards, lang), name: named })
+      : NOTICE[m] ? (m === "boards_full" && poolFullNotice(lang, who, "dashboards", boards, c.env)) || t(lang, NOTICE[m], { cap: fmtInt(cap, lang), n: fmtInt(BRIEFING_PANELS_MAX, lang), boards: fmtInt(boards, lang), name: named })
       : null;
   };
   // A dashboard the subscription has no room for reads and draws no tile.

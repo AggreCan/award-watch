@@ -539,9 +539,10 @@ describe("the invitation's page", () => {
       const id = await seatRow(holder.id, { email: m.email, invited: 0, hash: await sha256Hex(secret) });
       await arrange({ ...holder, entitlement });
       const l = { i: id, t: secret };
-      // The page reads the holder's plan and seats; the joins and a block are the take's to read.
+      // The page reads what the take reads (the holder's plan and seats, the joins, a block) and offers Take the seat only where it could pass.
       const page = await read(await joinGet(l, m.cookie));
-      expect(page, name).toContain(["the joins spent", "the holder blocked"].includes(name) ? t("en", "join.take") : line("en", "join.no_room", { holder: holder.email }));
+      expect(page, name).toContain(line("en", "join.no_room", { holder: holder.email }));
+      expect(page, name).not.toContain(t("en", "join.take"));
       const before = await rowById(id);
       const res = await joinPost(m, l, "take");
       expect(res.status, name).toBe(409);

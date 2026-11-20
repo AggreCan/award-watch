@@ -5,10 +5,20 @@
 // Every address under /account/seats and /account/seat is the site's 404, the same answer as an address the
 // accounts module does not know, with nothing read beyond that answer's own reads; the invitation's post writes
 // nothing and sends nothing; the limiter counts the seats' addresses as pages. With the switch on, a reader who
-// neither holds a seat nor gives one reads every page as before, and an Ultra account's pages gain only the
-// Seats row on the overview and the Seats link on the billing page.
+// neither holds a seat nor gives one reads every page as before once what the switch adds is taken out of it:
+// the plan cards' seats row, /pro's Ultra text and its question, the Terms' Seats section and abuse phrase, the
+// privacy page's paragraph, and an Ultra account's Seats row on the overview and Seats link on the billing page.
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { KEYS_MAX } from "../src/account/api_keys";
+import { PLANS, PLAN_SEATS, RULES, memberSeats } from "../src/account/entitlements";
+import { SEAT_INVITE_DAYS, SEAT_KEEP_DAYS, SEAT_WINDOW_DAYS, joinsAllowed } from "../src/account/seats";
+import { SESSIONS_MAX } from "../src/account/session";
+import { keyQuota } from "../src/api_keyed_spec";
+import { fmtInt, t, type Lang } from "../src/i18n";
 import { app } from "../src/index";
+import { scriptJson } from "../src/layout";
+import { CHECK_PATH, dashboardsWording, planLine, seatsWording } from "../src/pro";
+import { planYears } from "../src/records_db";
 import { ACCOUNTS, csrf, nextIp, onEnv, post, useAccountsDb, withoutSeats } from "./accounts-helpers";
 import { ENVS, type EnvName, READERS, type Reader, type Seen, emailOf, makeReaders, pagesOf, seen, shortHash } from "./seats-switch-fixtures";
 import { TODAY } from "./seats-switch-today";
@@ -173,31 +183,92 @@ describe("with the switch off", () => {
   });
 });
 
+// The pages the switch reaches, of the 122: those with plan cards (/pro for every reader, the billing page for
+// every account, the landing page signed out, the saved views' gate for Free, the dashboard's tease for Free and
+// Pro while Ultra is on sale and the address is open to them), the privacy page for every reader, the Terms while
+// Ultra is on sale, and an Ultra account's overview.
+const EXPECTED_CHANGED: readonly string[] = [
+  "base free /account/billing", "base free /account/billing?lang=fr", "base free /account/views", "base free /privacy", "base free /pro",
+  "base out /", "base out /?lang=fr", "base out /privacy", "base out /privacy?lang=fr", "base out /pro", "base out /pro?lang=fr",
+  "base pro /account/billing", "base pro /account/billing?lang=fr", "base pro /privacy", "base pro /pro",
+  "base ultra /account", "base ultra /account/billing", "base ultra /account/billing?lang=fr", "base ultra /account?lang=fr", "base ultra /privacy",
+  "base ultra /pro",
+  "sale free /account/billing", "sale free /account/billing?lang=fr", "sale free /account/dashboard", "sale free /account/views", "sale free /privacy",
+  "sale free /pro", "sale free /terms?lang=fr",
+  "sale out /", "sale out /?lang=fr", "sale out /privacy", "sale out /privacy?lang=fr", "sale out /pro", "sale out /pro?lang=fr", "sale out /terms",
+  "sale out /terms?lang=fr",
+  "sale pro /account/billing", "sale pro /account/billing?lang=fr", "sale pro /account/dashboard", "sale pro /privacy", "sale pro /pro",
+  "sale pro /terms?lang=fr",
+  "sale ultra /account", "sale ultra /account/billing", "sale ultra /account/billing?lang=fr", "sale ultra /account?lang=fr", "sale ultra /privacy",
+  "sale ultra /pro", "sale ultra /terms?lang=fr",
+];
+
+// What the switch adds to a page, as the page writes it (hono escapes these five characters in text).
+const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+// The page with every piece the switch adds taken out, each by its exact markup, so that what is left can be held
+// to the capture: anything else the switch changed stays in and fails the comparison.
+function unseated(body: string, lang: Lang, ultra: boolean): string {
+  let out = body;
+  // The plan cards' seats row, first on every card (src/pro.tsx SEATS_ROW), and the landing page's cards and lines.
+  for (const plan of PLANS) {
+    const words = esc(planLine(lang, seatsWording(plan)));
+    out = out.replaceAll(`<li><svg class="plan-mark" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="${CHECK_PATH}"></path></svg><span>${words}</span></li>`, "");
+    out = out.replaceAll(`<li><svg class="lp-ck" viewBox="0 0 16 16" aria-hidden="true"><path d="${CHECK_PATH}"></path></svg><span>${words}</span></li>`, "");
+  }
+  out = out.replace(/--plan-rows:(\d+);--plan-card-rows:(\d+)/g, (_, rows: string, all: string) => `--plan-rows:${Number(rows) - 1};--plan-card-rows:${Number(all) - 1}`);
+  const n = (v: number) => fmtInt(v, lang);
+  const seats = (v: number) => t(lang, v === 1 ? "seats.seat_one" : "seats.seat_many", { n: n(v) });
+  // /pro's Ultra text and its question, in the page and in its FAQ markup.
+  const d = dashboardsWording("ultra");
+  const ultraVars = {
+    searches: n(RULES.ultra.saved_searches), watches: n(RULES.ultra.watchlists), years: n(planYears("ultra")), day: n(keyQuota("ultra")?.perDay ?? 0),
+    dashboards: t(lang, d.key, d.vars?.(lang)), seats: seats(PLAN_SEATS.ultra), others: n(memberSeats("ultra")), keys: n(KEYS_MAX),
+  };
+  out = out.replace(esc(t(lang, "propage.ultra_text_seats", ultraVars)), esc(t(lang, "propage.ultra_text", ultraVars)));
+  const q = t(lang, "propage.q_seats");
+  const a = t(lang, "propage.a_seats", { pro_seats: seats(PLAN_SEATS.pro), ultra_seats: seats(PLAN_SEATS.ultra), others: n(memberSeats("ultra")) });
+  out = out.replace(`<h3>${esc(q)}</h3><p>${esc(a)}</p>`, "");
+  out = out.replace(`,${scriptJson({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })}`, "");
+  // The Terms' Seats section and the abuse paragraph that names a seat.
+  const terms = {
+    pro_seats: seats(PLAN_SEATS.pro), ultra_seats: seats(PLAN_SEATS.ultra), others: n(memberSeats("ultra")), days: n(SEAT_INVITE_DAYS),
+    joins: n(joinsAllowed("ultra")), window: n(SEAT_WINDOW_DAYS), devices: n(SESSIONS_MAX),
+  };
+  out = out.replace(`<h3>${esc(t(lang, "terms.pro_seats_title"))}</h3><p>${esc(t(lang, "terms.pro_seats", terms))}</p>`, "");
+  out = out.replace(esc(t(lang, "terms.pro_abuse_seats")), esc(t(lang, "terms.pro_abuse_ultra")));
+  // The privacy page's paragraph.
+  out = out.replace(`<p>${esc(t(lang, "seats.privacy", { days: n(SEAT_KEEP_DAYS) }))}</p>`, "");
+  // An Ultra account's Seats row on the overview and Seats link on the billing page (slice C1).
+  if (ultra) {
+    out = out.replace(lang === "fr" ? '<dt>Sièges</dt><dd><a href="/account/seats">1 siège sur 5</a></dd>' : '<dt>Seats</dt><dd><a href="/account/seats">1 of 5 seats</a></dd>', "");
+    out = out.replace(`<a href="/account/seats" class="btn">${lang === "fr" ? "Sièges" : "Seats"}</a>`, "");
+  }
+  return out;
+}
+
 describe("with the switch on and the table there", () => {
-  it("leaves every page of a reader who gives and holds no seat as main drew it; an Ultra account gains the Seats row and link alone", { timeout: 120_000 }, async () => {
-    const pages = await everyPage("on");
+  it("adds to each page of a reader who gives and holds no seat what the switch draws and nothing else: taken out, every page is main's", { timeout: 180_000 }, async () => {
     const c = await readers();
-    for (const [key, page] of pages) {
-      const [name, reader, path] = key.split(" ");
-      const changed = reader === "ultra" && /^\/account(?:\?lang=fr)?$|^\/account\/billing/.test(path);
-      if (!changed) {
-        expect(page, key).toEqual(TODAY[key]);
-        continue;
+    const changed: string[] = [];
+    for (const name of Object.keys(ENVS) as EnvName[]) {
+      for (const reader of READERS) {
+        for (const path of pagesOf(reader)) {
+          const key = `${name} ${reader} ${path}`;
+          const headers: Record<string, string> = { "sec-fetch-mode": "navigate", "cf-connecting-ip": nextIp() };
+          if (c[reader]) headers.cookie = c[reader]!;
+          const res = await app.request(path, { headers }, withSeats(ENVS[name](), "on"));
+          const body = await res.text();
+          const lang: Lang = path.includes("lang=fr") ? "fr" : "en";
+          const page = { status: res.status, cache: res.headers.get("cache-control"), cookie: res.headers.getSetCookie().length > 0, body: await shortHash(unseated(body, lang, reader === "ultra")) };
+          expect(page, key).toEqual(TODAY[key]);
+          if ((await shortHash(body)) !== TODAY[key].body) changed.push(key);
+        }
       }
-      // The page with the seats' piece taken out is the page main drew.
-      const res = await app.request(path, { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": nextIp(), cookie: c.ultra! } },
-        withSeats(ENVS[name as EnvName](), "on"));
-      const body = await res.text();
-      const fr = path.includes("lang=fr");
-      const row = fr
-        ? '<dt>Sièges</dt><dd><a href="/account/seats">1 siège sur 5</a></dd>'
-        : '<dt>Seats</dt><dd><a href="/account/seats">1 of 5 seats</a></dd>';
-      const link = `<a href="/account/seats" class="btn">${fr ? "Sièges" : "Seats"}</a>`;
-      const piece = path.startsWith("/account/billing") ? link : row;
-      expect(body, key).toContain(piece);
-      expect(body.split(piece), key).toHaveLength(2);
-      expect({ ...page, body: await shortHash(body.replace(piece, "")) }, key).toEqual(TODAY[key]);
     }
+    // What the switch reaches: every page with plan cards, /pro, the Terms while Ultra is on sale, the privacy page,
+    // and an Ultra account's overview and billing page; nothing else.
+    expect(changed.sort()).toEqual(EXPECTED_CHANGED);
     expect(emailOf("ultra")).toContain("@example.com");
   });
 });

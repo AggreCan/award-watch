@@ -21,6 +21,9 @@
 //   POST /admin/users/:id/unblock                      lift a block
 //   GET  /admin/users/:id/block | email | cancel | refund | delete   what the action will do (confirm page)
 //   POST /admin/users/:id/block | email | cancel | refund | delete   do it (confirm=yes from that page)
+//   GET  /admin/users/:id/seats/:sid/end | invite-cancel           a holder's seat or invitation: what ending it does
+//   POST /admin/users/:id/seats/:sid/end | invite-cancel           do it (confirm=yes); both whenever the seats table
+//                                                                  is on the database, the seats' switch on or off
 //   GET  /admin/announce                               the accounts-open message: counts, preview, confirm form
 //   POST /admin/announce                               send the next run of it (confirm=yes; announce.tsx)
 //   GET  /admin/announce?kind=ultra                    the same for the Ultra message (the Ultra card's addresses)
@@ -72,15 +75,18 @@ import { type LiveSubscription, type PaidCharge, operatorStripe } from "./admin_
 import { endForDeletion } from "./billing";
 import { BriefingsOverviewPanel, BriefingsUserPanels } from "./briefing_pages";
 import { type BriefingOverview, briefingOverview, userBriefings } from "./briefings";
-import { PLAN_SEATS, type PlanState, isPlan, planFor } from "./entitlements";
+import { PLAN_SEATS, type PlanState, isPlan, planFor, seatsReady } from "./entitlements";
 import { type FeedCounts, type FeedView, feedCounts, userFeeds } from "./feeds";
 import { CLAIM_TOP_N, type Claim, type ClaimOverview, claimDetail, claimOverview } from "./org_claim";
 import { planLabel } from "./pages";
 import { deleteAccount } from "./routes";
-import { type AccountSeats, type HeldSeat, seatsOfAccount } from "./seats";
+import {
+  type AccountSeats, type ConsoleSeat, type HeldSeat, SEAT_KEEP_DAYS, consoleSeat, operatorCancelInvitation, operatorEndSeat, seatsOfAccount, seatsOn,
+} from "./seats";
 import {
   MAIL_CHECK_TEMPLATES, type MailCheckOutcome, type MailCheckTemplate, mailCheckTo, mailCheckTokenAdmits, runMailCheck,
 } from "./mail_check";
+import { breakable } from "./seats_lines";
 import { addressNotice, isLocalHost, senderFor } from "./sender";
 import { type Account, csrfValid, readSession, revokeAllSessions } from "./session";
 import { accountsEnabled } from "./switch";
@@ -652,6 +658,7 @@ const NOTICE: Record<string, Key> = {
   cancel_now: "admin.msg_cancel_now", refunded: "admin.msg_refunded", blocked: "admin.msg_blocked", already_blocked: "admin.msg_already_blocked",
   unblocked: "admin.msg_unblocked", not_blocked: "admin.msg_not_blocked", email: "admin.msg_email", email_unsent: "admin.msg_email_unsent",
   signed_out: "admin.msg_signed_out", deleted: "admin.msg_deleted",
+  seat_ended: "admin.msg_seat_ended", invite_cancelled: "admin.msg_invite_cancelled", seat_nothing: "admin.msg_seat_nothing",
 };
 
 const DELIVER_KEY: Record<string, Key> = { daily: "account.deliver_daily", weekly: "account.deliver_weekly", off: "account.deliver_off" };
@@ -686,6 +693,8 @@ type UserState = {
   briefings?: Awaited<ReturnType<typeof userBriefings>>;
   // The account's seats as a holder and as a member (seats.ts); null without the table.
   seats?: AccountSeats | null;
+  // The account has a seat row: the panel offers End this seat and Cancel this invitation, the seats' switch on or off.
+  seatActions?: boolean;
 };
 
 function blockLine(lang: Lang, block: BlockRow | null): string {
@@ -739,7 +748,12 @@ const SEAT_WHY: Record<string, Key> = {
 // account's page, the ended ones of the last 30 days muted; and the seat it
 // holds as a member, its holder's address leading to the holder's page. Left
 // out for an account with neither and while the table is not on the database,
-// so the page reads as before for every account no seat row names.
+// so the page reads as before for every account no seat row names. Beside a
+// seat row (seatActions), a last column offers each live seat's End this seat
+// and each open invitation's Cancel this invitation, each a page that says what
+// it does and asks for the box before its post. The switch plays no part: a
+// live seat gives a plan whether it is on or off, so the operator can always
+// end one.
 function seatsPanel(lang: Lang, d: UserDetail, s: UserState, now: Date) {
   const seats = s.seats;
   if (!seats || (!seats.held.length && !seats.member)) return null;
@@ -754,11 +768,19 @@ function seatsPanel(lang: Lang, d: UserDetail, s: UserState, now: Date) {
     r.ended_at ? t(lang, "admin.seat_ended")
       : r.member_id ? t(lang, covered.has(r.member_id) ? "admin.seat_covered" : "admin.seat_uncovered")
       : r.expires_at > at ? t(lang, "admin.seat_invited", { date: day(r.expires_at) }) : t(lang, "admin.seat_expired");
+  const action = (r: HeldSeat): unknown =>
+    r.ended_at ? "" : r.member_id ? <a href={`/admin/users/${d.user.id}/seats/${r.id}/end`}>{t(lang, "admin.seat_end")}</a>
+      : r.expires_at > at ? <a href={`/admin/users/${d.user.id}/seats/${r.id}/invite-cancel`}>{t(lang, "admin.invite_end")}</a> : "";
+  // With the actions' column, an address may break after its "@" and dots, so the table keeps to its box,
+  const addr = (v: string | null) => (v && s.seatActions ? breakable(v) : v);
+  // and a date stays on one line.
+  const mono = s.seatActions ? "mono nw" : "mono";
   const cells = (r: HeldSeat): unknown[] => {
     const row = [
-      r.member_id ? <a href={`/admin/users/${r.member_id}`}>{r.member_email}</a> : r.email ?? <span class="muted">-</span>,
-      state(r), <span class="mono">{day(r.invited_at)}</span>, <span class="mono">{day(r.joined_at)}</span>,
-      <span class="mono">{day(r.ended_at)}</span>, r.ended_why && SEAT_WHY[r.ended_why] ? t(lang, SEAT_WHY[r.ended_why]) : "",
+      r.member_id ? <a href={`/admin/users/${r.member_id}`}>{addr(r.member_email)}</a> : addr(r.email) ?? <span class="muted">-</span>,
+      state(r), <span class={mono}>{day(r.invited_at)}</span>, <span class={mono}>{day(r.joined_at)}</span>,
+      <span class={mono}>{day(r.ended_at)}</span>, r.ended_why && SEAT_WHY[r.ended_why] ? t(lang, SEAT_WHY[r.ended_why]) : "",
+      ...(s.seatActions ? [action(r)] : []),
     ];
     return r.ended_at ? row.map((cell) => <span class="muted">{cell as any}</span>) : row;
   };
@@ -773,7 +795,7 @@ function seatsPanel(lang: Lang, d: UserDetail, s: UserState, now: Date) {
             members: fmtInt(live.length, lang), open: fmtInt(open.length, lang),
           })}</p>
           <Table heads={[t(lang, "admin.col_address"), t(lang, "admin.col_state"), t(lang, "admin.seat_col_invited"), t(lang, "admin.seat_col_joined"),
-            t(lang, "admin.seat_col_ended"), t(lang, "admin.seat_col_why")]} rows={seats.held.map(cells)} />
+            t(lang, "admin.seat_col_ended"), t(lang, "admin.seat_col_why"), ...(s.seatActions ? [t(lang, "seats.col_action")] : [])]} rows={seats.held.map(cells)} />
         </>
       ) : null}
       {m ? (
@@ -978,13 +1000,18 @@ async function userPage(c: Context<AppEnv>, id: string, extra: Partial<UserState
   const briefings = await userBriefings(c.env, id);
   const plan = await planFor(c.env, d.user, now);
   const seats = await seatsOfAccount(c.env, id, now);
+  // The actions on seats only while their switch is on, and only beside a seat row (nothing is read for it otherwise).
+  // WHETHER OR NOT THE SEATS' SWITCH IS ON: a seat gives its member a plan as long as its row is live (planFor reads
+  // it regardless of the switch), so the operator can always end one. seats is null while the table is not on the
+  // database, and the column shows only beside a seat row, so an account with none reads as before.
+  const seatActions = !!seats?.held.length;
   const stripe = operatorStripe(c.env);
   const live = stripe && d.payment?.subscription_id ? await stripe.subscription(d.payment.subscription_id) : undefined;
   const m = c.req.query("m") ?? "";
   const notice = extra.notice !== undefined ? extra.notice
     : NOTICE[m] ? t(lang, NOTICE[m], { n: fmtInt(Number(c.req.query("n") ?? "0") || 0, lang) }) : null;
   const title = d.user.status === "active" ? d.user.email : t(lang, "admin.deleted_title");
-  return adminPage(c, title, userView(lang, operatorOf(c), d, { ...extra, plan, stripeOn: !!stripe, live, notice, feeds, claim, briefings, seats }, now), extra.status ?? 200);
+  return adminPage(c, title, userView(lang, operatorOf(c), d, { ...extra, plan, stripeOn: !!stripe, live, notice, feeds, claim, briefings, seats, seatActions }, now), extra.status ?? 200);
 }
 
 admin.get("/users/:id", (c) => {
@@ -1422,10 +1449,94 @@ admin.post("/users/:id/delete", async (c) => {
   });
 });
 
+// -- a holder's seats (seats.ts) -------------------------------------------------------------------------
+
+// End a live seat, or cancel an invitation not yet taken, on the holder's own
+// page (the account the address names) and by the row's id in the address:
+// both from the console's own address, never a form's. Whenever the seats
+// table is on the database, the seats' switch on or off (a seat gives a plan
+// either way, and ending one is the operator's way to take it back); without
+// the table, the site's 404. Each says what it does, with the person's address, and asks for the
+// box; its post writes one audit row on the holder (and, for a seat, one on its
+// member) naming the operator alone: no address and no seat id.
+type SeatAction = "end" | "invite-cancel";
+const SEAT_ACTIONS: Record<SeatAction, { title: Key; button: Key }> = {
+  end: { title: "admin.seat_end_title", button: "admin.seat_end_button" },
+  "invite-cancel": { title: "admin.invite_end_title", button: "admin.invite_end_button" },
+};
+const isSeatAction = (v: string | undefined): v is SeatAction => v === "end" || v === "invite-cancel";
+
+// Whether the row is one the action applies to now: a live seat to end, an
+// invitation still open to cancel.
+function seatOpen(action: SeatAction, row: ConsoleSeat | null, now: Date): boolean {
+  if (!row || row.ended_at) return false;
+  return action === "end" ? !!row.member_id : !row.member_id && row.expires_at > now.toISOString();
+}
+
+function seatActionView(lang: Lang, op: Account, user: UserRow, action: SeatAction, row: ConsoleSeat | null, now: Date, errors?: Key[]) {
+  const open = seatOpen(action, row, now);
+  const words = SEAT_ACTIONS[action];
+  const lead = action === "end" ? t(lang, "admin.seat_end_lead") : t(lang, "admin.invite_end_lead", { days: fmtInt(SEAT_KEEP_DAYS, lang) });
+  return confirmView(lang, op, user, {
+    title: words.title, lead, items: [], action: `/admin/users/${user.id}/seats/${row?.id ?? ""}/${action}`, button: words.button,
+    refusal: open ? null : "admin.msg_seat_nothing", errors,
+    extra: open && row ? (
+      <dl class="wide">
+        <dt>{t(lang, "admin.seat_field_holder")}</dt><dd>{user.email}</dd>
+        {row.member_id ? (
+          <><dt>{t(lang, "admin.seat_field_person")}</dt><dd><a href={`/admin/users/${row.member_id}`}>{row.member_email}</a></dd></>
+        ) : (
+          <><dt>{t(lang, "admin.seat_field_invited")}</dt><dd>{row.email}</dd></>
+        )}
+      </dl>
+    ) : null,
+  });
+}
+
+admin.get("/users/:id/seats/:sid/:action", (c) =>
+  guarded(c, async () => {
+    const action = c.req.param("action");
+    if (!isSeatAction(action) || !(await seatsReady(c.env))) return c.notFound();
+    const user = await target(c);
+    if (!user) return c.notFound();
+    const lang = c.get("lang");
+    const now = new Date();
+    const row = await consoleSeat(c.env, user.id, c.req.param("sid") ?? "");
+    if (!row) return c.notFound();
+    return adminPage(c, t(lang, SEAT_ACTIONS[action].title), seatActionView(lang, operatorOf(c), user, action, row, now));
+  }));
+
+admin.post("/users/:id/seats/:sid/:action", async (c) => {
+  const action = c.req.param("action");
+  if (!isSeatAction(action) || !(await seatsReady(c.env).catch(() => false))) return c.notFound();
+  const post = await operatorPost(c);
+  if (post instanceof Response) return post;
+  const { op, fields, user } = post;
+  const lang = c.get("lang");
+  return guarded(c, async () => {
+    const now = new Date();
+    const row = await consoleSeat(c.env, user.id, c.req.param("sid") ?? "");
+    if (!row) return c.notFound();
+    if (!confirmed(fields)) {
+      return adminPage(c, t(lang, SEAT_ACTIONS[action].title), seatActionView(lang, op, user, action, row, now, ["admin.err_confirm"]), 400);
+    }
+    if (action === "end") {
+      const member = await operatorEndSeat(c.env, user.id, row.id, now);
+      if (!member) return c.redirect(userPath(user.id, "seat_nothing"), 303);
+      await operatorAudit(c.env, user.id, "operator_seat_ended", op.userId, null, now);
+      await operatorAudit(c.env, member, "operator_seat_ended", op.userId, null, now);
+      return c.redirect(userPath(user.id, "seat_ended"), 303);
+    }
+    if (!(await operatorCancelInvitation(c.env, user.id, row.id, now))) return c.redirect(userPath(user.id, "seat_nothing"), 303);
+    await operatorAudit(c.env, user.id, "operator_invite_cancelled", op.userId, null, now);
+    return c.redirect(userPath(user.id, "invite_cancelled"), 303);
+  });
+});
+
 // -- the accounts-open message and the Ultra message (announce.tsx) -----------------------------------
 
 // room: what the day's sending ceiling still allows (deliveries.ts dayRoom), null with no ceiling set.
-type AnnounceState = { counts: AnnounceCounts | null; refusal: Key | null; errors?: Key[]; notice?: string | null; room?: number | null };
+type AnnounceState = { counts: AnnounceCounts | null; refusal: Key | null; errors?: Key[]; notice?: string | null; room?: number | null; seats?: boolean };
 
 // Each kind's page wording; the accounts-open message keeps the words it had.
 const ANNOUNCE_WORDS: Record<AnnounceKind, { title: Key; lead: Key; waiting: Key; preview: Key }> = {
@@ -1450,7 +1561,9 @@ async function announceState(c: Context<AppEnv>, kind: AnnounceKind): Promise<An
   }
   const ceiling = mailCeiling(c.env);
   const room = ceiling ? await dayRoom(c.env, ceiling, new Date()) : null;
-  return { counts, refusal: mailOn(c) ? null : "admin.announce_no_mail", room };
+  // The Ultra message names the seats while their switch is on, as its run does (announce.tsx).
+  const seats = kind === "ultra" && (await seatsOn(c.env).catch(() => false));
+  return { counts, refusal: mailOn(c) ? null : "admin.announce_no_mail", room, ...(seats ? { seats } : {}) };
 }
 
 // What a run will do, the counts, the form, and the message in both
@@ -1489,7 +1602,7 @@ function announceView(lang: Lang, op: Account, base: string, s: AnnounceState, k
         // The preview shows the subject and the text, never a recipient.
         const token = "0".repeat(32);
         const m = kind === "ultra"
-          ? ultraOpenMessage(l, "", ultraLinks(base, l, token))
+          ? ultraOpenMessage(l, "", ultraLinks(base, l, token), !!s.seats)
           : accountsOpenMessage(l, "", [t(l, "interest.label_tenders_all")], announceLinks(base, l, token));
         return (
           <Panel title={t(lang, words.preview, { lang: t(lang, l === "fr" ? "admin.lang_fr" : "admin.lang_en") })}>

@@ -183,9 +183,10 @@ import {
   pendingInterest, setDelivery,
 } from "./searches";
 import { GROUP_TAGS_MAX, GROUP_TAG_CHARS, type GroupKind, USER_RE, provenBy, readGroupTags } from "./group_stop";
-import { endSeatsOf, seatsOn } from "./seats";
+import { endSeatsOf, seatsOn, seatsSwitched } from "./seats";
+import { poolFullLine } from "./seats_lines";
 import {
-  cancelPost, invitePost, joinPage, joinPost, leaveConfirm, leavePost, removeConfirm, removePost, seatsPage, seatsRow,
+  cancelPost, deleteSeatFacts, invitePost, joinPage, joinPost, leaveConfirm, leavePost, removeConfirm, removePost, seatsPage, seatsRow,
 } from "./seats_pages";
 import { randomHex, sameHash, sha256Hex, ipHash } from "./secrets";
 import { isLocalHost, senderFor, signInMessage } from "./sender";
@@ -692,9 +693,14 @@ async function searchesPage(c: Context<AppEnv>, who: Account, extra: { errors?: 
   // Ultra's figure beside a Pro account's, only while Ultra can be bought (payments.ts ultraOnSale).
   const ultra = RULES.ultra.saved_searches > cap && allowed(who, "delivery") && (await ultraOnSale(c.env)) ? RULES.ultra.saved_searches : null;
   // A refused add says what the account holds, the briefings counted with the searches; in a group, what the subscription holds.
+  // While the seats' switch is on, a refusal in a group says the subscription is full and whom to ask (seats_lines.tsx): an
+  // add, a briefing, a calendar feed. An account in no group reads what it always read.
+  const full = (figure: "searches" | "feeds", figureCap: number) => (inGroup ? poolFullLine(lang, who, figure, figureCap, seatsSwitched(c.env)) : null);
   const notice = m === "cap"
-    ? inGroup ? poolCount(lang, "searches", inGroup.line)
+    ? inGroup ? full("searches", cap) ?? poolCount(lang, "searches", inGroup.line)
       : who.plan === "free" ? t(lang, "account.cap_free", { cap }) : paidCapLine(lang, stored.length + (briefings?.length ?? 0), cap, ultra)
+    : m === "b_cap" && full("searches", cap) ? full("searches", cap)
+    : m === "feed_cap" && full("feeds", FEEDS_MAX) ? full("feeds", FEEDS_MAX)
     : SEARCH_NOTICE[m] ? t(lang, SEARCH_NOTICE[m]) : null;
   return accountPage(c, t(lang, "account.searches_title"),
     searchesView(lang, who, {
@@ -1376,9 +1382,12 @@ async function watchesPage(c: Context<AppEnv>, who: Account, said?: string, stat
   // Ultra's figure beside a Pro account's, only while Ultra can be bought (payments.ts ultraOnSale).
   const ultra = RULES.ultra.watchlists > cap && allowed(who, "watch_mail") && (await ultraOnSale(c.env)) ? RULES.ultra.watchlists : null;
   const held = countedWatches(watches, claimed);
+  // While the seats' switch is on, a refusal in a group says the subscription is full and whom to ask (seats_lines.tsx).
+  const full = (figure: "watches" | "feeds", figureCap: number) => (pool ? poolFullLine(lang, who, figure, figureCap, seatsSwitched(c.env)) : null);
   const notice = m === "cap"
-    ? line ? poolCount(lang, "watches", line) : allowed(who, "watch_mail") ? paidWatchCapLine(lang, held, cap, ultra)
+    ? line ? full("watches", cap) ?? poolCount(lang, "watches", line) : allowed(who, "watch_mail") ? paidWatchCapLine(lang, held, cap, ultra)
       : t(lang, "watches.cap_free", { n: fmtInt(held, lang), cap: fmtInt(cap, lang), max: fmtInt(RULES.pro.watchlists, lang) })
+    : m === "feed_cap" && full("feeds", FEEDS_MAX) ? full("feeds", FEEDS_MAX)
     : WATCH_NOTICE[m] ? t(lang, WATCH_NOTICE[m]) : null;
   // The watches' calendar feed, with how many events it holds now; no feeds
   // table on the database yet leaves it out.
@@ -2037,11 +2046,15 @@ account.post("/seat/leave", async (c) => {
 
 // -- deletion ----------------------------------------------------------------------------------------
 
+// What the delete page says: the subscription, the refund, and while the seats'
+// switch is on the seat the account holds or the seats it gives.
+const factsOf = async (c: Context<AppEnv>, who: Account) => ({ ...(await deleteFacts(c.env, who)), ...(await deleteSeatFacts(c, who)) });
+
 account.get("/delete", async (c) => {
   const who = await signedIn(c);
   if (who instanceof Response) return who;
   const lang = c.get("lang");
-  return accountPage(c, t(lang, "account.delete_title"), deleteView(lang, who, undefined, await deleteFacts(c.env, who)));
+  return accountPage(c, t(lang, "account.delete_title"), deleteView(lang, who, undefined, await factsOf(c, who)));
 });
 
 // The user row stays, marked deleted, its email replaced by "deleted:" and
@@ -2097,12 +2110,12 @@ account.post("/delete", async (c) => {
   const { account: who, fields } = post;
   const lang = c.get("lang");
   if (fields.confirm !== "yes") {
-    return accountPage(c, t(lang, "account.delete_title"), deleteView(lang, who, ["account.err_confirm"], await deleteFacts(c.env, who)), 400);
+    return accountPage(c, t(lang, "account.delete_title"), deleteView(lang, who, ["account.err_confirm"], await factsOf(c, who)), 400);
   }
   return guarded(c, async () => {
     // A deleted account must not be charged again: its subscriptions are cancelled first, or nothing is deleted.
     if (!(await endForDeletion(c.env, who.userId))) {
-      return accountPage(c, t(lang, "account.delete_title"), deleteView(lang, who, ["billing.err_delete"], await deleteFacts(c.env, who)), 503);
+      return accountPage(c, t(lang, "account.delete_title"), deleteView(lang, who, ["billing.err_delete"], await factsOf(c, who)), 503);
     }
     await deleteAccount(c, who);
     await revokeAllSessions(c.env, who.userId);

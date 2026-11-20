@@ -20,11 +20,13 @@ import { allKeys, rawEntry, SAME_IN_BOTH, t, type Key } from "../src/i18n";
 import { app } from "../src/index";
 import { STYLES_VERSION } from "../src/layout";
 import { KEYS_MAX } from "../src/account/api_keys";
-import { RULES } from "../src/account/entitlements";
+import { PLAN_SEATS, RULES } from "../src/account/entitlements";
 import { COMPETITORS_MAX } from "../src/account/org_claim";
 import { KEY_PER_DAY } from "../src/api_keyed_spec";
 import { EXPIRING_WINDOWS } from "../src/data";
-import { PLAN_CARD_ROWS, PLAN_LINE_MAX, PLAN_ROWS, PRO_GLYPH_PATH, PRO_INCLUDES, cardRows, planLine, planRows, proPrice } from "../src/pro";
+import {
+  PLAN_CARD_ROWS, PLAN_LINE_MAX, PLAN_ROWS, PRO_GLYPH_PATH, PRO_INCLUDES, SEATS_ROW, cardRows, planLine, planRows, proPrice, seatsWording,
+} from "../src/pro";
 import { FREE_YEARS, MAX_YEARS } from "../src/records_db";
 import { SAME_DAY_RUNS_UTC } from "../src/refresh";
 import { routeTemplate } from "../src/views";
@@ -536,6 +538,36 @@ describe("the plan cards", () => {
         expect(free, row.pro.key).toBe(false);
       }
     }
+  });
+
+  it("draw the seats row first while the seats' switch is on: each plan's own figure from PLAN_SEATS, the one counted row where Pro's is not above Free's", async () => {
+    await sessions();
+    const COMPARATIVE = /\b(more|higher|above|unlimited|limits above|plus|davantage|supérieure?s?|au-dessus|illimitée?s?)\b/i;
+    for (const lang of ["en", "fr"] as const) {
+      const panel = teaseOf(nbsp(decode(await html(`/tenders/same-day?lang=${lang}`, { env: paid({ SEATS: "on" }) }))));
+      const ROWS = planRows(["free", "pro"], { seats: true });
+      expect(ROWS[0]).toBe(SEATS_ROW);
+      expect(ROWS.slice(1)).toEqual(planRows(["free", "pro"]));
+      expect(panel, lang).toContain(`<div class="plan-cards" style="--plan-rows:${ROWS.length};--plan-card-rows:${cardRows(ROWS.length)}">`);
+      const [free, pro] = cardsOf(panel).map(rowsOf);
+      // Each card's own figure, read from PLAN_SEATS, with a check: Free has its seat as Pro has its own.
+      expect(free[0], lang).toEqual({ lacks: false, hollow: false, text: nbsp(planLine(lang, seatsWording("free"))), said: null });
+      expect(pro[0], lang).toEqual({ lacks: false, hollow: false, text: nbsp(planLine(lang, seatsWording("pro"))), said: null });
+      expect(free[0].text, lang).toBe(lang === "en" ? `${PLAN_SEATS.free} seat` : `${PLAN_SEATS.free} siège`);
+      for (const card of cardsOf(panel)) expect(card.replace(/<[^>]+>/g, " "), lang).not.toMatch(COMPARATIVE);
+    }
+    // The exception the seats design names (its 5.8 and decision 2): every other counted row holds Pro's figure
+    // above Free's (the test above, over PLAN_ROWS); the seats row is kept out of PLAN_ROWS and held instead to
+    // Free <= Pro < Ultra.
+    expect(PLAN_ROWS).not.toContain(SEATS_ROW);
+    expect(PLAN_SEATS.free).toBeLessThanOrEqual(PLAN_SEATS.pro);
+    expect(PLAN_SEATS.pro).toBeLessThan(PLAN_SEATS.ultra);
+    expect(planLine("en", seatsWording("ultra"))).toBe(`${PLAN_SEATS.ultra} seats sharing these figures`);
+    expect(planLine("en", seatsWording("ultra")).length).toBeLessThanOrEqual(PLAN_LINE_MAX);
+    // Off: the cards of before.
+    const off = teaseOf(nbsp(decode(await html("/tenders/same-day?lang=en", { env: paid({ SEATS: "off" }) }))));
+    expect(off).toContain(`--plan-rows:${planRows(["free", "pro"]).length};`);
+    expect(off).not.toContain(`<span>${PLAN_SEATS.free} seat</span>`);
   });
 
   it("are drawn in the theme's tokens: Pro framed 2 px in the accent with its head on the accent's soft ground, the heights held by the grid", () => {
