@@ -689,19 +689,24 @@ Google's verdict (`PASS` is indexed), its coverage state (the reason given
 when a page is not indexed, for example "Crawled - currently not indexed" or
 "URL is unknown to Google"), the robots, indexing and fetch states, the last
 crawl's date, and Google's canonical (its path, or "another host"). The
-sample is 40 pages: 15 open tender notices published in the 7 days to the
-data date (`tenders/open.json`), 15 organizations with an award notice in
-the 30 days to it (`awards/recent.json`), and 10 published contracts dated
-in the 90 days to it (the pipeline's contracts table, opened read-only),
-each kind ranked by SHA-256 of a fixed seed, the kind and the page's path,
-lowest first. The same pages come back night after night while they stay in
-their windows, so the sample rolls slowly. The addresses are the ones the
-sitemaps list.
+sample is 40 pages: 12 open tender notices published in the 7 days to the
+data date (`tenders/open.json`), 12 organizations with an award notice in
+the 30 days to it (`awards/recent.json`), 6 of the list pages that follow
+the data (with the guides' index and the monthly record's months), 4
+guides (their addresses as `site/src/guides.ts` writes them), and 6
+published contracts dated in the 90 days to it (the pipeline's contracts
+table, opened read-only), each kind ranked by SHA-256 of a fixed seed, the
+kind and the page's path, lowest first. The same pages come back night
+after night while they stay in their windows, so the sample rolls slowly.
+The kinds are asked in turn, one page of each a round, so a night the time
+limit cuts short has still asked about every kind (the first night asked
+kind by kind and reached 25 pages and no contract). The addresses are the
+ones the sitemaps list.
 
 One request per page, `POST https://searchconsole.googleapis.com/v1/urlInspection/index:inspect`
 with `{"inspectionUrl": "https://awardwatch.ca/<path>", "siteUrl":
 "sc-domain:awardwatch.ca", "languageCode": "en-US"}`, one at a time, a
-second apart, none after five minutes, and nothing on a night already
+second apart, none after seven minutes, and nothing on a night already
 sampled. Google's limits are 2,000 inspections a day and 600 a minute for a
 property, so the sample is 2% of the day's allowance. The token is the
 import's (scope `webmasters.readonly`, which the method accepts). An answer

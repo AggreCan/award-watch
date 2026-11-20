@@ -11,12 +11,18 @@ crawl's date and Google's canonical. The workflow keeps the file under
 
 The sample (SAMPLE, SAMPLE_SIZE in all): open tender notices published in the
 TENDER_DAYS days to the data date (tenders/open.json), organizations with an
-award notice in the ORGANIZATION_DAYS days to it (awards/recent.json), and
-published contracts dated in the CONTRACT_DAYS days to it (the pipeline's
-contracts table). Each kind's candidates are ranked by SHA-256 of SEED, the
-kind and the page's path, and the lowest are taken: the same candidates give
-the same sample every night, and the sample rolls slowly as pages enter and
-leave the windows. The addresses are the canonical ones the sitemaps list.
+award notice in the ORGANIZATION_DAYS days to it (awards/recent.json), the
+site's list pages that follow the data with the guides' index and the monthly
+record's months (export_static.SITEMAP_DATED_PAGES, monthly/index.json), the
+guides (their addresses as site/src/guides.ts writes them), and published
+contracts dated in the CONTRACT_DAYS days to it (the pipeline's contracts
+table). Each kind's candidates are ranked by SHA-256 of SEED, the kind and
+the page's path, and the lowest are taken: the same candidates give the same
+sample every night, and the sample rolls slowly as pages enter and leave the
+windows. The kinds are asked in turn, one page of each a round, so a night
+the time budget cuts short has still asked about every kind (the first
+night, 2026-11-20, asked kind by kind and reached 25 pages and no contract).
+The addresses are the canonical ones the sitemaps list.
 
 The requests: one POST per page to INSPECT_URL, with the page's address and
 the property, one at a time, PAUSE_S apart, none after BUDGET_S. Google's
@@ -63,8 +69,8 @@ FILE = "index_sample.csv"
 HEADER = ["date", "kind", "path", "verdict", "coverage", "robots", "indexing", "fetch", "last_crawl", "google_canonical"]
 OUTCOME = "index_outcome.txt"
 
-# The kinds of page and how many of each a night: 40 in all.
-SAMPLE: tuple[tuple[str, int], ...] = (("tender", 15), ("organization", 15), ("contract", 10))
+# The kinds of page and how many of each a night, 40 in all, in the order a round asks them.
+SAMPLE: tuple[tuple[str, int], ...] = (("tender", 12), ("organization", 12), ("page", 6), ("guide", 4), ("contract", 6))
 SAMPLE_SIZE = sum(n for _, n in SAMPLE)
 SEED = "award-watch index sample 1"
 TENDER_DAYS = 7
@@ -73,7 +79,8 @@ CONTRACT_DAYS = 90
 # Candidates read from the contracts table at most (by date, newest first).
 CONTRACT_CANDIDATES = 50_000
 PAUSE_S = 1.0
-BUDGET_S = 300.0
+# An inspection took about 12 s on the first night, so 420 s reaches about 35 pages; the step's own limit is 900 s.
+BUDGET_S = 420.0
 LANGUAGE = "en-US"
 
 NOT_PERMITTED = "not permitted"
@@ -172,17 +179,48 @@ def contract_paths(db: Path, as_of: date) -> list[str]:
     return sorted(out)
 
 
+MONTH_RE = re.compile(r"^[0-9]{4}-(?:0[1-9]|1[0-2])$")
+GUIDES_INDEX = "/guides"
+# The guides' addresses as the site's own file writes them, each a quoted "/guides/<slug>".
+GUIDES_FILE = config.REPO_ROOT / "site" / "src" / "guides.ts"
+GUIDE_PATH_RE = re.compile(r'"(/guides/[a-z0-9]+(?:-[a-z0-9]+)*)"')
+
+
+def page_paths(static: Path) -> list[str]:
+    """The list pages that follow the nightly data, the guides' index, and each month of the monthly record."""
+    from .export_static import SITEMAP_DATED_PAGES
+
+    out = set(SITEMAP_DATED_PAGES) | {GUIDES_INDEX}
+    index = _load(static / "monthly" / "index.json")
+    for row in (index.get("months") if isinstance(index, dict) else None) or []:
+        month = row.get("month") if isinstance(row, dict) else None
+        if isinstance(month, str) and MONTH_RE.match(month):
+            out.add(f"/monthly/{month}")
+    return sorted(out)
+
+
+def guide_paths(source: Path | None = None) -> list[str]:
+    """Each guide's address, read from the site's file; none when the file is not there."""
+    try:
+        text = (source or GUIDES_FILE).read_text(encoding="utf-8")
+    except OSError:
+        return []
+    return sorted(set(GUIDE_PATH_RE.findall(text)))
+
+
 def rank(kind: str, path: str) -> str:
     return hashlib.sha256(f"{SEED}|{kind}|{path}".encode("utf-8")).hexdigest()
 
 
 def draw(candidates: Mapping[str, list[str]]) -> list[tuple[str, str]]:
-    """(kind, path) for the night: each kind's share of its candidates with the lowest rank, kinds in SAMPLE
-    order. A kind with fewer candidates than its share gives what it has."""
+    """(kind, path) for the night: each kind's share of its candidates with the lowest rank, taken in turn, one
+    page of each kind a round in SAMPLE order, so a night cut short has asked about every kind. A kind with
+    fewer candidates than its share gives what it has."""
+    chosen = {kind: sorted(set(candidates.get(kind, [])), key=lambda p, kind=kind: rank(kind, p))[:share]
+              for kind, share in SAMPLE}
     out: list[tuple[str, str]] = []
-    for kind, share in SAMPLE:
-        chosen = sorted(set(candidates.get(kind, [])), key=lambda p: rank(kind, p))[:share]
-        out.extend((kind, p) for p in chosen)
+    for i in range(max((len(paths) for paths in chosen.values()), default=0)):
+        out.extend((kind, chosen[kind][i]) for kind, _ in SAMPLE if i < len(chosen[kind]))
     return out
 
 
@@ -191,7 +229,7 @@ def candidates(static: Path, db: Path) -> dict[str, list[str]]:
     if as_of is None:
         return {}
     return {"tender": tender_paths(static, as_of), "organization": organization_paths(static, as_of),
-            "contract": contract_paths(db, as_of)}
+            "page": page_paths(static), "guide": guide_paths(), "contract": contract_paths(db, as_of)}
 
 
 # -- one inspection ---------------------------------------------------------------

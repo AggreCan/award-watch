@@ -7,6 +7,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import re
 import sqlite3
 from datetime import date, datetime, timedelta, timezone
 
@@ -128,9 +129,22 @@ def test_the_sample_takes_each_kinds_share_from_its_window(world):
     assert "/contracts/dfo-mpo/F1234%205678" in found["contract"]
     assert not any("not%20a%20dept" in p or "bad" in p for p in found["contract"])
     assert len([p for p in found["contract"] if p.startswith("/contracts/dnd-mdn/")]) == 18
+    # The list pages that follow the data with the guides' index (no monthly record in this export), and the
+    # guides as the site's own file names them.
+    assert "/tenders" in found["page"] and "/guides" in found["page"] and "/privacy" not in found["page"]
+    assert not any(p.startswith("/monthly/") for p in found["page"])
+    assert len(found["guide"]) >= 16 and all(re.fullmatch(r"/guides/[a-z0-9-]+", p) for p in found["guide"])
     sample = ix.draw(found)
-    assert [k for k, _ in sample] == ["tender"] * 14 + ["organization"] * 15 + ["contract"] * 10
-    assert len(sample) <= ix.SAMPLE_SIZE == 40
+    kinds = [k for k, _ in sample]
+    assert {k: kinds.count(k) for k in set(kinds)} == {"tender": 12, "organization": 12, "page": 6, "guide": 4, "contract": 6}
+    # One page of each kind a round, in the order SAMPLE names them, until a kind has given its share.
+    assert kinds[:20] == ["tender", "organization", "page", "guide", "contract"] * 4
+    assert kinds[20:26] == ["tender", "organization", "page", "contract"] + ["tender", "organization"]
+    assert kinds[-12:] == ["tender", "organization"] * 6
+    # Each kind's pages are its lowest-ranked candidates, in rank order.
+    for kind, share in ix.SAMPLE:
+        assert [p for k, p in sample if k == kind] == sorted(set(found[kind]), key=lambda p: ix.rank(kind, p))[:share]
+    assert len(sample) == ix.SAMPLE_SIZE == 40
 
 
 def test_the_sample_is_the_same_each_night_and_rolls_slowly(world):
@@ -152,6 +166,13 @@ def test_no_export_or_no_database_gives_what_is_there(tmp_path):
     static = tmp_path / "static"
     write_static(static)
     assert ix.candidates(static, tmp_path / "none.sqlite")["contract"] == []
+    # The monthly record's months join the list pages once the export holds them; a file that names none adds none.
+    (static / "monthly").mkdir()
+    (static / "monthly" / "index.json").write_text(
+        '{"as_of": "2026-11-19", "months": [{"month": "2026-10"}, {"month": "2026-13"}, {"month": 7}, "x"]}', encoding="utf-8")
+    pages = ix.candidates(static, tmp_path / "none.sqlite")["page"]
+    assert "/monthly/2026-10" in pages and not any("2026-13" in p for p in pages)
+    assert ix.guide_paths(tmp_path / "no-such-file.ts") == []
 
 
 # -- the requests -------------------------------------------------------------------
@@ -170,9 +191,9 @@ def test_each_page_is_one_inspection_of_its_canonical_address_paced_and_kept(tmp
         gone: answer("FAIL", "Not found (404)", gone, fetch="NOT_FOUND", canonical="https://elsewhere.example/x"),
     })
     outcome, sleeps = run(tmp_path, world, http)
-    assert outcome == "inspected 39"
+    assert outcome == "inspected 40"
     token, *inspections = http.calls
-    assert token["url"] == sc.TOKEN_URL and len(inspections) == 39
+    assert token["url"] == sc.TOKEN_URL and len(inspections) == 40
     for c in inspections:
         assert c["url"] == "https://searchconsole.googleapis.com/v1/urlInspection/index:inspect"
         assert set(c["json"]) == {"inspectionUrl", "siteUrl", "languageCode"}
@@ -180,29 +201,29 @@ def test_each_page_is_one_inspection_of_its_canonical_address_paced_and_kept(tmp
         assert c["json"]["inspectionUrl"].startswith(f"{SITE}/")
         assert c["headers"]["Authorization"] == "Bearer ya29.test-token"
     # One pause between two requests, never before the first.
-    assert sleeps == [ix.PAUSE_S] * 38
+    assert sleeps == [ix.PAUSE_S] * 39
     rows = rows_of(tmp_path)
-    assert len(rows) == 39 and {r["date"] for r in rows} == {"2026-11-19"}
+    assert len(rows) == 40 and {r["date"] for r in rows} == {"2026-11-19"}
     by_path = {r["path"]: r for r in rows}
     assert by_path[unknown]["verdict"] == "NEUTRAL" and by_path[unknown]["coverage"] == "URL is unknown to Google"
     assert by_path[unknown]["last_crawl"] == ""
     assert by_path[crawled]["last_crawl"] == "2026-11-17" and by_path[crawled]["robots"] == "ALLOWED"
     assert by_path[duplicate]["google_canonical"] == duplicate
     assert by_path[gone]["fetch"] == "NOT_FOUND" and by_path[gone]["google_canonical"] == "another host"
-    assert sum(r["verdict"] == "PASS" for r in rows) == 35
+    assert sum(r["verdict"] == "PASS" for r in rows) == 36
     assert "ya29.test-token" not in caplog.text and KEY_FRAGMENT not in caplog.text
     assert not http.closed  # a session handed in belongs to the caller
 
 
 def test_a_night_already_sampled_asks_nothing(tmp_path, world):
-    assert run(tmp_path, world, FakeGoogle())[0] == "inspected 39"
+    assert run(tmp_path, world, FakeGoogle())[0] == "inspected 40"
     before = (tmp_path / "out" / ix.FILE).read_bytes()
     http = FakeGoogle()
     assert run(tmp_path, world, http)[0] == "up to date"
     assert http.calls == [] and (tmp_path / "out" / ix.FILE).read_bytes() == before
     # The next night appends its own.
-    assert run(tmp_path, world, FakeGoogle(), now=NOW + timedelta(days=1))[0] == "inspected 39"
-    assert [r["date"] for r in rows_of(tmp_path)].count("2026-11-20") == 39
+    assert run(tmp_path, world, FakeGoogle(), now=NOW + timedelta(days=1))[0] == "inspected 40"
+    assert [r["date"] for r in rows_of(tmp_path)].count("2026-11-20") == 40
 
 
 def test_a_refusal_stops_the_sample_and_the_night_goes_on(tmp_path, world, caplog):
@@ -222,8 +243,8 @@ def test_a_page_that_fails_is_skipped_and_the_rest_are_kept(tmp_path, world):
     broken = {p: FakeResponse(500, None, "backend error") for _, p in sample[:3]}
     broken[sample[3][1]] = {"inspectionResult": {}}  # no index status at all
     broken[sample[4][1]] = ConnectionError("reset")
-    assert run(tmp_path, world, FakeGoogle(broken))[0] == "inspected 34"
-    assert len(rows_of(tmp_path)) == 34
+    assert run(tmp_path, world, FakeGoogle(broken))[0] == "inspected 35"
+    assert len(rows_of(tmp_path)) == 35
     everything = FakeGoogle(default=FakeResponse(500, None, "backend error"))
     assert run(tmp_path, world, everything, now=NOW + timedelta(days=1))[0] == "failed"
 
@@ -232,6 +253,8 @@ def test_the_time_budget_ends_the_night(tmp_path, world):
     ticks = iter([0.0] + [0.0] * 5 + [ix.BUDGET_S + 1] * 100)
     outcome, _ = run(tmp_path, world, FakeGoogle(), clock=lambda: next(ticks))
     assert outcome == "inspected 5"
+    # The five pages a night cut that short has asked are one of each kind.
+    assert sorted(r["kind"] for r in rows_of(tmp_path)) == sorted(k for k, _ in ix.SAMPLE)
 
 
 def test_what_google_says_is_kept_short_and_plain(tmp_path):
