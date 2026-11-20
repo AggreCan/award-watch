@@ -15,7 +15,9 @@
 //              follows instrument_expires_6m holds that expire within 182
 //              days (rec_instruments and rec_holders, read below), and each
 //              followed open notice's closing
-//   all        every saved tender search and the watches in one feed
+//   all        every saved tender search and the watches in one feed (for a
+//              member of a group, the searches and watches its allowance
+//              of the subscription's figures covers: pool.ts)
 //
 // Every event is written by contractEvent or noticeEvent, so its UID and
 // SEQUENCE are the one-event file's for the same record: an amendment that
@@ -58,8 +60,8 @@ import { filterTenders, readTenderQuery } from "../pages/tenders";
 import { type Query, type Row, num, orgNumber, readRecords } from "../records_db";
 import { PUBLISHED_CONTRACT_SQL } from "../records_tables";
 import { isBlocked } from "./admin_ops";
-import { sharedCap } from "./briefings";
-import { type Group, type Plan, allowed, lastKnownPlan, planFor, watchCap } from "./entitlements";
+import { madeBefore, sharedCap } from "./briefings";
+import { type Group, type Plan, SAVED_SEARCH_MAX, allowed, lastKnownPlan, planFor, watchCap } from "./entitlements";
 import { type InGroup, aheadIds, groupIn, pooled } from "./pool";
 import { newId, randomHex, sameHash } from "./secrets";
 import { OUTAGE_TRUST_MS } from "./session";
@@ -232,15 +234,35 @@ export const FEED_SERVED_SQL =
   "AND NOT (w.kind = 'organization' AND w.target IS (SELECT c.organization_id FROM org_claims c WHERE c.user_id = w.user_id))) AS watches";
 
 // A member's feed: whether it is in service (and its search, for a search's
-// feed), and the account's allowance of the watches.
+// feed), the account's allowance of the watches, and of the saved searches with
+// the briefings (for a feed with no search of its own, searches counts the
+// accounts ahead alone, since ?8 is NULL and joins no row).
 async function servedFeed(
   db: D1Database, row: { id: string; user_id: string; search_id: string | null }, group: Group, plan: Plan,
-): Promise<{ ok: boolean; watches: number }> {
+): Promise<{ ok: boolean; watches: number; searches: number }> {
   const n = await db.prepare(FEED_SERVED_SQL).bind(row.user_id, row.id, ...aheadIds(group), row.search_id)
     .first<{ feeds: number; searches: number; watches: number }>();
   const ok = (n?.feeds ?? 0) < FEEDS_MAX && (row.search_id === null || (n?.searches ?? 0) < sharedCap(plan));
-  return { ok, watches: Math.max(0, watchCap(plan) - (n?.watches ?? 0)) };
+  return { ok, watches: Math.max(0, watchCap(plan) - (n?.watches ?? 0)), searches: Math.max(0, sharedCap(plan) - (n?.searches ?? 0)) };
 }
+
+// The account's saved tender searches a feed lists (?1 the account, ?2 the
+// kind; ?3 and ?4 one search's id, or '' for every one), oldest first: the
+// statement every feed sends.
+export const FEED_SEARCHES_SQL =
+  "SELECT id, params, label, lang FROM saved_searches WHERE user_id = ? AND kind = ? AND (? = '' OR id = ?) ORDER BY created_at, id";
+
+// A member's "all" feed, in place of FEED_SEARCHES_SQL, so it sends no
+// statement more: the account's tender searches its allowance covers (?3, the
+// allowance of the saved searches with the briefings, servedFeed), each one
+// with fewer of the account's own saved searches and briefings made before it
+// than that (briefings.ts madeBefore, the order the delivery run and the
+// searches page read), each count through its table's index on user_id. A
+// search past the allowance is saved and unavailable here, as its own feed is.
+// An account in no group and a holder send FEED_SEARCHES_SQL, as before.
+export const FEED_SEARCHES_SERVED_SQL =
+  "SELECT s.id, s.params, s.label, s.lang FROM saved_searches s WHERE s.user_id = ?1 AND s.kind = ?2 " +
+  `AND ${madeBefore("s", "saved_searches")} + ${madeBefore("s", "briefings")} < ?3 ORDER BY s.created_at, s.id LIMIT ${SAVED_SEARCH_MAX}`;
 
 // What this isolate last read for each feed it served, for the outage case
 // only. Bounded; the oldest entries go first.
@@ -292,9 +314,10 @@ export async function readFeed(env: Env, id: string, secret: string, now = new D
       lastKnown.delete(id);
       return { state: "none" };
     }
-    const searches = kind === "watchlist" ? [] : ((await db.prepare(
-      "SELECT id, params, label, lang FROM saved_searches WHERE user_id = ? AND kind = ? AND (? = '' OR id = ?) ORDER BY created_at, id",
-    ).bind(row.user_id, FEED_SEARCH_KIND, row.search_id ?? "", row.search_id ?? "").all<SearchRef>()).results ?? []);
+    // A member's "all" feed lists the searches its allowance covers; every other feed, as before.
+    const searches = kind === "watchlist" ? [] : ((await (served && kind === "all"
+      ? db.prepare(FEED_SEARCHES_SERVED_SQL).bind(row.user_id, FEED_SEARCH_KIND, served.searches)
+      : db.prepare(FEED_SEARCHES_SQL).bind(row.user_id, FEED_SEARCH_KIND, row.search_id ?? "", row.search_id ?? "")).all<SearchRef>()).results ?? []);
     if (kind === "search" && !searches.length) {
       lastKnown.delete(id);
       return { state: "none" };

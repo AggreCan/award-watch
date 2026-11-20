@@ -723,8 +723,8 @@ async function eventContext(c: Context<AppEnv>, lang: Lang): Promise<{ lang: Lan
 // In a group (served: the pool the page read, and the account's searches past
 // its allowance), each feed past the account's allowance of the subscription's
 // feeds, and each search's feed whose search is past its own, is marked, as
-// readFeed answers them; the "all" feed counts the watches within the account's
-// allowance.
+// readFeed answers them; the "all" feed counts the searches and the watches
+// within the account's allowance, as readFeed lists them.
 async function calendarView(
   c: Context<AppEnv>, lang: Lang, who: Pick<Account, "userId" | "plan" | "group">, searches: SavedSearch[], feeds: FeedRow[],
   served: { pool: Pool; searchesPast: ReadonlySet<string> } | null = null,
@@ -752,8 +752,9 @@ async function calendarView(
   if (tenders.length || allFeed) {
     const watchesCap = served ? poolLine(served.pool, who, "watches", watchCap(who.plan)).allowance : undefined;
     const watches = allFeed ? await feedWatches(c.env, who.userId, who.plan, watchesCap).catch(() => null) : null;
+    const listed = served ? tenders.filter((s) => !served.searchesPast.has(s.id)) : tenders;
     const n = watches ? await feedSize(c.env, {
-      kind: "all", searches: tenders.map(({ id, params, label, lang: l }) => ({ id, params, label, lang: l })), watches,
+      kind: "all", searches: listed.map(({ id, params, label, lang: l }) => ({ id, params, label, lang: l })), watches,
     }, await eventContext(c, lang)) : null;
     rows.push({ kind: "all", searchId: null, label: t(lang, "calfeed.kind_all"), href: null, feed: cell(allFeed, n) });
   }

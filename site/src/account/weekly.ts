@@ -42,7 +42,7 @@ import { num, readRecords } from "../records_db";
 import { WEEK_DAYS, weekAnchor } from "./briefings";
 import { type Ceiling, type Files, type QueryCount, STOP_CODES, type Tally, afterSend, budgetStop, sendWithHeaders } from "./deliveries";
 import { WEEKLY_ENDING_MONTHS, type WatchGroup, type WeekFigures, siteLink, weeklyDigest } from "./digests";
-import { allowed, type Plan } from "./entitlements";
+import { allowed, type Plan, watchCap } from "./entitlements";
 import { fitDigestBlock, weekNotices } from "./fit_mail";
 import { RunPool } from "./pool";
 import { type RecordsWait, missingTable } from "./records_deliveries";
@@ -274,7 +274,7 @@ export async function runWeekly(
   o: {
     site: string; dataDate: string; now: Date; plans: Map<string, Plan>; room: number; capText: string; files: Files; stats: Stats;
     queries?: QueryCount; tally?: Tally; ceiling?: Ceiling;
-    // The run's groups (pool.ts RunPool), so a part after this one knows the group of an account read here first.
+    // The run's groups and their counts (pool.ts RunPool); a part run alone keeps its own.
     pool?: RunPool;
     report?: WeeklyReport;
   },
@@ -339,13 +339,16 @@ export async function runWeekly(
     for (; i < due.length; i++) {
       const a = due[i];
       if (pause()) break;
-      // Read through the run's pool so a later part knows the account's group; the weekly email itself counts nothing.
+      // Read through the run's pool, which keeps the account's group for its allowance below and for the parts after this one.
       const plan = await pool.plan(env, o.plans, { id: a.user_id, plan: a.plan, plan_until: a.plan_until }, now);
       const lang: Lang = a.lang === "fr" ? "fr" : "en";
       // The account's watches, on the ids the nightly's merges left, each read over the whole week; past the
-      // plan's figure (after a move to a smaller plan), the first ones by creation date only.
+      // plan's figure (after a move to a smaller plan), the first ones by creation date only; in a group, the first
+      // ones to the account's allowance of the subscription's figure (pool.ts), as the watch mail reads them, its
+      // claimed organization's beside them. Its other lists (the matching notices, the site's figures) are no
+      // account's items: nothing else here is counted.
       const listed = (await followAliases(env, a.user_id, await listWatches(env, a.user_id))).watches;
-      const watches = await coveredWatches(env, a.user_id, listed, plan);
+      const watches = await coveredWatches(env, a.user_id, listed, plan, await pool.allowance(env, a.user_id, "watches", watchCap(plan)));
       let groups: WatchGroup[] = [];
       let total = 0;
       if (watches.length) {

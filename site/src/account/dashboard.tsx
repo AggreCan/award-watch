@@ -91,25 +91,25 @@ import {
 import { MAX_Q } from "../search_db";
 import { rivalsOf, shareSegmentOf } from "../view_address";
 import { RADAR_PROV_ROWS_END_SQL, RADAR_PROV_TOTAL_SQL, RADAR_ROWS_END_SQL, RADAR_TOTAL_SQL, radarBinds, radarProvBinds } from "../records_tables";
-import { type KeyRow, listKeys } from "./api_keys";
+import { KEYS_MAX, type KeyRow, listKeys } from "./api_keys";
 import { keyUsage, nowOf } from "./api_usage";
 import { briefingLabel } from "./briefing_pages";
-import { type Briefing, briefingPath, listBriefings, readBriefing, weekAnchor } from "./briefings";
+import { type Briefing, briefingPath, listBriefings, readBriefing, sharedCap, weekAnchor } from "./briefings";
 import { buildContext, buildRef, buildSizeKey, buildTile, buildsOn, isBuildKind } from "./build_views";
 import { BOARD_NAME_MAX, anchorOf, boardLabels } from "./dashboard_add";
 import { ANALYTIC_BODIES, ROWS_MAX, analyticFit, analyticKey, analyticPlot, tileFit } from "./dashboard_fit";
 import { DASHBOARD_PATH, FIND_PATH, OPTS_MAX, STARTER_PATH, boardCap, boardPath, holdsDashboard, missingTiles, tileCap } from "./dashboard_rule";
 import { poolFullNotice } from "./seats_lines";
 import { EVENT_KEY, watchEventLines } from "./digests";
-import { allowed, matchCap, type Plan } from "./entitlements";
+import { allowed, matchCap, type Plan, savedViewCap, watchCap } from "./entitlements";
 import {
   CLAIM_BLOCKS, CLAIM_BUYERS_SQL, CLAIM_INSTRUMENTS_SQL, CLAIM_SEGMENTS_SQL, CLAIM_SHARE_LARGEST_SQL, CLAIM_SHARE_SQL, type Claim, type ClaimBlock,
   type ClaimFrame, checkOrganization, claimFrame, endingParams, isClaimBlock, readClaim, shareBinds, shareSegment,
 } from "./org_claim";
 import { ultraOnSale } from "./payments";
 import { builderOn } from "../plan";
-import { type PoolLine, groupIn, pastAllowance, poolLine, poolOf, pooled } from "./pool";
-import { poolOver } from "./pool_lines";
+import { type Pool, type PoolLine, groupIn, pastAllowance, poolLine, poolOf, pooled } from "./pool";
+import { PoolMark, poolOver } from "./pool_lines";
 import {
   BUYER_COUNTS_SQL, BUYER_NAME_SQL, KIND_SOURCES, ORG_COUNTS_SQL, ORG_NAME_SQL, type RecordsKind, SEGMENT_COUNTS_SQL, entityOf, isRecordsKind,
   missingTable,
@@ -120,7 +120,7 @@ import { newId } from "./secrets";
 import { type Account, csrfValid } from "./session";
 import { type EventKind, type EventRow, type EventsRead, eventIdentity, foundKey, listed, readEvents } from "./watch_events";
 import { watchLabel } from "./watch_mail";
-import { type Watch, listWatches } from "./watches";
+import { type Watch, listWatches, withinCap } from "./watches";
 
 // -- the kinds and the rules ------------------------------------------------------------
 
@@ -780,6 +780,7 @@ type Resolved = { shown: Shown; title: string; item: string | null; href: string
 // analytics table's contracts ending count from it, as the view's do).
 // builder: the analytics builder is the reader's (build_views.tsx buildsOn);
 // buyers: the buyers' list, read only for a page holding a builder's tile.
+// pool: for an account in a group only (tilePool).
 type Ctx = {
   lang: Lang; env: Env; who: Account; h: Holdings; today: string; clock: Clock; frame: ClaimFrame;
   open: () => Promise<TenderRow[] | null>;
@@ -787,7 +788,27 @@ type Ctx = {
   asOf?: string | null;
   builder: boolean;
   buyers: BuyerSummary[] | null;
+  pool?: TilePool;
 };
+
+// What the tiles of an account in a group read (pool.ts; the seats design's 3.3): the ids of its own items past
+// its allowance, its saved searches with its briefings (one figure), its saved views and its live keys, each by
+// creation (pastAllowance), and the watches its allowance covers, its claimed organization's beside them
+// (watches.ts withinCap, the claim as stored, as POOL_COUNTS_SQL counts it). Worked out from the one read of the
+// group's counts the page makes already (poolOf) and the rows readHoldings read: no statement of its own.
+// Undefined for an account in no group, whose tiles read every item they name, as before.
+type TilePool = { past: ReadonlySet<string>; watches: readonly Watch[] };
+
+function tilePool(h: Holdings, pool: Pool | null, who: Account): TilePool | undefined {
+  if (!pool) return undefined;
+  const allowance = (figure: "searches" | "watches" | "views" | "keys", cap: number) => poolLine(pool, who, figure, cap).allowance;
+  const past = new Set([
+    ...pastAllowance([...h.searches, ...h.briefings], allowance("searches", sharedCap(who.plan))),
+    ...pastAllowance(h.views, allowance("views", savedViewCap(who.plan))),
+    ...pastAllowance(h.keys.filter((k) => !k.revoked_at), allowance("keys", KEYS_MAX)),
+  ]);
+  return { past, watches: withinCap(h.watches, allowance("watches", watchCap(who.plan)), h.claim?.organizationId ?? null) };
+}
 
 const int = (v: unknown): number => num(v) ?? 0;
 const READ_BASE = "https://read.invalid";
@@ -929,11 +950,11 @@ function recordsJob(ctx: Ctx, s: SavedSearch, n: number): Job | null {
 }
 
 // The week's events of every watch: how many of each kind, then the newest,
-// as many as the tile holds, an event two watches reach once.
-function watchesJob(ctx: Ctx, n: number): Job {
+// as many as the tile holds, an event two watches reach once. watches: the
+// account's, or in a group the ones its allowance covers (tilePool).
+function watchesJob(ctx: Ctx, n: number, watches: readonly Watch[]): Job {
   const { lang } = ctx;
   const days = Array.from({ length: WATCH_DAYS }, (_, i) => addDays(ctx.today, -i));
-  const watches = ctx.h.watches;
   return {
     queries: [],
     extra: () => (watches.length ? readEvents(ctx.env, watches, days) : Promise.resolve(null)),
@@ -1281,6 +1302,7 @@ function matchesJob(ctx: Ctx, n: number): Job | null {
 }
 
 // Each live key's requests today, beside the plan's daily figure (api_keyed_spec.ts keyQuota), as many keys as the tile holds.
+// In a group, a key past the account's allowance carries the mark the keys page gives it (the API refuses it, so it counts none).
 function apiJob(ctx: Ctx, n: number): Job {
   const { lang } = ctx;
   const live = ctx.h.keys.filter((k) => !k.revoked_at);
@@ -1302,7 +1324,7 @@ function apiJob(ctx: Ctx, n: number): Job {
               <tbody>
                 {shown.map((k) => (
                   <tr>
-                    <td data-label={t(lang, "account.key_name")}>{k.name}<br /><span class="muted small mono">{`aw_${k.prefix}_`}</span></td>
+                    <td data-label={t(lang, "account.key_name")}>{k.name}<br /><span class="muted small mono">{`aw_${k.prefix}_`}</span>{ctx.pool?.past.has(k.id) ? <PoolMark lang={lang} /> : null}</td>
                     <td data-label={t(lang, "apiusage.tile_today")} class="num">{fmtInt(usage.get(k.id)?.today ?? 0, lang)}</td>
                   </tr>
                 ))}
@@ -1316,10 +1338,21 @@ function apiJob(ctx: Ctx, n: number): Job {
 }
 
 // A tile against what the account holds: its head and its reads at its size, or gone.
+//
+// For an account in a group (ctx.pool), a tile whose item is the account's own and past its allowance (a saved
+// search of any kind, a briefing, a saved view by its id) keeps its head and says so in place of its body, reading
+// nothing for it; the watches tile reads the watches the allowance covers, and the keys' tile marks a key past it.
+// The rest name no counted item, so the allowance does not touch them: a radar window, a block of the claimed
+// organization and the matching notices are the account's own reads; an analytics table (kind analytic), a view's
+// tile kept at its address, and a view of the analytics builder or its figure (kinds build and number) each hold a
+// view's ADDRESS, which any reader with the plan opens, and no saved view's id. A text tile is the reader's note.
 function resolve(ctx: Ctx, s: Shown): Resolved {
   const { lang, h } = ctx;
   const title = s.kind === "org" && isClaimBlock(s.ref) ? t(lang, "dash.kind_org", { block: t(lang, BLOCK_KEY[s.ref]) }) : t(lang, KIND_KEY[s.kind]);
   const gone = (href: string): Resolved => ({ shown: s, title, item: null, href, job: null });
+  // An item past the allowance: its head and the mark, no reads (pool.mark).
+  const past = (id: string) => !!ctx.pool?.past.has(id);
+  const pastTile = (item: string | null, href: string, head = title): Resolved => ({ shown: s, title: head, item, href, job: null, note: "pool.mark" });
   const search = (ok: (kind: string) => boolean) => h.searches.find((x) => x.id === s.ref && ok(x.kind));
   const n = s.kind === "view" || s.kind === "analytic" || s.kind === "text" || isBuildKind(s.kind) ? 0 : tileFit(s.kind, s.ref, s.w, s.h).rows;
   // An analytics table at a view's address: headed by the table's own title, opening its view at the table.
@@ -1331,14 +1364,17 @@ function resolve(ctx: Ctx, s: Shown): Resolved {
   switch (s.kind) {
     case "tenders": {
       const found = search((k) => k === "tenders");
+      if (found && past(found.id)) return pastTile(found.label, found.params);
       return found ? { shown: s, title, item: found.label, href: found.params, job: tendersJob(ctx, found, n) } : gone("/account/searches");
     }
     case "radar": {
-      const params = isWindow(s.ref) ? `/expiring/${s.ref}` : search((k) => k === "expiring")?.params;
+      const saved = isWindow(s.ref) ? null : search((k) => k === "expiring");
+      if (saved && past(saved.id)) return pastTile(saved.label, saved.params);
+      const params = isWindow(s.ref) ? `/expiring/${s.ref}` : saved?.params;
       if (!params) return gone("/account/searches");
       const url = new URL(params, READ_BASE);
       const window = (/^\/expiring\/(3m|6m|12m)$/.exec(url.pathname)?.[1] ?? "3m") as ExpiringWindow;
-      const item = isWindow(s.ref) ? t(lang, WINDOW_KEY[s.ref]) : search((k) => k === "expiring")!.label;
+      const item = isWindow(s.ref) ? t(lang, WINDOW_KEY[s.ref]) : saved!.label;
       return {
         shown: s, title, item, href: params,
         job: { queries: radarQueries(radarParams(window, ctx.today, readExpiringQuery(url)), n), draw: (rows) => radarBody(lang, rows, ctx.today, n) },
@@ -1346,11 +1382,14 @@ function resolve(ctx: Ctx, s: Shown): Resolved {
     }
     case "records": {
       const found = search(isRecordsKind);
+      if (found && past(found.id)) return pastTile(found.label, found.params);
       const job = found ? recordsJob(ctx, found, n) : null;
       return found && job ? { shown: s, title, item: found.label, href: found.params, job } : gone("/account/searches");
     }
     case "watches":
-      return { shown: s, title, item: null, href: "/account/watches", job: watchesJob(ctx, n) };
+      // In a group with watches and none of them covered: the mark, in place of the line that says it watches nothing.
+      if (ctx.pool && h.watches.length && !ctx.pool.watches.length) return pastTile(null, "/account/watches");
+      return { shown: s, title, item: null, href: "/account/watches", job: watchesJob(ctx, n, ctx.pool ? ctx.pool.watches : h.watches) };
     case "view": {
       // A view's tile from before the analytics tables: its view's first table, as an analytics table of it draws.
       // A saved view by its id: its name as the item and its address as saved (the saved views page moves a merged id).
@@ -1358,6 +1397,7 @@ function resolve(ctx: Ctx, s: Shown): Resolved {
         const saved = h.views.find((x) => x.id === s.ref);
         const v = saved ? viewRef(saved.address) : null;
         if (!saved || !v) return gone("/account/views");
+        if (past(saved.id)) return pastTile(saved.name, saved.address, t(lang, TABLE_TITLES[v.view][firstTable(v)]));
         const r = analytic(v, firstTable(v), null, saved.name, `${saved.address}#${anchorOf(firstTable(v))}`, "/account/views");
         // The reader's name for the view heads the tile, in place of the buyer's or organization's the read gives.
         const read = r.job;
@@ -1374,6 +1414,7 @@ function resolve(ctx: Ctx, s: Shown): Resolved {
     case "build":
     case "number": {
       // A view of the analytics builder, or its latest figure (build_views.tsx), read in the page's one records batch.
+      // Its ref is the view's address, not a saved view's id: no counted item, so a group's allowance never touches it.
       const b = buildTile({ lang, kind: s.kind, ref: s.ref, w: s.w, h: s.h, on: ctx.builder, today: ctx.today, asOf: () => ctx.asOf, buyers: ctx.buyers });
       return { shown: s, title: b.title, item: b.item, href: b.href, job: b.job, ...(b.note ? { note: b.note } : {}) };
     }
@@ -1381,6 +1422,7 @@ function resolve(ctx: Ctx, s: Shown): Resolved {
       return { shown: s, title, item: null, href: "", job: null };
     case "briefing": {
       const b = h.briefings.find((x) => x.id === s.ref);
+      if (b && past(b.id)) return pastTile(briefingLabel(lang, b), briefingPath(b));
       return b ? { shown: s, title, item: briefingLabel(lang, b), href: briefingPath(b), job: briefingJob(ctx, b, n) } : gone("/account/searches#briefings");
     }
     case "org": {
@@ -1433,8 +1475,8 @@ async function readAll(ctx: Ctx, list: readonly Resolved[]): Promise<Map<Resolve
   return out;
 }
 
-// What a page view and a tile's fragment both need: the context of the reads.
-async function contextOf(c: Context<AppEnv>, who: Account, h: Holdings, list: readonly Shown[]): Promise<Ctx> {
+// What a page view and a tile's fragment both need: the context of the reads (pool: tilePool's, for an account in a group).
+async function contextOf(c: Context<AppEnv>, who: Account, h: Holdings, list: readonly Shown[], pool?: TilePool): Promise<Ctx> {
   const stats = await loadStats(c.env).catch(() => null);
   const today = todayOf(stats?.data_as_of);
   let openList: Promise<TenderRow[] | null> | null = null;
@@ -1446,7 +1488,7 @@ async function contextOf(c: Context<AppEnv>, who: Account, h: Holdings, list: re
   return {
     lang: c.get("lang"), env: c.env, who, h, today, clock: clockOf(c.env), frame: claimFrame(today), org,
     open: () => (openList ??= loadOpenList(c.env).catch(() => null)),
-    builder, buyers,
+    builder, buyers, ...(pool ? { pool } : {}),
   };
 }
 
@@ -2072,8 +2114,8 @@ export async function dashPage(c: Context<AppEnv>, body: unknown, path = DASHBOA
 }
 
 // The tiles drawn: each resolved at its size and read, in reading order.
-async function drawTiles(c: Context<AppEnv>, who: Account, h: Holdings, list: readonly Shown[]): Promise<Drawn[]> {
-  const ctx = await contextOf(c, who, h, list);
+async function drawTiles(c: Context<AppEnv>, who: Account, h: Holdings, list: readonly Shown[], pool?: TilePool): Promise<Drawn[]> {
+  const ctx = await contextOf(c, who, h, list, pool);
   const resolved = stack(list.map(asTile)).map((t) => resolve(ctx, list.find((s) => s.id === t.id)!));
   const bodies = await readAll(ctx, resolved);
   return resolved.map((r) => ({ r, body: bodies.get(r) ?? null }));
@@ -2111,7 +2153,8 @@ export async function dashboardPage(c: Context<AppEnv>, who: Account, board: str
   // A dashboard the subscription has no room for reads and draws no tile.
   if (unavailable(h, pool)) return dashPage(c, boardUnavailableView(lang, who, { h, notice: noticeOf(0), boards, pool: pool! }), at);
   const { list, starter, keeping } = shownTiles(h);
-  const drawn = await drawTiles(c, who, h, list);
+  // Each tile's item held to the account's allowance, from the same read of the group's counts (an account in a group only).
+  const drawn = await drawTiles(c, who, h, list, tilePool(h, read, who));
   const notice = noticeOf(drawn.length);
   const builder = buildsOn(c.env, who.plan);
   return dashPage(c, dashboardView(lang, who, { drawn, h, starter, keeping, notice, cap, boards, ...(pool ? { pool } : {}), ...(builder ? { builder } : {}) }), at);
@@ -2137,7 +2180,7 @@ export async function tileFragment(c: Context<AppEnv>, who: Account, id: string)
   const tiles = w === undefined && hh === undefined ? list.map(asTile) : resize(list.map(asTile), id, w ?? at.w, hh ?? at.h);
   const sized = tiles.find((x) => x.id === id)!;
   const shown = { ...at, x: sized.x, y: sized.y, w: sized.w, h: sized.h };
-  const [d] = await drawTiles(c, who, h, [shown]);
+  const [d] = await drawTiles(c, who, h, [shown], tilePool(h, read, who));
   const lang = c.get("lang");
   const moves = moveTargets(tabsOf(lang, h, list.length), tileCap(who.plan));
   return c.html(<DashTile lang={lang} account={who} d={d} offer={stepsOf(tiles, id)} moves={moves} /> as any);

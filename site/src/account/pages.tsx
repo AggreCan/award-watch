@@ -1029,7 +1029,7 @@ export function keysView(
               <tbody>
                 {state.keys.map((k) => (
                   <tr>
-                    <td data-label={t(lang, "account.key_name")}>{k.name}{pool?.past.has(k.id) ? <PoolMark lang={lang} /> : null}</td>
+                    <td data-label={t(lang, "account.key_name")}>{k.name}</td>
                     <td data-label={t(lang, "account.col_prefix")} class="mono">aw_{k.prefix}</td>
                     <td data-label={t(lang, "account.col_created")} class="mono">{day(k.created_at)}</td>
                     <td data-label={t(lang, "account.col_last_used")} class="mono">{k.last_used_at ? day(k.last_used_at) : t(lang, "account.key_never")}</td>
@@ -1041,7 +1041,8 @@ export function keysView(
                       ) : (
                         <form method="post" action={`/account/keys/${k.id}/revoke`} class="account-inline">
                           <Csrf account={account} />
-                          <span>{t(lang, "account.key_active")}</span>
+                          {/* In a group, a key past the account's allowance is not served (the API answers it 403): its status says so. */}
+                          {pool?.past.has(k.id) ? <span class="muted">{t(lang, "pool.mark")}</span> : <span>{t(lang, "account.key_active")}</span>}
                           <button type="submit" class="btn-link">{t(lang, "account.revoke")}</button>
                         </form>
                       )}

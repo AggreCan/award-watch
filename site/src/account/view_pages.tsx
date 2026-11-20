@@ -240,15 +240,27 @@ export function viewsView(lang: Lang, account: Account, s: ViewsPageState) {
 // way to the page that manages them; one line on saving one while it holds
 // none. A plan that keeps none and holds none has no panel. A view of the
 // analytics builder opens there only while the builder is the reader's (builder).
-export const SavedViewsPanel: FC<{ lang: Lang; views: readonly SavedView[]; cap: number; builder?: boolean }> = ({ lang, views, cap, builder }) =>
-  cap || views.length ? (
-    <Panel title={t(lang, "views.title")} count={cap ? t(lang, "views.count", { n: fmtInt(views.length, lang), cap: fmtInt(cap, lang) }) : fmtInt(views.length, lang)}
+// In a group (pool), as on /account/views: the subscription's count, what it
+// holds with the account's own, the line on the account's views past its
+// allowance and the mark on each; an account in no group reads the panel it read.
+export type SavedViewsState = {
+  views: readonly SavedView[]; cap: number; builder?: boolean; pool?: { line: PoolLine; past: ReadonlySet<string> };
+};
+
+export const SavedViewsPanel: FC<{ lang: Lang } & SavedViewsState> = ({ lang, views, cap, builder, pool }) => {
+  const n = pool ? pool.line.total : views.length;
+  return cap || views.length ? (
+    <Panel title={t(lang, "views.title")} count={cap ? t(lang, "views.count", { n: fmtInt(n, lang), cap: fmtInt(cap, lang) }) : fmtInt(n, lang)}
       tools={<a href={VIEWS_PATH}>{t(lang, "views.manage")}</a>}>
+      {pool ? <PoolLines lang={lang} figure="views" line={pool.line} past={pool.past.size} /> : null}
       {views.length ? (
-        <ul class="view-list">{views.map((v) => <li>{v.kind !== "build" || builder ? <a href={v.address} rel="nofollow">{v.name}</a> : v.name}</li>)}</ul>
+        <ul class="view-list">{views.map((v) => (
+          <li>{v.kind !== "build" || builder ? <a href={v.address} rel="nofollow">{v.name}</a> : v.name}{pool?.past.has(v.id) ? <PoolMark lang={lang} /> : null}</li>
+        ))}</ul>
       ) : <p class="muted">{t(lang, "views.index_none")}</p>}
     </Panel>
   ) : null;
+};
 
 // -- the stop link's pages ---------------------------------------------------------------------
 

@@ -31,9 +31,10 @@
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
 import { checkOrganization, orgIdIn, readClaim } from "../account/org_claim";
-import { type SavedView, listViews } from "../account/saved_views";
+import { pastAllowance, poolLine, poolOf } from "../account/pool";
+import { listViews } from "../account/saved_views";
 import { readSession } from "../account/session";
-import { SavedViewsPanel } from "../account/view_pages";
+import { SavedViewsPanel, type SavedViewsState } from "../account/view_pages";
 import { savedViewCap } from "../account/entitlements";
 import { MONEY_SOURCES, SEGMENTS, SEGMENT_CODES } from "../constants";
 import { BUYER_ID_RE, SEGMENT_RE, loadBuyers, loadStats, type BuyerSummary, type OrgTotal } from "../data";
@@ -146,13 +147,21 @@ async function ownOrganization(c: Context<AppEnv>): Promise<{ id: string; name: 
 
 // The signed-in account's saved views, oldest first, and its plan's figure.
 // Null without a session and on any fault, the table not yet made included:
-// the panel is then left out.
-async function ownViews(c: Context<AppEnv>): Promise<{ views: SavedView[]; cap: number; builder: boolean } | null> {
+// the panel is then left out. For an account in a group, the subscription's
+// count with the account's own and its views past its allowance, from one
+// statement more (pool.ts poolOf, as the saved views page reads them); an
+// account in no group reads nothing more.
+async function ownViews(c: Context<AppEnv>): Promise<SavedViewsState | null> {
   try {
     const read = await readSession(c);
     if (read.state !== "ok") return null;
-    const views = await listViews(c.env, read.account.userId);
-    return views ? { views, cap: savedViewCap(read.account.plan), builder: builderOn(c.env) && allowsBuilder(read.account.plan) } : null;
+    const [views, pool] = await Promise.all([listViews(c.env, read.account.userId), poolOf(c.env, read.account)]);
+    if (!views) return null;
+    const cap = savedViewCap(read.account.plan);
+    const line = pool ? poolLine(pool, read.account, "views", cap) : null;
+    return {
+      views, cap, builder: builderOn(c.env) && allowsBuilder(read.account.plan), ...(line ? { pool: { line, past: pastAllowance(views, line.allowance) } } : {}),
+    };
   } catch {
     return null;
   }
@@ -319,7 +328,7 @@ export async function analyticsIndex(c: Context<AppEnv>): Promise<Response> {
           </ul>
         </Panel>
       ) : null}
-      {saved ? <SavedViewsPanel lang={lang} views={saved.views} cap={saved.cap} builder={saved.builder} /> : null}
+      {saved ? <SavedViewsPanel lang={lang} {...saved} /> : null}
       <Panel title={t(lang, "nav.buyers")} count={index ? fmtInt(buyers.length, lang) : undefined}>
         {index ? <BuyerList lang={lang} rows={buyers} /> : <BuyersUnavailable lang={lang} />}
       </Panel>

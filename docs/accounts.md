@@ -3087,10 +3087,11 @@ sent only for an account in a group, with the ids the session read or
 | The watch mail | the claimed organization's watch and the first watches up to the allowance (`coveredWatches`) | listed, no events | the same read |
 | Briefings | as the saved searches, one figure with them | passed over for the week | the same read |
 | Saved views by email | the views made before it fewer than the allowance | passed over for the period | the same read |
-| The weekly email | each person's own, not counted | | nothing |
+| The weekly email | the claimed organization's watch and the first watches up to the allowance, as the watch mail reads them; its matching notices and the site's figures are no account's items | not in the message | the same read |
 | An API key | the live keys of the accounts ahead and the account's own made before it fewer than 5 | 403, "This key is saved and unavailable until the subscription has room for it: its 5 keys are in use." | one statement (`KEY_SERVED_SQL`), for a member's key only, its answer kept with the key's last-known answer for 5 minutes (`KEY_SERVED_MS`) |
-| A calendar feed | the same rule for feeds; a search's feed also needs its search in service; the watchlist's watches to the allowance | answers as a feed on a plan without feeds does (the site's 404) | one statement (`FEED_SERVED_SQL`), for a member's feed only |
+| A calendar feed | the same rule for feeds; a search's feed also needs its search in service; the watches of the watchlist's and the "all" feed to the allowance, and the "all" feed's tender searches to the searches' allowance (`FEED_SEARCHES_SERVED_SQL`, sent in place of the plain read) | answers as a feed on a plan without feeds does (the site's 404); a search past it is left out of the "all" feed | one statement (`FEED_SERVED_SQL`), for a member's feed only |
 | A dashboard | the account's dashboards by creation (not by tab order) up to the allowance | its tab kept and marked; its page says so in place of its tiles and reads none; a tile of it is not drawn alone | `POOL_COUNTS_SQL`, one a page view |
+| A dashboard's tiles | a tile of a saved search, a briefing or a saved view (by its id) within the allowance; the watches tile reads the claimed organization's watch and the watches up to the allowance; the keys' tile lists every live key | the tile keeps its head and says "Saved, unavailable until there is room" in place of its body, and reads nothing for it (alone too); a watches tile with none covered says the same; a key past it is marked | the page's own `POOL_COUNTS_SQL` read, nothing more |
 
 The holder's items are always in service, so the run and the key and feed
 checks read nothing more for a holder; a page reads the group's counts for
@@ -3102,12 +3103,17 @@ saved searches and briefings; 12 are this account's."), each row past the
 allowance is marked "Saved, unavailable until there is room", and a line
 above the rows says how many are past it: `/account/searches` and its
 briefings and calendar feeds panels, `/account/watches` (with the watches'
-feed), `/account/views` (a view past it offers no email), `/account/keys`
-and the dashboard's tabs. The searches and watches pages' notices at the
-figure state the group's count too. New Dashboard and a new key or feed are
-offered while the subscription has room. A member reads the group's totals
-and its own counts, never another account's count by itself, and nothing of
-what another account keeps.
+feed), `/account/views` (a view past it offers no email), the Saved Views
+panel of `/analytics`, `/account/keys` (a key past it says so in its Status,
+in place of "In use") and the dashboard's tabs. Tiles of an analytics table,
+of a view kept at its address and of the analytics builder hold a view's
+address, not a counted item, so the allowance does not touch them. The
+searches page counts the "all" feed's events as the feed lists them. The
+searches and watches pages' notices at the figure state the group's count
+too. New Dashboard and a new key or feed are offered while the subscription
+has room. A member reads the group's totals and its own counts, never
+another account's count by itself, and nothing of what another account
+keeps.
 
 A person who leaves, is removed, or whose seat stops being covered is in no
 group from the next read: their things are under their own plan's figures
