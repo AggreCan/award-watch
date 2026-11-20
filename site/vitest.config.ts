@@ -62,6 +62,14 @@ export function workersPool() {
         // ships, so the "switch off" tests hold while the site runs with it
         // on; the "switch on" tests set it themselves (test/accounts-helpers.ts).
         ACCOUNTS_ENABLED: "false",
+        // The analytics builder and the landing page's band on it start off
+        // under test the same way: wrangler.jsonc ships both "on" since
+        // 2026-11-20, and with them on every page gains the rail's item, so
+        // the tests that hold pages as they are with the switches off keep
+        // their meaning; the tests of the builder and of the band set the
+        // switches themselves.
+        BUILDER: "off",
+        BUILDER_DEMO: "off",
         // The delivery job's daily ceiling (src/env.ts mailCeiling) starts off
         // under test the same way, so a run is held to it only where a test
         // sets the two figures (test/recs-ops.test.ts).

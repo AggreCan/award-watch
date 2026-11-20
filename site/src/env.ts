@@ -173,18 +173,20 @@ export interface Env {
   BRANDFETCH_CLIENT_ID?: string;
   // The landing page's band on the analytics builder (src/pages/landing.tsx
   // builderDemoOn): "on", with the accounts switch on too, shows it, its
-  // picture drawn from National Defence's buyer file. Anything else ("off" in
-  // wrangler.jsonc until the builder and the new dashboard are live): the
-  // landing page byte for byte as before, no buyer file read and no word of
-  // the builder.
+  // picture the builder's own view of National Defence, read with the
+  // builder's statements. It shows only while BUILDER is on as well.
+  // wrangler.jsonc ships "on" since 2026-11-20. Anything else: the landing
+  // page byte for byte as it is without the band, nothing more read and no
+  // word of the builder.
   BUILDER_DEMO?: string;
   // The analytics builder's switch (src/pages/builder.tsx builderOn): "on",
   // with the accounts switch on too, serves /analytics/build and its CSV,
   // links it from the analytics index and the rail, and adds its line to
-  // Ultra's plan card. Anything else ("off" in wrangler.jsonc until the
-  // operator has checked the first night's cubes): both addresses are the
-  // site's 404, nothing links them, no card names the builder and every
-  // page is byte for byte as before.
+  // Ultra's plan card. wrangler.jsonc ships "on" since 2026-11-20 (the first
+  // night's cubes and the statements' plans were checked on production, and
+  // the operator looked at it). Anything else: both addresses are the site's
+  // 404, nothing links them, no card names the builder and every page is
+  // byte for byte as it is without it.
   BUILDER?: string;
 
   // -- the live mail check (src/account/mail_check.ts, docs/mail.md) ----------

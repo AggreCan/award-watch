@@ -870,16 +870,16 @@ notices placed nowhere make up the rest.
 never a query, whose address is the view; under it, one chart and its table,
 the line naming the source, the period and the data date, and the view as a
 CSV file. It is Ultra's (the plan feature `builder`), behind a switch of its
-own, `BUILDER` in `site/wrangler.jsonc`: anything but `"on"`, or the accounts
+own, `BUILDER` in `site/wrangler.jsonc`, which ships `"on"` since 2026-11-20
+(the test suites start it `"off"`, `site/vitest.config.ts`): anything but `"on"`, or the accounts
 switch off, and `/analytics/build` and `/analytics/build.csv` are the site's
 404, nothing links them, no plan card names the builder and every other page
 is as it was. On, the rail's Browse group lists "Analytics builder" after
 "Analytics" with the Ultra chip, and the footer links it after "Analytics"
 (where the rail shows it; on a phone the rail's Browse group is hidden), the
-analytics index links it in its head, Ultra's plan card gains the line "Your
-own charts and tables, 20 fiscal years" (the figure read from `BUILD_YEARS`;
-the cards on `/pro`, the billing page, the tease panels and the landing
-page), the Ultra paragraph on `/pro` gains a sentence on the builder (its 20
+analytics index links it in its head, Ultra's plan card gains the line
+"Analytics builder: your charts and tables" (the cards on `/pro`, the
+billing page, the tease panels and the landing page), the Ultra paragraph on `/pro` gains a sentence on the builder (its 20
 fiscal years and its comparison of up to 5 buyers or organizations),
 the Methodology page's analytics section gains a paragraph, and a buyer's and an organization's
 analytics view give an Ultra reader "Open in the builder" (the same subject,

@@ -145,7 +145,8 @@ and a line of a narrow card wraps. `site/test/plans-swipe.test.ts` holds both.
 
 A band that shows the analytics builder and the dashboard at work, behind
 its own switch: `BUILDER_DEMO` in `site/wrangler.jsonc`, read by
-`builderDemoOn` in `landing.tsx`. It ships "off", and the band shows only
+`builderDemoOn` in `landing.tsx`. It ships "on" since 2026-11-20 (the test
+suites start it "off", `site/vitest.config.ts`), and the band shows only
 with "on" and the builder's own switch on too (`plan.ts builderOn`: `BUILDER`
 "on" with the accounts switch), so the page never pictures a builder a
 reader cannot open. With anything else the page is byte for byte as it is
@@ -243,13 +244,12 @@ dashboard, the tile's foot) and raised `LANDING_VERSION` to 7; the open
 menus and the plans' swipe on a phone came the same day under version 8. When the band
 is on for good, fold the mark into a new `LANDING_VERSION`.
 
-**Switching it on (the operator's step).** Together with the builder: in
-`site/wrangler.jsonc` set `"BUILDER": "on"` and `"BUILDER_DEMO": "on"`, and
-in `site/test/landing-builder.test.ts` change the test "ships \"off\"" to
-expect "on" (the other tests set the switches themselves); then deploy the
-site as usual (the deploy-site workflow, or the next nightly). The band
-shows once the night's cubes are on the records database. To take it off,
-set `BUILDER_DEMO` back to "off".
+**Switched on with the builder on 2026-11-20.** `site/wrangler.jsonc` holds
+`"BUILDER": "on"` and `"BUILDER_DEMO": "on"`; the test pool holds both "off"
+(`site/vitest.config.ts`), and `site/test/landing-builder.test.ts` holds
+both facts. The band shows while the night's cubes are on the records
+database. To take the band off, set `BUILDER_DEMO` back to "off" and deploy;
+to take the builder off with it, set `BUILDER` to "off" as well.
 
 ## The Ultra card's form
 

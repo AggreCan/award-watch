@@ -264,8 +264,8 @@
     "PRICE_ULTRA_MONTHLY_CAD": "38.99",
     "PRICE_ULTRA_YEARLY_CAD": "389.99",
     "FOLLOWS_PANEL": "on",
-    "BUILDER_DEMO": "off",
-    "BUILDER": "off",
+    "BUILDER_DEMO": "on",
+    "BUILDER": "on",
     "SEATS": "off",
     "WORKFLOW_REPO": "AggreCan/award-watch"
   },

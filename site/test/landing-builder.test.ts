@@ -1,6 +1,6 @@
 // The landing page's band on the analytics builder and the dashboard (src/pages/landing.tsx
 // BuildBand, docs/landing.md "The builder's band"): its switch, BUILDER_DEMO,
-// ships "off" and leaves the page byte for byte as it is without the band, as
+// ships "on" (the test pool starts it "off"); "off" leaves the page byte for byte as it is without the band, as
 // does "on" while the builder's own switch is off; with both on the band
 // shows once in each language, its picture the builder's own view of National
 // Defence's published contracts by fiscal year, read with the builder's
@@ -116,9 +116,13 @@ const PICTURE_KEYS: readonly Key[] = [
 ];
 
 describe("the switch", () => {
-  it("ships \"off\", and only \"on\" turns it on", () => {
+  it("ships \"on\" with the builder's own switch, starts \"off\" under test, and only \"on\" turns it on", () => {
+    // The site ships both switches on (since 2026-11-20); the test pool holds both off (vitest.config.ts), so
+    // every test that does not set them sees the pages without the builder.
+    expect(wrangler).toMatch(/"BUILDER_DEMO":\s*"on"/);
+    expect(wrangler).toMatch(/"BUILDER":\s*"on"/);
     expect((env as unknown as { BUILDER_DEMO?: string }).BUILDER_DEMO).toBe("off");
-    expect(wrangler).toMatch(/"BUILDER_DEMO":\s*"off"/);
+    expect((env as unknown as { BUILDER?: string }).BUILDER).toBe("off");
     expect(builderDemoOn({ BUILDER_DEMO: "on" })).toBe(true);
     for (const v of ["off", "", "On", "ON", "true", "1", undefined]) expect(builderDemoOn({ BUILDER_DEMO: v }), String(v)).toBe(false);
   });
