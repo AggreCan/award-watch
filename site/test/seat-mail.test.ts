@@ -338,19 +338,28 @@ function statementFailing(sql: string, fail: () => boolean): D1Database {
 // =====================================================================================
 
 describe("the part inside the run", () => {
-  it("gives the claim back when a send does not go: a refusal waits for the next run, a sending limit stops the run", async () => {
+  it("gives the claim back when a send does not go: a refusal waits for the next UTC day, a sending limit stops the run", async () => {
     const { holder, members, seats } = await subscription("refused", ["en", "en"]);
     await ACCOUNTS.prepare("UPDATE entitlements SET ends_at = ? WHERE user_id = ?").bind(T("11-09T12:00:00"), holder.id).run();
     const refusal = Object.assign(new Error("refused"), { code: "E_RECIPIENT_SUPPRESSED" });
     const refused = await run({ mail: fakeMail((to) => (to === members[0].email ? refusal : undefined)) });
     expect(refused.report).toMatchObject({ sent: 1, failed: 1, lost: 1 });
     expect(refused.stop).toBeNull();
-    expect(await seatRow(seats[0])).toMatchObject(untold(0));
+    // What it was told stays; told_at names the day it waits for, a date alone, never a time it was told.
+    expect(await seatRow(seats[0])).toMatchObject({ told: 1, told_at: "2026-11-10", ended_at: null });
     expect(await seatRow(seats[1])).toMatchObject({ told: 0, told_at: NOW.toISOString() });
-    // The next run tells it.
-    const next = await run();
-    expect(next.report).toMatchObject({ sent: 1, failed: 0 });
+    // The day's later runs read it no more: nothing tried, nothing counted failed.
+    for (const hour of ["17", "20", "23"]) {
+      const later = await run({ now: new Date(`${DAY}T${hour}:00:00.000Z`) });
+      expect(later.report, hour).toMatchObject({ sent: 0, failed: 0 });
+      expect(later.mail.handed, hour).toEqual([]);
+    }
+    // The next day's first run tells it, once.
+    const next = await run({ now: new Date("2026-11-10T15:00:00.000Z") });
+    expect(next.report).toMatchObject({ sent: 1, failed: 0, lost: 1 });
     expect(next.mail.to(members[0].email)).toHaveLength(1);
+    expect(await seatRow(seats[0])).toMatchObject({ told: 0, told_at: "2026-11-10T15:00:00.000Z" });
+    expect((await run({ now: new Date("2026-11-10T16:00:00.000Z") })).mail.handed).toEqual([]);
 
     const other = await subscription("limited", ["en", "en"]);
     await ACCOUNTS.prepare("UPDATE entitlements SET ends_at = ? WHERE user_id = ?").bind(T("11-09T12:00:00"), other.holder.id).run();
@@ -363,6 +372,34 @@ describe("the part inside the run", () => {
     for (const [k, id] of other.seats.entries()) expect(await seatRow(id)).toMatchObject(untold(k));
     expect(limited.tally.left).toBe(2);
     expect((await run()).report?.sent).toBe(2);
+  });
+
+  it("lets a refused \"ended\" wait for the next day, and tells the end of a seat whose \"back\" was refused that day", async () => {
+    const refusal = Object.assign(new Error("refused"), { code: "E_RECIPIENT_SUPPRESSED" });
+    // An end refused: told the next day, dated the seat's end.
+    const removed = await subscription("refused-ended", ["fr"]);
+    await removeSeat(ON() as never, removed.holder.id, removed.seats[0], new Date(T("11-09T10:00:00")));
+    const first = await run({ mail: fakeMail(() => refusal) });
+    expect(first.report).toMatchObject({ sent: 0, failed: 1 });
+    expect(await seatRow(removed.seats[0])).toMatchObject({ told: 1, told_at: "2026-11-10", ended_why: "removed" });
+    expect((await run({ now: new Date(T("11-09T20:00:00")) })).report).toMatchObject({ sent: 0, failed: 0 });
+    const told = await run({ now: new Date(T("11-10T15:00:00")) });
+    holdsNotice(one(told.mail, removed.members[0]), "fr", "ended", t("fr", "account.plan_free"), DAY);
+    // "back" refused, then the seat removed the same day: the date alone is never an end told, so the next day tells
+    // the end, and only the end.
+    const back = await subscription("refused-back", ["en"]);
+    await ACCOUNTS.prepare("UPDATE entitlements SET ends_at = ? WHERE user_id = ?").bind(T("11-08T12:00:00"), back.holder.id).run();
+    expect((await run({ now: new Date(T("11-08T16:00:00")) })).report?.lost).toBe(1);
+    await grant(back.holder.id, "ultra", { created: T("11-09T10:00:00") });
+    const refusedBack = await run({ mail: fakeMail(() => refusal) });
+    expect(refusedBack.report).toMatchObject({ sent: 0, failed: 1 });
+    expect(await seatRow(back.seats[0])).toMatchObject({ told: 0, told_at: "2026-11-10", ended_at: null });
+    await removeSeat(ON() as never, back.holder.id, back.seats[0], new Date(T("11-09T18:00:00")));
+    expect((await run({ now: new Date(T("11-09T19:00:00")) })).mail.handed).toEqual([]);
+    const ended = await run({ now: new Date(T("11-10T15:00:00")) });
+    expect(ended.report).toMatchObject({ sent: 1, ended: 1, back: 0 });
+    holdsNotice(one(ended.mail, back.members[0]), "en", "ended", t("en", "account.plan_free"), DAY);
+    expect((await run({ now: new Date(T("11-10T16:00:00")) })).mail.handed).toEqual([]);
   });
 
   it("stops at the room the run gives it and at the day's ceiling, the rest told by a later run", async () => {
@@ -408,7 +445,7 @@ describe("the part inside the run", () => {
   it("reads the seats with one statement under its limit, the accounts by their keys, and claims a seat by its key", async () => {
     const plan = async (sql: string, ...binds: unknown[]) =>
       ((await ACCOUNTS.prepare(`EXPLAIN QUERY PLAN ${sql}`).bind(...binds).all<{ detail: string }>()).results ?? []).map((r) => r.detail).join("\n");
-    const due = await plan(SEATS_DUE_SQL, SEATS_RUN_MAX, "0".repeat(32));
+    const due = await plan(SEATS_DUE_SQL, SEATS_RUN_MAX, "0".repeat(32), NOW.toISOString());
     expect(SEATS_DUE_SQL).toMatch(/ LIMIT \?1$/);
     // The seats table is read whole (its live rows and those of the last 30 days); each account by its key.
     expect(due).not.toMatch(/SCAN (m|h)\b/);

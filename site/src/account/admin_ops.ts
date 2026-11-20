@@ -15,8 +15,9 @@
 
 import { watchDetail } from "./watches";
 import type { Env } from "../env";
-import { type PaidPlan, entitlementWrites, missingTiers, planFor, withTiers } from "./entitlements";
-import { newId } from "./secrets";
+import { type PaidPlan, entitlementWrites, missingSeats, missingTiers, planFor, seatsReady, withTiers } from "./entitlements";
+import { GRANT_ENDS_SEAT_SQL, SEAT_WINDOW_DAYS } from "./seats";
+import { newId, plusDays } from "./secrets";
 import { revokeAllSessions } from "./session";
 
 // -- who may use the console ----------------------------------------------------------
@@ -155,21 +156,35 @@ async function refreshPlan(env: Env, userId: string, now: Date): Promise<void> {
 // "no_tiers": an Ultra grant on a database without entitlement_tiers, which
 // writes nothing (the batch is one transaction) and says which file to apply.
 // A grant of Ultra by hand works whether or not Ultra is on sale.
+//
+// seats: the seats table is on the database (the caller read the account's seat,
+// seats.ts memberSeatOf). The batch then also ends every live seat the account
+// holds (GRANT_ENDS_SEAT_SQL), so the grant and the seat's end are written
+// together or not at all; each seat ended writes the audit rows the console's End
+// this seat writes, on its holder and on the account, naming the operator alone.
+// ended: how many seats the grant ended (0 or 1).
 export async function grantPlan(
-  env: Env, userId: string, operatorId: string, plan: PaidPlan, endsAt: string | null, reference: string, now = new Date(),
-): Promise<"granted" | "no_tiers"> {
+  env: Env, userId: string, operatorId: string, plan: PaidPlan, endsAt: string | null, reference: string, now = new Date(), seats = false,
+): Promise<{ result: "granted"; ended: number } | { result: "no_tiers" }> {
   const db = env.ACCOUNTS!;
   const at = now.toISOString();
+  const writes = entitlementWrites(db, { id: newId(), userId, plan, source: "manual", startsAt: at, endsAt, reference, createdAt: at });
+  let done: D1Result[];
   try {
-    await db.batch(entitlementWrites(db, { id: newId(), userId, plan, source: "manual", startsAt: at, endsAt, reference, createdAt: at }));
+    done = await db.batch(seats ? [...writes, db.prepare(GRANT_ENDS_SEAT_SQL).bind(at, userId)] : writes);
   } catch (e) {
-    if (plan === "ultra" && missingTiers(e)) return "no_tiers";
+    if (plan === "ultra" && missingTiers(e)) return { result: "no_tiers" };
     throw e;
   }
+  const ended = seats ? ((done[done.length - 1]?.results ?? []) as { id: string; holder_id: string }[]) : [];
   await refreshPlan(env, userId, now);
   const end = endsAt ? `until ${endsAt.slice(0, 10)}` : "no end";
   await operatorAudit(env, userId, "operator_granted", operatorId, plan === "ultra" ? `ultra, ${end}` : end, now);
-  return "granted";
+  for (const seat of ended) {
+    await operatorAudit(env, seat.holder_id, "operator_seat_ended", operatorId, null, now);
+    await operatorAudit(env, userId, "operator_seat_ended", operatorId, null, now);
+  }
+  return { result: "granted", ended: ended.length };
 }
 
 // Pro by hand, as before Ultra.
@@ -230,7 +245,39 @@ export type Overview = {
   // delivery_runs exists.
   sent: number; failed: number; messages: number | null; bugs: { all: number; week: number } | null;
   audit: AuditRow[]; latestBugs: BugRow[] | null;
+  // The seats' signals, null while the seats table is not on the database.
+  seats?: SeatSignals | null;
 };
+
+// The seats' signals on the overview (the seats design's 5.7, slice E), counts
+// alone and no address: the live seats and the holders that give them, the
+// invitations open now, the joins of the last SEAT_WINDOW_DAYS (ended seats
+// counted, as the joins allowance counts them), and the browsers the browser
+// cap signed out in the last CAPPED_DAYS (the audit's "signed_out" rows of
+// detail "cap <n>", session.ts SESSIONS_MAX) with the accounts it signed out
+// CAPPED_ACCOUNT_MIN or more of, the design's mark of one sign-in shared by a
+// team, for the operator to read. Read whenever the seats table is on the
+// database, the seats' switch on or off; while it is not, nothing more is read.
+export type SeatSignals = { seats: number; holders: number; open: number; joins: number; capped: number; cappedAccounts: number };
+export const CAPPED_DAYS = 30;
+export const CAPPED_ACCOUNT_MIN = 10;
+
+// ?1 now, ?2 SEAT_WINDOW_DAYS ago. The live seats through idx_seats_member_live,
+// the open invitations through idx_seats_email (an open invitation keeps its
+// address); the joins read the table's rows, which the sweep holds to the live
+// ones and those of its last SEAT_KEEP_DAYS.
+export const SEAT_SIGNALS_SQL =
+  "SELECT (SELECT COUNT(*) FROM seats WHERE member_id IS NOT NULL AND ended_at IS NULL) AS seats, " +
+  "(SELECT COUNT(DISTINCT holder_id) FROM seats WHERE member_id IS NOT NULL AND ended_at IS NULL) AS holders, " +
+  "(SELECT COUNT(*) FROM seats WHERE email IS NOT NULL AND member_id IS NULL AND ended_at IS NULL AND expires_at > ?1) AS open, " +
+  "(SELECT COUNT(*) FROM seats WHERE joined_at > ?2) AS joins";
+
+// ?1 CAPPED_DAYS ago, ?2 CAPPED_ACCOUNT_MIN: the window's rows through idx_audit_at,
+// summed by account.
+export const CAP_SIGNALS_SQL =
+  "SELECT COALESCE(SUM(n), 0) AS capped, COALESCE(SUM(n >= ?2), 0) AS accounts FROM (" +
+  "SELECT user_id, SUM(CAST(substr(detail, 5) AS INTEGER)) AS n FROM audit " +
+  "WHERE at >= ?1 AND event = 'signed_out' AND detail LIKE 'cap %' GROUP BY user_id)";
 
 export const WEEK_DAYS = 7;
 export const OVERVIEW_AUDIT_ROWS = 20;
@@ -241,7 +288,13 @@ export async function overview(env: Env, now = new Date()): Promise<Overview> {
   const at = now.toISOString();
   const today = `${at.slice(0, 10)}T00:00:00.000Z`;
   const week = new Date(now.getTime() - WEEK_DAYS * 86_400_000).toISOString();
-  const { results: [counts, pro, subs, audit], tiers } = await withTiers(async (tiers) => ({ tiers, results: await db.batch([
+  // The session read that admitted the operator has asked planFor, which knows by now whether the table is there.
+  const seats = await seatsReady(env, now);
+  const signals = () => (seats ? [
+    db.prepare(SEAT_SIGNALS_SQL).bind(at, plusDays(now, -SEAT_WINDOW_DAYS)),
+    db.prepare(CAP_SIGNALS_SQL).bind(plusDays(now, -CAPPED_DAYS), CAPPED_ACCOUNT_MIN),
+  ] : []);
+  const { results: [counts, pro, subs, audit, seatRow, capRow], tiers } = await withTiers(async (tiers) => ({ tiers, results: await db.batch([
     db.prepare(
       "SELECT (SELECT COUNT(*) FROM users WHERE status = 'active') AS active, (SELECT COUNT(*) FROM users WHERE status = 'deleted') AS deleted, " +
       "(SELECT COUNT(*) FROM sessions WHERE revoked_at IS NULL AND expires_at > ?1) AS sessions, " +
@@ -263,8 +316,12 @@ export async function overview(env: Env, now = new Date()): Promise<Overview> {
     ).bind(at),
     db.prepare("SELECT COALESCE(status, 'none') AS status, COUNT(*) AS n FROM payment_customers GROUP BY 1 ORDER BY n DESC, status"),
     db.prepare("SELECT id, user_id, event, at, detail FROM audit ORDER BY id DESC LIMIT ?").bind(OVERVIEW_AUDIT_ROWS),
+    ...signals(),
   ]) }));
   const c = (counts.results?.[0] ?? {}) as Record<string, number>;
+  const s = (seatRow?.results?.[0] ?? {}) as Record<string, number>;
+  const k = (capRow?.results?.[0] ?? {}) as Record<string, number>;
+  const num = (v: unknown) => Number(v ?? 0) || 0;
   const byPlan = new Map(((pro.results ?? []) as { plan: string; source: string; n: number }[]).map((r) => [`${r.plan} ${r.source}`, r.n]));
   const blocked = await optional(async () => (await db.prepare("SELECT COUNT(*) AS n FROM account_blocks").first<{ n: number }>())?.n ?? 0);
   const messages = await optional(async () =>
@@ -283,6 +340,9 @@ export async function overview(env: Env, now = new Date()): Promise<Overview> {
     ultraManual: tiers ? byPlan.get("ultra manual") ?? 0 : null, ultraStripe: tiers ? byPlan.get("ultra stripe") ?? 0 : null,
     subscriptions: (subs.results ?? []) as { status: string; n: number }[],
     sent: c.sent ?? 0, failed: c.failed ?? 0, messages, bugs, audit: (audit.results ?? []) as AuditRow[], latestBugs,
+    seats: seats ? {
+      seats: num(s.seats), holders: num(s.holders), open: num(s.open), joins: num(s.joins), capped: num(k.capped), cappedAccounts: num(k.accounts),
+    } : null,
   };
 }
 
@@ -312,7 +372,11 @@ export const ACCOUNT_CSV_ROWS = 10_000;
 
 // The values each filter takes; anything else, "any" included, sets no
 // filter. subscription is Stripe's status as payment_customers stores it,
-// or none for an account with no row or no status.
+// or none for an account with no row or no status. seat: the account holds a
+// live seat (member), gives a live seat or an open invitation (holder, the
+// seats in use as the Seats page counts them), or neither (none); an account
+// that both holds a seat and gives one reads member, the side its plan is read
+// from. Offered only while the seats table is on the database (SEAT_ONLY).
 export const ACCOUNT_FILTERS = {
   plan: ["free", "pro", "ultra"],
   status: ["active", "deleted"],
@@ -320,13 +384,14 @@ export const ACCOUNT_FILTERS = {
   delivery: ["on", "off"],
   subscription: ["active", "trialing", "past_due", "unpaid", "incomplete", "incomplete_expired", "canceled", "paused", "none"],
   language: ["en", "fr"],
+  seat: ["holder", "member", "none"],
 } as const;
 
 export type AccountFilter = keyof typeof ACCOUNT_FILTERS;
 export const ACCOUNT_FILTER_NAMES = Object.keys(ACCOUNT_FILTERS) as AccountFilter[];
 
 export const ACCOUNT_SORTS = [
-  "address", "plan", "status", "blocked", "created", "sign_in", "searches", "delivery", "keys", "subscription", "language",
+  "address", "plan", "seat", "status", "blocked", "created", "sign_in", "searches", "delivery", "keys", "subscription", "language",
 ] as const;
 export type AccountSort = (typeof ACCOUNT_SORTS)[number];
 export type SortDir = "asc" | "desc";
@@ -338,6 +403,7 @@ export const DEFAULT_SORT: AccountSort = "created";
 const ORDER_BY: Record<AccountSort, Record<SortDir, string>> = {
   address: { asc: "email ASC, id ASC", desc: "email DESC, id DESC" },
   plan: { asc: "plan ASC, plan_until ASC, id ASC", desc: "plan DESC, plan_until DESC, id DESC" },
+  seat: { asc: "seat ASC, id ASC", desc: "seat DESC, id DESC" },
   status: { asc: "status ASC, id ASC", desc: "status DESC, id DESC" },
   blocked: { asc: "blocked_at ASC, id ASC", desc: "blocked_at DESC, id DESC" },
   created: { asc: "created_at ASC, id ASC", desc: "created_at DESC, id DESC" },
@@ -364,13 +430,19 @@ const oneOf = <T extends string>(list: readonly T[], v: string | undefined): T |
 // default key newest first, every other key ascending.
 export const firstDir = (sort: AccountSort): SortDir => (sort === DEFAULT_SORT ? "desc" : "asc");
 
+// The filter and the sort key that exist only while the seats table is on the database.
+export const SEAT_ONLY = { filter: "seat", sort: "seat" } as const;
+
 // The table's parameters from the request's query. Every value is checked
 // against the lists above, and one that is not on them reads as unset. q, an
-// address's start, is the only text, and it is bound as a LIKE pattern.
-export function readAccountQuery(get: (name: string) => string | undefined): AccountQuery {
+// address's start, is the only text, and it is bound as a LIKE pattern. seats:
+// the seats table is on the database; without it the seat filter and sort read
+// as unset, as a value off the lists does.
+export function readAccountQuery(get: (name: string) => string | undefined, seats = true): AccountQuery {
   const filters = {} as Record<AccountFilter, string | null>;
-  for (const name of ACCOUNT_FILTER_NAMES) filters[name] = oneOf(ACCOUNT_FILTERS[name], get(name));
-  const sort = oneOf(ACCOUNT_SORTS, get("sort")) ?? DEFAULT_SORT;
+  for (const name of ACCOUNT_FILTER_NAMES) filters[name] = !seats && name === SEAT_ONLY.filter ? null : oneOf(ACCOUNT_FILTERS[name], get(name));
+  const asked = oneOf(ACCOUNT_SORTS, get("sort"));
+  const sort = (asked === SEAT_ONLY.sort && !seats ? null : asked) ?? DEFAULT_SORT;
   const rawPage = get("page") ?? "";
   return {
     q: (get("q") ?? "").trim().toLowerCase().slice(0, 254),
@@ -384,7 +456,16 @@ export function readAccountQuery(get: (name: string) => string | undefined): Acc
 export type AccountListRow = {
   id: string; email: string; created_at: string; lang: string; status: string; plan: string; plan_until: string | null;
   blocked_at: string | null; last_sign_in: string | null; searches: number; delivering: number; live_keys: number; sub_status: string | null;
+  // holder, member or none (ACCOUNT_FILTERS.seat); none for every account while the seats table is not on the database.
+  seat: string;
 };
+
+// The account's side of a seat, as ACCOUNT_FILTERS.seat says it: a live seat it holds through
+// idx_seats_member_live, else a live seat or open invitation it gives through idx_seats_holder (?1 now).
+const SEAT_SIDE =
+  "CASE WHEN EXISTS (SELECT 1 FROM seats sm WHERE sm.member_id = u.id AND sm.ended_at IS NULL) THEN 'member' " +
+  "WHEN EXISTS (SELECT 1 FROM seats sh WHERE sh.holder_id = u.id AND sh.ended_at IS NULL AND (sh.member_id IS NOT NULL OR sh.expires_at > ?1)) " +
+  "THEN 'holder' ELSE 'none' END";
 
 // One row per account, ?1 the moment. The plan is the deciding entitlement
 // row's, as planFromRows picks it, under the overview's rule for Pro now (an
@@ -392,11 +473,13 @@ export type AccountListRow = {
 // Ultra tier). The last sign-in is the newest session's start, so an account
 // whose sessions have all been swept (90 days after they end) shows none. A
 // database without account_blocks reads every account as not blocked, as the
-// rest of the console does; one without entitlement_tiers reads Ultra as Pro.
-const accountsWith = (blocks: boolean, tiers: boolean) =>
+// rest of the console does; one without entitlement_tiers reads Ultra as Pro;
+// one without seats reads every account's seat as none, reading nothing for it.
+const accountsWith = (blocks: boolean, tiers: boolean, seats: boolean) =>
   "WITH a AS (SELECT u.id, u.email, u.created_at, u.lang, u.status, " +
   `CASE WHEN u.status = 'active' AND e.plan = 'pro' THEN ${tiers ? "COALESCE(t.tier, 'pro')" : "'pro'"} ELSE 'free' END AS plan, ` +
   "CASE WHEN u.status = 'active' AND e.plan = 'pro' THEN e.ends_at END AS plan_until, " +
+  `${seats ? SEAT_SIDE : "'none'"} AS seat, ` +
   "b.created_at AS blocked_at, p.status AS sub_status, " +
   "(SELECT MAX(s.created_at) FROM sessions s WHERE s.user_id = u.id) AS last_sign_in, " +
   "(SELECT COUNT(*) FROM saved_searches q WHERE q.user_id = u.id) AS searches, " +
@@ -414,51 +497,57 @@ const accountsWith = (blocks: boolean, tiers: boolean) =>
 const ACCOUNT_WHERE =
   "WHERE (?2 IS NULL OR email LIKE ?2 ESCAPE '\\') AND (?3 IS NULL OR plan = ?3) AND (?4 IS NULL OR status = ?4) " +
   "AND (?5 IS NULL OR (blocked_at IS NOT NULL) = (?5 = 'yes')) AND (?6 IS NULL OR (delivering > 0) = (?6 = 'on')) " +
-  "AND (?7 IS NULL OR COALESCE(sub_status, 'none') = ?7) AND (?8 IS NULL OR lang = ?8) ";
+  "AND (?7 IS NULL OR COALESCE(sub_status, 'none') = ?7) AND (?8 IS NULL OR lang = ?8) AND (?9 IS NULL OR seat = ?9) ";
 
 const accountBinds = (a: AccountQuery, now: Date) => {
   const f = a.filters;
-  return [now.toISOString(), a.q ? likePrefix(a.q) : null, f.plan, f.status, f.blocked, f.delivery, f.subscription, f.language];
+  return [now.toISOString(), a.q ? likePrefix(a.q) : null, f.plan, f.status, f.blocked, f.delivery, f.subscription, f.language, f.seat];
 };
 
-// The accounts statements with both optional tables, then without whichever
-// the database lacks (entitlement_tiers through withTiers, account_blocks here).
-async function withBlocks<T>(run: (head: string) => Promise<T>): Promise<T> {
+// The accounts statements with every optional table, then without whichever
+// the database lacks (entitlement_tiers through withTiers, account_blocks here;
+// seats as the caller found it, seatsReady).
+async function withBlocks<T>(seats: boolean, run: (head: string) => Promise<T>): Promise<T> {
   return withTiers(async (tiers) => {
     try {
-      return await run(accountsWith(true, tiers));
+      return await run(accountsWith(true, tiers, seats));
     } catch (e) {
-      if (missingTable(e) && !missingTiers(e)) return run(accountsWith(false, tiers));
+      if (missingTable(e) && !missingTiers(e) && !missingSeats(e)) return run(accountsWith(false, tiers, seats));
       throw e;
     }
   });
 }
 
-export type AccountsPage = { rows: AccountListRow[]; total: number; page: number; pages: number };
+// seats: the seats table is on the database (seatsReady): the Seat column and its filter.
+export type AccountsPage = { rows: AccountListRow[]; total: number; page: number; pages: number; seats: boolean };
 
 // The page asked for, in one batch with the count. A page past the last (an
 // old link, a hand-edited number) shows the last, as the search page does.
-export async function accountsPage(env: Env, a: AccountQuery, now = new Date()): Promise<AccountsPage> {
+// seats: the seats table is on the database; read by the caller, whose query
+// already holds no seat filter or sort without it (readAccountQuery).
+export async function accountsPage(env: Env, a: AccountQuery, now = new Date(), seats = false): Promise<AccountsPage> {
   const db = env.ACCOUNTS!;
   const binds = accountBinds(a, now);
-  return withBlocks(async (head) => {
+  return withBlocks(seats, async (head) => {
     const select = (page: number) =>
-      db.prepare(`${head}SELECT * FROM a ${ACCOUNT_WHERE}ORDER BY ${ORDER_BY[a.sort][a.dir]} LIMIT ?9 OFFSET ?10`)
+      db.prepare(`${head}SELECT * FROM a ${ACCOUNT_WHERE}ORDER BY ${ORDER_BY[a.sort][a.dir]} LIMIT ?10 OFFSET ?11`)
         .bind(...binds, ACCOUNT_PAGE_SIZE, (page - 1) * ACCOUNT_PAGE_SIZE);
     const [count, first] = await db.batch([db.prepare(`${head}SELECT COUNT(*) AS n FROM a ${ACCOUNT_WHERE}`).bind(...binds), select(a.page)]);
     const total = (count.results?.[0] as { n: number } | undefined)?.n ?? 0;
     const pages = Math.max(1, Math.min(Math.ceil(total / ACCOUNT_PAGE_SIZE), ACCOUNT_MAX_PAGE));
     const page = Math.min(a.page, pages);
     const rows = page === a.page ? first.results ?? [] : (await select(page).all()).results ?? [];
-    return { rows: rows as AccountListRow[], total, page, pages };
+    return { rows: rows as AccountListRow[], total, page, pages, seats };
   });
 }
 
-// The same rows for the CSV, from the first, at most ACCOUNT_CSV_ROWS.
-export async function accountsForCsv(env: Env, a: AccountQuery, now = new Date()): Promise<AccountListRow[]> {
+// The same rows for the CSV, from the first, at most ACCOUNT_CSV_ROWS. Its
+// columns are ACCOUNT_CSV_HEAD's (admin.tsx); the seat filter narrows its rows
+// as it narrows the page's.
+export async function accountsForCsv(env: Env, a: AccountQuery, now = new Date(), seats = false): Promise<AccountListRow[]> {
   const db = env.ACCOUNTS!;
-  return withBlocks(async (head) =>
-    (await db.prepare(`${head}SELECT * FROM a ${ACCOUNT_WHERE}ORDER BY ${ORDER_BY[a.sort][a.dir]} LIMIT ?9`)
+  return withBlocks(seats, async (head) =>
+    (await db.prepare(`${head}SELECT * FROM a ${ACCOUNT_WHERE}ORDER BY ${ORDER_BY[a.sort][a.dir]} LIMIT ?10`)
       .bind(...accountBinds(a, now), ACCOUNT_CSV_ROWS).all<AccountListRow>()).results ?? []);
 }
 

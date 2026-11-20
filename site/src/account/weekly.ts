@@ -349,6 +349,10 @@ export async function runWeekly(
       // account's items: nothing else here is counted.
       const listed = (await followAliases(env, a.user_id, await listWatches(env, a.user_id))).watches;
       const watches = await coveredWatches(env, a.user_id, listed, plan, await pool.allowance(env, a.user_id, "watches", watchCap(plan)));
+      // In a group, the account's watches past its allowance are said in one line (pool.over); an account in no
+      // group is never given it, so its message keeps every byte. Counted from the two lists above: nothing read.
+      const unavailable = pool.group(a.user_id) && listed.length > watches.length
+        ? { n: listed.length - watches.length, cap: watchCap(plan) } : null;
       let groups: WatchGroup[] = [];
       let total = 0;
       if (watches.length) {
@@ -391,6 +395,7 @@ export async function runWeekly(
       const message = weeklyDigest({
         lang, to: a.email, site, dataDate, address, stopUrl: siteLink(site, `/account/stop?e=${a.user_id}&t=${secret}`, lang),
         watches: { groups, total, watched: watches.length }, figures, pro: allowed({ plan }, "watch_mail"), matches,
+        ...(unavailable ? { unavailable } : {}),
       });
       const result = await sendWithHeaders(env, site, message);
       if (result.sent) {

@@ -1407,6 +1407,9 @@ export interface WeeklyDigest {
   pro: boolean;
   // The week's matching notices (fit_mail.ts), after the watches or the figures.
   matches?: DigestMatches | null;
+  // For an account in a group (pool.ts) whose watches the subscription has no room for: how many are saved and
+  // unavailable, and the plan's figure, said in one line after the lead (pool.over); absent for any other account.
+  unavailable?: { n: number; cap: number };
 }
 
 // The figures in the order the message lists them, each with its list on the site.
@@ -1435,6 +1438,16 @@ export function weeklyDigest(o: WeeklyDigest): DigestMessage {
   const text: string[] = [];
   let subject: string;
   let pre: string;
+  // The pages the account follows that the subscription has no room for, as the watches page says it (pool.over):
+  // after the lead, which counts the pages covered alone; for an account in a group only.
+  const u = o.unavailable;
+  const over = u && u.n > 0
+    ? tn(lang, "pool.over_one", "pool.over", u.n, { n: n(u.n), things: t(lang, "pool.f_watches"), cap: n(u.cap) }) : null;
+  const sayOver = () => {
+    if (!over) return;
+    html.push(para(escapeHtml(over)));
+    text.push(over);
+  };
 
   if (total > 0 && groups.length) {
     const title = t(lang, "weekly.title_watch");
@@ -1443,6 +1456,7 @@ export function weeklyDigest(o: WeeklyDigest): DigestMessage {
       : tn(lang, "weekly.lead_one", "weekly.lead_many", total, { n: n(total), w: n(groups.length), all: n(watched) });
     html.push(h1(title), para(escapeHtml(span), true), para(escapeHtml(lead)));
     text.push(`${title}\n${span}`, lead);
+    sayOver();
     const lines = groups.slice(0, WEEKLY_LINES).map((g) => ({
       head: `${g.label} · ${t(lang, WATCH_KIND_KEY[g.kind])}`, href: link(g.path),
       kinds: g.events.filter((e) => e.n > 0).map((e) => t(lang, "weekly.kind_n", { kind: t(lang, EVENT_KEY[e.kind]), n: n(e.n) })).join(", "),
@@ -1469,11 +1483,13 @@ export function weeklyDigest(o: WeeklyDigest): DigestMessage {
       const quiet = tn(lang, "weekly.quiet_one", "weekly.quiet_many", watched, { all: n(watched) });
       html.push(para(inkLink(watchesPage, quiet)));
       text.push(linkText(quiet, watchesPage));
-    } else {
+    } else if (!over) {
       const follow = t(lang, "weekly.follow_none");
       html.push(para(escapeHtml(follow)));
       text.push(follow);
     }
+    // An account whose every page waits for room follows pages still: the line in place of the invitation to follow one.
+    sayOver();
     const shown = WEEK_FIGURES.flatMap((f) => {
       const v = o.figures[f.key];
       return v === null ? [] : [{ label: tn(lang, f.one, f.many, v, { n: n(v), ...f.vars }), href: link(f.path) }];

@@ -157,6 +157,22 @@ describe.each(LANGS)("every message, in %s", (lang) => {
     checkMessage(await viaLogSender(partial), shapeOf("weekly", "weekly email, one figure", SITE), lang);
   });
 
+  it("the weekly email of a member whose watches wait for room: the line after the lead, or in place of the invitation to follow", async () => {
+    // pool.over, as the watches page says it, for an account in a group (weekly.ts); 1 and 2 pages, news and none.
+    const cases: [string, Parameters<typeof weeklyInput>[1], number][] = [
+      ["news on the pages covered, 2 waiting", {}, 2], ["the site's week, 3 pages covered, 1 waiting", { news: false, watched: 3 }, 1],
+      ["the site's week, none covered, 2 waiting", { news: false, watched: 0 }, 2],
+    ];
+    for (const [name, o, n] of cases) {
+      const m = weeklyDigest({ ...weeklyInput(lang, o), to: newEmail(`weekly-pool-${lang}`), unavailable: { n, cap: 100 } });
+      const line = t(lang, n === 1 ? "pool.over_one" : "pool.over", { n, things: t(lang, "pool.f_watches"), cap: 100 });
+      expect(nbsp(m.text), name).toContain(nbsp(line));
+      // Following none of the covered pages, the account still follows pages: no invitation to follow one.
+      if (o?.watched === 0) expect(nbsp(m.text), name).not.toContain(nbsp(t(lang, "weekly.follow_none")));
+      checkMessage(await viaLogSender(m), shapeOf("weekly", `weekly email, ${name}`, SITE), lang);
+    }
+  });
+
   it("the weekly email with the week's matching notices: the figures or the watches' news, Free and Pro", async () => {
     for (const plan of ["free", "pro"] as const) {
       const matches = matchesInput(lang, plan, 12);

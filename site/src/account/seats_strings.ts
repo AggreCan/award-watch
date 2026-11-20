@@ -332,6 +332,48 @@ export const SEATS_STRINGS = {
     fr: "Rien n'a changé : ce siège ou cette invitation n'est plus ouvert.",
   },
 
+  // -- slice E: the console's signals (admin.tsx, admin_ops.ts overview and accountsPage) ---------------------------------
+  // The overview's panel, counts alone, whenever the seats table is on the database: {n} the window in days
+  // (SEAT_WINDOW_DAYS for the joins, CAPPED_DAYS for the browsers), {min} CAPPED_ACCOUNT_MIN.
+  "admin.panel_signals": { en: "Seats and Signed-In Browsers", fr: "Sièges et navigateurs connectés" },
+  "admin.overview_seats": { en: "Seats taken now", fr: "Sièges occupés maintenant" },
+  "admin.overview_holders": { en: "Subscriptions with a seat taken", fr: "Abonnements dont un siège est occupé" },
+  "admin.overview_open": { en: "Invitations open now", fr: "Invitations ouvertes maintenant" },
+  "admin.overview_joins": { en: "Joins, last {n} days", fr: "Arrivées, {n} derniers jours" },
+  "admin.overview_capped": { en: "Browsers signed out by the cap, last {n} days", fr: "Navigateurs déconnectés par la limite, {n} derniers jours" },
+  "admin.overview_capped_accounts": {
+    en: "Accounts with {min} or more of them, last {n} days",
+    fr: "Comptes qui en comptent {min} ou plus, {n} derniers jours",
+  },
+  // The accounts table's Seat column and its filter's three values (admin_ops.ts ACCOUNT_FILTERS.seat).
+  "admin.col_seat": { en: "Seat", fr: "Siège" },
+  "admin.seat_side_holder": { en: "Gives seats", fr: "Donne des sièges" },
+  "admin.seat_side_member": { en: "Holds a seat", fr: "Occupe un siège" },
+  "admin.seat_side_none": { en: "None", fr: "Aucun" },
+  // The grant to an account that holds a seat: its confirmation ({holder} the subscription's holder's address,
+  // linked to its console page; {plan} the plan granted), the refusal when the seat changed meanwhile, and the notices.
+  "admin.grant_seat_title": { en: "Grant a Plan to an Account in a Seat", fr: "Accorder un forfait à un compte qui occupe un siège" },
+  "admin.grant_seat_lead": {
+    en: "This account holds a seat on another account's subscription. An account with a plan of its own holds no seat, so the grant ends the seat in the same step.",
+    fr: "Ce compte occupe un siège de l'abonnement d'un autre compte. Un compte qui a son propre forfait n'occupe aucun siège; l'octroi met donc fin au siège du même coup.",
+  },
+  "admin.grant_seat_holder": { en: "The seat is on the subscription of {holder}.", fr: "Le siège relève de l'abonnement de {holder}." },
+  "admin.grant_seat_ends": {
+    en: "The grant gives this account {plan} of its own and ends the seat at once, so the subscription has a seat free again.",
+    fr: "L'octroi donne à ce compte son propre forfait {plan} et met fin au siège aussitôt; l'abonnement a donc de nouveau un siège libre.",
+  },
+  "admin.grant_seat_told": {
+    en: "Nothing the account keeps is deleted. The seat notices tell the person the seat has ended, as when a seat is ended here.",
+    fr: "Rien de ce que garde le compte n'est supprimé. Les avis de siège indiquent à la personne que le siège a pris fin, comme lorsqu'un siège est terminé ici.",
+  },
+  "admin.grant_seat_button": { en: "Grant the plan and end the seat", fr: "Accorder le forfait et mettre fin au siège" },
+  "admin.err_seat_changed": {
+    en: "The account's seat changed after this page was drawn. Read the page again before you confirm.",
+    fr: "Le siège du compte a changé après l'affichage de cette page. Relisez la page avant de confirmer.",
+  },
+  "admin.msg_granted_seat": { en: "Pro granted. The account's seat has ended.", fr: "Pro accordé. Le siège du compte a pris fin." },
+  "admin.msg_granted_ultra_seat": { en: "Ultra granted. The account's seat has ended.", fr: "Ultra accordé. Le siège du compte a pris fin." },
+
   // -- slice D: the seat notices (seat_mail.ts seatNotice) and the holder's lines before the act -------------------------
   // One message to a seat's member when what the seat gives changes, in the member's mail language. The subject is
   // the heading too. {plan} the plan the account is on now (account.plan_free, pro.tag, ultra.tag), {date} the day

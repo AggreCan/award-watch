@@ -10,12 +10,16 @@
 //      memory), and its address is listed;
 //   5. when ACCESS_AUD is set: the token's address is the session's.
 //
-//   GET  /admin                                        counts, the last audit events, the search box (?q=),
+//   GET  /admin                                        counts (the seats' too, whenever their table is on the
+//                                                      database), the last audit events, the search box (?q=),
 //                                                      the newest corrections and merge reports (forms database)
-//   GET  /admin/accounts                               every account, filtered, sorted, 50 to a page
+//   GET  /admin/accounts                               every account, filtered, sorted, 50 to a page (a Seat column
+//                                                      and filter whenever the seats table is on the database)
 //   GET  /admin/accounts.csv                           the same view as CSV, at most 10,000 rows
 //   GET  /admin/users/:id                              one account: rows, plan, subscription, activity, actions
-//   POST /admin/users/:id/grant                        Pro or Ultra by hand (end date optional, reference required)
+//   POST /admin/users/:id/grant                        Pro or Ultra by hand (end date optional, reference required);
+//                                                      for an account that holds a seat, first a page that says the
+//                                                      grant ends it (confirm=yes and the seat's id), then both at once
 //   POST /admin/users/:id/entitlements/:eid/revoke     revoke one row
 //   POST /admin/users/:id/sign-out                     revoke every session
 //   POST /admin/users/:id/unblock                      lift a block
@@ -66,10 +70,10 @@ import {
 } from "./announce";
 import {
   type AccountFilter, type AccountListRow, type AccountQuery, type AccountSort, type AccountsPage, type BlockRow, type Overview,
-  type UserDetail, type UserHit, type UserRow, ACCOUNT_CSV_ROWS, ACCOUNT_FILTERS, ACCOUNT_FILTER_NAMES, ACCOUNT_MAX_PAGE,
-  ACCOUNT_PAGE_SIZE, DEFAULT_SORT, ID_RE, USER_DELIVERY_ROWS, WEEK_DAYS, accountsForCsv, accountsPage, blockAccount, changeAddress,
-  findUsers, firstDir, grantPlan, isBlocked, operatorAudit, operatorEmails, overview, readAccountQuery, revocable, revokeEntitlement,
-  unblockAccount, userDetail,
+  type SeatSignals, type UserDetail, type UserHit, type UserRow, ACCOUNT_CSV_ROWS, ACCOUNT_FILTERS, ACCOUNT_FILTER_NAMES, ACCOUNT_MAX_PAGE,
+  ACCOUNT_PAGE_SIZE, CAPPED_ACCOUNT_MIN, CAPPED_DAYS, DEFAULT_SORT, ID_RE, SEAT_ONLY, USER_DELIVERY_ROWS, WEEK_DAYS, accountsForCsv,
+  accountsPage, blockAccount, changeAddress, findUsers, firstDir, grantPlan, isBlocked, operatorAudit, operatorEmails, overview,
+  readAccountQuery, revocable, revokeEntitlement, unblockAccount, userDetail,
 } from "./admin_ops";
 import { type LiveSubscription, type PaidCharge, operatorStripe } from "./admin_stripe";
 import { endForDeletion } from "./billing";
@@ -81,7 +85,8 @@ import { CLAIM_TOP_N, type Claim, type ClaimOverview, claimDetail, claimOverview
 import { planLabel } from "./pages";
 import { deleteAccount } from "./routes";
 import {
-  type AccountSeats, type ConsoleSeat, type HeldSeat, SEAT_KEEP_DAYS, consoleSeat, operatorCancelInvitation, operatorEndSeat, seatsOfAccount, seatsOn,
+  type AccountSeats, type ConsoleSeat, type HeldSeat, type MemberSeat, SEAT_KEEP_DAYS, SEAT_WINDOW_DAYS, consoleSeat, memberSeatOf,
+  operatorCancelInvitation, operatorEndSeat, seatsOfAccount, seatsOn,
 } from "./seats";
 import {
   MAIL_CHECK_TEMPLATES, type MailCheckOutcome, type MailCheckTemplate, mailCheckTo, mailCheckTokenAdmits, runMailCheck,
@@ -257,13 +262,17 @@ const UserLink: FC<{ id: string | null }> = ({ id }) =>
   id ? <a href={`/admin/users/${id}`} class="mono">{id}</a> : <span class="muted">-</span>;
 
 // th, when given, writes each heading cell (the accounts table's sort links);
-// heads stay the labels a restacked row shows beside its cells.
-const Table: FC<{ heads: string[]; rows: unknown[][]; th?: (label: string, i: number) => unknown }> = ({ heads, rows, th }) => (
+// heads stay the labels a restacked row shows beside its cells. rest, when
+// given, names each column's class (the accounts table's columns that rest
+// between 700 and 1,279 px, styles.css mdh), on its cells.
+const Table: FC<{ heads: string[]; rows: unknown[][]; th?: (label: string, i: number) => unknown; rest?: (string | undefined)[] }> = (
+  { heads, rows, th, rest },
+) => (
   <div class="table-wrap">
     <table class="restack">
       <thead><tr>{heads.map((h, i) => (th ? th(h, i) : <th>{h}</th>))}</tr></thead>
       <tbody>
-        {rows.map((r) => <tr>{r.map((cell, i) => <td data-label={heads[i]}>{cell as any}</td>)}</tr>)}
+        {rows.map((r) => <tr>{r.map((cell, i) => <td data-label={heads[i]} class={rest?.[i]}>{cell as any}</td>)}</tr>)}
       </tbody>
     </table>
   </div>
@@ -368,6 +377,23 @@ const CorrectionsPanel = ({ lang, rows }: { lang: Lang; rows: CorrectionListRow[
   </Panel>
 ));
 
+// The seats' signals (admin_ops.ts SeatSignals; the seats design's 5.7): counts
+// alone, no address and no id. Drawn whenever the seats table is on the
+// database, the seats' switch on or off; left out while it is not.
+const SeatSignalsPanel = ({ lang, s }: { lang: Lang; s: SeatSignals | null | undefined }) => (s ? (
+  <Panel title={t(lang, "admin.panel_signals")}>
+    <dl class="wide">
+      <dt>{t(lang, "admin.overview_seats")}</dt><dd>{fmtInt(s.seats, lang)}</dd>
+      <dt>{t(lang, "admin.overview_holders")}</dt><dd>{fmtInt(s.holders, lang)}</dd>
+      <dt>{t(lang, "admin.overview_open")}</dt><dd>{fmtInt(s.open, lang)}</dd>
+      <dt>{t(lang, "admin.overview_joins", { n: fmtInt(SEAT_WINDOW_DAYS, lang) })}</dt><dd>{fmtInt(s.joins, lang)}</dd>
+      <dt>{t(lang, "admin.overview_capped", { n: fmtInt(CAPPED_DAYS, lang) })}</dt><dd>{fmtInt(s.capped, lang)}</dd>
+      <dt>{t(lang, "admin.overview_capped_accounts", { min: fmtInt(CAPPED_ACCOUNT_MIN, lang), n: fmtInt(CAPPED_DAYS, lang) })}</dt>
+      <dd>{fmtInt(s.cappedAccounts, lang)}</dd>
+    </dl>
+  </Panel>
+) : null);
+
 // "search 3, all 1": the live calendar feeds by kind, as stored.
 const feedKinds = (lang: Lang, f: FeedCounts) =>
   f.byKind.length ? f.byKind.map((k) => `${k.kind} ${fmtInt(k.n, lang)}`).join(", ") : t(lang, "admin.none");
@@ -443,6 +469,7 @@ function overviewView(
           <dt>{t(lang, "admin.count_codes")}</dt><dd>{fmtInt(o.codesToday, lang)}</dd>
         </dl>
       </Panel>
+      <SeatSignalsPanel lang={lang} s={o.seats} />
       <WatchesPanel lang={lang} w={w} />
       <ClaimsPanel lang={lang} c={claims} />
       <BriefingsOverviewPanel lang={lang} ov={briefings} />
@@ -480,16 +507,23 @@ admin.get("/", async (c) => {
 // -- every account -----------------------------------------------------------------------------
 
 // The table's columns in order: the sort key each heading sets, and its label.
+// The Seat column only while the seats table is on the database (accountColumns).
 const ACCOUNT_COLUMNS: [AccountSort, Key][] = [
-  ["address", "admin.col_address"], ["plan", "admin.col_plan"], ["status", "admin.col_status"], ["blocked", "admin.field_blocked"],
-  ["created", "admin.col_signed_up"], ["sign_in", "admin.col_sign_in"], ["searches", "admin.col_searches"],
+  ["address", "admin.col_address"], ["plan", "admin.col_plan"], ["seat", "admin.col_seat"], ["status", "admin.col_status"],
+  ["blocked", "admin.field_blocked"], ["created", "admin.col_signed_up"], ["sign_in", "admin.col_sign_in"], ["searches", "admin.col_searches"],
   ["delivery", "admin.col_delivery_on"], ["keys", "admin.col_keys"], ["subscription", "admin.col_subscription"],
   ["language", "admin.field_lang"],
 ];
+const accountColumns = (seats: boolean) => (seats ? ACCOUNT_COLUMNS : ACCOUNT_COLUMNS.filter(([k]) => k !== SEAT_ONLY.sort));
+// The columns that rest from 700 to 1,279 px (styles.css mdh), where the content column (635 to 951 px) cannot hold
+// all twelve; a phone's restacked rows and a wider window show them, and the CSV holds them all.
+const RESTING: ReadonlySet<AccountSort> = new Set<AccountSort>(["sign_in", "delivery", "keys", "language"]);
+const restOf = (sort: AccountSort) => (RESTING.has(sort) ? "mdh" : undefined);
+const accountFilters = (seats: boolean) => (seats ? ACCOUNT_FILTER_NAMES : ACCOUNT_FILTER_NAMES.filter((f) => f !== SEAT_ONLY.filter));
 
 const FILTER_LABEL: Record<AccountFilter, Key> = {
   plan: "admin.col_plan", status: "admin.col_status", blocked: "admin.field_blocked", delivery: "admin.col_delivery",
-  subscription: "admin.col_subscription", language: "admin.field_lang",
+  subscription: "admin.col_subscription", language: "admin.field_lang", seat: "admin.col_seat",
 };
 
 // A value without a word here is a Stripe status, shown as Stripe writes it.
@@ -500,6 +534,7 @@ const OPTION_LABEL: { [K in AccountFilter]?: Partial<Record<string, Key>> } = {
   delivery: { on: "admin.delivery_some", off: "admin.delivery_none" },
   subscription: { none: "admin.sub_filter_none" },
   language: { en: "admin.lang_en", fr: "admin.lang_fr" },
+  seat: { holder: "admin.seat_side_holder", member: "admin.seat_side_member", none: "admin.seat_side_none" },
 };
 
 const optionLabel = (lang: Lang, name: AccountFilter, value: string) => {
@@ -538,11 +573,13 @@ const FilterSelect: FC<{ lang: Lang; name: AccountFilter; value: string | null }
   </label>
 );
 
-function accountCells(lang: Lang, r: AccountListRow): unknown[] {
+function accountCells(lang: Lang, r: AccountListRow, seats: boolean): unknown[] {
   const count = (v: number) => <span class="mono">{fmtInt(v, lang)}</span>;
   const dash = () => <span class="muted">-</span>;
   return [
-    <a href={`/admin/users/${r.id}`}>{r.email}</a>, cachedPlan(lang, r), statusWord(lang, r.status),
+    // An address may break after its "@" and dots, so the column keeps to its share of the width.
+    <a href={`/admin/users/${r.id}`}>{breakable(r.email)}</a>, cachedPlan(lang, r),
+    ...(seats ? [optionLabel(lang, "seat", r.seat)] : []), statusWord(lang, r.status),
     r.blocked_at ? t(lang, "admin.blocked_on", { date: day(r.blocked_at) }) : t(lang, "admin.no"),
     <span class="mono">{day(r.created_at)}</span>, r.last_sign_in ? <span class="mono">{day(r.last_sign_in)}</span> : dash(),
     count(r.searches), count(r.delivering), count(r.live_keys), r.sub_status ? <span class="mono">{r.sub_status}</span> : dash(),
@@ -552,6 +589,7 @@ function accountCells(lang: Lang, r: AccountListRow): unknown[] {
 
 function accountsView(lang: Lang, a: AccountQuery, p: AccountsPage) {
   const n = (v: number) => fmtInt(v, lang);
+  const columns = accountColumns(p.seats);
   const from = (p.page - 1) * ACCOUNT_PAGE_SIZE + 1;
   const to = (p.page - 1) * ACCOUNT_PAGE_SIZE + p.rows.length;
   const capped = p.total > ACCOUNT_MAX_PAGE * ACCOUNT_PAGE_SIZE;
@@ -582,7 +620,7 @@ function accountsView(lang: Lang, a: AccountQuery, p: AccountsPage) {
             <span class="field-label">{t(lang, "admin.filter_address")}</span>
             <input type="search" name="q" value={a.q} maxlength={EMAIL_MAX} autocomplete="off" spellcheck={false} />
           </label>
-          {ACCOUNT_FILTER_NAMES.map((name) => <FilterSelect lang={lang} name={name} value={a.filters[name]} />)}
+          {accountFilters(p.seats).map((name) => <FilterSelect lang={lang} name={name} value={a.filters[name]} />)}
           {/* The order stays when the filters change; the page goes back to the first. */}
           {a.sort !== DEFAULT_SORT ? <input type="hidden" name="sort" value={a.sort} /> : null}
           {a.dir !== firstDir(a.sort) ? <input type="hidden" name="dir" value={a.dir} /> : null}
@@ -595,12 +633,13 @@ function accountsView(lang: Lang, a: AccountQuery, p: AccountsPage) {
       <Panel title={t(lang, "admin.accounts_title")} foot={pager}
         count={p.total ? tn(lang, "admin.accounts_count_one", "admin.accounts_count_many", p.total, { n: n(p.total), from: n(from), to: n(to) }) : n(0)}>
         {p.rows.length ? (
-          <Table heads={ACCOUNT_COLUMNS.map(([, key]) => t(lang, key))} rows={p.rows.map((r) => accountCells(lang, r))}
+          <Table heads={columns.map(([, key]) => t(lang, key))} rows={p.rows.map((r) => accountCells(lang, r, p.seats))}
+            rest={columns.map(([key]) => restOf(key))}
             th={(label, i) => {
-              const key = ACCOUNT_COLUMNS[i][0];
+              const key = columns[i][0];
               const on = a.sort === key;
               return (
-                <th aria-sort={on ? (a.dir === "asc" ? "ascending" : "descending") : undefined}>
+                <th aria-sort={on ? (a.dir === "asc" ? "ascending" : "descending") : undefined} class={restOf(key)}>
                   <a href={sortHref(a, key)}>{label}{on ? <span aria-hidden="true">{a.dir === "asc" ? " ↑" : " ↓"}</span> : null}</a>
                 </th>
               );
@@ -611,13 +650,17 @@ function accountsView(lang: Lang, a: AccountQuery, p: AccountsPage) {
   );
 }
 
-const readAccounts = (c: Context<AppEnv>) => readAccountQuery((name) => c.req.query(name));
+// seats: the seats table is on the database (seatsReady; the operator's own session read has asked by now, so
+// this reads nothing more), for the Seat column, its filter and its sort.
+const readAccounts = (c: Context<AppEnv>, seats: boolean) => readAccountQuery((name) => c.req.query(name), seats);
 
 admin.get("/accounts", (c) => {
   const lang = c.get("lang");
   return guarded(c, async () => {
-    const a = readAccounts(c);
-    const p = await accountsPage(c.env, a);
+    const now = new Date();
+    const seats = await seatsReady(c.env, now);
+    const a = readAccounts(c, seats);
+    const p = await accountsPage(c.env, a, now, seats);
     const title = t(lang, "admin.accounts_title");
     return adminPage(c, p.page > 1 ? `${title}, ${t(lang, "common.page_n", { n: fmtInt(p.page, lang) })}` : title, accountsView(lang, a, p));
   });
@@ -639,7 +682,9 @@ const csvCell = (v: string | number | null): string => {
 // stands in for the link each address carries on the page.
 admin.get("/accounts.csv", (c) =>
   guarded(c, async () => {
-    const rows = await accountsForCsv(c.env, readAccounts(c));
+    const now = new Date();
+    const seats = await seatsReady(c.env, now);
+    const rows = await accountsForCsv(c.env, readAccounts(c, seats), now, seats);
     const lines = rows.map((r) => [
       r.id, r.email, r.plan, r.plan_until, r.status, r.blocked_at ? "yes" : "no", r.blocked_at, r.created_at, r.last_sign_in,
       r.searches, r.delivering, r.live_keys, r.sub_status, r.lang,
@@ -659,6 +704,7 @@ const NOTICE: Record<string, Key> = {
   unblocked: "admin.msg_unblocked", not_blocked: "admin.msg_not_blocked", email: "admin.msg_email", email_unsent: "admin.msg_email_unsent",
   signed_out: "admin.msg_signed_out", deleted: "admin.msg_deleted",
   seat_ended: "admin.msg_seat_ended", invite_cancelled: "admin.msg_invite_cancelled", seat_nothing: "admin.msg_seat_nothing",
+  granted_seat: "admin.msg_granted_seat", granted_ultra_seat: "admin.msg_granted_ultra_seat",
 };
 
 const DELIVER_KEY: Record<string, Key> = { daily: "account.deliver_daily", weekly: "account.deliver_weekly", off: "account.deliver_off" };
@@ -1032,6 +1078,7 @@ admin.post("/users/:id/grant", async (c) => {
   const post = await operatorPost(c);
   if (post instanceof Response) return post;
   const { op, fields, user } = post;
+  const lang = c.get("lang");
   return guarded(c, async () => {
     const until = clean(fields, "until", 20);
     const reference = clean(fields, "reference", REFERENCE_MAX + 1);
@@ -1052,11 +1099,59 @@ admin.post("/users/:id/grant", async (c) => {
       errors: e, until, reference: reference.slice(0, REFERENCE_MAX), grantPlan: plan ?? "pro", status: 400, notice: null,
     });
     if (errors.length || !plan) return again(errors);
-    // Without entitlement_tiers an Ultra grant writes nothing and says which file to apply.
-    if ((await grantPlan(c.env, user.id, op.userId, plan, endsAt, reference, now)) === "no_tiers") return again(["admin.err_no_tiers"]);
-    return c.redirect(userPath(user.id, plan === "ultra" ? "granted_ultra" : "granted"), 303);
+    // The seat the account holds (seats.ts memberSeatOf), read before anything is written: a fault here ends on the
+    // 503 page and grants nothing. A seat is ended by the grant, so the grant first says so with the holder named and
+    // goes only once the box is ticked on that page for that seat; a seat changed since the page asks again.
+    const seat = await memberSeatOf(c.env, user.id);
+    if (seat && seat !== "no_table" && (!confirmed(fields) || fields.seat !== seat.id)) {
+      const changed = !!fields.seat && fields.seat !== seat.id;
+      const errs: Key[] | undefined = changed ? ["admin.err_seat_changed"] : fields.seat ? ["admin.err_confirm"] : undefined;
+      return adminPage(c, t(lang, "admin.grant_seat_title"), grantSeatView(lang, op, user, { plan, until, endsAt, reference, seat, errors: errs }),
+        changed ? 409 : errs ? 400 : 200);
+    }
+    // Without entitlement_tiers an Ultra grant writes nothing and says which file to apply. With the seats table, the
+    // grant's batch ends any live seat the account holds (a seat taken since the read included).
+    const done = await grantPlan(c.env, user.id, op.userId, plan, endsAt, reference, now, seat !== "no_table");
+    if (done.result === "no_tiers") return again(["admin.err_no_tiers"]);
+    const m = plan === "ultra" ? "granted_ultra" : "granted";
+    return c.redirect(userPath(user.id, done.ended ? `${m}_seat` : m), 303);
   });
 });
+
+// The grant to an account that holds a seat (the seats design's slice E): the
+// grant ends the seat in the same batch, so this page names the subscription's
+// holder, what ending the seat does, and what is granted, and asks for the box;
+// its form carries the grant's fields and the seat's id, and posts the grant again.
+function grantSeatView(
+  lang: Lang, op: Account, user: UserRow,
+  g: { plan: "pro" | "ultra"; until: string; endsAt: string | null; reference: string; seat: MemberSeat; errors?: Key[] },
+) {
+  const plan = t(lang, g.plan === "ultra" ? "ultra.tag" : "pro.tag");
+  return confirmView(lang, op, user, {
+    title: "admin.grant_seat_title", lead: t(lang, "admin.grant_seat_lead"), action: `/admin/users/${user.id}/grant`, button: "admin.grant_seat_button",
+    errors: g.errors,
+    items: [
+      tj(lang, "admin.grant_seat_holder", { holder: <a href={`/admin/users/${g.seat.holder_id}`}>{breakable(g.seat.holder_email)}</a> }),
+      t(lang, "admin.grant_seat_ends", { plan }),
+      t(lang, "admin.grant_seat_told"),
+    ],
+    extra: (
+      <dl class="wide">
+        <dt>{t(lang, "admin.grant_plan")}</dt><dd>{plan}</dd>
+        <dt>{t(lang, "admin.col_ends")}</dt><dd class="mono">{g.endsAt ? day(g.endsAt) : t(lang, "admin.none")}</dd>
+        <dt>{t(lang, "admin.col_reference")}</dt><dd>{g.reference}</dd>
+      </dl>
+    ),
+    fields: (
+      <>
+        <input type="hidden" name="plan" value={g.plan} />
+        <input type="hidden" name="until" value={g.until} />
+        <input type="hidden" name="reference" value={g.reference} />
+        <input type="hidden" name="seat" value={g.seat.id} />
+      </>
+    ),
+  });
+}
 
 admin.post("/users/:id/entitlements/:eid/revoke", async (c) => {
   const post = await operatorPost(c);

@@ -192,8 +192,11 @@ export function viewsView(lang: Lang, account: Account, s: ViewsPageState) {
                         <br /><span class="muted small">{t(lang, KIND_KEY[v.kind])}</span>
                         {pool ? (pool.past.has(v.id) ? <PoolMark lang={lang} /> : null)
                           : i >= cap ? <><br /><span class="muted small">{t(lang, "views.past")}</span></> : null}
-                        {dash && open ? <AddToDashboard lang={lang} account={account} kind={build ? "build" : "view"} panelRef={build ? v.address : v.id} boards={s.boards} /> : null}
-                        {dash && !build ? <ChooseTables lang={lang} address={v.address} /> : null}
+                        {/* A view past a group member's allowance offers no tile: its mark above stands in the control's place,
+                            and its tables' checklist (their tiles hold the view's address, no counted item) keeps a line of its own. */}
+                        {dash && open && !pool?.past.has(v.id)
+                          ? <AddToDashboard lang={lang} account={account} kind={build ? "build" : "view"} panelRef={build ? v.address : v.id} boards={s.boards} /> : null}
+                        {dash && !build ? <>{pool?.past.has(v.id) ? <br /> : null}<ChooseTables lang={lang} address={v.address} /></> : null}
                       </td>
                       {s.ultra ? (
                         <td data-label={t(lang, "views.col_email")}>

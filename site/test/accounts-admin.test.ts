@@ -573,7 +573,8 @@ const listed = (html: string) => [...html.matchAll(/<a href="\/admin\/users\/([0
 function cells(html: string, id: string): Record<string, string> {
   const at = html.indexOf(`<a href="/admin/users/${id}">`);
   const row = html.slice(html.lastIndexOf("<tr>", at), html.indexOf("</tr>", at));
-  return Object.fromEntries([...row.matchAll(/<td data-label="([^"]*)">(.*?)<\/td>/g)].map((m) => [m[1], m[2].replace(/<[^>]+>/g, "")]));
+  // A cell of a column that rests between 700 and 1,279 px carries its class after its label.
+  return Object.fromEntries([...row.matchAll(/<td data-label="([^"]*)"(?: class="[^"]*")?>(.*?)<\/td>/g)].map((m) => [m[1], m[2].replace(/<[^>]+>/g, "")]));
 }
 
 describe("the accounts table", () => {
@@ -586,11 +587,12 @@ describe("the accounts table", () => {
     const html = await text(res);
     expect(listed(html)).toEqual([s.e, s.d, s.c, s.b, s.a]);
     expect(html).toContain("5 accounts, showing 1 to 5");
-    for (const head of ["Address", "Plan", "Status", "Blocked", "Signed up", "Last sign-in", "Saved searches", "Delivery on", "API keys", "Subscription", "Language"]) {
+    for (const head of ["Address", "Plan", "Seat", "Status", "Blocked", "Signed up", "Last sign-in", "Saved searches", "Delivery on", "API keys", "Subscription", "Language"]) {
       expect(html, head).toContain(`>${head}<`);
     }
+    // The Seat column (slice E): with the seats table on the database, every account's side of a seat, none here.
     expect(cells(html, s.b)).toEqual({
-      Address: s.mail("b"), Plan: "Pro, until 2099-01-01", Status: "Active", Blocked: "No", "Signed up": "2026-02-01", "Last sign-in": "2026-10-30",
+      Address: s.mail("b"), Plan: "Pro, until 2099-01-01", Seat: "None", Status: "Active", Blocked: "No", "Signed up": "2026-02-01", "Last sign-in": "2026-10-30",
       "Saved searches": "2", "Delivery on": "1", "API keys": "1", Subscription: "active", Language: "French",
     });
     expect(cells(html, s.c)).toMatchObject({ Blocked: "Yes, since 2026-10-01", Subscription: "past_due", "Saved searches": "1", "Delivery on": "0" });
@@ -636,7 +638,7 @@ describe("the accounts table", () => {
     expect(await ids("sort=searches&dir=desc")).toEqual([s.e, s.b, s.c, s.d, s.a]);
     expect(await ids("sort=created&dir=asc")).toEqual([s.a, s.b, s.c, s.d, s.e]);
     // Every key sorts without a fault.
-    for (const key of ["plan", "status", "blocked", "sign_in", "delivery", "keys", "subscription", "language"]) {
+    for (const key of ["plan", "seat", "status", "blocked", "sign_in", "delivery", "keys", "subscription", "language"]) {
       for (const dir of ["asc", "desc"]) expect((await ids(`sort=${key}&dir=${dir}`)).sort(), `${key} ${dir}`).toEqual([s.a, s.b, s.c, s.d, s.e].sort());
     }
     expect(await ids("sort=sign_in&dir=desc")).toEqual([s.e, s.b, s.c, s.d, s.a]);

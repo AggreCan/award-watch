@@ -32,9 +32,14 @@
 // Each message is claimed before its send by writing told and told_at, in a
 // statement that holds only while the row is as the part read it, and given
 // back when the send does not go, as a briefing's is. A sending limit's
-// refusal stops the run; any other refusal is counted as failed and the seat
-// waits for the next run. A message is counted before anything after it, in
-// the report the run hands the part, so a fault keeps its count. The message
+// refusal stops the run and the seat is read again by the next. Any other
+// refusal is counted as failed once, and the claim is given back with told_at
+// set to the next UTC day, written as a date alone (SEAT_WAIT_RE): the seat is
+// not read again before that day (the other parts remember a refusal for their
+// own period the same way: a briefing's failed row, the weekly email's
+// failed_week), and a date alone is never read as a message told, so an end
+// that comes meanwhile is still told. A message is counted before anything
+// after it, in the report the run hands the part, so a fault keeps its count. The message
 // never says why the holder's plan changed (that is the holder's billing), and
 // names no address and no other account's figure.
 //
@@ -106,17 +111,28 @@ export function seatNotice(o: SeatNotice): DigestMessage {
 // then the live seats a holder at a time, starting at ?2 (a random id each run)
 // and wrapping round, so that when more than ?1 are live every holder's are
 // read in turn. holder_ok: the holder is active and not blocked, as planFor's
-// own read of a member's seat says it. The table holds the live seats and the
-// rows of the last 30 days (the sweep), so it is read whole; the two accounts
-// by their keys.
+// own read of a member's seat says it. A seat whose last message was refused
+// waits for the day its told_at names (a date alone, ?3 now): until then it is
+// not read, and its told_at never counts as an end told. The table holds the
+// live seats and the rows of the last 30 days (the sweep), so it is read whole;
+// the two accounts by their keys.
 export const SEATS_DUE_SQL =
   "SELECT s.id, s.holder_id, s.member_id, s.ended_at, s.told, s.told_at, m.email, m.lang, m.plan, m.plan_until, " +
   "h.plan AS holder_plan, h.plan_until AS holder_until, " +
   "COALESCE(h.status = 'active' AND NOT EXISTS (SELECT 1 FROM account_blocks b WHERE b.user_id = s.holder_id), 0) AS holder_ok " +
   "FROM seats s JOIN users m ON m.id = s.member_id LEFT JOIN users h ON h.id = s.holder_id " +
   "WHERE s.member_id IS NOT NULL AND m.status = 'active' AND NOT EXISTS (SELECT 1 FROM account_blocks x WHERE x.user_id = s.member_id) " +
-  "AND (s.ended_at IS NULL OR (s.ended_why IN ('removed', 'closed', 'operator') AND (s.told = 1 OR s.told_at IS NULL OR s.told_at < s.ended_at))) " +
+  "AND (s.ended_at IS NULL OR (s.ended_why IN ('removed', 'closed', 'operator') " +
+  "AND (s.told = 1 OR s.told_at IS NULL OR s.told_at < s.ended_at OR length(s.told_at) = 10))) " +
+  "AND (s.told_at IS NULL OR length(s.told_at) <> 10 OR s.told_at <= ?3) " +
   "ORDER BY s.ended_at IS NULL, s.ended_at, s.holder_id < ?2, s.holder_id, s.joined_at, s.id LIMIT ?1";
+
+// A refused message's mark (?2 of SEAT_RELEASE_SQL in place of the told_at it had): the next UTC day after now,
+// as YYYY-MM-DD. Ten characters, where a time told is an ISO moment of 24, so the two are never taken for each
+// other; it sorts before every moment of its own day, so the seat is read again from that day's first run.
+export function seatWaitDay(now: Date): string {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)).toISOString().slice(0, 10);
+}
 
 type DueRow = {
   id: string; holder_id: string; member_id: string; ended_at: string | null; told: number; told_at: string | null;
@@ -130,7 +146,8 @@ type DueRow = {
 export const SEAT_CLAIM_SQL =
   "UPDATE seats SET told = ?1, told_at = ?2 WHERE id = ?3 AND member_id IS NOT NULL AND told = ?4 AND told_at IS ?5 AND ended_at IS ?6";
 
-// The claim given back (?1 told, ?2 told_at as they were, ?3 the seat), while it is this run's (?4, ?5 the claim's).
+// The claim given back (?1 told, ?2 told_at as they were, or after a refusal that is not a sending limit the day
+// the seat waits for, seatWaitDay; ?3 the seat), while it is this run's (?4, ?5 the claim's).
 export const SEAT_RELEASE_SQL = "UPDATE seats SET told = ?1, told_at = ?2 WHERE id = ?3 AND told = ?4 AND told_at = ?5";
 
 // -- the run ------------------------------------------------------------------------------------
@@ -180,15 +197,15 @@ export async function runSeatNotices(
   if (!seatsSwitched(env)) return { report: null, stop: null, capped: false };
   const { site, now } = o;
   const report = o.report ?? emptySeatReport();
+  const at = now.toISOString();
   let due: DueRow[];
   try {
-    due = (await env.ACCOUNTS!.prepare(SEATS_DUE_SQL).bind(SEATS_RUN_MAX, randomHex(16)).all<DueRow>()).results ?? [];
+    due = (await env.ACCOUNTS!.prepare(SEATS_DUE_SQL).bind(SEATS_RUN_MAX, randomHex(16), at).all<DueRow>()).results ?? [];
   } catch (e) {
     if (!missingSeats(e)) throw e;
     report.records = "no_table";
     return { report, stop: null, capped: false };
   }
-  const at = now.toISOString();
   const today = at.slice(0, 10);
   let stop = null as string | null;
   let capped = false;
@@ -233,8 +250,9 @@ export async function runSeatNotices(
     }
     return read;
   };
-  const release = (row: DueRow, told: number) =>
-    env.ACCOUNTS!.prepare(SEAT_RELEASE_SQL).bind(row.told, row.told_at, row.id, told, at).run();
+  // The claim given back as the row was; toldAt the day the seat waits for after a refusal that is not a limit.
+  const release = (row: DueRow, told: number, toldAt: string | null = row.told_at) =>
+    env.ACCOUNTS!.prepare(SEAT_RELEASE_SQL).bind(row.told, toldAt, row.id, told, at).run();
 
   // One seat: what is true now, and the message when it differs from what the member was told.
   const tell = async (row: DueRow): Promise<"next" | "stop"> => {
@@ -297,15 +315,15 @@ export async function runSeatNotices(
       return "next";
     }
     const limited = !!result.code && STOP_CODES.has(result.code);
-    // A refusal that is not a limit is a message tried: counted before the claim is given back.
+    // A refusal that is not a limit is a message tried: counted before the claim is given back, which then marks
+    // the seat to wait for the next UTC day, so it is tried once a day and not every run.
     if (!limited) report.failed++;
-    await release(row, told);
+    await release(row, told, limited ? row.told_at : seatWaitDay(now));
     held = null;
     if (limited) {
       stop = result.code;
       return "stop";
     }
-    // The seat waits for the next run.
     pending.delete(row.id);
     return "next";
   };

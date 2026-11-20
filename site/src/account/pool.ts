@@ -170,6 +170,12 @@ export class RunPool {
     return read.plan;
   }
 
+  // The group plan() kept for an account, undefined for one in no group (or not
+  // read this run): what a message names the subscription's room by, with nothing read.
+  group(userId: string): Group | undefined {
+    return this.groups.get(userId);
+  }
+
   // The figure an account's items are served to this run: cap for an account in
   // no group and for a holder; a member's allowance otherwise.
   async allowance(env: Env, userId: string, figure: PoolFigure, cap: number): Promise<number> {

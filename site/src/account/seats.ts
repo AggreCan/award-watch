@@ -378,6 +378,11 @@ export type MemberSeat = { id: string; holder_id: string; holder_email: string; 
 
 export type AccountSeats = { held: HeldSeat[]; member: MemberSeat | null };
 
+// The live seat an account holds as a member, with its holder (?1 the account), through idx_seats_member_live.
+export const MEMBER_SEAT_SQL =
+  "SELECT s.id, s.holder_id, h.email AS holder_email, s.joined_at FROM seats s JOIN users h ON h.id = s.holder_id " +
+  "WHERE s.member_id = ?1 AND s.ended_at IS NULL";
+
 // The console's Seats panel (admin.tsx): the account's rows as a holder that
 // are live, open, or ended in the last SEAT_KEEP_DAYS, and the live seat it
 // holds as a member. null, and nothing read, while the table is not on the
@@ -390,10 +395,7 @@ export async function seatsOfAccount(env: Env, userId: string, now = new Date())
       "SELECT s.id, s.member_id, u.email AS member_email, s.email, s.invited_at, s.expires_at, s.joined_at, s.ended_at, s.ended_why " +
       "FROM seats s LEFT JOIN users u ON u.id = s.member_id WHERE s.holder_id = ?1 AND (s.ended_at IS NULL OR s.ended_at >= ?2)",
     ).bind(userId, plusDays(now, -SEAT_KEEP_DAYS)),
-    db.prepare(
-      "SELECT s.id, s.holder_id, h.email AS holder_email, s.joined_at FROM seats s JOIN users h ON h.id = s.holder_id " +
-      "WHERE s.member_id = ?1 AND s.ended_at IS NULL",
-    ).bind(userId),
+    db.prepare(MEMBER_SEAT_SQL).bind(userId),
   ]);
   const rows = (held.results ?? []) as HeldSeat[];
   // Live seats in the order the plan covers them (joined, then id), then the
@@ -446,3 +448,30 @@ export async function operatorCancelInvitation(env: Env, holderId: string, id: s
   ).bind(now.toISOString(), id, holderId).run();
   return (res.meta?.changes ?? 0) === 1;
 }
+
+// -- the console's grant -------------------------------------------------------------------
+// A member cannot buy a plan (checkout refuses it) and a take refuses an account
+// with a paid plan, so a plan of the account's own beside a live seat comes only
+// from the operator's grant (admin_ops.ts grantPlan). The grant ends the seat in
+// its own batch, so no account holds both: one with a plan of its own and a live
+// seat would leave its group and still count in its holder's pool and seats.
+
+// The live seat the account holds, read before the grant so its confirmation can
+// name the holder: null for none; "no_table" while the seats table is not on the
+// database (no seat can be held). Any other fault is passed on: a grant that
+// cannot read the seat does not go.
+export async function memberSeatOf(env: Env, userId: string): Promise<MemberSeat | null | "no_table"> {
+  try {
+    return (await env.ACCOUNTS!.prepare(MEMBER_SEAT_SQL).bind(userId).first<MemberSeat>()) ?? null;
+  } catch (e) {
+    if (missingSeats(e)) return "no_table";
+    throw e;
+  }
+}
+
+// In the grant's batch whenever the table is on the database (?1 now, ?2 the account): every live seat the account
+// holds ends, operator, as the console's End this seat ends one (told kept, so the seat notices tell the end), the
+// ones it ended returned for their audit rows. A seat taken after the read above ends in the same transaction as the
+// grant. Through idx_seats_member_live; at most one row (one live seat a person).
+export const GRANT_ENDS_SEAT_SQL =
+  "UPDATE seats SET ended_at = ?1, ended_why = 'operator' WHERE member_id = ?2 AND ended_at IS NULL RETURNING id, holder_id";

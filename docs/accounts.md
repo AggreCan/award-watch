@@ -3090,11 +3090,12 @@ sent only for an account in a group, with the ids the session read or
 | The watch mail | the claimed organization's watch and the first watches up to the allowance (`coveredWatches`) | listed, no events | the same read |
 | Briefings | as the saved searches, one figure with them | passed over for the week | the same read |
 | Saved views by email | the views made before it fewer than the allowance | passed over for the period | the same read |
-| The weekly email | the claimed organization's watch and the first watches up to the allowance, as the watch mail reads them; its matching notices and the site's figures are no account's items | not in the message | the same read |
+| The weekly email | the claimed organization's watch and the first watches up to the allowance, as the watch mail reads them; its matching notices and the site's figures are no account's items | not in the message; after its lead (which counts the pages covered alone), one line says how many wait, as the watches page says it ("2 of this account's watches are saved and unavailable until the subscription has room: ..."), in place of the invitation to follow a page when none is covered | the same read |
 | An API key | the live keys of the accounts ahead and the account's own made before it fewer than 5 | 403, "This key is saved and unavailable until the subscription has room for it: its 5 keys are in use." | one statement (`KEY_SERVED_SQL`), for a member's key only, its answer kept with the key's last-known answer for 5 minutes (`KEY_SERVED_MS`) |
 | A calendar feed | the same rule for feeds; a search's feed also needs its search in service; the watches of the watchlist's and the "all" feed to the allowance, and the "all" feed's tender searches to the searches' allowance (`FEED_SEARCHES_SERVED_SQL`, sent in place of the plain read) | answers as a feed on a plan without feeds does (the site's 404); a search past it is left out of the "all" feed | one statement (`FEED_SERVED_SQL`), for a member's feed only |
 | A dashboard | the account's dashboards by creation (not by tab order) up to the allowance | its tab kept and marked; its page says so in place of its tiles and reads none; a tile of it is not drawn alone | `POOL_COUNTS_SQL`, one a page view |
 | A dashboard's tiles | a tile of a saved search, a briefing or a saved view (by its id) within the allowance; the watches tile reads the claimed organization's watch and the watches up to the allowance; the keys' tile lists every live key | the tile keeps its head and says "Saved, unavailable until there is room" in place of its body, and reads nothing for it (alone too); a watches tile with none covered says the same; a key past it is marked | the page's own `POOL_COUNTS_SQL` read, nothing more |
+| Add a Tile, and Add to dashboard on a row | the items in service, as the tiles read them | not offered: Add a Tile's select leaves out each saved search, briefing and saved view (either kind) past the allowance, and the watches while none of the account's is covered; on the searches page, its briefings panel and `/account/views`, such a row has its mark where Add to dashboard was | the page's own `POOL_COUNTS_SQL` read, nothing more |
 
 The holder's items are always in service, so the run and the key and feed
 checks read nothing more for a holder; a page reads the group's counts for
@@ -3433,8 +3434,13 @@ database now (`planFor`'s last known plan) tells nobody anything, and the
 seat waits for the next run. The message is claimed before its send by
 writing `told` and `told_at` in a statement that holds only while the row is
 as the run read it (`SEAT_CLAIM_SQL`), and given back when the send does not
-go (`SEAT_RELEASE_SQL`); a refusal that is not a sending limit counts as
-failed and the seat waits for the next run. Without the seats table the part
+go (`SEAT_RELEASE_SQL`). A sending limit's refusal stops the run and the
+seat is read again by the next. Any other refusal counts as failed once, and
+the claim is given back with `told_at` set to the next UTC day, written as a
+date alone (`seatWaitDay`): the part does not read the seat again before that
+day's first run, so an address that refuses is tried once a day rather than
+every run, and a date alone never counts as an end told, so a seat that ends
+while it waits is told its end. Without the seats table the part
 reads one statement, sends nothing, and the run's report says so. No column
 or table is added.
 
@@ -3490,6 +3496,40 @@ The switch plays no part here: a live seat gives its member the plan whether
 the switch is on or off (the plan is read from the seat's row), so ending one
 is always open to the operator. Without the seats table both addresses are
 the site's 404, and an account no seat row names has no such column.
+
+The overview (`/admin`) has a panel "Seats and Signed-In Browsers" whenever
+the seats table is on the database, the switch on or off: the seats taken
+now and the subscriptions that give them, the invitations open now, the
+joins of the last 30 days (`SEAT_WINDOW_DAYS`, ended seats counted), the
+browsers the cap of signed-in browsers signed out in the last 30 days
+(`CAPPED_DAYS`, the audit's `signed_out` rows of detail `cap <n>`), and how
+many accounts it signed out 10 or more of in that window
+(`CAPPED_ACCOUNT_MIN`), the mark of one sign-in shared by a team. Counts
+alone: the panel names no address and no id. Its two statements
+(`SEAT_SIGNALS_SQL`, `CAP_SIGNALS_SQL` in `admin_ops.ts`) go in the batch
+the overview sends already, each through an index; without the table the
+panel is left out and neither is sent. The accounts table has a Seat column
+and filter (*Operator console*, *The accounts table*).
+
+A member cannot buy a plan (checkout refuses it) and a take refuses an
+account with a paid plan, so the operator's grant is the one way an account
+could hold a live seat and a plan of its own, and be counted in its
+holder's pool while out of its group. The grant closes it. For an account
+that holds a seat, the grant's post first answers a page that names the
+subscription's holder (linked to its console page), says the grant ends the
+seat at once and that the person is told the seat ended, and lists the
+plan, end date and reference; its form carries them with the seat's id and
+the box. The confirmed post reads the seat again (a fault there ends on the
+503 page and grants nothing; a seat other than the one confirmed shows the
+page again, 409), then writes the grant and ends every live seat of the
+account (`ended_why = 'operator'`, `seats.ts GRANT_ENDS_SEAT_SQL`) in one
+batch, so either both are written or neither is; it writes `operator_granted`
+and End this seat's two `operator_seat_ended` rows (on the holder and on the
+account), each naming the operator alone, and returns "Ultra granted. The
+account's seat has ended." Whenever the seats table is on the database the
+grant's batch carries the seat's end, so a seat taken after the read also
+ends with the grant. An account that holds no seat is granted as before, in
+one post; a database without the table sends the grant's batch as before.
 
 ### Operator step
 
@@ -4552,7 +4592,7 @@ delete the operator's own account.
 
 | Action | Effect |
 |---|---|
-| Grant Pro by hand (or Ultra) | A `manual` entitlement row from now to the start of the end date given (UTC), or with no end. The reference is required: at most 120 characters, and any value holding `@` is refused, since a reference never holds an address. The same row as the insert under *Granting a plan by hand*. The Plan select offers Pro (the default) and Ultra; an Ultra grant writes the row and its `entitlement_tiers` row in one batch, whether or not Ultra is on sale, and on a database without that table writes nothing and says to apply `accounts_schema.sql` (*Ultra*). |
+| Grant Pro by hand (or Ultra) | A `manual` entitlement row from now to the start of the end date given (UTC), or with no end. The reference is required: at most 120 characters, and any value holding `@` is refused, since a reference never holds an address. The same row as the insert under *Granting a plan by hand*. The Plan select offers Pro (the default) and Ultra; an Ultra grant writes the row and its `entitlement_tiers` row in one batch, whether or not Ultra is on sale, and on a database without that table writes nothing and says to apply `accounts_schema.sql` (*Ultra*). For an account that holds a seat, the grant first shows a page that names the seat's holder and says the grant ends the seat (*Seats*, *The console*). |
 | Revoke | Sets `revoked_at` on one row not yet revoked or ended. Revoking a Stripe row leaves the subscription billing, and its next paid invoice grants Pro again: cancel the subscription as well. |
 | Cancel the subscription (confirm) | At the period end (`POST /v1/subscriptions/<id>` with `cancel_at_period_end=true`): Pro runs to the end of the period paid, then Stripe's `customer.subscription.deleted` notice ends it. At once (`DELETE /v1/subscriptions/<id>`): Stripe ends it now and the stored row reads `canceled`; the same notice ends Pro, usually within a minute. Neither refunds anything. |
 | Refund the latest payment (confirm) | The page reads the latest paid invoices of the subscription (`GET /v1/invoices?subscription=<id>&status=paid&expand[]=data.payments`) and takes the newest that took money; its charge comes from the invoice's payments, or, for a payment through a PaymentIntent, from `GET /v1/charges?payment_intent=<id>`. It shows the invoice, the charge, the amount and what is refunded already. The post finds the charge again, refunds only if it is still the one shown, and calls `POST /v1/refunds` with `charge=<id>` and the header `Idempotency-Key: operator-refund-<charge id>`, so a second press or a retry within Stripe's 24 hours returns the first refund. Stripe's `charge.refunded` notice then ends the account's Stripe Pro (*What each notice does*). The subscription is not cancelled. |
@@ -4574,7 +4614,8 @@ delete the operator's own account.
   grouped message once); bug reports in
   the last 7 days and in all, with the latest 10, once the `bug_reports`
   table exists; calendar feeds by kind and read in the last 7 days, once
-  the `feeds` table exists; sign-in codes issued today (UTC); the last 20 audit
+  the `feeds` table exists; sign-in codes issued today (UTC); once the
+  `seats` table exists, the seats' signals (*Seats*, *The console*); the last 20 audit
   events; and a search by user id or by address, exact or by its start.
 - `/admin/accounts`: every account in one table, filtered, sorted and
   paged, with a CSV of the same view (*The accounts table*, below).
@@ -4618,7 +4659,8 @@ same rows.
 
 `/admin/accounts`, linked from the overview, lists every account, 50 to a
 page, newest sign-up first. Its columns: the address (linked to the
-account's page), the plan now, status, blocked (with the block's date),
+account's page), the plan now, the seat (once the `seats` table exists:
+Gives seats, Holds a seat or None), status, blocked (with the block's date),
 signed up, last sign-in, saved searches, saved searches with delivery on,
 live API keys (not revoked), the subscription's status and the account's
 language.
@@ -4645,7 +4687,8 @@ order; no parameter's text reaches the SQL.
 | `delivery` | `on` (at least one saved search has delivery on), `off` |
 | `subscription` | `active`, `trialing`, `past_due`, `unpaid`, `incomplete`, `incomplete_expired`, `canceled`, `paused`, `none` (no row or no status) |
 | `language` | `en`, `fr`: the account's language. `lang` stays the page's own. |
-| `sort` | `address`, `plan`, `status`, `blocked`, `created` (the default), `sign_in`, `searches`, `delivery`, `keys`, `subscription`, `language` |
+| `seat` | `holder` (gives a live seat or an open invitation), `member` (holds a live seat; an account on both sides reads `member`), `none`. Only while the `seats` table is on the database; without it the parameter reads as unset and the column is not drawn. |
+| `sort` | `address`, `plan`, `seat` (with the `seats` table), `status`, `blocked`, `created` (the default), `sign_in`, `searches`, `delivery`, `keys`, `subscription`, `language` |
 | `dir` | `asc`, `desc`. Without it `created` sorts newest first and every other key ascending. |
 | `page` | 1 to 200. A page past the last shows the last. |
 

@@ -661,9 +661,10 @@ CREATE INDEX IF NOT EXISTS idx_view_deliveries_sent ON view_deliveries(sent_at);
 -- (entitlements.ts) reads the holder's own entitlements and the group's seats beside the member's
 -- rows, and every pooled figure is counted from the tables that hold the items. told is what the
 -- seat notices last told the member (1: the seat gives the plan, which taking it says; 0: it gives
--- none, or it ended), told_at when. Rows go 30 days after they end, and an invitation never taken
--- 30 days after it was sent (signin.ts sweep); either account's deletion ends its rows and clears
--- any address on them.
+-- none, or it ended), told_at when, or, after a message refused for a reason other than a sending
+-- limit, the next UTC day as a date alone, which the notices wait for (seat_mail.ts). Rows go 30
+-- days after they end, and an invitation never taken 30 days after it was sent (signin.ts sweep);
+-- either account's deletion ends its rows and clears any address on them.
 CREATE TABLE IF NOT EXISTS seats (
   id TEXT PRIMARY KEY,
   holder_id TEXT NOT NULL REFERENCES users(id),

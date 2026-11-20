@@ -1529,21 +1529,32 @@ const countIn = (c: Context<AppEnv>, k: string): number => {
 // is added from its own page, or here once it is saved; a view of the
 // analytics builder from its page, or here once it is saved, while the
 // builder is the reader's (builder), as a tile of its own (kind build).
-function addChoices(lang: Lang, h: Holdings, taken: ReadonlySet<string>, builder = false): { label: string; options: [string, string][] }[] {
+// pool: for an account in a group only (tilePool, from the page's one read of
+// the group's counts): its own items past its allowance are left out (a saved
+// search of any kind, a briefing, a saved view of either kind), and the
+// watches while the allowance covers none of the account's, since each such
+// tile would say it is unavailable. Undefined for any other account, whose
+// choices are what they were.
+function addChoices(
+  lang: Lang, h: Holdings, taken: ReadonlySet<string>, builder = false, pool?: TilePool,
+): { label: string; options: [string, string][] }[] {
   const free = (kind: PanelKind, ref: string) => !taken.has(`${kind}:${ref}`);
   const group = (kind: PanelKind, label: string, options: [string, string][]) => ({ label, options: options.filter(([v]) => free(kind, v.slice(kind.length + 1))) });
+  const served = (id: string) => !pool?.past.has(id);
   const searches = (ok: (k: string) => boolean, kind: PanelKind): [string, string][] =>
-    h.searches.filter((s) => ok(s.kind)).map((s) => [`${kind}:${s.id}`, s.label]);
+    h.searches.filter((s) => ok(s.kind) && served(s.id)).map((s) => [`${kind}:${s.id}`, s.label]);
+  const views = h.views.filter((v) => served(v.id));
+  const watches = !pool || !h.watches.length || pool.watches.length > 0;
   const groups = [
     group("tenders", t(lang, "dash.kind_tenders"), searches((k) => k === "tenders", "tenders")),
     group("radar", t(lang, "dash.kind_radar"), [
       ...EXPIRING_WINDOWS.map((w): [string, string] => [`radar:${w}`, t(lang, WINDOW_KEY[w])]), ...searches((k) => k === "expiring", "radar"),
     ]),
     group("records", t(lang, "dash.kind_records"), searches(isRecordsKind, "records")),
-    group("watches", t(lang, "dash.kind_watches"), [["watches:", t(lang, "dash.kind_watches")]]),
-    group("view", t(lang, "views.title"), h.views.filter((v) => v.kind !== "build").map((v): [string, string] => [`view:${v.id}`, v.name])),
-    group("build", t(lang, "dash.saved_builds"), builder ? h.views.filter((v) => v.kind === "build").map((v): [string, string] => [`build:${v.address}`, v.name]) : []),
-    group("briefing", t(lang, "briefing.list_title"), h.briefings.map((b): [string, string] => [`briefing:${b.id}`, briefingLabel(lang, b)])),
+    group("watches", t(lang, "dash.kind_watches"), watches ? [["watches:", t(lang, "dash.kind_watches")]] : []),
+    group("view", t(lang, "views.title"), views.filter((v) => v.kind !== "build").map((v): [string, string] => [`view:${v.id}`, v.name])),
+    group("build", t(lang, "dash.saved_builds"), builder ? views.filter((v) => v.kind === "build").map((v): [string, string] => [`build:${v.address}`, v.name]) : []),
+    group("briefing", t(lang, "briefing.list_title"), h.briefings.filter((b) => served(b.id)).map((b): [string, string] => [`briefing:${b.id}`, briefingLabel(lang, b)])),
     group("org", t(lang, "orgclaim.title_short"), h.claim ? CLAIM_BLOCKS.map((b): [string, string] => [`org:${b}`, t(lang, BLOCK_KEY[b])]) : []),
     group("matches", t(lang, "dash.kind_matches"), h.claim ? [["matches:", t(lang, "dash.kind_matches")]] : []),
     group("api", t(lang, "dash.kind_api"), h.keys.some((k) => !k.revoked_at) ? [["api:", t(lang, "dash.kind_api")]] : []),
@@ -1675,11 +1686,12 @@ const Starters: FC<{ lang: Lang; account: Account; h: Holdings; board: string | 
 // While the analytics builder is the reader's (builder), a fourth group between
 // Analytics and Text, Build a View: the builder's page, where a view is made
 // and its own Add to dashboard puts it, or its latest figure, on a dashboard.
+// pool: for an account in a group, what its tiles read (tilePool): its items past its allowance are not offered.
 const AddTile: FC<{
   lang: Lang; account: Account; h: Holdings; n: number; cap: number; keeping: Keeping; taken: ReadonlySet<string>; more: readonly MoreLine[]; open: boolean;
-  starters?: boolean; builder?: boolean;
-}> = ({ lang, account, h, n, cap, keeping, taken, more, open, starters, builder }) => {
-  const choices = addChoices(lang, h, taken, builder);
+  starters?: boolean; builder?: boolean; pool?: TilePool;
+}> = ({ lang, account, h, n, cap, keeping, taken, more, open, starters, builder, pool }) => {
+  const choices = addChoices(lang, h, taken, builder, pool);
   const board = keeping === "tiles" ? h.board?.id ?? null : null;
   const lines = more.filter((l) => !l.kinds.includes("view"));
   const part = (id: string, key: Key) => <p class="dash-adder-part" id={id}>{t(lang, key)}</p>;
@@ -1994,9 +2006,13 @@ export function dashClientData(lang: Lang, account: Account, keeping: Keeping, b
 // allowance, by creation (not by tab order).
 type BoardPool = { line: PoolLine; past: ReadonlySet<string> };
 
+// items: for an account in a group, what its tiles read (tilePool), which Add a Tile's choices follow.
 export function dashboardView(
   lang: Lang, account: Account,
-  s: { drawn: Drawn[]; h: Holdings; starter: boolean; keeping: Keeping; notice: string | null; cap: number; boards: number; pool?: BoardPool; builder?: boolean },
+  s: {
+    drawn: Drawn[]; h: Holdings; starter: boolean; keeping: Keeping; notice: string | null; cap: number; boards: number; pool?: BoardPool; builder?: boolean;
+    items?: TilePool;
+  },
 ) {
   const n = s.drawn.length;
   const emptied = !s.starter && !n;
@@ -2016,7 +2032,7 @@ export function dashboardView(
           dashboard's open Add a Tile never covers them. */}
       <PageHead lang={lang} title={t(lang, "dash.title")} lead={t(lang, "dash.lead")}
         actions={<AddTile lang={lang} account={account} h={s.h} n={n} cap={s.cap} keeping={s.keeping} taken={taken} more={more} open={emptied}
-          starters={emptied && s.keeping !== "none"} builder={s.builder} />}>
+          starters={emptied && s.keeping !== "none"} builder={s.builder} pool={s.items} />}>
         {tabs.length ? <BoardTabs lang={lang} account={account} tabs={tabs} cap={s.boards} pool={s.pool} /> : null}
       </PageHead>
       {s.notice ? <p class="account-notice" role="status">{s.notice}</p> : null}
@@ -2153,11 +2169,15 @@ export async function dashboardPage(c: Context<AppEnv>, who: Account, board: str
   // A dashboard the subscription has no room for reads and draws no tile.
   if (unavailable(h, pool)) return dashPage(c, boardUnavailableView(lang, who, { h, notice: noticeOf(0), boards, pool: pool! }), at);
   const { list, starter, keeping } = shownTiles(h);
-  // Each tile's item held to the account's allowance, from the same read of the group's counts (an account in a group only).
-  const drawn = await drawTiles(c, who, h, list, tilePool(h, read, who));
+  // Each tile's item held to the account's allowance, from the same read of the group's counts (an account in a group
+  // only), and Add a Tile's choices with it: no statement more.
+  const items = tilePool(h, read, who);
+  const drawn = await drawTiles(c, who, h, list, items);
   const notice = noticeOf(drawn.length);
   const builder = buildsOn(c.env, who.plan);
-  return dashPage(c, dashboardView(lang, who, { drawn, h, starter, keeping, notice, cap, boards, ...(pool ? { pool } : {}), ...(builder ? { builder } : {}) }), at);
+  return dashPage(c, dashboardView(lang, who, {
+    drawn, h, starter, keeping, notice, cap, boards, ...(pool ? { pool } : {}), ...(builder ? { builder } : {}), ...(items ? { items } : {}),
+  }), at);
 }
 
 // One tile at a size, for the page's script after a resize: the tile's

@@ -192,12 +192,13 @@ export const BriefingsPanel: FC<{
             <tbody>
               {briefings.map((b) => (
                 <tr>
-                  {/* An Ultra account adds a briefing to its dashboard from its row (dashboard.tsx). */}
+                  {/* An Ultra account adds a briefing to its dashboard from its row (dashboard.tsx); one past a group member's
+                      allowance has its mark in the control's place. */}
                   {dash ? (
                     <td data-label={t(lang, "briefing.col")}>
                       <a href={briefingPath(b)}>{briefingLabel(lang, b)}</a>
-                      {past?.has(b.id) ? <PoolMark lang={lang} /> : null}
-                      <AddToDashboard lang={lang} account={account} kind="briefing" panelRef={b.id} boards={boards} />
+                      {past?.has(b.id) ? <PoolMark lang={lang} />
+                        : <AddToDashboard lang={lang} account={account} kind="briefing" panelRef={b.id} boards={boards} />}
                     </td>
                   ) : <td data-label={t(lang, "briefing.col")}><a href={briefingPath(b)}>{briefingLabel(lang, b)}</a>{past?.has(b.id) ? <PoolMark lang={lang} /> : null}</td>}
                   <td data-label={t(lang, "account.col_delivery")}>

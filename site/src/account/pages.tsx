@@ -786,12 +786,14 @@ export function searchesView(
               <tbody>
                 {searches.map((s) => (
                   <tr>
-                    {/* An Ultra account adds a search to its dashboard from its row (dashboard.tsx); the sort reads the label alone. */}
+                    {/* An Ultra account adds a search to its dashboard from its row (dashboard.tsx); the sort reads the label alone.
+                        A search past a group member's allowance offers no tile, whose body would say it is unavailable: its mark
+                        stands in the control's place. */}
                     {dash && DASH_KINDS[s.kind] ? (
                       <td data-label={t(lang, "account.col_search")} data-sort={s.label}>
                         <a href={s.params}>{s.label}</a>
-                        {pool?.past.has(s.id) ? <PoolMark lang={lang} /> : null}
-                        <AddToDashboard lang={lang} account={account} kind={DASH_KINDS[s.kind]!} panelRef={s.id} boards={state.boards} />
+                        {pool?.past.has(s.id) ? <PoolMark lang={lang} />
+                          : <AddToDashboard lang={lang} account={account} kind={DASH_KINDS[s.kind]!} panelRef={s.id} boards={state.boards} />}
                       </td>
                     ) : <td data-label={t(lang, "account.col_search")}><a href={s.params}>{s.label}</a>{pool?.past.has(s.id) ? <PoolMark lang={lang} /> : null}</td>}
                     <td data-label={t(lang, "account.col_delivery")}>
