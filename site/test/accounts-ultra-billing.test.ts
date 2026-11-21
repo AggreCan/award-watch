@@ -480,7 +480,9 @@ describe("the billing page", () => {
     expect(cards).toHaveLength(3);
     expect(cards[2]).toMatch(/^<div class="plan-card plan-card-ultra"><div class="plan-card-head"><h3>Ultra<\/h3><span class="ultra-tag">/);
     expect(cards[2]).toContain('<strong class="plan-amount">CA$30</strong> a month or CA$301.50 a year');
-    expect(cards[2]).toContain('<a href="/account/billing?plan=ultra#subscribe" class="btn">Subscribe to Ultra</a>');
+    // Filled in Ultra's sapphire beside Pro's emerald one, whichever panel the page shows.
+    expect(cards[2]).toContain('<a href="/account/billing?plan=ultra#subscribe" class="btn btn-ultra">Subscribe to Ultra</a>');
+    expect(cards[1]).toContain('<a href="#subscribe" class="btn btn-primary">Subscribe to Pro</a>');
     expect(html).toContain("Subscribe to Ultra instead");
     const ultra = await text(await get("/account/billing?plan=ultra", { cookie, env: saleEnv() }));
     const panel = ultra.slice(ultra.indexOf('id="subscribe"'));
@@ -490,7 +492,8 @@ describe("the billing page", () => {
     expect(panel).toContain("Yearly, CA$301.50 a year (CA$25.13 a month)");
     expect(panel).toContain("Ultra is sold through Link");
     expect(panel).toContain('<a href="/account/billing#subscribe">Subscribe to Pro instead</a>');
-    // The chosen plan's link is the filled one; Pro's leads back to Pro's panel.
+    // Ultra's link leads to the panel under it, in the sapphire; Pro's leads back to Pro's panel and is plain.
+    expect(cardsOf(ultra)[2]).toContain('<a href="#subscribe" class="btn btn-ultra">Subscribe to Ultra</a>');
     expect(cardsOf(ultra)[1]).toContain('<a href="/account/billing#subscribe" class="btn">Subscribe to Pro</a>');
     for (const page of [html, ultra]) {
       expect(page).not.toContain(EM_DASH);

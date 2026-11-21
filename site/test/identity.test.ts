@@ -8,7 +8,8 @@
 //      edge at 3:1 or better;
 //   3. one filled button, .btn-primary in the emerald, which Follow takes on a
 //      profile and on a contract's page; a buyer and a tender notice keep it on
-//      their own first action and their Follow flat;
+//      their own first action and their Follow flat; its one companion is the
+//      way to Ultra on a plan card, .btn-ultra in the sapphire (2026-11-21);
 //   4. 6 px corners on controls, 4 px on the Pro chip, and none on the regions.
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
@@ -172,6 +173,49 @@ describe("one filled button", () => {
     // 2 px, so the curve of a rounded corner holds beside the straight sides; the padding gives up the pixel.
     expect(decl(btn, "border")).toBe("2px solid var(--field-border)");
     expect(decl(btn, "padding")).toBe("4px 11px");
+  });
+
+  // The operator's ruling of 2026-11-21: Subscribe to Ultra is filled as Subscribe to Pro is, in Ultra's own colour.
+  it("has one companion, the way to Ultra on its plan card: .btn-ultra in the sapphire, the type on it past 4.5:1 in both themes", () => {
+    const ultra = rule(".btn-ultra")?.body;
+    expect(decl(ultra, "background")).toBe("var(--ultra)");
+    expect(decl(ultra, "border-color")).toBe("var(--ultra)");
+    expect(decl(ultra, "color")).toBe("var(--on-ultra)");
+    expect(decl(ultra, "font-weight")).toBe("600");
+    const hover = rule(".btn-ultra:hover")?.body;
+    expect(decl(hover, "background")).toBe("var(--ultra-hover)");
+    expect(decl(hover, "border-color")).toBe("var(--ultra-hover)");
+    // After .btn:hover, of the same weight, so the fill keeps a ground of its own under the pointer.
+    const order = rules().map((r) => r.selector);
+    expect(order.indexOf(".btn:hover")).toBeGreaterThan(-1);
+    expect(order.indexOf(".btn-ultra:hover")).toBeGreaterThan(order.indexOf(".btn:hover"));
+    expect(token(LIGHT, "--ultra")).toBe("#0f52ba");
+    expect(token(LIGHT, "--on-ultra")).toBe("#ffffff");
+    expect(token(DARK, "--ultra")).toBe("#7eb0ff");
+    expect(token(DARK, "--on-ultra")).toBe("#07111d");
+    for (const name of ["--ultra", "--ultra-hover", "--on-ultra"]) expect(token(MEDIA, name), name).toBe(token(DARK, name));
+    for (const theme of ["light", "dark"] as const) {
+      for (const ground of ["--ultra", "--ultra-hover"]) {
+        expect(contrast(themeToken(theme, "--on-ultra")!, themeToken(theme, ground)!), `${theme} ${ground}`).toBeGreaterThanOrEqual(4.5);
+      }
+      // Its edge is its fill: past the 3:1 a control's boundary needs, on the panel.
+      expect(contrast(themeToken(theme, "--ultra")!, themeToken(theme, "--panel")!), `${theme} edge`).toBeGreaterThanOrEqual(3);
+    }
+    // No other rule fills with the sapphire.
+    expect(rules().filter((r) => /background:\s*var\(--ultra\)/.test(r.body)).map((r) => r.selector)).toEqual([".btn-ultra"]);
+    // The landing page's card: the same fill under that stylesheet's token names, after the outline's rule so it wins.
+    const landing = rules(LANDING_CSS);
+    const sap = landing.find((r) => r.selector === ".lp-plan-ultra .lp-btn-sap")?.body;
+    expect(decl(sap, "background")).toBe("var(--sap)");
+    expect(decl(sap, "color")).toBe("var(--sap-ink)");
+    const names = landing.map((r) => r.selector);
+    expect(names.indexOf(".lp-plan-ultra .lp-btn")).toBeGreaterThan(-1);
+    expect(names.indexOf(".lp-plan-ultra .lp-btn-sap")).toBeGreaterThan(names.indexOf(".lp-plan-ultra .lp-btn"));
+    expect(landing.filter((r) => /background:\s*var\(--sap\)/.test(r.body)).map((r) => r.selector)).toEqual([".lp-plan-ultra .lp-btn-sap"]);
+    const blocks = [/:root \{[\s\S]*?\n\}/, /:root\[data-theme="dark"\] \{[\s\S]*?\n\}/, /:root:not\(\[data-theme="light"\]\) \{[\s\S]*?\n {2}\}/]
+      .map((re) => re.exec(LANDING_CSS)?.[0] ?? "");
+    expect(blocks.map((b) => [token(b, "--sap"), token(b, "--sap-ink")])).toEqual([["#0f52ba", "#ffffff"], ["#7eb0ff", "#07111d"], ["#7eb0ff", "#07111d"]]);
+    for (const b of blocks) expect(contrast(token(b, "--sap-ink")!, token(b, "--sap")!)).toBeGreaterThanOrEqual(4.5);
   });
 
   it("is a profile's Follow, signed in or not, and the profile's only one", async () => {

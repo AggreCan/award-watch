@@ -54,6 +54,7 @@
   --amber: #b45309;
   --sap: #0f52ba;
   --sap-soft: #e3ebf9;
+  --sap-ink: #ffffff;
   /* The map on the navy card: a province with no notice, then four steps of one hue. */
   --m0: #1b2f42;
   --m1: #1e4d40;
@@ -82,6 +83,7 @@
   --amber: #f0b64a;
   --sap: #7eb0ff;
   --sap-soft: #13223d;
+  --sap-ink: #07111d;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -101,6 +103,7 @@
     --amber: #f0b64a;
     --sap: #7eb0ff;
     --sap-soft: #13223d;
+    --sap-ink: #07111d;
     color-scheme: dark;
   }
 }
@@ -577,6 +580,10 @@ html.js .theme-toggle { display: inline-flex; }
 .lp-lacks { color: var(--muted); }
 .lp-plan-acts { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; padding-top: 6px; }
 .lp-plan-ultra .lp-btn { border-color: var(--sap); color: var(--sap); }
+/* Subscribe to Ultra, filled in the sapphire as Pro's button is in the emerald (operator, 2026-11-21): white type on it
+   7.2:1 in the light theme, navy 8.6 in the dark. The waitlist's button keeps the outline above. */
+.lp-plan-ultra .lp-btn-sap { background: var(--sap); color: var(--sap-ink); }
+.lp-plan-ultra .lp-btn-sap:hover { border-color: var(--sap); filter: brightness(1.06); }
 .lp-plans-note { margin-top: 16px; font-size: 13px; line-height: 20px; color: var(--muted); max-width: 72ch; }
 /* The line that says the plans swipe: shown on a phone alone (the 640 px block). */
 .lp-plans-swipe { display: none; margin: -16px 0 16px; font-size: 14px; line-height: 20px; color: var(--muted); }

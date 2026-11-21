@@ -95,7 +95,7 @@ import { money, provincesText } from "./shared";
 
 // The stylesheet's version: bump it with any change to public/landing.css so
 // a cached copy is never paired with new markup.
-export const LANDING_VERSION = 9;
+export const LANDING_VERSION = 10;
 
 // The stylesheet's address. The builder's band (below) brought rules that the
 // page without it never uses, so that page names the stylesheet as it always
@@ -745,8 +745,10 @@ export const UltraBox: FC<{ lang: Lang } & UltraState> = ({ lang, done, error, e
 // figures): the monthly figure large and the yearly beside it, the "for"
 // line, every row of the plan cards in Ultra's own wording (the rows of its
 // card on /pro, in the same order), and Subscribe to Ultra
-// through the sign-in page, outlined in sapphire as the form's button is;
-// the form leaves the card, and the addresses it kept stay for the message.
+// through the sign-in page, filled in sapphire as Pro's button is in the
+// emerald (the operator's ruling of 2026-11-21; the form's button stays an
+// outline); the form leaves the card, and the addresses it kept stay for the
+// message.
 const UltraCard: FC<{ lang: Lang; ultra: UltraState; sale: ProPrice | null; planned: ProPrice | null; builder?: boolean; seats?: boolean }> = ({
   lang, ultra, sale, planned, builder, seats,
 }) => {
@@ -757,7 +759,7 @@ const UltraCard: FC<{ lang: Lang; ultra: UltraState; sale: ProPrice | null; plan
       <p class="lp-pr">{figure(sale.monthly)}<small>{t(lang, "landing.price_rest", { yearly: figure(sale.yearly) })}</small></p>
       <p class="lp-for">{t(lang, "plans.ultra_for")}</p>
       <PlanList lang={lang} plan="ultra" plans={ON_SALE} wrap builder={builder} seats={seats} />
-      <p class="lp-plan-acts"><a class="lp-btn" href={ULTRA_SUBSCRIBE_PATH}>{t(lang, "plans.ultra_subscribe")}</a></p>
+      <p class="lp-plan-acts"><a class="lp-btn lp-btn-sap" href={ULTRA_SUBSCRIBE_PATH}>{t(lang, "plans.ultra_subscribe")}</a></p>
     </div>
   ) : (
     <div class="lp-plan lp-plan-ultra" id={ULTRA_ANCHOR}>

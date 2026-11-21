@@ -405,6 +405,11 @@ const Mark: FC<{ has: boolean }> = ({ has }) => has
 const cardClass = (card: PlanCard) =>
   card.plan === "ultra" ? "plan-card plan-card-ultra" : card.offered ? "plan-card plan-card-offer" : "plan-card";
 
+// A card's link: flat, or filled in the plan's own colour (the emerald;
+// on Ultra's card its sapphire, the operator's ruling of 2026-11-21).
+const actionClass = (card: PlanCard, a: PlanAction) =>
+  !a.primary ? "btn" : card.plan === "ultra" ? "btn btn-ultra" : "btn btn-primary";
+
 const PlanCardView: FC<{ lang: Lang; card: PlanCard; rows: readonly PlanRow[] }> = ({ lang, card, rows }) => (
   <div class={cardClass(card)}>
     <div class="plan-card-head">
@@ -426,7 +431,7 @@ const PlanCardView: FC<{ lang: Lang; card: PlanCard; rows: readonly PlanRow[] }>
     </ul>
     {/* Drawn when empty too, so the note keeps the last row. */}
     <p class="plan-buttons">
-      {card.actions.map((a, i) => <>{i ? " " : null}<a href={a.href} class={a.primary ? "btn btn-primary" : "btn"}>{a.label}</a></>)}
+      {card.actions.map((a, i) => <>{i ? " " : null}<a href={a.href} class={actionClass(card, a)}>{a.label}</a></>)}
     </p>
     {card.note ? <p class="plan-note">{card.note}</p> : null}
   </div>
@@ -460,14 +465,16 @@ export type PlanPlace = "tease" | "pro_page" | "billing";
 //
 // While Ultra is on sale (ultra holds its figures) its card is the third:
 // Subscribe to Ultra through the sign-in page (ULTRA_SUBSCRIBE_PATH) or the
-// billing page's Ultra panel; for a Pro reader, Move to Ultra, which on the
-// Pro page is the page's filled button and on the billing page a plain one
-// (the subscription's Manage stays filled); for an Ultra reader on the
-// billing page, Pro's card offers Move to Pro. An Ultra reader while Ultra is
+// billing page's Ultra panel, filled wherever it is drawn, in Ultra's
+// sapphire (PlanCardView), beside Pro's emerald one; for a Pro reader, Move
+// to Ultra, which on the Pro page is the page's filled button and on the
+// billing page a plain one (the subscription's Manage stays filled); for an
+// Ultra reader on the billing page, Pro's card offers Move to Pro. An Ultra reader while Ultra is
 // not on sale (a grant by hand) sees the two cards as a Pro reader does,
 // without the mark of its own plan. On the billing page, chosen is the plan
-// its Subscribe panel offers (that plan's link is the filled one), and move
-// the move its subscription can make, if any. live: the account's
+// its Subscribe panel offers (with Ultra's chosen, Pro's link leads back to
+// Pro's panel and is plain), and move the move its subscription can make,
+// if any. live: the account's
 // subscription can still bill (billing.tsx liveSubscription), so the page
 // draws no Subscribe panel (a checkout would go to the portal): a link that
 // would lead to that panel leads to the subscription's own panel instead
@@ -537,14 +544,13 @@ export function planCards(
   ];
   if (!ultra) return cards;
   // Ultra's way in: through the sign-in page, to the billing page's Ultra panel, or a move for a Pro reader.
-  const ultraActions: PlanAction[] = reader === "out" ? [go(ULTRA_SUBSCRIBE_PATH, "plans.ultra_subscribe")]
+  // Subscribe to Ultra: on the billing page with its panel chosen, to that panel; from anywhere else, to the billing page's.
+  const ultraPanel = ultraChosen ? "#subscribe" : `/account/billing?plan=ultra${lang === "fr" ? "&lang=fr" : ""}#subscribe`;
+  const ultraActions: PlanAction[] = reader === "out" ? [go(ULTRA_SUBSCRIBE_PATH, "plans.ultra_subscribe", true)]
     : bound && !(reader === "pro" && o.move === "up") ? (reader === "ultra" ? account : [])
-    : reader === "free" ? [place === "billing"
-      ? go(ultraChosen ? "#subscribe" : `/account/billing?plan=ultra${lang === "fr" ? "&lang=fr" : ""}#subscribe`, "plans.ultra_subscribe", ultraChosen)
-      : go(`/account/billing?plan=ultra${lang === "fr" ? "&lang=fr" : ""}#subscribe`, "plans.ultra_subscribe")]
+    : reader === "free" ? [go(ultraPanel, "plans.ultra_subscribe", true)]
     : reader === "pro" ? [place === "billing"
-      ? (o.move === "up" ? go("#move", "plans.move_ultra")
-        : go(ultraChosen ? "#subscribe" : `/account/billing?plan=ultra${lang === "fr" ? "&lang=fr" : ""}#subscribe`, "plans.ultra_subscribe", ultraChosen))
+      ? (o.move === "up" ? go("#move", "plans.move_ultra") : go(ultraPanel, "plans.ultra_subscribe", true))
       : go(`/account/billing?plan=ultra${lang === "fr" ? "&lang=fr" : ""}#move`, "plans.move_ultra", place === "pro_page")]
     : account;
   cards.push({

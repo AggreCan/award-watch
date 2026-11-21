@@ -301,10 +301,11 @@ describe("a Free or Pro account while Ultra is on sale", () => {
         expect(main).toContain(`<p class="muted">${norm(t(lang, "dash.gate"))} <a href="/account/billing">${norm(t(lang, "billing.link_plans"))}</a></p>`);
         expect(main.match(/<div class="plan-card[ "]/g)).toHaveLength(3);
         expect(main).toContain("plan-card plan-card-ultra");
-        // One filled button: Ultra's.
-        const filled = [...main.matchAll(/<a href="([^"]*)" class="btn btn-primary">/g)].map((m) => m[1]);
+        // One filled button: Ultra's, in its sapphire; no emerald one beside it.
+        const filled = [...main.matchAll(/<a href="([^"]*)" class="btn btn-ultra">/g)].map((m) => m[1]);
         expect(filled).toHaveLength(1);
         expect(filled[0]).toContain("plan=ultra");
+        expect(main).not.toContain("btn-primary");
         // No tile, no script, no records read.
         expect(main).not.toContain("dash-tile");
         expect(main).not.toContain("dashboard.js");

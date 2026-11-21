@@ -2767,7 +2767,11 @@ is true:
 
 - the plan cards are three, wherever they are drawn (the tease panels, the
   Pro page, the billing page): Ultra's card framed in sapphire, its chip in
-  the card's head, every row with Ultra's own wording and figure;
+  the card's head, every row with Ultra's own wording and figure, and
+  Subscribe to Ultra filled in the sapphire (`.btn-ultra`, since 2026-11-21)
+  beside Pro's emerald button, the one fill a page may hold besides its own;
+  a filled link on Ultra's card is always the sapphire one (Move to Ultra on
+  the Pro page, Ultra's link at the dashboard's gate);
 - the Pro page gains the section on Ultra after Who It Is For, the answer on
   moving between the plans, the refund's answer naming both plans, and a
   Product "Award Watch Ultra" with its two offers in the page's markup;

@@ -459,7 +459,8 @@ describe("the Ultra card's form", () => {
     // 6 brought the matching notices' example card (test/accounts-funnel.test.ts).
     // 7 the builder's band brought up to the builder as built: its Show menu, the result's Add to dashboard, the tile's foot (test/landing-builder.test.ts).
     // 9 let every plan card's lines wrap, Free's and Pro's as Ultra's did (test/plans-swipe.test.ts).
-    expect(LANDING_VERSION).toBe(9);
+    // 10 filled Subscribe to Ultra in the sapphire (test/ultra.test.ts).
+    expect(LANDING_VERSION).toBe(10);
     for (const rule of [".lp-ultra {", ".lp-ultra-form {", ".lp-ultra .hp {", ".lp-ultra-field input {", ".lp-ultra-btn {", ".lp-ultra-error {",
       ".lp-ultra-done {", ".lp-ultra-thanks {", ".lp-ultra-noted {", ".lp-plan-ultra { scroll-margin-top:"]) {
       expect(LANDING_CSS, rule).toContain(rule);

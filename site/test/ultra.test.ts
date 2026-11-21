@@ -302,12 +302,22 @@ describe("the plan cards while Ultra is on sale", () => {
   });
 
   it("lead a reader without a session to the sign-in page and on to Ultra's panel, a Free reader to its billing page", async () => {
-    const out = cardsOf(text((await page("/pro", saleEnv())).body))[2];
-    expect(out).toContain('<a href="/account/sign-in?next=%2Faccount%2Fbilling%3Fplan%3Dultra" class="btn">Subscribe to Ultra</a>');
+    const outCards = cardsOf(text((await page("/pro", saleEnv())).body));
+    const out = outCards[2];
+    expect(out).toContain('<a href="/account/sign-in?next=%2Faccount%2Fbilling%3Fplan%3Dultra" class="btn btn-ultra">Subscribe to Ultra</a>');
     expect(out).toContain("<strong class=\"plan-amount\">CA$30</strong> a month or CA$301.50 a year");
     const cookie = await signIn(newEmail("sale-free"), { env: saleEnv() });
-    const free = cardsOf(text((await page("/tenders/same-day", saleEnv(), cookie)).body))[2];
-    expect(free).toContain('<a href="/account/billing?plan=ultra#subscribe" class="btn">Subscribe to Ultra</a>');
+    const freeCards = cardsOf(text((await page("/tenders/same-day", saleEnv(), cookie)).body));
+    expect(freeCards[2]).toContain('<a href="/account/billing?plan=ultra#subscribe" class="btn btn-ultra">Subscribe to Ultra</a>');
+    // Each paid plan's way in is filled in its own colour (the operator's ruling of 2026-11-21): Pro's in the emerald,
+    // Ultra's in the sapphire, one each; the sapphire fill is on Ultra's card alone, and Free's card has no fill.
+    for (const cards of [outCards, freeCards]) {
+      expect(cards[0]).not.toMatch(/btn-primary|btn-ultra/);
+      expect(cards[1].match(/class="btn btn-primary"/g)).toHaveLength(1);
+      expect(cards[1]).not.toContain("btn-ultra");
+      expect(cards[2].match(/class="btn btn-ultra"/g)).toHaveLength(1);
+      expect(cards[2]).not.toContain("btn-primary");
+    }
   });
 });
 
@@ -347,8 +357,10 @@ describe("the Pro page while Ultra is on sale", () => {
     await grantPro(email);
     const html = text((await page("/pro", saleEnv(), cookie)).body);
     const main = html.slice(html.indexOf("<main"), html.indexOf("</main>"));
-    expect(main.match(/class="btn btn-primary"/g)).toHaveLength(1);
-    expect(cardsOf(html)[2]).toContain('<a href="/account/billing?plan=ultra#move" class="btn btn-primary">Move to Ultra</a>');
+    // On Ultra's card the fill is the sapphire; the page has no emerald one beside it.
+    expect(main).not.toContain("btn-primary");
+    expect(main.match(/class="btn btn-ultra"/g)).toHaveLength(1);
+    expect(cardsOf(html)[2]).toContain('<a href="/account/billing?plan=ultra#move" class="btn btn-ultra">Move to Ultra</a>');
   });
 });
 
@@ -403,9 +415,13 @@ describe("the landing page's Ultra card", () => {
       const onlyUltra = PLAN_ROWS.filter((r) => !r.free && !r.pro).length;
       expect(onlyUltra).toBeGreaterThan(0);
       expect(lists[1].match(/class="lp-lacks"/g)?.length ?? 0, lang).toBe(onlyUltra);
-      expect(card, lang).toContain(`<a class="lp-btn" href="/account/sign-in?next=%2Faccount%2Fbilling%3Fplan%3Dultra">${text(t(lang, "plans.ultra_subscribe"))}</a>`);
+      // Filled in the sapphire, as Pro's is in the emerald: one of each in the section.
+      expect(card, lang).toContain(`<a class="lp-btn lp-btn-sap" href="/account/sign-in?next=%2Faccount%2Fbilling%3Fplan%3Dultra">${text(t(lang, "plans.ultra_subscribe"))}</a>`);
       expect(on.match(/class="lp-btn lp-btn-fill"/g)?.length ?? 0, lang).toBe(1);
+      expect(on.match(/lp-btn-sap/g)?.length ?? 0, lang).toBe(1);
     }
+    // The waitlist's button keeps its outline.
+    expect(off).not.toContain("lp-btn-sap");
   });
 });
 
@@ -495,7 +511,7 @@ describe("an Ultra account granted by hand", () => {
 // -- the stylesheet ------------------------------------------------------------------------
 
 describe("the sapphire", () => {
-  it("is defined for both themes and used by the Ultra chip, card and subscript alone", () => {
+  it("is defined for both themes and used by the Ultra chip, card, button and subscript alone", () => {
     expect(STYLES).toMatch(/:root \{[^}]*--ultra: #0f52ba;[^}]*--ultra-soft: #e3ebf9;/);
     expect(STYLES).toMatch(/:root\[data-theme="dark"\] \{[^}]*--ultra: #7eb0ff;[^}]*--ultra-soft: #13223d;/);
     expect(STYLES).toMatch(/:root:not\(\[data-theme="light"\]\) \{[^}]*--ultra: #7eb0ff;[^}]*--ultra-soft: #13223d;/);

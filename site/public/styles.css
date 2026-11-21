@@ -13,7 +13,9 @@
 
    One filled button a page: .btn-primary, emerald with white type in the
    light theme and navy type in the dark (the filters' Apply, a profile's
-   Follow). Every other button is flat, an outline on the panel ground.
+   Follow). Every other button is flat, an outline on the panel ground, but
+   the way to Ultra on its plan card, .btn-ultra, filled in Ultra's sapphire
+   beside Pro's emerald one (operator, 2026-11-21).
    Elsewhere emerald is a structural signal (the inset edge of the active
    rail item and of the hovered or selected table row) and keeps its
    meanings (the Open chip's outline, the Awarded check, the mark's check);
@@ -90,11 +92,16 @@
      (src/pro.tsx PlanCards), under ink labels and the chip. */
   --accent-soft: #e6f2ec;
   /* Ultra's sapphire (operator's ruling of 2026-11-06), the landing page's
-     --sap: its chip, its plan card's frame, head and checks, and the brand
-     subscript of an Ultra account, nothing else; charts keep the emerald.
-     7.2:1 on white; its soft ground under the card's head band. */
+     --sap: its chip, its plan card's frame, head and checks, the brand
+     subscript of an Ultra account, and the fill of the button that leads to
+     Ultra on its plan card (.btn-ultra), nothing else; charts keep the
+     emerald. 7.2:1 on white; its soft ground under the card's head band.
+     On the fill, white type is 7.2:1, and 8.9 on the darker step under the
+     pointer. */
   --ultra: #0f52ba;
   --ultra-soft: #e3ebf9;
+  --ultra-hover: #0c459e;
+  --on-ultra: #ffffff;
   --amber: #b45309;
   --on-amber: #ffffff;
   /* The edge of a field or a button: 3.46:1 on white, past the 3:1 a
@@ -183,9 +190,12 @@
   --sel: #172033;
   --accent: #34d399;
   --accent-soft: #122b22;
-  /* Sapphire lifted for the dark ground: 8.1:1 on the panel. */
+  /* Sapphire lifted for the dark ground: 8.1:1 on the panel. On the fill,
+     navy type is 8.6:1, and 11.0 on the lighter step under the pointer. */
   --ultra: #7eb0ff;
   --ultra-soft: #13223d;
+  --ultra-hover: #a3c7ff;
+  --on-ultra: #07111d;
   --amber: #fbbf24;
   --on-amber: #0b1120;
   --field-border: #5b6b80;
@@ -230,6 +240,8 @@
     --accent-soft: #122b22;
     --ultra: #7eb0ff;
     --ultra-soft: #13223d;
+    --ultra-hover: #a3c7ff;
+    --on-ultra: #07111d;
     --amber: #fbbf24;
     --on-amber: #0b1120;
     --field-border: #5b6b80;
@@ -485,7 +497,8 @@ h1 { font-family: var(--display); font-size: 28px; line-height: 34px; font-weigh
    A control has 6 px corners (a button, a field, a select); the regions
    around it stay square. Every button is flat, an outline on the panel
    ground, but the one filled button a page, .btn-primary: the emerald with
-   white type in the light theme and navy type in the dark, at 600. */
+   white type in the light theme and navy type in the dark, at 600; and, on
+   a plan card, the way to Ultra in its sapphire (.btn-ultra). */
 /* A control's edge is 2 px (operator, 2026-11-11): at 1 px the curve of a
    rounded corner drew fainter than the straight sides and the corner seemed
    to go, most of all on a display scaled to 125%, where 1 px is one device
@@ -500,6 +513,10 @@ h1 { font-family: var(--display); font-size: 28px; line-height: 34px; font-weigh
 .btn:disabled { border-color: var(--border); color: var(--muted); background: var(--panel); cursor: default; }
 .btn-primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 600; }
 .btn-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+/* The way to Ultra on its plan card (src/pro.tsx PlanCardView): filled in
+   Ultra's sapphire as Pro's is in the emerald, at the same weight. */
+.btn-ultra { background: var(--ultra); border-color: var(--ultra); color: var(--on-ultra); font-weight: 600; }
+.btn-ultra:hover { background: var(--ultra-hover); border-color: var(--ultra-hover); }
 .btn-active, .btn[aria-pressed="true"] { border-color: var(--ink); font-weight: 600; }
 .btn-active::before, .btn[aria-pressed="true"]::before { content: ""; flex: none; width: 8px; height: 8px; background: var(--ink); }
 .btn-link { padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-decoration: underline; text-decoration-color: var(--muted); text-underline-offset: 2px; cursor: pointer; }

@@ -23,7 +23,7 @@ import stats from "./fixtures/stats.json";
 import { ACCOUNTS, PRO_SALE, ULTRA_VARS, decode, nbsp, nextIp, onEnv, signIn, useAccountsDb } from "./accounts-helpers";
 import { fakeMail } from "./mail-fixtures";
 import { applySql } from "./setup";
-import { withoutMonthly } from "./seats-switch-fixtures";
+import { withoutMonthly, withoutUltraFill } from "./seats-switch-fixtures";
 import { KEYS, PAGES as TODAY_PAGES, RUN, RUN_MAIL, STATEMENTS } from "./seats-today";
 
 useAccountsDb();
@@ -144,8 +144,9 @@ const CAPTURED_STYLES = 74;
 // The count now takes the singular for none and one (dash.count_one), and nothing else on the page changed, so that
 // one line is put back as it read at the capture before a page is compared; the capture stays as it is.
 const CAPTURED_COUNT = /(<p class="muted small">[01]) tuile sur /g;
-const steady = (body: string) =>
-  withoutMonthly(body).replace(CAPTURED_COUNT, "$1 tuiles sur ").replace(/(name="csrf" value="|"csrf":")[0-9a-f]{32}/g, "$1CSRF")
+// The class of Ultra's link on a plan card is put back too (seats-switch-fixtures.ts withoutUltraFill), by the page's address.
+const steady = (body: string, path = "") =>
+  withoutUltraFill(withoutMonthly(body), path).replace(CAPTURED_COUNT, "$1 tuiles sur ").replace(/(name="csrf" value="|"csrf":")[0-9a-f]{32}/g, "$1CSRF")
     .replaceAll(`styles.css?v=${STYLES_VERSION}"`, `styles.css?v=${CAPTURED_STYLES}"`);
 
 const PAGES = ["/account/searches", "/account/watches", "/account/views", "/account/keys", "/account/dashboard"];
@@ -196,7 +197,7 @@ describe("an account in no group", () => {
           const url = lang === "fr" ? `${path}?lang=fr` : path;
           const res = await app.request(url, { headers: { cookie, "sec-fetch-mode": "navigate", "cf-connecting-ip": nextIp() } }, sale({ ACCOUNTS: r.db }));
           const today = TODAY_PAGES[`${plan}_${url}`];
-          expect({ status: res.status, body: await sha(steady(await res.text())), sent: [...r.sent].sort() }, `${plan} ${url}`)
+          expect({ status: res.status, body: await sha(steady(await res.text(), path)), sent: [...r.sent].sort() }, `${plan} ${url}`)
             .toEqual({ status: today.status, body: today.body, sent: today.sent.map(text) });
         }
       }

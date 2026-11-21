@@ -122,8 +122,20 @@ export const CAPTURED_WITHOUT: readonly string[] = [
   '<a href="/monthly">Bilan mensuel</a>',
 ];
 export const withoutMonthly = (page: string): string => CAPTURED_WITHOUT.reduce((p, added) => p.replaceAll(added, ""), page);
-export async function shortHash(text: string): Promise<string> {
-  let page = withoutMonthly(text).replaceAll(`styles.css?v=${STYLES_VERSION}"`, `styles.css?v=${CAPTURED_STYLES}"`)
+// The capture was made before the way to Ultra on a plan card took a fill of its own (src/pro.tsx actionClass, the
+// landing page's .lp-btn-sap; the operator's ruling of 2026-11-21). Only that link's class changed, on the pages
+// that draw it while Ultra is on sale, so its class is put back as the capture held it before a page is hashed:
+// "btn btn-primary" where Ultra's link was the page's filled button (Move to Ultra on the Pro page, and the link at
+// the dashboard's gate, which path names), "btn" everywhere else, and "lp-btn" on the landing page. Also read by
+// test/seats-service.test.ts, whose capture predates it too.
+export function withoutUltraFill(page: string, path = ""): string {
+  const gate = path.startsWith("/account/dashboard");
+  return page.replaceAll('class="lp-btn lp-btn-sap"', 'class="lp-btn"')
+    .replace(/class="btn btn-ultra">(Move to Ultra|Passer à Ultra)</g, 'class="btn btn-primary">$1<')
+    .replaceAll('class="btn btn-ultra">', gate ? 'class="btn btn-primary">' : 'class="btn">');
+}
+export async function shortHash(text: string, path = ""): Promise<string> {
+  let page = withoutUltraFill(withoutMonthly(text), path).replaceAll(`styles.css?v=${STYLES_VERSION}"`, `styles.css?v=${CAPTURED_STYLES}"`)
     .replaceAll(`landing.css?v=${LANDING_VERSION}`, `landing.css?v=${CAPTURED_LANDING}`);
   for (const [now, then] of CAPTURED_TEXT) for (const drawn of DRAWN) page = page.replaceAll(drawn(now), drawn(then));
   return (await sha256Hex(page)).slice(0, 24);
@@ -136,5 +148,5 @@ export async function seen(path: string, env: object, cookie?: string): Promise<
   const headers: Record<string, string> = { "sec-fetch-mode": "navigate", "cf-connecting-ip": nextIp() };
   if (cookie) headers.cookie = cookie;
   const res = await app.request(path, { headers }, env);
-  return { status: res.status, cache: res.headers.get("cache-control"), cookie: res.headers.getSetCookie().length > 0, body: await shortHash(await res.text()) };
+  return { status: res.status, cache: res.headers.get("cache-control"), cookie: res.headers.getSetCookie().length > 0, body: await shortHash(await res.text(), path) };
 }

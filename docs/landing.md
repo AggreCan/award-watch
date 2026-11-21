@@ -124,7 +124,8 @@ a one-field form in place of a button (below).
 Once Ultra is on sale (docs/accounts.md, *Ultra*) the card shows its monthly
 figure large with the yearly beside it, "For people who follow a whole
 market.", "Everything in Pro" and Ultra's own lines with its figures from
-`RULES`, and Subscribe to Ultra, outlined in sapphire, through the sign-in
+`RULES`, and Subscribe to Ultra, filled in sapphire as Pro's button is in
+the emerald (`.lp-btn-sap`, since 2026-11-21), through the sign-in
 page to the billing page's Ultra panel; the form leaves the card, and the
 addresses it kept stay for the Ultra message. The chips sit on the plan
 cards only. Every piece the switch changes is

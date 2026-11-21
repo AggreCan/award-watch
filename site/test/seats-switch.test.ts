@@ -276,9 +276,9 @@ describe("with the switch on and the table there", () => {
           const res = await app.request(path, { headers }, withSeats(ENVS[name](), "on"));
           const body = await res.text();
           const lang: Lang = path.includes("lang=fr") ? "fr" : "en";
-          const page = { status: res.status, cache: res.headers.get("cache-control"), cookie: res.headers.getSetCookie().length > 0, body: await shortHash(unseated(body, lang, reader === "ultra")) };
+          const page = { status: res.status, cache: res.headers.get("cache-control"), cookie: res.headers.getSetCookie().length > 0, body: await shortHash(unseated(body, lang, reader === "ultra"), path) };
           expect(page, key).toEqual(TODAY[key]);
-          if ((await shortHash(body)) !== TODAY[key].body) changed.push(key);
+          if ((await shortHash(body, path)) !== TODAY[key].body) changed.push(key);
         }
       }
     }
