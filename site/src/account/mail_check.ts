@@ -294,7 +294,7 @@ export async function mailCheckMessages(
   const segment43 = `43 ${segmentShort(lang, "43")}`;
   type Built = (MailMessage & { headers?: Record<string, string> }) | null;
   const build: Record<MailCheckTemplate, () => Built | Promise<Built>> = {
-    sign_in: () => signInMessage(lang, to, "000000", `${site}/account/check?token=${ZERO}.${ZERO}${ZERO}${lang === "fr" ? "&lang=fr" : ""}`,
+    sign_in: () => signInMessage(lang, to, "000000", `${site}/account/check?token=${ZERO}.${ZERO}${ZERO}&lang=${lang}`,
       CODE_MINUTES, site),
     tenders_daily: () => tenderDigest({
       lang, to, site, label: t(lang, "interest.label_tenders_all"), params: "/tenders", cadence: "daily", dataDate: day,
