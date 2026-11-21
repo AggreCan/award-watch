@@ -787,6 +787,32 @@ describe("the Seats page", () => {
     expect(await one("SELECT COUNT(*) AS n FROM audit WHERE event = 'seat_cancelled' AND user_id = ?", stranger.id)).toBe(0);
   });
 
+  it("says an invitation taken before Cancel was pressed was taken, so Remove is the step, and the seat stays", async () => {
+    const h = await person("cancel-late-holder", "ultra");
+    const m = await person("cancel-late-member");
+    await invite(h, m.email);
+    const l = await linkTo(m.email);
+    // The holder's Seats page, drawn while the invitation was open, still offers its Cancel; the person takes the seat meanwhile.
+    const drawn = await token(h);
+    expect((await joinPost(m, l, "take")).status).toBe(303);
+    for (const lang of ["en", "fr"] as const) {
+      const res = await post(`/account/seats/${l.i}/cancel`, { csrf: drawn, lang }, { cookie: h.cookie, env: ON() });
+      expect(res.status, lang).toBe(303);
+      const to = res.headers.get("location")!;
+      expect(to, lang).toBe(`/account/seats?m=cancel_taken${lang === "fr" ? "&lang=fr" : ""}`);
+      const page = await read(await get(to, { cookie: h.cookie, env: ON() }));
+      expect(page, lang).toContain(line(lang, "seats.msg_cancel_taken"));
+      expect(page, lang).not.toContain(line(lang, "seats.msg_cancelled"));
+      expect(page, lang).toContain(m.email);
+    }
+    expect(await rowById(l.i)).toMatchObject({ member_id: m.id, ended_at: null });
+    expect(await one("SELECT COUNT(*) AS n FROM audit WHERE event = 'seat_cancelled' AND user_id = ?", h.id)).toBe(0);
+    // Another holder's post naming the same seat reads as any cancel of a row not its own.
+    const stranger = await person("cancel-late-stranger", "ultra");
+    const theirs = await post(`/account/seats/${l.i}/cancel`, { csrf: await token(stranger) }, { cookie: stranger.cookie, env: ON() });
+    expect(theirs.headers.get("location")).toBe("/account/seats?m=cancelled");
+  });
+
   it("removes a member after its page asks, the seat ended and the member on its own plan; another holder's post changes nothing", async () => {
     const h = await person("remove-holder", "ultra");
     const m = await person("remove-member");

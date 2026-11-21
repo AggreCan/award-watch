@@ -332,6 +332,7 @@ export async function seatsPage(
   const m = c.req.query("m");
   const notice = extra.notice ?? (
     m === "cancelled" ? t(lang, "seats.msg_cancelled")
+      : m === "cancel_taken" ? t(lang, "seats.msg_cancel_taken")
       : m === "left" && !who.seat ? t(lang, "seat.msg_left", { plan: planWord(lang, who.plan) })
       : m === "taken" && who.seat?.covered ? t(lang, "join.msg_taken")
       : null
@@ -409,10 +410,18 @@ export async function invitePost(c: Context<AppEnv>, who: Account, fields: Recor
   return seatsPage(c, who, { notice: t(lang, "seats.msg_sent", { email }) });
 }
 
-// POST /account/seats/:id/cancel: the same answer whatever the id names.
+// POST /account/seats/:id/cancel: the same answer whatever the id names, but
+// for one of this holder's own invitations taken before the press (a page drawn
+// while it was open): that one says so, so the holder knows Remove is the step.
+// The read is bound to the holder, so another account's row answers as any id.
 export async function cancelPost(c: Context<AppEnv>, who: Account, id: string): Promise<Response> {
-  if (await cancelInvitation(c.env, who.userId, id)) await audit(c.env, who.userId, "seat_cancelled");
-  return c.redirect(`${SEATS_PATH}?m=cancelled${c.get("lang") === "fr" ? "&lang=fr" : ""}`, 303);
+  const lang = c.get("lang") === "fr" ? "&lang=fr" : "";
+  if (await cancelInvitation(c.env, who.userId, id)) {
+    await audit(c.env, who.userId, "seat_cancelled");
+    return c.redirect(`${SEATS_PATH}?m=cancelled${lang}`, 303);
+  }
+  const taken = await seatMember(c.env, who.userId, id);
+  return c.redirect(`${SEATS_PATH}?m=${taken ? "cancel_taken" : "cancelled"}${lang}`, 303);
 }
 
 // -- removing a member ----------------------------------------------------------------------------------

@@ -3281,7 +3281,11 @@ could not be sent, and nothing was kept."). Audit `seat_invited`, no detail.
 The holder's Cancel (`POST /account/seats/:id/cancel`, bound to the holder)
 ends an open invitation `cancelled` and clears its hash, so the link stops at
 once; the address stays on the row until the sweep, so the per-address count
-still holds it. Audit `seat_cancelled`.
+still holds it. Audit `seat_cancelled`. Cancel pressed on a page drawn while
+the invitation was open, after its person took the seat, cancels nothing and
+says "That invitation had already been taken, so nothing was cancelled. To
+end the seat, use Remove beside the person."; the read that tells it is
+bound to the holder, so an id of another account's row answers as before.
 
 ### The invitation's page
 

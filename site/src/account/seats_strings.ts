@@ -62,6 +62,11 @@ export const SEATS_STRINGS = {
     en: "The invitation was cancelled, and its link no longer works.",
     fr: "L'invitation a été annulée, et son lien ne fonctionne plus.",
   },
+  // Cancel pressed on a page drawn while the invitation was open, after its person took the seat (seats_pages.tsx cancelPost).
+  "seats.msg_cancel_taken": {
+    en: "That invitation had already been taken, so nothing was cancelled. To end the seat, use Remove beside the person.",
+    fr: "Cette invitation avait déjà été acceptée; rien n'a donc été annulé. Pour mettre fin au siège, utilisez Retirer à côté de la personne.",
+  },
   "seats.msg_removed": {
     en: "{email} no longer holds a seat. What their account keeps stays theirs, and the subscription's figures have room again.",
     fr: "{email} n'occupe plus de siège. Ce que son compte conserve lui reste, et les chiffres de l'abonnement ont de nouveau de la place.",
