@@ -186,6 +186,9 @@ export const BUILDER_STRINGS = {
   // -- a view kept on the account (src/account/build_views.tsx), for an Ultra reader while the switch is on ------------
   // The result's second Add to dashboard (account/dashboard_add.tsx), where the view gives one figure a fiscal year.
   "build.add_figure": { en: "Add its latest figure to dashboard", fr: "Ajouter son dernier chiffre au tableau de bord" },
+  // With two or more dashboards both are lists of their names: each list opens on what it adds.
+  "build.add_head_view": { en: "The view", fr: "La vue" },
+  "build.add_head_figure": { en: "Its latest figure", fr: "Son dernier chiffre" },
   // Beside the organization's field: the dashboard's find page, whose matches open in the builder.
   "build.find_org": { en: "Find an organization by name", fr: "Trouver une organisation par son nom" },
   // A tile of one figure (kind "number", pages/builder.tsx figureBody) of a whole fiscal year: its change from the

@@ -29,10 +29,11 @@ import { accountsEnabled } from "./switch";
 export type BoardChoice = { id: string; label: string };
 
 // label: the control's words where one thing offers two tiles (a view of the analytics builder and its latest
-// figure, pages/builder.tsx); "Add to dashboard" otherwise.
+// figure, pages/builder.tsx); "Add to dashboard" otherwise. head: what the list of dashboards adds, its first line,
+// where two such lists stand side by side (the same two), since both list the same names.
 export const AddToDashboard: FC<{
-  lang: Lang; account: Pick<Account, "csrf">; kind: string; panelRef: string; button?: boolean; boards?: readonly BoardChoice[]; label?: string;
-}> = ({ lang, account, kind, panelRef, button, boards, label }) => {
+  lang: Lang; account: Pick<Account, "csrf">; kind: string; panelRef: string; button?: boolean; boards?: readonly BoardChoice[]; label?: string; head?: string;
+}> = ({ lang, account, kind, panelRef, button, boards, label, head }) => {
   const words = label ?? t(lang, "dash.add_here");
   const fields = <>
     <input type="hidden" name="csrf" value={account.csrf} />
@@ -45,6 +46,7 @@ export const AddToDashboard: FC<{
         <summary class={button ? "btn" : "btn-link"}>{words}</summary>
         <form method="post" action={`${DASHBOARD_PATH}/panels`} class="dash-add-list">
           {fields}
+          {head ? <p class="dash-add-head">{head}</p> : null}
           {boards.map((b) => <button type="submit" name="board" value={b.id} class="dash-menu-item">{b.label}</button>)}
         </form>
       </details>

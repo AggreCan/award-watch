@@ -511,6 +511,36 @@ describe("the builder's page", () => {
     expect((await addTile(r, "build", CHART, on(), { board: "e".repeat(32) })).headers.get("location")).toMatch(new RegExp(`^/account/dashboard/${"e".repeat(32)}\\?m=added`));
   });
 
+  it("heads each of the two lists with what it adds, and sets them side by side when both are open, so neither covers the other", async () => {
+    const r = await reader("page-add-heads");
+    await freshBoard(r);
+    await ACCOUNTS.prepare("INSERT INTO dashboards (id, user_id, name, pos, created_at) VALUES (?, ?, 'Second', 1, '2026-10-02T00:00:00.000Z')").bind("d".repeat(32), r.id).run();
+    expect([t("en", "build.add_head_view"), t("en", "build.add_head_figure")]).toEqual(["The view", "Its latest figure"]);
+    for (const lang of ["en", "fr"] as const) {
+      const html = await text(await page(r, `${CHART}${lang === "fr" ? "&lang=fr" : ""}`, on()));
+      const tools = html.slice(html.indexOf('<div class="panel-tools">'), html.indexOf('<div class="chart">'));
+      const lists = [...tools.matchAll(/<details class="dash-add dash-add-menu">([\s\S]*?)<\/details>/g)].map((m) => m[1]);
+      expect(lists, lang).toHaveLength(2);
+      // The view's list first, then its latest figure's, each opening on a head that says which.
+      expect(lists[0]).toContain('name="kind" value="build"');
+      expect(lists[0]).toMatch(new RegExp(`<form [^>]*class="dash-add-list">(<input [^>]*/>)*<p class="dash-add-head">${norm(t(lang, "build.add_head_view"))}</p>`));
+      expect(lists[1]).toContain('name="kind" value="number"');
+      expect(lists[1]).toMatch(new RegExp(`<form [^>]*class="dash-add-list">(<input [^>]*/>)*<p class="dash-add-head">${norm(t(lang, "build.add_head_figure"))}</p>`));
+    }
+    // A view's list elsewhere (an analytics panel, a saved view's row) has no head: one control, one thing added.
+    const one = await text(await page(r, RANKED, on()));
+    expect(one.match(/<details class="dash-add dash-add-menu">/g)).toHaveLength(1);
+    expect(one).not.toContain("dash-add-head");
+    // Both lists hang from the panel's head at its right; with both open the figure's keeps its place and the view's
+    // stands at its left, each at most half the head less the gutters, so the later one in the page cannot cover it.
+    const styles = (env as unknown as { STYLES_CSS: string }).STYLES_CSS.replace(/\r\n/g, "\n");
+    for (const rule of [
+      ".panel-tools > .dash-add-menu[open]:has(~ .dash-add-menu[open]) > .dash-add-list,\n" +
+        ".panel-tools > .dash-add-menu[open] ~ .dash-add-menu[open] > .dash-add-list { width: min(320px, calc(50% - 12px)); min-width: 0; }",
+      ".panel-tools > .dash-add-menu[open]:has(~ .dash-add-menu[open]) > .dash-add-list { right: calc(16px + min(320px, calc(50% - 12px))); }",
+    ]) expect(styles, rule).toContain(rule);
+  });
+
   it("saves the view as a saved view of kind build, named as typed or by the site, held to the plan's figure, and lists it", async () => {
     const r = await reader("page-save");
     const html = await text(await page(r, CHART, on()));

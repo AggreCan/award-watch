@@ -750,11 +750,15 @@ const ViewPanel: FC<{ lang: Lang; ctx: Ctx; model: Model; asOf: string; keep?: K
   const line = c.measure === "ending" ? t(lang, "build.as_of_ending", { date: asOf })
     : t(lang, "build.as_of", { source: t(lang, FROM_KEY[c.source]), first: fiscalLabel(lang, c.first), last: fiscalLabel(lang, c.last), date: asOf });
   const subjects = model.groups.filter((g) => g.subject.kind !== "set").map((g) => subjectLink(lang, g.subject, names));
-  // Add to dashboard: the view as a tile of its own, and its latest figure as a tile where it gives one a year.
+  // Add to dashboard: the view as a tile of its own, and its latest figure as a tile where it gives one a year. With
+  // two or more dashboards both open on the same names, so each list opens on what it adds (styles.css sets the two
+  // side by side when both are open).
   const address = buildAddress(c);
+  const two = figureOffered(c);
   const add = keep?.dash ? <>
-    <AddToDashboard lang={lang} account={keep.dash} kind="build" panelRef={address} boards={keep.boards} />
-    {figureOffered(c) ? <AddToDashboard lang={lang} account={keep.dash} kind="number" panelRef={address} boards={keep.boards} label={t(lang, "build.add_figure")} /> : null}
+    <AddToDashboard lang={lang} account={keep.dash} kind="build" panelRef={address} boards={keep.boards} head={two ? t(lang, "build.add_head_view") : undefined} />
+    {two ? <AddToDashboard lang={lang} account={keep.dash} kind="number" panelRef={address} boards={keep.boards} label={t(lang, "build.add_figure")}
+      head={t(lang, "build.add_head_figure")} /> : null}
   </> : null;
   return (
     <Panel title={title ?? viewTitle(lang, c)} tools={any && !sample ? <><a href={csv} rel="nofollow">{t(lang, "analytics.csv")}</a>{add}</> : undefined}

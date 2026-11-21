@@ -1044,7 +1044,11 @@ the contracts ending: `builder.ts figureOffered`), "Add its latest figure to
 dashboard", a tile of kind `number`. Both are the analytics panels' own
 control and post (`dashboard_add.tsx AddToDashboard`,
 `POST /account/dashboard/panels`), with the account's dashboards to choose
-from when it holds several. Under the result, "Save this view" (the analytics
+from when it holds several. Both lists then name the same dashboards, so each
+opens on what it adds ("The view", "Its latest figure"; "La vue", "Son dernier
+chiffre"), and with both open the stylesheet sets them side by side, the
+view's at the left, each at most half the panel's head, so neither covers the
+other, with or without the script. Under the result, "Save this view" (the analytics
 views' own control, `view_pages.tsx SaveViewRow`) keeps it as a saved view of
 kind `build`. Both sit inside the result, so the preview redraws them with
 the view; nothing of them is read or drawn for any other reader, nor while

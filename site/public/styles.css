@@ -843,6 +843,13 @@ td > .dash-add { margin-top: 4px; }
    names hang under the head at its right, over the panel. */
 .panel-head:has(> .panel-tools > .dash-add-menu) { position: relative; }
 .panel-tools > .dash-add-menu > .dash-add-list { position: absolute; right: 8px; top: calc(100% - 4px); z-index: 15; width: min(320px, calc(100% - 16px)); margin: 0; font-size: 13px; }
+/* The builder's view and its latest figure: two such lists in one head, the same names in each, so each opens on
+   what it adds. With both open the figure's keeps its place and the view's stands at its left, each at most half the
+   head less the gutters, so the later one in the page cannot cover the other, with or without the script. */
+.dash-add-head { margin: 0; padding: 6px 12px 2px; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--ink-2); }
+.panel-tools > .dash-add-menu[open]:has(~ .dash-add-menu[open]) > .dash-add-list,
+.panel-tools > .dash-add-menu[open] ~ .dash-add-menu[open] > .dash-add-list { width: min(320px, calc(50% - 12px)); min-width: 0; }
+.panel-tools > .dash-add-menu[open]:has(~ .dash-add-menu[open]) > .dash-add-list { right: calc(16px + min(320px, calc(50% - 12px))); }
 /* A menu item names a dashboard as its reader typed it: a long word wraps inside the menu. */
 .dash-menu-item { overflow-wrap: anywhere; }
 /* Move To in a tile's menu: its head over the other dashboards' names. */
