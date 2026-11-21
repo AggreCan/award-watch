@@ -284,7 +284,9 @@ describe("the routes counted by name", () => {
   });
 
   it("names each of the pipeline's sitemap parts apart, the index and an older numbered part as before", () => {
-    expect(PIPELINE_PARTS).toEqual(["open-tenders", "pages", "active-organizations", "other-organizations"]);
+    expect(PIPELINE_PARTS).toEqual(["open-tenders", "pages", "active-organizations"]);
+    // A part retired on 2026-11-21, which a search engine may still ask for, is no route of the site's.
+    expect(routeTemplate("GET", "/sitemap-other-organizations-1.xml")).toEqual({ route: "other", kind: "other" });
     for (const part of PIPELINE_PARTS) {
       expect(routeTemplate("GET", `/sitemap-${part}-1.xml`)).toEqual({ route: `/sitemap-${part}-:n.xml`, kind: "file" });
       expect(routeTemplate("GET", `/sitemap-${part}-14.xml`)).toEqual({ route: `/sitemap-${part}-:n.xml`, kind: "file" });

@@ -320,31 +320,38 @@ describe("crawler files", () => {
     const search = rules.indexOf("User-agent: Applebot");
     const bingRules = rules.slice(bing, search);
     expect(bingRules.slice(1)).toEqual(everyone.slice(2));
-    // The crawlers of AI search indexes: the same rules, the single record pages closed, ten seconds apart.
+    // The crawlers of AI search indexes: the same rules, ten seconds apart.
     const searchRules = rules.slice(search, rules.indexOf("User-agent: ShapBot"));
     const own = searchRules.filter((l) => !l.startsWith("User-agent: "));
     expect(own.slice(0, everyone.length - 2)).toEqual(everyone.slice(2));
-    expect(own.slice(everyone.length - 2)).toEqual(["Disallow: /contracts/", "Disallow: /awards/", "Disallow: /history/", "Crawl-delay: 10"]);
+    expect(own.slice(everyone.length - 2)).toEqual(["Crawl-delay: 10"]);
+    // The pages of single records are closed to every crawler since 2026-11-21 (the operator's ruling): the last
+    // rules of every group, the award notices' own lists kept open.
+    expect(everyone.slice(-5)).toEqual([
+      "Disallow: /contracts/", "Disallow: /history/", "Disallow: /awards/", "Allow: /awards/20", "Allow: /awards/erroneous",
+    ]);
     const open = [
       "/", "/tenders", "/tenders?lang=fr", "/tenders/new", "/tenders/new?lang=fr", "/tenders/cb-100-10000001",
       "/organizations", "/organizations/org-a000000001", "/organizations/org-a000000001?lang=fr", "/organizations/directory/on/2",
       "/buyers/dnd-mdn", "/segments/82", "/rankings", "/rankings?lang=fr", "/rankings/2026", "/corrections", "/corrections?lang=fr",
       "/downloads/organizations.csv",
+      // The award notices' lists: the newest, a year's (the sitemap's "pages" part names each), the erroneous ones.
+      "/awards", "/awards?lang=fr", "/awards/2026", "/awards/2026?lang=fr", "/awards/2000", "/awards/erroneous", "/awards/erroneous?lang=fr",
+      "/expiring/12m", "/guides", "/guides/how-to-bid", "/instruments", "/contracts", "/history",
     ];
     const shut = [
       "/tenders?segment=82", "/tenders?lang=fr&segment=82", "/tenders/new?day=2026-10-30", "/rankings?source=contracts",
       "/organizations/org-a000000001/respond", "/api/stats", "/corrections?organization=org-a000000001",
+      // A record's own page, in either language, and its calendar file.
+      "/contracts/dnd-mdn/C-2026-2027-Q1-00052", "/contracts/dnd-mdn/C-2026-2027-Q1-00052?lang=fr", "/awards/cb-100-10000001",
+      "/awards/cb-100-10000001?lang=fr", "/awards/cb-100-10000001.ics", "/history/W8486-123456", "/history/cw2453588?lang=fr",
     ];
     for (const group of [everyone, bingRules, searchRules]) {
       for (const path of open) expect(robotsAllow(group, path), path).toBe(true);
       for (const path of shut) expect(robotsAllow(group, path), path).toBe(false);
     }
-    // A record's own page is open to a search engine and closed to an AI index's crawler; the lists stay open to both.
-    for (const path of ["/contracts/dnd-mdn/C-2026-2027-Q1-00052", "/awards/cb-100-10000001", "/history/W8486-123456"]) {
-      expect(robotsAllow(everyone, path), path).toBe(true);
-      expect(robotsAllow(searchRules, path), path).toBe(false);
-    }
-    for (const path of ["/awards", "/expiring/12m", "/guides", "/instruments"]) expect(robotsAllow(searchRules, path), path).toBe(true);
+    // No address the sitemaps offer is one the robots file closes: the award years of the "pages" part among them.
+    for (const year of [2000, 2019, 2026, 2031]) expect(robotsAllow(everyone, `/awards/${year}`), String(year)).toBe(true);
     // Training and bulk-scraping crawlers are kept off the Worker entirely.
     const aiGroup = rules.slice(rules.indexOf("User-agent: ShapBot"), rules.indexOf("Disallow: /") + 1);
     for (const bot of ["ClaudeBot", "GPTBot", "Google-Extended", "CCBot", "Bytespider"]) expect(aiGroup).toContain(`User-agent: ${bot}`);

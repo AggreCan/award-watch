@@ -179,24 +179,53 @@ fetches a day and what comes first is what gets crawled:
 4. `/sitemap-active-organizations-<n>.xml`: the organizations with an award
    notice, a contract history record or a published contract dated within
    the last 24 months, the most recent first.
-5. `/sitemap-other-organizations-<n>.xml`: every other organization.
 
 An organization is dated by the night a figure on its profile last changed.
 Each part holds 25,000 pages and serves every page twice, English then
 French, each entry carrying the alternates of both, so a part holds at most
 the protocol's 50,000 addresses.
 
-The published contracts' 128 parts, `/sitemap-contracts-1.xml` to
-`/sitemap-contracts-128.xml`, are no longer in the index: they were about 2.7
-million of the 3.4 million addresses it offered, and readers from a search
-arrive on organization and tender pages. The parts still answer at their
-addresses, read from the records database (503 with a retry time during a
-reload), and the contract pages are unchanged and linked from the
-organization and buyer pages. Listing them again is a one-line change.
+In all, about 72,000 addresses, each language counted: about 2,000 for the
+open notices, 12,000 for the site's own pages, 34 for the guides and 58,000
+for the active organizations.
 
-In all, about 0.67 million addresses, each language counted: about 2,000 for
-the open notices, 12,000 for the site's own pages and 660,000 for the
-organizations.
+**Fewer pages offered to a search engine (the operator's ruling of
+2026-11-21).** From 2026-11-16 Google showed the site far less than the week
+before, with no fault found on the site, and the nightly index sample found
+none of the open notices or guides it asked about in Google's index. The
+site was three weeks old and offered about 670,000 listed addresses and 1.3
+million pages of single records, most of them one row of a public dataset.
+Three things changed together:
+
+- **The pages of single records are closed to every crawler.** `robots.txt`
+  disallows `/contracts/`, `/history/` and `/awards/` in every group, and
+  allows `/awards/20` (a year's list, which the "pages" part names) and
+  `/awards/erroneous`. The pages are unchanged for readers and linked as
+  before. Their 128 sitemap parts, `/sitemap-contracts-<n>.xml`, are the
+  site's 404: a sitemap must not offer what the robots file closes.
+- **An organization's profile with nothing recent says `noindex`.** The
+  organization's last record date (award notices, contract history,
+  published contracts, grants and lobbying communications) and the newest
+  record its profile counts for matching notices both fall before the 24
+  months to the data date, and the profile lists no contract ending within
+  twelve months. About three profiles in four. A page that says `noindex`
+  names no canonical address and no alternates; a reader sees the same
+  page. Without a data date, or on a profile written before the last record
+  date was exported, the page stays open.
+- **The sitemap names no other organization.** The part
+  `/sitemap-other-organizations-<n>.xml` is retired: the export no longer
+  writes it, its address is the site's 404, and the index as served leaves
+  out any entry whose file the site does not serve, so an index written the
+  night before is right from the deploy.
+
+The window of 24 months is one figure held in the site and in the nightly
+export, kept equal by tests on both sides, and the profile's rule reads the
+same date the sitemap's part reads, so the sitemap never names a page that
+says `noindex`. An organization with a recent grant or lobbying record and
+no recent contract stays open to a search engine and is in no part.
+
+Each of the three can be undone on its own; the engineering notes on search
+engines name the places.
 
 **Links into the guides.** The record pages (a tender notice, an award
 notice, a contract history record, a published contract, a standing offer)

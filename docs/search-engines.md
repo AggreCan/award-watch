@@ -295,7 +295,8 @@ page); a published contract `/contracts/:dept/:reference`; the record tables
 a radar window's `/expiring/:window/rows.csv`; the contract sitemaps
 `/sitemap-contracts-:n.xml` and each of the pipeline's sitemap parts
 (`/sitemap-open-tenders-:n.xml`, `/sitemap-pages-:n.xml`,
-`/sitemap-active-organizations-:n.xml`, `/sitemap-other-organizations-:n.xml`,
+`/sitemap-active-organizations-:n.xml`; until 2026-11-21 also
+`/sitemap-other-organizations-:n.xml`, now no route and counted `other`,
 so the counts say which part a search engine reads; the index, the guides'
 part and an older numbered part stay `/sitemap.xml`); `/interest/stop`; the
 directory's old address
@@ -1007,9 +1008,29 @@ organizations, found by their names.
 | 2 | `/sitemap-pages-<n>.xml` | the home page, the overview, the lists, the rankings, the monthly record's index, the buyers, the segments, the award years, the radar's three windows, the directory pages, the standing offers and supply arrangements, each month of the monthly record | below |
 | 3 | `/sitemap-guides.xml` | the guides' index and each guide | the day the guide was last checked against its sources |
 | 4 | `/sitemap-active-organizations-<n>.xml` | the organizations with an award notice, a PSPC contract history record or a published contract dated within 24 months of the data date, the most recent record first | the night a figure on the profile last changed |
-| 5 | `/sitemap-other-organizations-<n>.xml` | every other organization, by id | the same |
 
-The nightly export writes parts 1, 2, 4 and 5 and the index
+Until 2026-11-21 a fifth part, `/sitemap-other-organizations-<n>.xml`, named
+every other organization. It is retired: those profiles say `noindex`
+(`docs/seo.md`, *Fewer pages offered to a search engine*), the export no
+longer writes the part, its address is the site's 404, and the index as
+served drops any entry whose file the site does not serve
+(`withServedParts` in `site/src/sitemaps.ts`).
+
+**Which profiles say `noindex`.** `dormantProfile` in `site/src/seo.ts`: the
+organization's `last_seen` and its matching block's `newest` both fall before
+`activeSince(data date)` (`ACTIVE_MONTHS`, 24, the arithmetic of
+`export_static.active_since`), and the profile's `expiring` rows are empty.
+It is false without a data date or when the file carries no `last_seen`.
+`ACTIVE_MONTHS` is held equal in `site/src/seo.ts` and
+`pipeline/awardwatch_pipeline/export_static.py` by
+`pipeline/tests/test_sitemaps.py` and `site/test/seo-dormant.test.ts`. To
+undo the three changes of 2026-11-21: take the five lines out of each group
+of `site/public/robots.txt`; set `CONTRACT_SITEMAPS_SERVED` (and
+`CONTRACT_SITEMAPS_LISTED` to name the parts again); return `false` from
+`dormantProfile`; and put `other-organizations` back in `SITEMAP_PARTS` and
+`PIPELINE_PARTS`.
+
+The nightly export writes parts 1, 2 and 4 and the index
 (`pipeline/awardwatch_pipeline/export_static.py`, `sitemap_parts`); the
 Worker adds part 3 after the last of part 2 (`site/src/sitemaps.ts`). A
 notice that closes leaves part 1 the next night; its page stays. An
@@ -1039,18 +1060,23 @@ the publication date of the last file that held it. Pages that change only
 with the code (the methodology, the terms) carry none. The index dates each
 part by the night its file last changed, from the same table.
 
-**Published contracts.** Their pages are not listed. The 128 parts
-`/sitemap-contracts-1.xml` to `/sitemap-contracts-128.xml` held about 2.7
-million addresses with French, four fifths of what the index offered, while
-Google had indexed about 10,500 of the 3.25 million addresses it knew and
-readers from search landed on organization and tender pages. The pages are
-unchanged: reachable, linked from organization and buyer pages, indexable,
-with their canonical links, and the parts still answer at their addresses,
-so a search engine that holds them can keep reading them. The constant
-`CONTRACT_SITEMAPS_LISTED` in `site/src/sitemaps.ts` lists them again, after
-every other part, when set to `true` and deployed. A constant rather than a
-Worker variable: a variable changed in the dashboard is replaced by the
-value in `wrangler.jsonc` at the next deploy, so either takes a commit.
+**Published contracts.** Their pages are not listed, and since 2026-11-21
+they are closed to every crawler with the award notices' and the contract
+history's own pages (`robots.txt`: `Disallow: /contracts/`, `/history/`,
+`/awards/`, with `Allow: /awards/20` and `Allow: /awards/erroneous` for the
+award notices' lists). The 128 parts `/sitemap-contracts-1.xml` to
+`/sitemap-contracts-128.xml` held about 2.7 million addresses with French,
+four fifths of what the index offered, while Google had indexed about 10,500
+of the 3.25 million addresses it knew and readers from search landed on
+organization and tender pages. The pages are unchanged for readers:
+reachable and linked from organization and buyer pages. The parts are the
+site's 404, since a sitemap must not offer what the robots file closes. Two
+constants in `site/src/sitemaps.ts` hold this: `CONTRACT_SITEMAPS_SERVED`
+answers the parts again and `CONTRACT_SITEMAPS_LISTED` names them in the
+index after every other part (it does nothing while the parts are not
+served); open the pages in `robots.txt` first. Constants rather than Worker
+variables: a variable changed in the dashboard is replaced by the value in
+`wrangler.jsonc` at the next deploy, so either takes a commit.
 
 **Languages.** Each part lists every page twice, its English address and its
 French one (`?lang=fr`), each entry naming both and `x-default` as alternates

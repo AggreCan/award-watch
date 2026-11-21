@@ -147,7 +147,7 @@ change there. Output tree (under data/out/static):
                                 (feeds/canada/monthly.xml, feeds.write_monthly_feed)
   sitemaps/index.xml, sitemaps/sitemap-<part>-<n>.xml   the sitemap index and its parts, in SITEMAP_PARTS order
                                 (sitemap_parts: the open notices, the site's own pages, the organizations with
-                                recent activity, the other organizations), dated by page_dates
+                                recent activity; no other organization is named), dated by page_dates
 
 Open and closed. CanadaBuys' open-notice file keeps listing some notices for
 months after they close. A notice's status in the export is its status on the
@@ -340,17 +340,19 @@ SITEMAP_MAX_URLS = 25_000
 SITEMAP_NS = "http://www.sitemaps.org/schemas/sitemap/0.9"
 # The parts of the sitemap index, in the order a search engine reads them: the
 # open tender notices, the site's own pages (the Worker adds the guides' part
-# right after them), the organizations with recent activity, then the other
-# organizations. Each part is written as sitemaps/sitemap-<name>-<n>.xml and
-# served at /sitemap-<name>-<n>.xml (site/src/sitemaps.ts PIPELINE_PARTS, held
-# equal to this by site/test/sitemaps.test.ts). The published contracts' pages
-# are in none of them: the Worker can list them from the records database
-# (/sitemap-contracts-<n>.xml) behind its CONTRACT_SITEMAPS_LISTED switch.
-SITEMAP_PARTS = ("open-tenders", "pages", "active-organizations", "other-organizations")
+# right after them), the organizations with recent activity. Each part is
+# written as sitemaps/sitemap-<name>-<n>.xml and served at
+# /sitemap-<name>-<n>.xml (site/src/sitemaps.ts PIPELINE_PARTS, held equal to
+# this by site/test/sitemaps.test.ts). Since 2026-11-21 (the operator's ruling)
+# nothing else is offered to a search engine: the other organizations, whose
+# profiles the site marks noindex (site/src/seo.ts dormantProfile), have no
+# part, and the pages of single records are closed by the site's robots.txt.
+SITEMAP_PARTS = ("open-tenders", "pages", "active-organizations")
 # An organization is active when the newest record its profile's "matching"
 # block counts (an award notice, a PSPC contract history record or a published
 # contract: profile_matching.matching_block's newest) falls within this many
-# months of the data date.
+# months of the data date. The site reads the same figure for its noindex rule
+# (site/src/seo.ts ACTIVE_MONTHS; tests/test_sitemaps.py holds the two equal).
 ACTIVE_MONTHS = 24
 # /pro, /tenders/same-day and /analytics answer while the site's accounts
 # switch is on, as it is in production.
@@ -2448,7 +2450,8 @@ def sitemap_parts(m: Model, out: Path, skip: Collection[str] = ()) -> list[tuple
     a segment, a year, a window and the instruments' index are dated by page_dates.
     active-organizations: the organizations whose newest counted record (m.activity) falls on or after
     active_since(data date), the most recent first, ties by id.
-    other-organizations: every other organization, by id.
+    Every other organization is in no part: the site marks a profile with nothing recent noindex
+    (site/src/seo.ts dormantProfile), and a sitemap must not name a page that says so.
     An organization is dated by its updated_at, which organizations.recompute moves only when a figure of its
     profile changed. A supplier withheld as a person has no organization row, so no part names it.
 
@@ -2487,17 +2490,14 @@ def sitemap_parts(m: Model, out: Path, skip: Collection[str] = ()) -> list[tuple
 
     since = active_since(m.today)
     active: list[tuple[str, str, str | None]] = []
-    other: Entries = []
     for r in conn.execute("SELECT id, updated_at FROM organizations ORDER BY id"):
         newest = m.activity.get(r["id"])
         if newest and newest >= since:
             # A record dated after the data date (a published contract's date ahead) counts as of the data date.
             active.append((min(newest, m.as_of), r["id"], _lastmod(r["updated_at"])))
-        else:
-            other.append((f"/organizations/{r['id']}", _lastmod(r["updated_at"])))
     active.sort(key=lambda a: a[0], reverse=True)
     recent: Entries = [(f"/organizations/{oid}", mod) for _, oid, mod in active]
-    return list(zip(SITEMAP_PARTS, (tenders, pages, recent, other)))
+    return list(zip(SITEMAP_PARTS, (tenders, pages, recent)))
 
 
 def sitemap_chunks(entries: Sequence, max_urls: int = SITEMAP_MAX_URLS) -> list[Sequence]:

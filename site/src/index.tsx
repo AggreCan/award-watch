@@ -295,9 +295,9 @@ app.get("/robots.txt", robotsTxt);
 app.get("/llms.txt", llmsTxt);
 // The guides' part, written from src/guides.ts (src/sitemaps.ts).
 app.get(`/${GUIDES_SITEMAP}`, () => guidesSitemap());
-// The published contracts' parts, read from the records database (src/sitemaps.ts); they answer whether or
-// not the index names them (CONTRACT_SITEMAPS_LISTED).
-app.get("/:file{sitemap-contracts-[0-9]+\\.xml}", contractSitemap);
+// The published contracts' parts (src/sitemaps.ts): the site's 404 while robots.txt closes those pages
+// (CONTRACT_SITEMAPS_SERVED). Called with the context alone: the handler's second argument is its own switch.
+app.get("/:file{sitemap-contracts-[0-9]+\\.xml}", (c) => contractSitemap(c));
 // The index and the pipeline's parts (src/sitemaps.ts sitemapAsset says which file an address names). After
 // the two above: this pattern matches their addresses too.
 app.get("/:file{sitemap[a-z0-9-]*\\.xml}", sitemapFile);

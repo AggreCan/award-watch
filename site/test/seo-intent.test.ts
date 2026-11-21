@@ -13,11 +13,12 @@ import { homeRequest } from "./home";
 import { CONTRACT_SITEMAP_SQL } from "../src/records_tables";
 import { proIncludes } from "../src/pages/pro";
 import { DESCRIPTION_MAX, TITLE_MAX, expiringWindowSeo } from "../src/seo";
+import { Hono } from "hono";
 import {
-  CONTRACT_PARTS, CONTRACT_SITEMAPS_LISTED, SITEMAP_PART_MAX, SITEMAP_URL_MAX, contractPartKeys, sitemapIndex as servedIndex,
-  withContractParts, withGuidesPart, withLanguages,
+  CONTRACT_PARTS, CONTRACT_SITEMAPS_LISTED, CONTRACT_SITEMAPS_SERVED, SITEMAP_PART_MAX, SITEMAP_URL_MAX, contractPartKeys, contractSitemap,
+  sitemapIndex as servedIndex, withContractParts, withGuidesPart, withLanguages,
 } from "../src/sitemaps";
-import type { Env } from "../src/env";
+import type { AppEnv, Env } from "../src/env";
 import { guidesChecked } from "../src/guides";
 import { onEnv, offEnv, useAccountsDb } from "./accounts-helpers";
 import { testEnv } from "./assets";
@@ -520,6 +521,13 @@ async function seedRecords(state: string): Promise<void> {
   ]);
 }
 
+// The published contracts' parts as they answer when served (src/sitemaps.ts contractSitemap with its switch on).
+// The site ships them closed since 2026-11-21 (CONTRACT_SITEMAPS_SERVED), so the reading is held here on a route
+// of the test's own, and the site's own answer, 404, in the tests below and in test/sitemaps.test.ts.
+const servedParts = new Hono<AppEnv>().get("/:file{sitemap-contracts-[0-9]+\\.xml}", (c) => contractSitemap(c, true));
+const getServed = (path: string, e: object = onEnv()) => servedParts.request(path, {}, e);
+const servedXml = async (path: string) => (await getServed(path)).text();
+
 describe("the published contracts' sitemaps", () => {
   beforeAll(() => seedRecords("ready"));
 
@@ -530,22 +538,23 @@ describe("the published contracts' sitemaps", () => {
     for (let n = 1; n < CONTRACT_PARTS; n++) expect(BigInt(contractPartKeys(n + 1)[0])).toBe(BigInt(contractPartKeys(n)[1]) + 1n);
   });
 
-  it("list each contract of the part in both languages, at the page's own address", async () => {
-    const one = await get("/sitemap-contracts-1.xml");
+  it("list each contract of the part in both languages, at the page's own address, when served", async () => {
+    const one = await getServed("/sitemap-contracts-1.xml");
     expect(one.status).toBe(200);
     expect(one.headers.get("content-type")).toBe("application/xml; charset=utf-8");
     expect(locsOf(await one.text())).toEqual([
       `${O}/contracts/dnd-mdn/C-FIRST`, `${O}/contracts/dnd-mdn/C-FIRST?lang=fr`,
       `${O}/contracts/hc-sc/W8486-123456%2F001%2FZM`, `${O}/contracts/hc-sc/W8486-123456%2F001%2FZM?lang=fr`,
     ]);
-    expect(locsOf(await html("/sitemap-contracts-2.xml"))).toEqual([`${O}/contracts/dnd-mdn/C-SECOND`, `${O}/contracts/dnd-mdn/C-SECOND?lang=fr`]);
+    expect(locsOf(await servedXml("/sitemap-contracts-2.xml"))).toEqual([`${O}/contracts/dnd-mdn/C-SECOND`, `${O}/contracts/dnd-mdn/C-SECOND?lang=fr`]);
     // A department in capitals at its lower-case address; one the page would refuse is left out.
-    expect(locsOf(await html("/sitemap-contracts-65.xml"))).toEqual([`${O}/contracts/dnd-mdn/C-ZERO`, `${O}/contracts/dnd-mdn/C-ZERO?lang=fr`]);
-    expect(locsOf(await html(`/sitemap-contracts-${CONTRACT_PARTS}.xml`))).toEqual([`${O}/contracts/dnd-mdn/C-LAST`, `${O}/contracts/dnd-mdn/C-LAST?lang=fr`]);
-    expect(locsOf(await html("/sitemap-contracts-3.xml"))).toEqual([]);
+    expect(locsOf(await servedXml("/sitemap-contracts-65.xml"))).toEqual([`${O}/contracts/dnd-mdn/C-ZERO`, `${O}/contracts/dnd-mdn/C-ZERO?lang=fr`]);
+    expect(locsOf(await servedXml(`/sitemap-contracts-${CONTRACT_PARTS}.xml`))).toEqual([`${O}/contracts/dnd-mdn/C-LAST`, `${O}/contracts/dnd-mdn/C-LAST?lang=fr`]);
+    expect(locsOf(await servedXml("/sitemap-contracts-3.xml"))).toEqual([]);
     // The listed address is one the page answers.
     expect((await get("/contracts/hc-sc/W8486-123456%2F001%2FZM", offEnv())).status).not.toBe(400);
     for (const bad of ["/sitemap-contracts-0.xml", `/sitemap-contracts-${CONTRACT_PARTS + 1}.xml`, "/sitemap-contracts-01.xml", "/sitemap-contracts-x.xml"]) {
+      expect((await getServed(bad)).status, bad).toBe(404);
       expect((await get(bad)).status, bad).toBe(404);
     }
   });
@@ -557,23 +566,28 @@ describe("the published contracts' sitemaps", () => {
     expect(steps).toMatch(/SEARCH \w+ USING INTEGER PRIMARY KEY \(rowid>\? AND rowid<\?\)/);
   });
 
-  it("are left out of the index while CONTRACT_SITEMAPS_LISTED is false, whatever the records database's state, and still answer", async () => {
+  it("are left out of the index and are the site's 404 while robots.txt closes their pages, whatever the records database's state", async () => {
     expect(CONTRACT_SITEMAPS_LISTED).toBe(false);
+    expect(CONTRACT_SITEMAPS_SERVED).toBe(false);
     // The index is the pipeline's with the guides' part alone added (src/sitemaps.ts), ready or not.
     const withGuides = withGuidesPart(sitemapIndex);
     expect(withGuides).toBe(sitemapIndex.replace("</sitemapindex>", `<sitemap><loc>${O}/sitemap-guides.xml</loc><lastmod>${guidesChecked()}</lastmod></sitemap></sitemapindex>`));
     expect(await (await get("/sitemap.xml")).text()).toBe(withGuides);
     expect(await (await get("/sitemap.xml", { ...onEnv(), RECORDS: undefined })).text()).toBe(withGuides);
-    // A part a search engine already holds answers as it did.
-    expect((await get("/sitemap-contracts-1.xml")).status).toBe(200);
+    // A part a search engine still holds is gone: a sitemap must not offer what the robots file closes.
+    for (const path of ["/sitemap-contracts-1.xml", `/sitemap-contracts-${CONTRACT_PARTS}.xml`]) expect((await get(path)).status, path).toBe(404);
+    expect((await get("/sitemap-contracts-1.xml", { ...onEnv(), RECORDS: undefined })).status).toBe(404);
+    // Served, a part answers whether or not the index names it, and asks a crawler back while the database is not ready.
+    expect((await getServed("/sitemap-contracts-1.xml")).status).toBe(200);
     await seedRecords("loading");
     try {
       expect(await (await get("/sitemap.xml")).text()).toBe(withGuides);
-      const part = await get("/sitemap-contracts-1.xml");
+      expect((await get("/sitemap-contracts-1.xml")).status).toBe(404);
+      const part = await getServed("/sitemap-contracts-1.xml");
       expect(part.status).toBe(503);
       expect(part.headers.get("retry-after")).toBe("3600");
       expect(part.headers.get("cache-control")).toBe("no-store");
-      expect((await get("/sitemap-contracts-1.xml", { ...onEnv(), RECORDS: undefined })).status).toBe(503);
+      expect((await getServed("/sitemap-contracts-1.xml", { ...onEnv(), RECORDS: undefined })).status).toBe(503);
     } finally {
       await seedRecords("ready");
     }

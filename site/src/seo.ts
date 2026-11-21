@@ -794,7 +794,52 @@ export function recordTitle(name: string, kind: "organization" | "buyer", lang: 
   return [pageTitle(named), named].find((s) => s.length <= TITLE_MAX) ?? pageTitle(name);
 }
 
-export function organizationSeo(profile: Profile, lang: Lang, crumbs: { name: string; path?: string }[]): Seo {
+// Which organization profiles a search engine is asked to index (the
+// operator's ruling of 2026-11-21). A site this young gets few fetches a day
+// from a search engine and is judged by all of its pages together, and about
+// three profiles in four hold nothing recent. A profile with no record in the
+// ACTIVE_MONTHS months to the data date, and no contract ending in the next
+// twelve, says noindex: it stays a page for readers, linked as before, and
+// the sitemaps do not name it. The pipeline's sitemap part lists the
+// organizations with a counted record in the same window
+// (export_static.ACTIVE_MONTHS and active_since; pipeline/tests/test_sitemaps.py
+// holds the two figures equal), and the same block's date is read here, so a
+// profile the sitemap names is never one this rule closes.
+export const ACTIVE_MONTHS = 24;
+
+// The first day a record may fall on to count: the same day of the month,
+// months before the data date, or that month's last day when it is shorter
+// (export_static.active_since). Null for a data date that does not parse.
+export function activeSince(dataAsOf: string | null | undefined, months: number = ACTIVE_MONTHS): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dataAsOf ?? "");
+  if (!m) return null;
+  const total = Number(m[1]) * 12 + Number(m[2]) - 1 - months;
+  const year = Math.floor(total / 12);
+  const month = total - year * 12 + 1;
+  const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${String(year).padStart(4, "0")}-${two(month)}-${two(Math.min(Number(m[3]), last))}`;
+}
+
+const dayOf = (v: unknown): string | null => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : null);
+
+// Whether a profile holds nothing recent. The dates read: the organization's
+// last record date (organizations.last_seen: award notices, contract history,
+// published contracts, grants and lobbying communications) and the newest
+// record of its matching block (the date the sitemap's part reads). Without a
+// data date, or on a profile written before the last record date was
+// exported, nothing can be said and the page stays open.
+export function dormantProfile(profile: Profile, dataAsOf: string | null | undefined): boolean {
+  const since = activeSince(dataAsOf);
+  const o = profile.organization as { last_seen?: unknown };
+  if (!since || o.last_seen === undefined) return false;
+  const matching = profile.matching;
+  const newest = matching !== null && typeof matching === "object" ? (matching as { newest?: unknown }).newest : null;
+  if ([dayOf(o.last_seen), dayOf(newest)].some((d) => d !== null && d >= since)) return false;
+  return !(profile.expiring && Array.isArray(profile.expiring.rows) && profile.expiring.rows.length > 0);
+}
+
+export function organizationSeo(profile: Profile, lang: Lang, crumbs: { name: string; path?: string }[], dataAsOf?: string | null): Seo {
   const o = profile.organization;
   return {
     path: `/organizations/${o.id}`,
@@ -802,6 +847,7 @@ export function organizationSeo(profile: Profile, lang: Lang, crumbs: { name: st
     description: organizationDescription(profile, lang),
     socialTitle: o.display_name,
     jsonLd: [breadcrumbJsonLd(crumbs)],
+    ...(dormantProfile(profile, dataAsOf) ? { noindex: true } : {}),
   };
 }
 

@@ -1,8 +1,8 @@
 """Sitemaps: the index names its parts in the order a search engine should read them (the open tender notices,
-the site's own pages, the organizations with recent activity, the other organizations), each part at most
-25,000 entries to a file (the Worker serves each page twice, English and French, within the protocol's 50,000),
-and every lastmod is a date on which the page really changed: a night that leaves a page as it was leaves its
-date as it was."""
+the site's own pages, the organizations with recent activity), each part at most 25,000 entries to a file (the
+Worker serves each page twice, English and French, within the protocol's 50,000), and every lastmod is a date on
+which the page really changed: a night that leaves a page as it was leaves its date as it was. An organization
+with nothing recent is in no part: the site marks its profile noindex (site/src/seo.ts dormantProfile)."""
 
 import re
 import xml.etree.ElementTree as ET
@@ -56,16 +56,17 @@ def seed_with_an_old_supplier(conn):
 
 
 def test_parts_respect_the_limit_and_the_index_lists_them_in_their_order(tmp_path):
+    # The writer takes any named parts; "regions" stands for a part with entries after one with none.
     parts = [("open-tenders", [("/tenders/a&b", "2026-10-11")]),
              ("pages", [("/", "2026-10-12"), ("/methodology", None), ("/buyers/dnd-mdn", None)]),
              ("active-organizations", []),
-             ("other-organizations", [("/organizations/org-0000000001", "2026-10-15")])]
+             ("regions", [("/organizations/org-0000000001", "2026-10-15")])]
     counts = es.write_sitemaps(parts, tmp_path, BASE + "/", max_urls=2)
     assert counts == {"sitemap_files": 4, "sitemap_urls": 5, "sitemap_open_tenders": 1, "sitemap_pages": 3,
-                      "sitemap_active_organizations": 0, "sitemap_other_organizations": 1}
+                      "sitemap_active_organizations": 0, "sitemap_regions": 1}
     files = sorted(p.name for p in (tmp_path / "sitemaps").iterdir())
-    assert files == ["index.xml", "sitemap-open-tenders-1.xml", "sitemap-other-organizations-1.xml", "sitemap-pages-1.xml",
-                     "sitemap-pages-2.xml"]
+    assert files == ["index.xml", "sitemap-open-tenders-1.xml", "sitemap-pages-1.xml", "sitemap-pages-2.xml",
+                     "sitemap-regions-1.xml"]
     assert locs(parse(tmp_path / "sitemaps" / "sitemap-pages-1.xml"), "url") == [(f"{BASE}/", "2026-10-12"),
                                                                                 (f"{BASE}/methodology", None)]
     # XML special characters are escaped and parse back.
@@ -76,7 +77,7 @@ def test_parts_respect_the_limit_and_the_index_lists_them_in_their_order(tmp_pat
     # no file. Without the ledger, an index entry carries the newest date inside its file.
     assert locs(index, "sitemap") == [(f"{BASE}/sitemap-open-tenders-1.xml", "2026-10-11"),
                                       (f"{BASE}/sitemap-pages-1.xml", "2026-10-12"), (f"{BASE}/sitemap-pages-2.xml", None),
-                                      (f"{BASE}/sitemap-other-organizations-1.xml", "2026-10-15")]
+                                      (f"{BASE}/sitemap-regions-1.xml", "2026-10-15")]
 
 
 def test_full_size_split():
@@ -102,8 +103,17 @@ def test_the_active_window_counts_back_whole_months():
     assert es.active_since(date(2026, 1, 10), months=1) == "2025-12-10"
 
 
+def test_the_site_reads_the_same_window_for_its_noindex_rule():
+    """site/src/seo.ts marks a profile noindex by the same count of months (its activeSince is this module's
+    active_since, held to the same cases by site/test/seo-dormant.test.ts)."""
+    source = (Path(__file__).resolve().parents[2] / "site" / "src" / "seo.ts").read_text(encoding="utf-8")
+    found = re.findall(r"^export const ACTIVE_MONTHS = (\d+);$", source, flags=re.M)
+    assert found == [str(es.ACTIVE_MONTHS)]
+
+
 def test_the_part_names_are_the_ones_the_worker_serves():
-    assert es.SITEMAP_PARTS == ("open-tenders", "pages", "active-organizations", "other-organizations")
+    # No part for the organizations with nothing recent since 2026-11-21: the site marks their profiles noindex.
+    assert es.SITEMAP_PARTS == ("open-tenders", "pages", "active-organizations")
     assert all(re.fullmatch(r"[a-z]+(?:-[a-z]+)*", name) for name in es.SITEMAP_PARTS)
     # The Worker writes these two itself; a pipeline part never takes their names.
     assert not {"contracts", "guides"} & set(es.SITEMAP_PARTS)
@@ -116,8 +126,8 @@ def test_the_export_writes_the_parts_in_order(conn, tmp_path):
     counts = es.export_static(conn, out, today=TODAY, base_url=BASE)
     parts = parts_of(out)
     assert [name for name, _, _ in parts] == ["sitemap-open-tenders-1.xml", "sitemap-pages-1.xml",
-                                             "sitemap-active-organizations-1.xml", "sitemap-other-organizations-1.xml"]
-    tenders, pages, active, other = ([loc.replace(BASE, "") for loc, _ in entries] for _, _, entries in parts)
+                                             "sitemap-active-organizations-1.xml"]
+    tenders, pages, active = ([loc.replace(BASE, "") for loc, _ in entries] for _, _, entries in parts)
 
     # The open notices, newest first: by the night their newest version first appeared, then by publication date
     # (the backlog notice published in 2024 last), then by reference. The expired notice is in no part.
@@ -136,24 +146,25 @@ def test_the_export_writes_the_parts_in_order(conn, tmp_path):
     # Active: a record in the last 24 months, the most recent first (Northern's award of 2026-10-20, Acme's history
     # record of 2026-06-01, the foreign supplier's award of 2025-02-01). The supplier last seen in 2021 is not.
     assert active == [f"/organizations/{ids[n]}" for n in (NORTH, ACME, FOREIGN)]
-    assert other == [f"/organizations/{ids[OLD]}"]
 
-    # Every organization is in exactly one part; the supplier withheld as a person is in none, by id or by name.
+    # Every other organization is in no part, by id anywhere in the files; nor is the supplier withheld as a
+    # person, by id or by name.
     live = {r[0] for r in conn.execute("SELECT id FROM organizations")}
-    assert {p.rsplit("/", 1)[1] for p in active + other} == live
+    assert {p.rsplit("/", 1)[1] for p in active} == live - {ids[OLD]}
     for path in (out / "sitemaps").iterdir():
         text = path.read_text(encoding="utf-8")
         assert PERSON not in text and PERSON_STREET not in text
-    assert not any("?" in p for p in tenders + pages + active + other)
+        assert ids[OLD] not in text, path.name
+    assert not any("?" in p for p in tenders + pages + active)
 
-    assert counts["sitemap_files"] == 4
+    assert counts["sitemap_files"] == 3
     assert counts["sitemap_open_tenders"] == 4 and counts["sitemap_active_organizations"] == 3
-    assert counts["sitemap_other_organizations"] == 1 and counts["sitemap_pages"] == len(pages)
-    assert counts["sitemap_urls"] == len(tenders) + len(pages) + len(active) + len(other)
+    assert "sitemap_other_organizations" not in counts and counts["sitemap_pages"] == len(pages)
+    assert counts["sitemap_urls"] == len(tenders) + len(pages) + len(active)
     # The run status keeps the first 200 characters of the stage's detail, so the sitemap's counts lead it.
     detail = conn.execute("SELECT detail FROM sources_log WHERE source = 'export'").fetchone()[0]
-    assert detail[:200].startswith("static sitemap_files=4 sitemap_urls=")
-    assert "sitemap_other_organizations=1" in detail[:200]
+    assert detail[:200].startswith("static sitemap_files=3 sitemap_urls=")
+    assert "sitemap_active_organizations=3" in detail[:200] and "sitemap_other" not in detail
 
     text = (out / "sitemaps" / "index.xml").read_text(encoding="utf-8")
     assert text.startswith('<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex ')
@@ -199,7 +210,7 @@ def test_a_page_that_did_not_change_keeps_its_date_from_one_night_to_the_next(co
     assert all(second[f"{BASE}{p}"] == "2026-11-01" for p in moved)
     # Everything else kept its date: the open notices, the organizations, the buyers, the segments, the years, the
     # directories, the lists that did not move, and the parts and their index entries.
-    for path in ("/tenders/cb-100-1", f"/organizations/{ids[ACME]}", f"/organizations/{ids[OLD]}", "/buyers/dnd-mdn",
+    for path in ("/tenders/cb-100-1", f"/organizations/{ids[ACME]}", f"/organizations/{ids[NORTH]}", "/buyers/dnd-mdn",
                  "/segments/72", "/awards/2026", "/awards/2021", "/organizations/directory/on", "/tenders", "/awards",
                  "/segments", "/rankings", "/feeds", "/organizations", "/buyers", "/monthly/2026-09", "/monthly/2025-11",
                  "/sitemap-open-tenders-1.xml", "/sitemap-active-organizations-1.xml"):
@@ -209,17 +220,19 @@ def test_a_page_that_did_not_change_keeps_its_date_from_one_night_to_the_next(co
 def test_a_change_moves_the_date_of_the_pages_it_reaches_and_no_other(conn, tmp_path):
     ids = seed_with_an_old_supplier(conn)
     first = everything_after(conn, tmp_path / "one", TODAY)
-    # The next night a 2021 notice of the old supplier is amended: its profile, its year's page and the parts
-    # holding them change; the other years, the other organizations and the open notices do not.
+    # The next night a 2021 notice of the old supplier is amended: its year's page and the part holding it change;
+    # the other years, the organizations the parts name and the open notices do not. The supplier's own profile,
+    # with nothing recent, is named by no part on either night.
     award(conn, "AW-OLD", 1, OLD, value=9_000.0, awarded="2021-05-05", published="2021-05-06", first_seen="2026-11-01")
     conn.commit()
     organizations.recompute(conn, now="2026-11-01T13:00:00Z")
     indicators.compute(conn, now="2026-11-01T13:00:00Z")
     conn.commit()
     second = everything_after(conn, tmp_path / "two", TODAY + timedelta(days=1))
-    assert second[f"{BASE}/organizations/{ids[OLD]}"] == "2026-11-01"
     assert second[f"{BASE}/awards/2021"] == "2026-11-01"
-    assert second[f"{BASE}/sitemap-other-organizations-1.xml"] == "2026-11-01"
+    assert second[f"{BASE}/sitemap-pages-1.xml"] == "2026-11-01"
+    for night in (first, second):
+        assert f"{BASE}/organizations/{ids[OLD]}" not in night
     for path in (f"/organizations/{ids[ACME]}", "/awards/2026", "/tenders/cb-100-1", "/sitemap-open-tenders-1.xml",
                  "/sitemap-active-organizations-1.xml"):
         assert second[f"{BASE}{path}"] == first[f"{BASE}{path}"], path

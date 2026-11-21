@@ -319,7 +319,7 @@ def test_an_export_without_its_required_files_is_not_deployed(tmp_path):
 def test_an_export_whose_sitemap_index_names_a_part_with_no_file_is_not_deployed(tmp_path):
     static = tmp_path / "static"
     write_export(static)
-    parts = ["sitemap-open-tenders-1.xml", "sitemap-pages-1.xml", "sitemap-other-organizations-1.xml"]
+    parts = ["sitemap-open-tenders-1.xml", "sitemap-pages-1.xml", "sitemap-active-organizations-1.xml"]
     (static / "sitemaps" / "index.xml").write_text(
         '<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
         + "\n".join(f"<sitemap><loc>https://awardwatch.ca/{p}</loc><lastmod>2026-10-18</lastmod></sitemap>" for p in parts)

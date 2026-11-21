@@ -566,7 +566,7 @@ export async function organizationPage(c: Context<AppEnv>): Promise<Response> {
   const lines = profile.expiring ? await sectionLines(c, lang, profile.expiring.rows) : undefined;
   return page(
     c,
-    <Layout lang={lang} title={o.display_name} dataAsOf={stats.data_as_of} active="/organizations" seo={organizationSeo(profile, lang, crumbs)}>
+    <Layout lang={lang} title={o.display_name} dataAsOf={stats.data_as_of} active="/organizations" seo={organizationSeo(profile, lang, crumbs, stats.data_as_of)}>
       <PageHead lang={lang} crumbs={crumbs} title={o.display_name} lead={placeText(lang, o)}
         actions={<>
           <button type="button" class="btn" id="watch-toggle" style="display:none" title={t(lang, "watch.button_title")}

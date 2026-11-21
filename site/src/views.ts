@@ -202,7 +202,7 @@ export function routeTemplate(method: string, path: string): { route: string; ki
   if (/^\/sitemap(?:-[0-9]+|-guides)?\.xml$/.test(path)) return { route: "/sitemap.xml", kind: "file" };
   // The pipeline's named parts (src/sitemaps.ts PIPELINE_PARTS; a test holds this list equal to it), each counted
   // apart, so the counts say which part a search engine reads.
-  const part = /^\/sitemap-(open-tenders|pages|active-organizations|other-organizations)-[0-9]+\.xml$/.exec(path);
+  const part = /^\/sitemap-(open-tenders|pages|active-organizations)-[0-9]+\.xml$/.exec(path);
   if (part) return { route: `/sitemap-${part[1]}-:n.xml`, kind: "file" };
   // The published contracts' parts (src/sitemaps.ts contractSitemap), apart from the others: their own crawl.
   if (/^\/sitemap-contracts-[0-9]+\.xml$/.test(path)) return { route: "/sitemap-contracts-:n.xml", kind: "file" };

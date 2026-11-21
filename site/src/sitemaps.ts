@@ -10,8 +10,10 @@
 // The index, in the order a search engine reads it (a young site gets few
 // fetches a day, so what comes first is what gets crawled): the open tender
 // notices, the site's own pages, the guides, the organizations with recent
-// activity, the other organizations. The published contracts' parts follow
-// only while CONTRACT_SITEMAPS_LISTED is true.
+// activity. Since 2026-11-21 (the operator's ruling) it names nothing else:
+// the other organizations' profiles say noindex (seo.ts dormantProfile) and
+// robots.txt closes the pages of single records, the published contracts
+// among them, so neither is offered to a search engine.
 //
 // Languages: the pipeline lists each page once, by its English address. The
 // Worker owns the addressing (canonicalUrl in seo.ts: the plain address is
@@ -49,16 +51,20 @@ export const SITEMAP_PART_MAX = 25_000;
 // /sitemap-<part>-<n>.xml from data/sitemaps/ (export_static.SITEMAP_PARTS;
 // test/sitemaps.test.ts holds the two equal). An export written before the
 // parts had names numbers them alone (/sitemap-<n>.xml), and those are still
-// served.
-export const PIPELINE_PARTS = ["open-tenders", "pages", "active-organizations", "other-organizations"] as const;
+// served. A part an earlier export wrote and this list no longer names (the
+// other organizations, until 2026-11-21) is the site's 404, and the index as
+// served leaves its entries out (withServedParts), so the change holds from
+// the deploy and not only from the next night's export.
+export const PIPELINE_PARTS = ["open-tenders", "pages", "active-organizations"] as const;
 
-// Whether the index names the published contracts' parts. False since
-// 2026-11-20: they were four fifths of the addresses the index offered (about
-// 2.7 million with French), and a site this young gets few fetches a day from
-// a search engine, so the index leaves them out for the pages that earn
-// searches. The parts still answer at /sitemap-contracts-<n>.xml, the pages
-// stay indexable and linked from the organization and buyer pages; true lists
-// them again after every other part, as before.
+// The published contracts' parts. Not listed since 2026-11-20: they were four
+// fifths of the addresses the index offered (about 2.7 million with French).
+// Not served since 2026-11-21: robots.txt closes /contracts/ to every
+// crawler, and a sitemap must not offer what the robots file closes, so
+// /sitemap-contracts-<n>.xml is the site's 404. To open the pages again:
+// take the three lines out of robots.txt's groups, then set SERVED, then
+// LISTED (which reads nothing while SERVED is false).
+export const CONTRACT_SITEMAPS_SERVED = false;
 export const CONTRACT_SITEMAPS_LISTED = false;
 
 // The published contracts' parts: the records database's keys are signed
@@ -161,11 +167,26 @@ export function withContractParts(xml: string, lastmod: string | null): string {
   return `${xml.slice(0, at)}${parts.join("")}${xml.slice(at)}`;
 }
 
-// The index as served, from the pipeline's: the guides' part added, and the
-// published contracts' parts when listed and the records database is ready
-// (one small read tells). Not listed, nothing is read.
-export async function sitemapIndex(env: Env, xml: string, listContracts: boolean = CONTRACT_SITEMAPS_LISTED): Promise<string> {
-  const index = withGuidesPart(xml);
+// The pipeline's index without the entries of a file the site does not serve
+// (sitemapAsset): an export written before a part was retired still names
+// its files, and an index must not name an address that answers 404.
+const INDEX_ENTRY_RE = /<sitemap><loc>([^<]*)<\/loc>(?:<lastmod>[^<]*<\/lastmod>)?<\/sitemap>\n?/g;
+
+export function withServedParts(xml: string): string {
+  return xml.replace(INDEX_ENTRY_RE, (whole, loc: string) => {
+    const file = unescapeXml(loc).startsWith(`${SITE_ORIGIN}/`) ? unescapeXml(loc).slice(SITE_ORIGIN.length + 1) : "";
+    return sitemapAsset(file) && file !== "sitemap.xml" ? whole : "";
+  });
+}
+
+// The index as served, from the pipeline's: only the parts the site serves,
+// the guides' part added, and the published contracts' parts when listed and
+// served and the records database is ready (one small read tells). Not
+// listed, nothing is read.
+export async function sitemapIndex(
+  env: Env, xml: string, listContracts: boolean = CONTRACT_SITEMAPS_LISTED && CONTRACT_SITEMAPS_SERVED,
+): Promise<string> {
+  const index = withGuidesPart(withServedParts(xml));
   if (!listContracts) return index;
   const records = await readRecords(env, []);
   return records.state === "ready" ? withContractParts(index, records.asOf) : index;
@@ -199,12 +220,14 @@ export async function sitemapFile(c: Context<AppEnv>): Promise<Response> {
   return new Response(await sitemapIndex(c.env, text), { headers: XML_HEADERS });
 }
 
-// /sitemap-contracts-<n>.xml: the published contracts whose key falls in part
-// n, each in both languages. 503 while the records database is missing,
-// loading or failing, so a crawler comes back rather than drop the part. It
-// answers whether or not the index names it (CONTRACT_SITEMAPS_LISTED): a
-// search engine that holds the address keeps reading it.
-export async function contractSitemap(c: Context<AppEnv>): Promise<Response> {
+// /sitemap-contracts-<n>.xml: the site's 404 while the parts are not served
+// (CONTRACT_SITEMAPS_SERVED), reading nothing. Served: the published
+// contracts whose key falls in part n, each in both languages; 503 while the
+// records database is missing, loading or failing, so a crawler comes back
+// rather than drop the part; and it answers whether or not the index names
+// it (CONTRACT_SITEMAPS_LISTED).
+export async function contractSitemap(c: Context<AppEnv>, served: boolean = CONTRACT_SITEMAPS_SERVED): Promise<Response> {
+  if (!served) return c.notFound();
   const m = /^sitemap-contracts-([1-9][0-9]{0,2})\.xml$/.exec(c.req.param("file") ?? "");
   const n = m ? Number(m[1]) : 0;
   if (n < 1 || n > CONTRACT_PARTS) return c.notFound();
