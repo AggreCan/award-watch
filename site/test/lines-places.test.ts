@@ -260,9 +260,10 @@ describe("a reader not signed in", () => {
       const banded = await get(`${path}${join}line=run`, { env: E() });
       expect(banded.headers.get("cache-control"), path).toBe("public, max-age=300");
       const body = await banded.text();
-      // The address is echoed (the language link) and nothing else differs from an address with an unknown key.
+      // The address is echoed (the language link, and encoded in the sign-in link's next) and nothing else differs
+      // from an address with an unknown key.
       const plain = await (await get(`${path}${join}zz=run`, { env: E() })).text();
-      expect(body.replaceAll("line=run", "zz=run"), path).toBe(plain);
+      expect(body.replaceAll("line=run", "zz=run").replaceAll("line%3Drun", "zz%3Drun"), path).toBe(plain);
       expect(body, path).not.toMatch(/<select name="line">|<b>Long run<\/b>|<b>Longue série<\/b>/);
     }
     // An unfiltered window reads the static file, and the band adds no read.

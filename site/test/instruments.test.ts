@@ -20,7 +20,7 @@ import { SOSA_PATH, guideBySlug, slugOf } from "../src/guides";
 import { guideText } from "../src/pages/guides";
 import { regionName, typeCodeOf } from "../src/pages/instruments";
 import { bucketFor } from "../src/limits";
-import { PRO_INCLUDES } from "../src/pro";
+import { PRO_INCLUDES, SUBSCRIBE_PATH } from "../src/pro";
 import { orgNumber } from "../src/records_db";
 import { routeTemplate } from "../src/views";
 import { decode, get, grantPro, nbsp, newEmail, onEnv, signIn, useAccountsDb } from "./accounts-helpers";
@@ -400,6 +400,18 @@ describe("the CSV files", () => {
     const proPage = await (await get("/instruments", { env: on(), cookie })).text();
     expect(proPage).not.toContain("The CSV of this view is part of Pro.");
     expect(proPage).toContain('href="/instruments/rows.csv"');
+  });
+
+  it("send a reader not signed in from the mark beside the file to the sign-in page that ends on billing, in both languages", async () => {
+    const subscribe = { en: `<a href="${SUBSCRIBE_PATH}">Subscribe to Pro</a>`, fr: `<a href="${SUBSCRIBE_PATH}">S’abonner à Pro</a>` };
+    for (const path of ["/instruments", instrumentPath(RMSO)]) {
+      for (const lang of ["en", "fr"] as const) {
+        const at = lang === "fr" ? `${path}?lang=fr` : path;
+        const { html } = await page(at, on());
+        expect(html, at).toContain(subscribe[lang]);
+        expect(html, at).not.toContain(`<a href="/account/sign-in">${lang === "fr" ? "S’abonner" : "Subscribe"}`);
+      }
+    }
   });
 
   it("count against the download cap and fold the numbers into their routes", () => {

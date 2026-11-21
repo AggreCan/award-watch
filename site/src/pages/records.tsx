@@ -24,7 +24,7 @@ import type { AppEnv } from "../env";
 import { fmtInt, pick, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
 import { CompetitiveFlag, Layout, PageHead, Panel, lowerRedirect, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { requestPlan } from "../plan";
-import { ProNote } from "../pro";
+import { ProNote, SUBSCRIBE_PATH } from "../pro";
 import { MAX_YEARS, SOURCE_NUMBER, dollars, fiscalLabel, fiscalYearOf, num, orgIdOf, orgNumber } from "../records_db";
 import {
   RECORDS_CSV_MAX, RECORDS_PAGE_ROWS, type RecordsParams, type RecordsSort, type RecordsView, type Row, readRecordCsv, readRecordTable,
@@ -335,7 +335,7 @@ async function recordsPage(c: Context<AppEnv>, view: RecordsView): Promise<Respo
             {free ? (
               <ProNote lang={lang}>
                 {asked ? `${t(lang, "records.free_asked")} ` : ""}{t(lang, "records.free_note", { n: RECORDS_PAGE_ROWS })}{" "}
-                <a href={account?.email ? "/account/billing" : "/account/sign-in"}>{t(lang, account?.email ? "analytics.pro_billing" : "analytics.pro_sign_in")}</a>
+                <a href={account?.email ? "/account/billing" : SUBSCRIBE_PATH}>{t(lang, account?.email ? "analytics.pro_billing" : "analytics.pro_sign_in")}</a>
               </ProNote>
             ) : (
               <p class="muted small">

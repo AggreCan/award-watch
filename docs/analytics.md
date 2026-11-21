@@ -397,7 +397,8 @@ and the period form (the longer periods and the form's button marked Pro),
 the first chart for the latest three fiscal years with no table, and for
 every other chart its title and one line of what it shows, marked Pro
 (`pro-note`), with a link to `/account/billing` (signed out:
-`/account/sign-in`). A free request that names a period, a segment or
+`/account/sign-in?next=/account/billing`, so the code ends on the billing
+page). A free request that names a period, a segment or
 organizations to compare gets the same page with a line saying the choice is
 part of Pro. That page reads D1 once: one batch of the state row and the
 first chart's statement, which reads a summary table (buyers, segments: at

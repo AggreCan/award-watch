@@ -55,7 +55,7 @@
 // changes for it.
 
 import type { Context } from "hono";
-import { ProTag, UltraTag } from "../pro";
+import { ProTag, SUBSCRIBE_PATH, UltraTag } from "../pro";
 import type { FC } from "hono/jsx";
 import {
   ChartStack, RankedBars, barGap, fiscalAxis, moneyTip, partOf, recordsText, tileLabels, tipHead, tipText, type AxisLabel, type Panel as ChartPanel,
@@ -207,10 +207,11 @@ function segmentLink(lang: Lang, sid: number) {
 // -- the pieces every view shares ---------------------------------------------------
 
 
-// Where a reader without the feature goes for it: the billing page, or the
-// sign-in page while signed out.
+// Where a reader without the feature goes for it: the billing page, or while
+// signed out the sign-in page that ends on it (SUBSCRIBE_PATH), not on the
+// account overview.
 const ProLink: FC<{ lang: Lang; signedIn: boolean }> = ({ lang, signedIn }) => (
-  <a href={signedIn ? "/account/billing" : "/account/sign-in"}>{t(lang, signedIn ? "analytics.pro_billing" : "analytics.pro_sign_in")}</a>
+  <a href={signedIn ? "/account/billing" : SUBSCRIBE_PATH}>{t(lang, signedIn ? "analytics.pro_billing" : "analytics.pro_sign_in")}</a>
 );
 
 // A chart the free view names without drawing: its title marked Pro and one

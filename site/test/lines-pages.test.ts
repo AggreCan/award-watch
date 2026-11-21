@@ -163,10 +163,12 @@ describe("a reader not signed in", () => {
       expect(html.match(/class="muted small line-signin"/g), path).toHaveLength(1);
       expect(marks(html), path).toEqual([]);
       expect(html, path).not.toMatch(/line-disclaimer|Under each holder/);
+      // The sign-in ends back on the page it was pressed on, its query (and so its language) kept, where the marks now show.
+      const signin = `/account/sign-in?next=${encodeURIComponent(path)}`;
       if (path.endsWith("fr")) {
-        expect(html, path).toContain("Les lecteurs connectés voient, sous le nom de chaque titulaire, ses dossiers auprès de l'acheteur. <a href=\"/account/sign-in\">Se connecter</a>");
+        expect(html, path).toContain(`Les lecteurs connectés voient, sous le nom de chaque titulaire, ses dossiers auprès de l'acheteur. <a href="${signin}">Se connecter</a>`);
       } else {
-        expect(html, path).toContain(`${SIGNED_OUT} <a href="/account/sign-in">Sign in</a>`);
+        expect(html, path).toContain(`${SIGNED_OUT} <a href="${signin}">Sign in</a>`);
       }
     }
     // The overview gets nothing, and neither does any page while the switch is off.

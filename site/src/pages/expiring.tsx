@@ -43,6 +43,7 @@
 import type { Context } from "hono";
 import type { FC } from "hono/jsx";
 import { allowed } from "../account/entitlements";
+import { NEXT_MAX } from "../account/next";
 import { SaveSearchForm, SaveSearchLine, SaveSearchRow, saveControl } from "../account/search_control";
 import { railAccount } from "../account/session";
 import { accountsEnabled } from "../account/switch";
@@ -67,7 +68,7 @@ import {
   readRadarCsv,
 } from "../records_tables";
 import { csvCell } from "./analytics";
-import { ProNote, ProPanel, ProTag, checkoutPrice, ultraCheckoutPrice } from "../pro";
+import { ProNote, ProPanel, ProTag, SUBSCRIBE_PATH, checkoutPrice, ultraCheckoutPrice } from "../pro";
 import { canonicalUrl, expiringWindowSeo, pageSeo } from "../seo";
 import { EXPIRING_EVENT, loadFeedIndex } from "./feeds";
 import { InterestPanel, interestFilter } from "./interest";
@@ -628,7 +629,12 @@ export const MoreInWindow: FC<{ lang: Lang; part: ExpiringPart; pro?: boolean }>
 export async function radarLines(c: Context<AppEnv>, lang: Lang, rows: readonly ExpiringRow[]): Promise<RadarLines> {
   if (!accountsEnabled(c.env)) return { state: "off" };
   const account = await railAccount(c).catch(() => undefined);
-  if (!account?.email) return { state: "signed_out" };
+  if (!account?.email) {
+    // The sign-in ends back on this page with its query; one too long for next (account/next.ts) keeps the path.
+    const url = new URL(c.req.url);
+    const here = `${url.pathname}${url.search}`;
+    return { state: "signed_out", next: here.length <= NEXT_MAX ? here : url.pathname };
+  }
   const days = lineDays(account.plan ?? "free");
   const keys = rows.filter((r) => r.days_left >= 0 && r.days_left <= days && r.organization_id && !r.supplier_withheld)
     .map((r) => lineKey(r.kind, r.reference));
@@ -1363,7 +1369,7 @@ export async function expiringWindowPage(c: Context<AppEnv>, raw: string): Promi
           ) : accountsEnabled(c.env) ? (
             <ProNote lang={lang}>
               {t(lang, "expiring.csv_filtered_pro")}{" "}
-              <a href={account?.email ? "/account/billing" : "/account/sign-in"}>
+              <a href={account?.email ? "/account/billing" : SUBSCRIBE_PATH}>
                 {t(lang, account?.email ? "analytics.pro_billing" : "analytics.pro_sign_in")}
               </a>
             </ProNote>

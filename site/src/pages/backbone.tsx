@@ -26,7 +26,7 @@ import type { AppEnv, Env } from "../env";
 import { fmtInt, fmtMoney, pick, sourceLabel, t, tn, type Lang } from "../i18n";
 import { Panel, addDays, todayOf } from "../layout";
 import { allowsRadarDepth, requestPlan } from "../plan";
-import { ProNote } from "../pro";
+import { ProNote, SUBSCRIBE_PATH } from "../pro";
 import { MAX_YEARS, dollars, fiscalYearOf, num, orgIdOf, orgNumber } from "../records_db";
 import {
   EARLIER_CLASSES_MAX, EARLIER_SHOWN, INCUMBENTS_MAX, type Read, type Row, readEarlierAwards, readFollows, readIncumbents, readOrgFeed,
@@ -219,7 +219,7 @@ export const IncumbentsPanel: FC<{ lang: Lang; inc: Incumbents }> = ({ lang, inc
               {t(lang, inc.nOrgs > INCUMBENTS_MAX ? "incumbents.pro_capped" : "incumbents.pro", {
                 n: INCUMBENTS_TEASE, all: fmtInt(inc.nOrgs, lang), max: INCUMBENTS_MAX,
               })}{" "}
-              <a href={inc.signedIn ? "/account/billing" : "/account/sign-in"}>{t(lang, inc.signedIn ? "analytics.pro_billing" : "analytics.pro_sign_in")}</a>
+              <a href={inc.signedIn ? "/account/billing" : SUBSCRIBE_PATH}>{t(lang, inc.signedIn ? "analytics.pro_billing" : "analytics.pro_sign_in")}</a>
             </ProNote>
           ) : null}
         </>

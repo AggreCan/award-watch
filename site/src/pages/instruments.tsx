@@ -35,7 +35,7 @@ import {
 } from "../instruments";
 import { Layout, PageHead, Panel, noDataPage, notFoundPage, page, todayOf } from "../layout";
 import { requestPlan } from "../plan";
-import { ProNote } from "../pro";
+import { ProNote, SUBSCRIBE_PATH } from "../pro";
 import { dollars, num, orgIdOf } from "../records_db";
 import { canonicalUrl } from "../seo";
 import { csvCell } from "./analytics";
@@ -141,11 +141,11 @@ export async function instrumentsCsvAllowed(c: Context<AppEnv>): Promise<boolean
   return allowed({ plan: await requestPlan(c) }, "export_filtered");
 }
 
-// Where a reader without the file goes: the billing page signed in, else the sign-in.
+// Where a reader without the file goes: the billing page signed in, else the sign-in that ends on it.
 const ProCsvNote: FC<{ lang: Lang; text: Key; signedIn: boolean }> = ({ lang, text, signedIn }) => (
   <ProNote lang={lang}>
     {t(lang, text)}{" "}
-    <a href={signedIn ? "/account/billing" : "/account/sign-in"}>{t(lang, signedIn ? "analytics.pro_billing" : "analytics.pro_sign_in")}</a>
+    <a href={signedIn ? "/account/billing" : SUBSCRIBE_PATH}>{t(lang, signedIn ? "analytics.pro_billing" : "analytics.pro_sign_in")}</a>
   </ProNote>
 );
 

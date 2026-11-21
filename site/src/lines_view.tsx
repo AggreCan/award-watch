@@ -6,6 +6,7 @@
 // contract's page is src/pages/holders.tsx.
 
 import type { FC } from "hono/jsx";
+import { signInTo } from "./account/fit_panels";
 import { AdvisoryDisclaimer } from "./fit";
 import { fmtInt, t, tj, tn, type Key, type Lang } from "./i18n";
 import { type Band, LINE_YEARS, type LineRecord, lineLabel } from "./lines";
@@ -39,13 +40,15 @@ export const RadarMark: FC<{ text: string }> = ({ text }) => (
 );
 
 // What a window's list knows of its rows' records. off: the accounts switch
-// is off, and nothing is said. signed_out: one line, with a way to sign in.
+// is off, and nothing is said. signed_out: one line, with a way to sign in
+// that ends back on next, the page it is on, where the marks then show.
 // absent: the records database holds no rec_lines yet (the nightly has not
 // run the stage), and the page reads as it did. unavailable: the database
 // could not answer. ready: the marks by row key; pending when the rows the
 // plan covers have no record yet.
 export type RadarLines =
-  | { state: "off" | "signed_out" | "absent" | "unavailable" }
+  | { state: "off" | "absent" | "unavailable" }
+  | { state: "signed_out"; next: string }
   | { state: "ready"; marks: ReadonlyMap<string, string>; pending: boolean };
 
 // legend: what the marks are, line.legend under a holder's name; a profile's
@@ -55,7 +58,7 @@ export const RadarLineNotes: FC<{ lang: Lang; lines: RadarLines; legend?: Key }>
     case "signed_out":
       return (
         <p class="muted small line-signin">
-          {tj(lang, "line.signed_out", { signin: <a href="/account/sign-in">{t(lang, "account.sign_in")}</a> })}
+          {tj(lang, "line.signed_out", { signin: <a href={signInTo(lines.next)}>{t(lang, "account.sign_in")}</a> })}
         </p>
       );
     case "unavailable":

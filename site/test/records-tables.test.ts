@@ -18,6 +18,7 @@ import {
 } from "../src/records_tables";
 import { recordHref, recordTitle, shownReference } from "../src/pages/records";
 import { contractPath } from "../src/pages/shared";
+import { SUBSCRIBE_PATH } from "../src/pro";
 import { get, grantPro, newEmail, offEnv, onEnv, signIn, useAccountsDb } from "./accounts-helpers";
 import { FILES, makeFakeAssets } from "./assets";
 import { applySql } from "./setup";
@@ -737,6 +738,20 @@ describe("the earlier awards, the incumbents and the organization feeds", () => 
     const full = decode(nbsp(await (await get("/segments/82", { cookie: pro, env: onEnv() })).text())).split("Who Holds the Contracts")[1] ?? "";
     expect([...full.matchAll(/href="\/organizations\/(org-c\d+)"/g)]).toHaveLength(4);
     expect(full).not.toContain("Pro lists all");
+  });
+
+  it("send a reader not signed in from each Pro note to the sign-in page that ends on billing, in both languages", async () => {
+    // The free record table, a segment's incumbents past the first three, and the radar's filtered CSV: after the
+    // code the reader lands where Pro is bought (SUBSCRIBE_PATH), as from /pro, not on the account overview.
+    const subscribe = { en: `<a href="${SUBSCRIBE_PATH}">Subscribe to Pro</a>`, fr: `<a href="${SUBSCRIBE_PATH}">S’abonner à Pro</a>` };
+    for (const path of [`/organizations/${A1}/records`, "/segments/82", `/expiring/3m?supplier=${A1}`]) {
+      for (const lang of ["en", "fr"] as const) {
+        const at = lang === "fr" ? `${path}${path.includes("?") ? "&" : "?"}lang=fr` : path;
+        const { html } = await page(at, { env: onEnv() });
+        expect(html, at).toContain(subscribe[lang]);
+        expect(html, at).not.toContain(`<a href="/account/sign-in">${lang === "fr" ? "S’abonner" : "Subscribe"}`);
+      }
+    }
   });
 
   it("serve an organization's newest records as Atom, cached an hour, in the feed bucket", async () => {

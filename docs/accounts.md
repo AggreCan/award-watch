@@ -310,7 +310,8 @@ each of their CSV files is the site's 404 and no page links them. On, the
 buyer, profile and segment pages link them with the word Pro marked, and a
 request without the feature sees each view's first chart for the latest
 three fiscal years and a line on each other chart, with a link to
-`/account/billing` (signed out, `/account/sign-in`); the CSV files answer
+`/account/billing` (signed out, `/account/sign-in?next=/account/billing`,
+which ends on the billing page); the CSV files answer
 404 to it. `site/test/analytics.test.ts` proves both states
 (`docs/analytics.md`). Their index, `/analytics`, follows the same switch:
 off, the site's 404 and no rail item; on, the rail's Browse group lists it
@@ -5537,7 +5538,8 @@ prints every figure from `lines.ts`.
   answer: one line saying so. A reader not signed in: "Signed-in readers see
   each holder's record with the buyer under its name. Sign in", the same for
   everyone, so the page stays public (`public, max-age=300`, `Vary:
-  Cookie`).
+  Cookie`). Its link carries `next=` the page's path and query (the path
+  alone past `NEXT_MAX`), so the code ends back on the list with the marks.
 - A contract's page (`/awards/<ref>`, `/history/<ref>`,
   `/contracts/<department>/<ref>`), after the dates: the panel "The Holder's
   Record With This Buyer" with the lead, the label and its figure, each

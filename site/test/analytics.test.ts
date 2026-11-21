@@ -24,6 +24,7 @@ import {
 } from "../src/records_db";
 import { LINES_BY_KEY_SQL } from "../src/records_tables";
 import { csvCell } from "../src/pages/analytics";
+import { SUBSCRIBE_PATH } from "../src/pro";
 import { routeTemplate } from "../src/views";
 import { get, grantPro, grantUltra, newEmail, onEnv, signIn, ultraEnv, useAccountsDb, withoutTiers } from "./accounts-helpers";
 import { testEnv } from "./assets";
@@ -319,7 +320,8 @@ describe("the free view", () => {
         expect(html, who).not.toContain(".csv");
         for (const title of locked[view]) expect(decode(html), who).toContain(`${title}<span class="pro-tag">`);
         expect(html, who).toContain('class="pro-note"');
-        expect(html, who).toContain(cookie ? 'href="/account/billing">See the Pro plan on the billing page' : 'href="/account/sign-in">Subscribe to Pro');
+        // Signed out, the sign-in page that ends on billing (SUBSCRIBE_PATH), as from /pro, not on the account overview.
+        expect(html, who).toContain(cookie ? 'href="/account/billing">See the Pro plan on the billing page' : `<a href="${SUBSCRIBE_PATH}">Subscribe to Pro</a>`);
         expect(html, who).toContain('<meta name="robots" content="noindex"/>');
         expect(res.headers.get("cache-control"), who).toBe(cookie ? "private, no-store" : "public, max-age=300");
         expect(res.headers.get("vary"), who).toContain("Cookie");
@@ -616,7 +618,7 @@ describe("the Pro view", () => {
       expect(html).not.toContain(EM_DASH);
     }
     const free = (await page(`${VIEWS[0]}?lang=fr`)).html;
-    expect(free).toContain("S’abonner à Pro");
+    expect(free).toContain(`<a href="${SUBSCRIBE_PATH}">S’abonner à Pro</a>`);
     expect(free).not.toContain("Sign in to subscribe");
   });
 });
