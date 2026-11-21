@@ -857,6 +857,20 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, ORDERS, clean, filterRows, queryStrin
   var note = el("p", "muted small loading-note", tx("tenders.loading"));
   note.setAttribute("aria-live", "polite");
   results.insertBefore(note, tableBox);
+  // A view the server left to this script (a filter or a later page while its
+  // first file holds part of the list) has no row of the server's to fall
+  // back on: when the download fails, the words the page drew hidden for it
+  // (src/pages/tenders.tsx, #tender-failed) go into the note, so they are
+  // read out as it is, and the waiting line goes. True when they did.
+  function failedView() {
+    var failed = document.getElementById("tender-failed");
+    if (!failed) return false;
+    var waiting = document.getElementById("tender-waiting");
+    if (waiting) waiting.hidden = true;
+    note.textContent = "";
+    while (failed.firstChild) note.appendChild(failed.firstChild);
+    return true;
+  }
   fetch("/data/tenders/open.json")
     .then(function (r) {
       if (!r.ok) throw new Error(String(r.status));
@@ -868,7 +882,7 @@ import { BUYER_RE, CODE_RE, FIELDS, MULTI, ORDERS, clean, filterRows, queryStrin
       start(data.filter(function (r) { return r && typeof r.reference === "string" && Array.isArray(r.segments) && Array.isArray(r.provinces) && Array.isArray(r.category); }));
       fitDraw(rows);
     }, function () {
-      note.textContent = tx("tenders.load_failed");
+      if (!failedView()) note.textContent = tx("tenders.load_failed");
       fitDraw(null);
     });
 })();

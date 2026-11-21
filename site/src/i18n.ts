@@ -478,6 +478,12 @@ const STRINGS = {
     fr: "Le filtrage de la liste complète nécessite JavaScript. Sans lui, {link} présente les avis ouverts par date de clôture.",
   },
   "tenders.noscript_link": { en: "the unfiltered list", fr: "la liste non filtrée" },
+  // A view left to the script whose full list did not download: in the waiting line's place (public/tenders.js).
+  "tenders.view_failed": {
+    en: "This view could not be loaded, because the full list of open notices did not reach your browser. See {list} or {retry}.",
+    fr: "Cette vue n'a pas pu être chargée, car la liste complète des avis ouverts n'est pas parvenue à votre navigateur. Consultez {list} ou {retry}.",
+  },
+  "tenders.retry": { en: "try again", fr: "réessayez" },
   "tenders.new_title": { en: "New Tender Notices", fr: "Nouveaux avis d'appel d'offres" },
   "tenders.new_lead": {
     en: "The notices first seen on each of the last {days} days. Pick a day to see its notices.",

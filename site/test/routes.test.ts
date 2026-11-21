@@ -10,6 +10,7 @@ import {
 } from "../src/layout";
 import lockupSvg from "../../brand/lockup.svg?raw";
 import wordmarkSvg from "../../brand/wordmark.svg?raw";
+import tendersJs from "../public/tenders.js?raw";
 import { filterTenders, readTenderQuery, tenderQueryString } from "../src/pages/tenders";
 import { assetsWithout, emptyAssets, fakeAssets, makeFakeAssets, testClock, testEnv } from "./assets";
 import openFirst from "./fixtures/tenders-open-first.json";
@@ -289,6 +290,29 @@ describe("tender notices", () => {
     }
     // The form still shows the link's values, so the script and the reader start from them.
     expect(await (await get("/tenders?segment=82", env)).text()).toContain('<option value="82" selected="">');
+  });
+
+  it("says such a view could not be loaded when the full list fails to download, with the unfiltered list and a retry", async () => {
+    const partial = { ...openFirst, total: 900 };
+    const env = testEnv(makeFakeAssets({}, { "tenders/open-first.json": partial }));
+    // The view holds no row of the server's, so "the notices shown are the server's" would be false for it: the page
+    // carries its own words, hidden, which tenders.js moves into its note in the waiting line's place when the download fails.
+    const en = await (await get("/tenders?segment=82&page=2", env)).text();
+    expect(en).toContain('<p class="muted" id="tender-waiting">These filters apply once the full list of open notices has loaded in your browser.</p>');
+    expect(en).toContain('<p id="tender-failed" hidden="">This view could not be loaded, because the full list of open notices did not reach your ' +
+      'browser. See <a href="/tenders">the unfiltered list</a> or <a href="/tenders?segment=82&amp;page=2">try again</a>.</p>');
+    const fr = nbsp(await (await get("/tenders?segment=82&lang=fr", env)).text());
+    expect(fr).toContain('<p id="tender-failed" hidden="">Cette vue n’a pas pu être chargée, car la liste complète des avis ouverts n’est pas ' +
+      'parvenue à votre navigateur. Consultez <a href="/tenders">la liste non filtrée</a> ou <a href="/tenders?segment=82">réessayez</a>.</p>');
+    // A page that shows the server's rows keeps the line that says so, and has no such line.
+    expect(await (await get("/tenders", env)).text()).not.toContain("tender-failed");
+    // The script: on a failed download, those words in its note (read out, as the note is live) and the waiting line
+    // hidden; for a page with the server's rows, the note says they are the server's.
+    expect(tendersJs).toMatch(/if \(!failedView\(\)\) note\.textContent = tx\("tenders\.load_failed"\);\n {6}fitDraw\(null\);/);
+    const failedView = /function failedView\(\) \{[\s\S]*?\n {2}\}/.exec(tendersJs)?.[0] ?? "";
+    expect(failedView).toContain('document.getElementById("tender-failed")');
+    expect(failedView).toContain('var waiting = document.getElementById("tender-waiting");\n    if (waiting) waiting.hidden = true;');
+    expect(failedView).toContain("while (failed.firstChild) note.appendChild(failed.firstChild);");
   });
 
   it("lists the open notices, the first 50 by closing date, with the filters the rows carry", async () => {

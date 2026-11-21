@@ -516,7 +516,15 @@ export async function tendersPage(c: Context<AppEnv>): Promise<Response> {
             <div id="tender-table">
               {waiting ? (
                 <>
-                  <p class="muted">{t(lang, "tenders.waiting")}</p>
+                  <p class="muted" id="tender-waiting">{t(lang, "tenders.waiting")}</p>
+                  {/* No row of the server's to fall back on: if the full list fails to download, tenders.js moves
+                      these words into its note in the waiting line's place, with the unfiltered list and this view again. */}
+                  <p id="tender-failed" hidden>
+                    {tj(lang, "tenders.view_failed", {
+                      list: <a href="/tenders">{t(lang, "tenders.noscript_link")}</a>,
+                      retry: <a href={`/tenders${tenderQueryString(q)}`}>{t(lang, "tenders.retry")}</a>,
+                    })}
+                  </p>
                   <noscript>
                     <p>{tj(lang, "tenders.noscript", { link: <a href="/tenders">{t(lang, "tenders.noscript_link")}</a> })}</p>
                   </noscript>
