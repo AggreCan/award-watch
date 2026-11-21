@@ -58,6 +58,48 @@ describe("saving the layout of a dashboard deleted in another tab", () => {
   });
 });
 
+describe("saving a layout that names none of the dashboard's tiles", () => {
+  it("answers 409, stale, with its line and the link to reload, once the first save wrote the starter's tiles under new ids", async () => {
+    // A new Ultra account: no dashboard stored, so the page shows the starting layout, its tiles s0, s1 and so on.
+    const r = await reader("dash-stale");
+    const page = await (await get("/account/dashboard", { cookie: r.cookie, env: onEnv() })).text();
+    const starters = [...page.matchAll(/data-id="(s\d+)"/g)].map((m) => m[1]);
+    expect(starters.length).toBeGreaterThanOrEqual(2);
+    const at = (dy: number) => JSON.stringify(starters.map((id, i) => ({ id, x: 0, y: i * 12 + dy, w: 12, h: 11 })));
+    // The first save writes the first dashboard and answers the stored ids.
+    const first = await send(r, "/account/dashboard/layout", { layout: at(0) });
+    expect(first.status).toBe(200);
+    const saved = await first.json() as { state: string; renamed: Record<string, string> };
+    expect(saved.state).toBe("saved");
+    expect(Object.keys(saved.renamed).sort()).toEqual([...starters].sort());
+    // The same page again (its answer lost, or a second tab): its ids are no tile of the dashboard now.
+    const en = await send(r, "/account/dashboard/layout", { layout: at(1) });
+    expect(en.status).toBe(409);
+    expect(en.headers.get("content-type")).toContain("application/json");
+    expect(await en.json()).toEqual({
+      state: "stale", line: "This dashboard was changed elsewhere, so the layout was not saved.", link: "Reload it", href: "/account/dashboard",
+    });
+    const fr = await send(r, "/account/dashboard/layout", { layout: at(1) }, `${r.cookie}; lang=fr`);
+    expect(fr.status).toBe(409);
+    expect(await fr.json()).toEqual({
+      state: "stale", line: "Ce tableau de bord a été modifié ailleurs; la disposition n’a donc pas été enregistrée.", link: "Le recharger",
+      href: "/account/dashboard?lang=fr",
+    });
+    // The stored ids still save, and an empty layout still answers saved.
+    const stored = JSON.stringify(Object.values(saved.renamed).map((id, i) => ({ id, x: 0, y: i * 12, w: 12, h: 11 })));
+    expect(await (await send(r, "/account/dashboard/layout", { layout: stored })).json()).toMatchObject({ state: "saved" });
+    expect(await (await send(r, "/account/dashboard/layout", { layout: "[]" })).json()).toMatchObject({ state: "saved" });
+    // The script meets it as it meets gone: the line, the link, no Try again, nothing saved again.
+    const again = await send(r, "/account/dashboard/layout", { layout: at(2) });
+    expect(goneOf(again.status, await again.json())).toEqual({ line: t("en", "dash.status_stale"), link: t("en", "dash.status_stale_link"), href: "/account/dashboard" });
+    expect(goneOf(409, { state: "gone", line: "x", link: "y", href: "/account/dashboard" })).toBeNull();
+    expect(goneOf(404, { state: "stale", line: "x", link: "y", href: "/account/dashboard" })).toBeNull();
+    expect(goneOf(409, { state: "stale", line: "x", link: "y", href: `/account/dashboard/${"a".repeat(32)}?lang=fr` })?.href).toBe(`/account/dashboard/${"a".repeat(32)}?lang=fr`);
+    expect(goneOf(409, { state: "stale", line: "x", link: "y", href: "https://example.com/" })?.href).toBe("/account/dashboard");
+    expect(dashboardJs).toMatch(/\(res\.ok \|\| res\.status === 404 \|\| res\.status === 409\) && json/);
+  });
+});
+
 describe("the page's script, on a save's answer", () => {
   it("reads the gone answer as the Worker writes it, and nothing else as gone", async () => {
     const r = await reader("dash-gone-script");

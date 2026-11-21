@@ -2589,7 +2589,8 @@ export const LAYOUT_CHARS_MAX = 8000;
 // dashboard the account no longer holds (deleted in another tab) answers 404,
 // state gone, with the line the script shows in place of Try again and the
 // link to the account's dashboards, in the reader's language: the page's own
-// data block stays as it was.
+// data block stays as it was. A post that names tiles, none of them the
+// dashboard's, answers 409, state stale, the same way, its link the dashboard.
 export async function layoutPost(c: Context<AppEnv>, who: Account, fields: Record<string, string>): Promise<Response> {
   if (!holdsDashboard(who.plan)) return c.json({ state: "refused" }, 403);
   const want = boardField(c.req.query("board") ?? fields.board);
@@ -2611,6 +2612,16 @@ export async function layoutPost(c: Context<AppEnv>, who: Account, fields: Recor
   const asked = new Map<string, Record<string, unknown>>();
   for (const p of posted) {
     if (p && typeof p === "object" && typeof (p as { id?: unknown }).id === "string") asked.set((p as { id: string }).id, p as Record<string, unknown>);
+  }
+  // A post naming tiles none of which is this dashboard's: the page holds ids the dashboard no longer has (the
+  // starter's, once the first save was written from another tab or its answer was lost). Every tile would keep its
+  // stored place and the answer would say saved, so it answers 409, state stale, with the line and the link to read
+  // the dashboard again, which the script shows as it shows gone.
+  if (asked.size && !list.some((s) => asked.has(s.id))) {
+    const lang = c.get("lang");
+    return c.json({
+      state: "stale", line: t(lang, "dash.status_stale"), link: t(lang, "dash.status_stale_link"), href: inLang(c, want ? `${DASHBOARD_PATH}/${want}` : DASHBOARD_PATH),
+    }, 409);
   }
   // A place or a size the post leaves out, or gives as no number, is the tile's own.
   const own = (v: unknown, was: number) => (typeof v === "number" && Number.isFinite(v) ? v : was);

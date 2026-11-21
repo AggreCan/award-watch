@@ -3898,7 +3898,13 @@ The script (`dashboard.js`, a module loaded on this page only):
   not be saved." with Try again and Undo; for a dashboard deleted meanwhile
   (in another tab), "This dashboard no longer exists." with a link to Your
   dashboards and no Try again, and nothing is saved again on that page
-  (`public/dashboard.js goneOf`, `site/test/dashboard-gone.test.ts`).
+  (`public/dashboard.js goneOf`, `site/test/dashboard-gone.test.ts`). A save
+  that names tiles none of which is the dashboard's (the page still holds the
+  starter's ids after the first save was written, from another tab or with
+  its answer lost) answers 409, state stale, and the page says "This
+  dashboard was changed elsewhere, so the layout was not saved." with "Reload
+  it", the same way. Two tabs on a stored dashboard still each save their own
+  whole layout, the last one kept.
 - **Undo**: the status line's link, or Ctrl+Z (Cmd+Z) outside a field: the
   layout before the last change, the last 20 of the visit, saved again.
 - **A resize** reads that tile again at its new size
@@ -3953,7 +3959,7 @@ entry measured 14.62 against the 12 tiles' 8.62 (bound 44).
 | `GET /account/dashboard` | the first dashboard's tiles on the grid; `?edit=1` is the same page |
 | `GET /account/dashboard/:id` | a dashboard by its id, the same page; an id the account does not hold, 303 to `/account/dashboard` |
 | `POST /account/dashboard/panels` | add a tile: `kind` and `ref` from a page's Add to dashboard (an analytics table: `kind=analytic`, its ref), `panel` (`kind:ref`) from Add a Tile, or `kind=text` and `text` from Add a Tile's Text group, to the dashboard `board` names (none, the first); it goes under the others at the left, half the row wide (never narrower than its least), at its kind's starting height |
-| `POST /account/dashboard/layout` | the script's save, for the dashboard `?board=` names (none, the first): `layout`, JSON `[{id, x, y, w, h}]` (8,000 characters and 50 tiles at most); only that dashboard's own ids count, a tile the post leaves out keeps its place, the whole goes through `normalize`; answers JSON `{state: "saved", tiles, renamed}`, `{state: "unsaved"}` while the tables are absent, 404 `{state: "gone", line, link, href}` for a dashboard the account does not hold (deleted in another tab: the line and the link to the account's dashboards in the reader's language, for the script), 400 for anything that is not such a list |
+| `POST /account/dashboard/layout` | the script's save, for the dashboard `?board=` names (none, the first): `layout`, JSON `[{id, x, y, w, h}]` (8,000 characters and 50 tiles at most); only that dashboard's own ids count, a tile the post leaves out keeps its place, the whole goes through `normalize`; answers JSON `{state: "saved", tiles, renamed}`, `{state: "unsaved"}` while the tables are absent, 404 `{state: "gone", line, link, href}` for a dashboard the account does not hold (deleted in another tab: the line and the link to the account's dashboards in the reader's language, for the script), 409 `{state: "stale", line, link, href}` for a list that names tiles none of which is that dashboard's (the link to the dashboard itself), 400 for anything that is not such a list |
 | `POST /account/dashboard/boards` | New dashboard, within the plan's figure; lands on it |
 | `POST /account/dashboard/boards/:id/rename` | `name`; `:id` a dashboard's id, or `first` for the computed first |
 | `POST /account/dashboard/boards/:id/move` | `dir` earlier or later |

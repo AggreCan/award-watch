@@ -273,6 +273,13 @@ export const DASHBOARD_STRINGS = {
   // layoutPost), the line and the link to the account's dashboards, in place of Try again.
   "dash.status_gone": { en: "This dashboard no longer exists.", fr: "Ce tableau de bord n'existe plus." },
   "dash.status_gone_link": { en: "Your dashboards", fr: "Vos tableaux de bord" },
+  // A save that names none of the dashboard's tiles (the page still holds the starter's ids after the first save was
+  // written, its answer lost or from another tab): the line and the link to read the dashboard again, the same way.
+  "dash.status_stale": {
+    en: "This dashboard was changed elsewhere, so the layout was not saved.",
+    fr: "Ce tableau de bord a été modifié ailleurs; la disposition n'a donc pas été enregistrée.",
+  },
+  "dash.status_stale_link": { en: "Reload it", fr: "Le recharger" },
   "dash.js_undo": { en: "Undo", fr: "Annuler" },
   "dash.js_retry": { en: "Try again", fr: "Réessayer" },
   "dash.say_picked": {
