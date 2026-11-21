@@ -30,7 +30,11 @@ pages through the alternates and, from this pass, the sitemaps. On a page
 that answers 200 the switch keeps the page's own query and changes `lang`
 alone (a list's filters, the emailed sign-in link's token, `next` and
 `follow`), and the tender list's script keeps it in step as the filters
-rewrite the address; on any other answer it is the plain `?lang=`.
+rewrite the address; on any other answer it is the plain `?lang=`. A
+sign-in page that answers a post (the code page, a mistyped code, the
+sign-in form's own errors) has no query of its own, so its switch leads to
+the sign-in page with the `next`, `follow` and `brief` its form carries,
+in the other language; with none of them it is the plain `?lang=` too.
 
 **Sitemaps.** The nightly export listed each page once, by its English
 address, 50,000 to a file. No French address appeared in any sitemap. The

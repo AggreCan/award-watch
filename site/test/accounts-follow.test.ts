@@ -513,6 +513,44 @@ describe("Ask for a new code", () => {
   });
 });
 
+// -- the language toggle on a page answered to a post ---------------------------------------------------------
+
+describe("the language toggle on a sign-in page that answers a post", () => {
+  const toggleOf = (html: string) => decode(/<a href="([^"]*)" class="lang-toggle"/.exec(html)?.[1] ?? "");
+  const NEXT = encodeURIComponent(`/organizations/${ORG}`);
+  const FOLLOW = encodeURIComponent(`organization:${ORG}`);
+
+  it("keeps the page to return to, what to follow and the briefing, so switching language keeps the Follow", async () => {
+    const email = newEmail("f-toggle");
+    // The code page after a Follow form's post: its own address is the bare /account/sign-in.
+    const sent = await post("/account/sign-in", await pageForm(`/organizations/${ORG}`, email));
+    const href = toggleOf(await sent.text());
+    expect(href).toBe(`/account/sign-in?next=${NEXT}&follow=${FOLLOW}&lang=fr`);
+    const fr = await text(await get(href));
+    expect(fr).toContain('<html lang="fr">');
+    expect(fr).toContain(`<input type="hidden" name="next" value="/organizations/${ORG}"/>`);
+    expect(fr).toContain(`<input type="hidden" name="follow" value="organization:${ORG}"/>`);
+    expect(fr).toContain("En vous connectant, vous suivrez aussi la page où vous avez appuyé sur Suivre.");
+    // The wrong-code page, in French, back to English.
+    const { code } = await mailOf(email);
+    const wrong = code === "000000" ? "111111" : "000000";
+    const bad = await post("/account/check", { lang: "fr", email, code: wrong, sent: "1", next: `/organizations/${ORG}`, follow: `organization:${ORG}` });
+    expect(bad.status).toBe(400);
+    expect(toggleOf(await bad.text())).toBe(`/account/sign-in?next=${NEXT}&follow=${FOLLOW}&lang=en`);
+    // The sign-in form's own error after such a post. (A briefing's code page: accounts-brief.test.ts.)
+    const typo = await post("/account/sign-in", { lang: "en", next: `/organizations/${ORG}`, follow: `organization:${ORG}`, email: "not-an-address", website: "" });
+    expect(typo.status).toBe(400);
+    expect(toggleOf(await typo.text())).toBe(`/account/sign-in?next=${NEXT}&follow=${FOLLOW}&lang=fr`);
+  });
+
+  it("stays the page's own query when there is nothing to carry, and on every GET page", async () => {
+    const plain = await post("/account/sign-in", { lang: "en", email: newEmail("plain-toggle"), website: "" });
+    expect(toggleOf(await plain.text())).toBe("?lang=fr");
+    expect(toggleOf(await (await get(`/account/sign-in?next=${NEXT}&follow=${FOLLOW}`)).text())).toBe(`?next=${NEXT}&follow=${FOLLOW}&lang=fr`);
+    expect(toggleOf(await (await get(`/organizations/${ORG}`)).text())).toBe("?lang=fr");
+  });
+});
+
 // -- the hour's ceiling on Follow posts --------------------------------------------------------------------
 
 describe("the hour's ceiling on sign-in messages asked for through a Follow form", () => {

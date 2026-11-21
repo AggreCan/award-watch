@@ -176,7 +176,7 @@ import {
 } from "./feeds";
 import {
   type CalendarRow, type CalendarView, accountPage, codeView, deleteView, deletedView, keysView, linkView, overviewView, searchesView,
-  groupStopView, groupStoppedView, signInView, staleFormView, stopView, stoppedView, unavailableView, weeklyStopView, weeklyStoppedView,
+  groupStopView, groupStoppedView, signInToggle, signInView, staleFormView, stopView, stoppedView, unavailableView, weeklyStopView, weeklyStoppedView,
 } from "./pages";
 import {
   type SavedSearch, addSearch, capFor, deleteSearch, heldCount, importInterest, isDelivery, lastDeliveries, listSearches, paidCapLine,
@@ -408,8 +408,10 @@ account.post("/sign-in", async (c) => {
   const brief = briefOf(fields.brief);
   const offerWeekly = await weeklyReady(c.env);
   const weekly = offerWeekly && fields.weekly === "1";
+  // This post's answers carry next, follow and brief in their forms alone: the language toggle carries them too (signInToggle).
+  const toggle = signInToggle(next, follow, brief);
   const again = (errors: Key[], status: number, limitN?: number) => accountPage(c, t(lang, "account.sign_in_title"),
-    signInView(lang, { errors, email: typed.slice(0, EMAIL_MAX), limitN, next, follow, brief, offerWeekly }), status);
+    signInView(lang, { errors, email: typed.slice(0, EMAIL_MAX), limitN, next, follow, brief, offerWeekly }), status, toggle);
   if (clean(fields, "website", 10)) return again(["interest.err_rejected"], 400);
   const email = normalizeEmail(typed);
   if (!email) return again(["interest.err_email"], 400);
@@ -478,7 +480,7 @@ account.post("/sign-in", async (c) => {
       if (sent.reason === "failed") await audit(c.env, issued.userId, "mail_failed", null, now);
       return again([sent.reason === "not_configured" ? "account.err_not_sent" : "account.err_send_failed"], 503);
     }
-    return accountPage(c, t(lang, "account.check_title"), codeView(lang, { email, sent: true, next, follow, brief, weekly }));
+    return accountPage(c, t(lang, "account.check_title"), codeView(lang, { email, sent: true, next, follow, brief, weekly }), 200, toggle);
   });
 });
 
@@ -531,11 +533,13 @@ account.post("/check", async (c) => {
       // signed-in reader may be signing in to another address; so does a stale one in a browser with no session.
       const standing = checked.reason === "stale" ? await readSession(c) : null;
       const signedIn = standing?.state === "ok" ? { email: standing.account.email, href: inLang(next ?? "/account", lang), next: !!next } : undefined;
-      if (token) return accountPage(c, t(lang, "account.link_title"), linkView(lang, "", errors, next, follow, brief, weekly, signedIn), 400);
+      // The language toggle carries what the form carries, as on the code page (signInToggle).
+      const toggle = signInToggle(next, follow, brief);
+      if (token) return accountPage(c, t(lang, "account.link_title"), linkView(lang, "", errors, next, follow, brief, weekly, signedIn), 400, toggle);
       const title = t(lang, sentForm ? "account.check_title" : "account.enter_title");
       // A mistyped code keeps the page to return to, what to follow, the briefing to save and the weekly email's tick, for the next try.
       return accountPage(c, title,
-        codeView(lang, { email: email ?? typed.slice(0, EMAIL_MAX), sent: sentForm && !!email, errors, next, follow, brief, weekly, signedIn }), 400);
+        codeView(lang, { email: email ?? typed.slice(0, EMAIL_MAX), sent: sentForm && !!email, errors, next, follow, brief, weekly, signedIn }), 400, toggle);
     }
     const user = await findOrCreateUser(c.env, checked.email, lang, now);
     if (user.created) await audit(c.env, user.id, "user_created", null, now);

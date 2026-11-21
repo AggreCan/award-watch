@@ -268,6 +268,9 @@ export type Shell = {
   // The request's query string ("?a=b", or ""), for the language toggle (langToggle); "" on any
   // answer but a 200, so an error page (the site's 404 above all) reads the same whatever was asked.
   search?: string;
+  // A path and query on this site for the toggle in place of the request's own (langToggleTo): set by a
+  // page answered to a post, whose own address carries none of what its form holds (page(), toggle).
+  toggle?: string;
 };
 export const RailContext = createContext<Shell | null>(null);
 
@@ -280,6 +283,13 @@ export function langToggle(search: string, lang: Lang): string {
   const q = new URLSearchParams(search);
   q.set("lang", lang === "fr" ? "en" : "fr");
   return `?${q.toString()}`;
+}
+
+// The toggle to a page the shell was handed (Shell.toggle, a path and query on
+// this site): that path, its query with lang set as langToggle sets it.
+export function langToggleTo(target: string, lang: Lang): string {
+  const cut = target.indexOf("?");
+  return cut < 0 ? `${target}${langToggle("", lang)}` : `${target.slice(0, cut)}${langToggle(target.slice(cut), lang)}`;
 }
 
 // The nightly's stamp from the rail's read of stats.json, and the last
@@ -609,7 +619,7 @@ export const Layout: FC<
           <div class="topbar-meta">
             <span class="asof">{t(lang, "nav.data_date", { date: props.dataAsOf ?? t(lang, "common.na") })}</span>
             <RefreshTimers lang={lang} now={shell?.now ?? Date.now()} on={shell?.accountsOn ?? false} stamps={shell?.stamps} />
-            <a href={langToggle(shell?.search ?? "", lang)} class="lang-toggle" rel="nofollow">
+            <a href={shell?.toggle ? langToggleTo(shell.toggle, lang) : langToggle(shell?.search ?? "", lang)} class="lang-toggle" rel="nofollow">
               {t(lang, "nav.lang")}
             </a>
             <button type="button" class="theme-toggle">
@@ -655,8 +665,10 @@ export function varyOnCookie(c: Context<AppEnv>): void {
 // Every page goes out through here: the rail's counts are loaded once and
 // handed to the shell, with the page's own address, through RailContext
 // while the page renders. A failure to read them leaves the rail's links
-// without counts, never the page down.
-export async function page(c: Context<AppEnv>, body: unknown, status = 200): Promise<Response> {
+// without counts, never the page down. toggle: Shell.toggle, for a page
+// answered to a post (account/routes.tsx, the sign-in pages); absent, the
+// toggle keeps the request's own query as before.
+export async function page(c: Context<AppEnv>, body: unknown, status = 200, toggle?: string): Promise<Response> {
   let rail: RailCounts | null = null;
   try {
     rail = await loadRail(c.env);
@@ -667,6 +679,7 @@ export async function page(c: Context<AppEnv>, body: unknown, status = 200): Pro
   const shell: Shell = {
     rail, here: viewKey(`${url.pathname}${url.search}`), now: clockOf(c.env).now, accountsOn: accountsEnabled(c.env),
     stamps: pageStamps(c, rail), search: status === 200 ? url.search : "",
+    ...(toggle ? { toggle } : {}),
   };
   c.header("Cache-Control", status === 200 ? "public, max-age=300" : "no-store");
   varyOnCookie(c);

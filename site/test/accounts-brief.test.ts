@@ -392,7 +392,7 @@ describe("the sign-in pages with brief", () => {
   const NOTE_HTML = `<p class="muted small">${NOTE_EN}</p>`;
   const FIELD_HTML = `<input type="hidden" name="brief" value="segment:${SEGMENT}"/>`;
 
-  it("differ from the same pages without brief by the line and the field alone, and by the new code link's brief", async () => {
+  it("differ from the same pages without brief by the line and the field alone, and by the brief the new code link and the language toggle carry", async () => {
     const plain = await (await get(`/account/sign-in?next=%2Fsegments%2F${SEGMENT}`)).text();
     const carried = await (await get(`/account/sign-in?next=%2Fsegments%2F${SEGMENT}&brief=segment%3A${SEGMENT}`)).text();
     expect(carried.split(NOTE_HTML).length - 1).toBe(1);
@@ -403,7 +403,10 @@ describe("the sign-in pages with brief", () => {
     const email = newEmail("b-same");
     const codePlain = await (await post("/account/sign-in", { lang: "en", email, next: `/segments/${SEGMENT}` })).text();
     const codeCarried = await (await post("/account/sign-in", { lang: "en", email, next: `/segments/${SEGMENT}`, brief: `segment:${SEGMENT}` })).text();
-    expect(codeCarried.replace(NOTE_HTML, "").replace(FIELD_HTML, "").replace(`&amp;brief=segment%3A${SEGMENT}"`, '"')).toBe(codePlain);
+    // The code page answers a post, so its language toggle leads to the sign-in page with what the form carries (pages.tsx signInToggle).
+    expect(codeCarried).toContain(`<a href="/account/sign-in?next=%2Fsegments%2F${SEGMENT}&amp;brief=segment%3A${SEGMENT}&amp;lang=fr" class="lang-toggle"`);
+    expect(codeCarried.replace(NOTE_HTML, "").replace(FIELD_HTML, "").replace(`&amp;brief=segment%3A${SEGMENT}"`, '"')
+      .replace(`&amp;brief=segment%3A${SEGMENT}&amp;lang=fr"`, '&amp;lang=fr"')).toBe(codePlain);
     // A page with a brief that does not read is the page without one (its language toggle keeps the address's query).
     expect((await (await get(`/account/sign-in?next=%2Fsegments%2F${SEGMENT}&brief=segment%3A99`)).text()).replace("&amp;brief=segment%3A99&amp;lang=fr\"", '&amp;lang=fr"'))
       .toBe(plain);

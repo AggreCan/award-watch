@@ -32,7 +32,9 @@ import { type Account, type LiveSession, SESSIONS_MAX } from "./session";
 import { CODE_MINUTES } from "./signin";
 import { type Follow, followValue } from "./watch_events";
 
-export async function accountPage(c: Context<AppEnv>, title: string, body: unknown, status = 200): Promise<Response> {
+// toggle: where the language toggle leads in place of the request's own query (layout.tsx page), for a page
+// answered to a post (signInToggle).
+export async function accountPage(c: Context<AppEnv>, title: string, body: unknown, status = 200, toggle?: string): Promise<Response> {
   const lang = c.get("lang");
   const stats = await loadStats(c.env).catch(() => null);
   return page(
@@ -42,6 +44,7 @@ export async function accountPage(c: Context<AppEnv>, title: string, body: unkno
       {body as any}
     </Layout>,
     status,
+    toggle,
   );
 }
 
@@ -101,6 +104,15 @@ const againHref = (next?: string | null, follow?: Follow | null, brief?: Brief |
   ].filter(Boolean).join("&");
   return query ? `/account/sign-in?${query}` : "/account/sign-in";
 };
+
+// The language toggle of a sign-in page that answers a post (routes.tsx, POST
+// /account/sign-in and /account/check): the address the post was sent to has
+// no query, and the page to return to, what to follow and the briefing live in
+// its form's hidden fields alone, so the toggle leads to "Ask for a new code"'s
+// sign-in page with them, in the other language. Undefined with nothing to
+// carry: the toggle then keeps the request's own query, as on every page.
+export const signInToggle = (next?: string | null, follow?: Follow | null, brief?: Brief | null): string | undefined =>
+  next || follow || brief ? againHref(next, follow, brief) : undefined;
 
 // What a free account gives, beside the form from 1200 px and under it below
 // (public/styles.css .signin-grid), for a first visit and a return alike: the
