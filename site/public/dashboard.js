@@ -20,7 +20,10 @@
    of a dashboard deleted meanwhile says it no longer exists, with a link to
    the account's dashboards, and a save naming none of its tiles (changed
    elsewhere) says so with a link to reload it; nothing is saved again after
-   either (goneOf). Undo (the
+   either (goneOf). A change still unsent when the reader presses Remove,
+   Move to or Edit (posts the Worker answers from the stored layout) is saved
+   first and the post sent after (sendFirst), and one unsent as the page goes
+   (a tab, a link) is sent kept alive past it (keepaliveInit). Undo (the
    status line's link, and Ctrl+Z or Cmd+Z outside a field) goes back a
    change, the last UNDO_MAX of the visit. A tile resized is read again at
    its new size (the Worker's fragment, from this site only, parsed and its
@@ -62,6 +65,31 @@ export function goneOf(status, answer) {
   if (!(status === 404 && answer.state === "gone") && !(status === 409 && answer.state === "stale")) return null;
   const href = typeof answer.href === "string" && /^\/account\/dashboard(\/[0-9a-f]{32})?(\?lang=fr)?$/.test(answer.href) ? answer.href : "/account/dashboard";
   return { line: typeof answer.line === "string" ? answer.line : "", link: typeof answer.link === "string" ? answer.link : "", href };
+}
+
+/**
+ * A save sent as the page goes (pagehide): the layout post's own request, kept alive past the page; its answer is
+ * never read. @param {string} csrf @param {string} layout
+ */
+export function keepaliveInit(csrf, layout) {
+  return {
+    method: "POST", body: new URLSearchParams({ csrf, layout }), credentials: /** @type {RequestCredentials} */ ("same-origin"),
+    redirect: /** @type {RequestRedirect} */ ("error"), keepalive: true, headers: { accept: "application/json" },
+  };
+}
+
+/**
+ * A post the Worker answers by laying the dashboard out from its stored layout (Remove, Move to, Edit), sent while a
+ * change is unsent: the save first, to its end (flush), then the post, whether the save worked or not.
+ * @param {() => Promise<void>} flush @param {() => void} submit
+ */
+export async function sendFirst(flush, submit) {
+  try {
+    await flush();
+  } catch {
+    // A save that failed says so on the status line; the post still goes.
+  }
+  submit();
 }
 
 /** The arrow keys' steps, for the grip and for the corner. */
@@ -211,6 +239,15 @@ function start() {
   let timer = 0;
   let sending = false;
   let again = false;
+  /** A change whose timer is set and has not yet fired: it is not on its way to the Worker yet. */
+  let waiting = false;
+  /** Those waiting for every save to end (flush), let go when a save ends with none to follow it. @type {(() => void)[]} */
+  const settled = [];
+  const settle = () => {
+    for (const resolve of settled.splice(0)) resolve();
+  };
+  /** A change not yet kept: waiting for its timer, or a save under way. */
+  const unsent = () => waiting || sending;
   /** The dashboard was deleted or changed meanwhile (in another tab): the layout post's own words for it, and nothing is saved again. @type {{ line: string, link: string, href: string } | null} */
   let gone = null;
 
@@ -241,6 +278,7 @@ function start() {
       return;
     }
     line(words.saving || "");
+    waiting = true;
     window.clearTimeout(timer);
     timer = window.setTimeout(() => save(false), DELAY_MS);
   }
@@ -266,6 +304,7 @@ function start() {
   /** Send the layout now; a save asked for meanwhile goes after it. @param {boolean} now */
   async function save(now) {
     if (now) window.clearTimeout(timer);
+    waiting = false;
     if (sending) {
       again = true;
       return;
@@ -288,6 +327,7 @@ function start() {
         again = false;
         sending = false;
         goneLine();
+        settle();
         return;
       }
       if (res.ok && answer && answer.state === "saved") {
@@ -297,6 +337,7 @@ function start() {
         data.save = false;
         sending = false;
         line(words.local || "", { undo: true });
+        settle();
         return;
       }
     } catch {
@@ -309,6 +350,13 @@ function start() {
       return;
     }
     line(ok ? words.saved || "" : words.failed || "", ok ? { undo: true } : { retry: true, undo: true });
+    settle();
+  }
+
+  /** A change waiting for its timer sent now; resolved once no save is under way. @returns {Promise<void>} */
+  function flush() {
+    if (waiting) save(true);
+    return sending ? new Promise((resolve) => settled.push(resolve)) : Promise.resolve();
   }
 
   function undo() {
@@ -333,6 +381,7 @@ function start() {
       line(words.undone || "", { undo: true });
       return;
     }
+    waiting = true;
     window.clearTimeout(timer);
     timer = window.setTimeout(() => save(false), DELAY_MS);
     line(words.saving || "");
@@ -548,6 +597,13 @@ function start() {
     const form = e.target instanceof HTMLFormElement ? e.target : null;
     const button = form?.querySelector("button[data-step]");
     const el = /** @type {HTMLElement | null} */ (form?.closest(".dash-tile") ?? null);
+    // Remove, Move to and Edit post, and the Worker lays the rest out from the stored layout: a change still unsent is
+    // saved first, then the form is sent (form.submit fires no second submit event; the forms carry hidden fields alone).
+    if (form && el && !button && unsent()) {
+      e.preventDefault();
+      sendFirst(flush, () => form.submit());
+      return;
+    }
     if (!form || !button || !el || held) return;
     e.preventDefault();
     const step = /** @type {Step} */ (button.getAttribute("data-step"));
@@ -580,6 +636,15 @@ function start() {
     for (const d of grid.querySelectorAll("details.dash-menu[open]")) {
       if (!(e.target instanceof Node) || !d.contains(e.target)) d.removeAttribute("open");
     }
+  });
+
+  // Leaving the page (a tab, a link, a reload, a post outside the grid) with a change still unsent: it goes as the
+  // page goes, kept alive past it, since a save under way is cut off with the page.
+  window.addEventListener("pagehide", () => {
+    if (!unsent() || gone || !data.save) return;
+    window.clearTimeout(timer);
+    waiting = false;
+    fetch(data.layout || "", keepaliveInit(data.csrf || "", layoutJson(layout))).catch(() => undefined);
   });
 
   // The lists kept to their tiles' heights at each width, and once the fonts are in.

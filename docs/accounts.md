@@ -3904,7 +3904,12 @@ The script (`dashboard.js`, a module loaded on this page only):
   its answer lost) answers 409, state stale, and the page says "This
   dashboard was changed elsewhere, so the layout was not saved." with "Reload
   it", the same way. Two tabs on a stored dashboard still each save their own
-  whole layout, the last one kept.
+  whole layout, the last one kept. A change still unsent (its 600 ms not
+  run out, or a save under way) when the reader presses Remove, Move to or
+  Edit, posts the Worker answers from the stored layout, is saved first and
+  the post sent once that save has ended (`dashboard.js sendFirst`); one
+  unsent as the page goes (a tab, a link, a reload) is sent as a keepalive
+  request on `pagehide` (`keepaliveInit`).
 - **Undo**: the status line's link, or Ctrl+Z (Cmd+Z) outside a field: the
   layout before the last change, the last 20 of the visit, saved again.
 - **A resize** reads that tile again at its new size

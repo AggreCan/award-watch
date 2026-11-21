@@ -12,7 +12,7 @@ import {
   BOTH_FROM, COLS, H_MAX, H_MIN, LEAST, NARROW_BELOW, START_H, STEPS, W_MIN, type Step, type Tile, clamp, collides, compact, fromPanels, least, move,
   normalize, place, placeAll, resize, same, stack, startSize, stepTile, steps, takesBoth,
 } from "../public/dash-grid.js";
-import { DELAY_MS, KEY_STEPS, UNDO_MAX, fill, layoutJson } from "../public/dashboard.js";
+import { DELAY_MS, KEY_STEPS, UNDO_MAX, fill, keepaliveInit, layoutJson, sendFirst } from "../public/dashboard.js";
 import dashboardJs from "../public/dashboard.js?raw";
 import { env } from "cloudflare:test";
 import { ANALYTIC_BODIES, ROWS_MAX, ROWS_MIN, analyticFit, analyticKey, rowsHeld, tileFit } from "../src/account/dashboard_fit";
@@ -345,5 +345,45 @@ describe("the page's script", () => {
     for (const s of [...Object.values(KEY_STEPS.grip), ...Object.values(KEY_STEPS.corner)]) expect(STEPS).toContain(s);
     expect(UNDO_MAX).toBe(20);
     expect(DELAY_MS).toBeGreaterThan(0);
+  });
+
+  // The suite runs without a browser: the order is held through the functions the script exports (sendFirst,
+  // keepaliveInit) and the handlers through the script's own text. What a browser does between them (pagehide on
+  // following a tab, a keepalive request outliving the page) is the platform's.
+  it("saves a change still waiting for its save before a Remove, a Move to or an Edit posts, and as the page goes", async () => {
+    const log: string[] = [];
+    const flush = (fail: boolean) => async () => {
+      log.push("save sent");
+      await new Promise((r) => setTimeout(r, 5));
+      log.push("save ended");
+      if (fail) throw new Error("offline");
+    };
+    // The save to its end, then the post, whether the save worked or not.
+    await sendFirst(flush(false), () => log.push("posted"));
+    await sendFirst(flush(true), () => log.push("posted"));
+    expect(log).toEqual(["save sent", "save ended", "posted", "save sent", "save ended", "posted"]);
+    // The save as the page goes: the layout post's own request, kept alive past the page.
+    const layout = layoutJson([{ id: "a", kind: "radar", x: 0, y: 2, w: 6, h: 9 }]);
+    const init = keepaliveInit("c".repeat(32), layout);
+    expect(init).toMatchObject({ method: "POST", credentials: "same-origin", redirect: "error", keepalive: true, headers: { accept: "application/json" } });
+    expect(Object.fromEntries(init.body as URLSearchParams)).toEqual({ csrf: "c".repeat(32), layout });
+    // A form of a tile with no step (Remove, Move to, Edit) waits while a change is unsent, ahead of the steps' branch.
+    const submit = dashboardJs.slice(dashboardJs.indexOf('grid.addEventListener("submit"'), dashboardJs.indexOf("// Undo by the keys"));
+    expect(submit).toMatch(/if \(form && el && !button && unsent\(\)\) \{\s*e\.preventDefault\(\);\s*sendFirst\(flush, \(\) => form\.submit\(\)\);\s*return;\s*\}/);
+    expect(submit.indexOf("sendFirst(")).toBeLessThan(submit.indexOf("if (!form || !button || !el || held) return;"));
+    // Leaving the page sends what is unsent, the timer stopped, with keepaliveInit.
+    const hide = dashboardJs.slice(dashboardJs.indexOf('window.addEventListener("pagehide"'));
+    expect(hide).toMatch(/^window\.addEventListener\("pagehide", \(\) => \{\s*if \(!unsent\(\) \|\| gone \|\| !data\.save\) return;\s*window\.clearTimeout\(timer\);/);
+    expect(hide).toContain('fetch(data.layout || "", keepaliveInit(data.csrf || "", layoutJson(layout)))');
+    // flush sends at once a change waiting for its timer and resolves when no save is under way; each end of a save
+    // that no other follows lets it go; a timer set marks a change unsent.
+    const save = dashboardJs.slice(dashboardJs.indexOf("async function save("), dashboardJs.indexOf("function undo("));
+    expect(save.match(/settle\(\);/g)).toHaveLength(3);
+    expect(save).toMatch(/sending = true;/);
+    expect(dashboardJs).toMatch(/function flush\(\) \{\s*if \(waiting\) save\(true\);\s*return sending \? new Promise\(\(resolve\) => settled\.push\(resolve\)\) : Promise\.resolve\(\);\s*\}/);
+    for (const fn of ["function changed(", "function undo("]) {
+      const body = dashboardJs.slice(dashboardJs.indexOf(fn), dashboardJs.indexOf("window.setTimeout(() => save(false), DELAY_MS);", dashboardJs.indexOf(fn)));
+      expect(body, fn).toContain("waiting = true;");
+    }
   });
 });
