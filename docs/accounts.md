@@ -3291,7 +3291,10 @@ scanner that opens the link uses nothing up. Then, by reader:
   lines) and the sign-in form with the address filled in and the page as
   `next`, so the sign-in ends here (the secret rides in the sign-in message's
   link, to the same address);
-- signed in as another address: whose the invitation is, and nothing to press;
+- signed in as another address: whose the invitation is and which address
+  the browser is signed in as, then the same sign-in form as signed out (the
+  invited address filled in, the page as `next`); signing in there replaces
+  this browser's session and ends back on the page as the invited address;
 - an account holding a seat elsewhere, or with a paid plan of its own: why it
   cannot take one, and Decline;
 - the take would refuse it now (the holder's plan has no member seat for it,

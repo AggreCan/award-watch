@@ -511,8 +511,9 @@ export async function whatFits(c: Context<AppEnv>, inv: Invitation, joiner: Acco
   });
 }
 
+// next: this invitation's own link, which the sign-in panel carries back to (out, other).
 type JoinState =
-  | { kind: "stale" } | { kind: "out"; inv: Invitation; next: string } | { kind: "other"; inv: Invitation; you: string }
+  | { kind: "stale" } | { kind: "out"; inv: Invitation; next: string } | { kind: "other"; inv: Invitation; you: string; next: string }
   | { kind: "own_plan"; inv: Invitation; who: Account; secret: string } | { kind: "seated"; inv: Invitation; who: Account; secret: string }
   | { kind: "no_room"; inv: Invitation; who: Account; secret: string } | { kind: "take"; inv: Invitation; who: Account; secret: string; fits: Fit[] }
   | { kind: "done"; message: string };
@@ -540,6 +541,29 @@ const JoinButtons: FC<{ lang: Lang; who: Account; inv: Invitation; secret: strin
   </div>
 );
 
+// The invited address's sign-in, prefilled, its next this invitation's link: for a
+// reader signed out, and for one signed in as another address, whose sign-in
+// here replaces that session (routes.tsx POST /account/check) and lands back on
+// the link as the invited address. The post carries no follow and no brief, so
+// it is the sign-in page's own, held to its caps and nothing more.
+const JoinSignIn: FC<{ lang: Lang; inv: Invitation; next: string }> = ({ lang, inv, next }) => (
+  <Panel title={t(lang, "account.email_panel")} class="panel-form">
+    <p>{t(lang, "join.sign_in", { email: inv.email })}</p>
+    <form method="post" action="/account/sign-in" class="stack">
+      <input type="hidden" name="lang" value={lang} />
+      <input type="hidden" name="next" value={next} />
+      <label>
+        {t(lang, "interest.email")}
+        <input name="email" type="email" required maxlength={EMAIL_MAX} autocomplete="email" spellcheck={false} value={inv.email} />
+      </label>
+      <div class="hp"><label>{t(lang, "form.honeypot")}<input name="website" type="text" tabindex={-1} autocomplete="off" /></label></div>
+      <button type="submit" class="btn btn-primary">{t(lang, "account.send_code")}</button>
+    </form>
+  </Panel>
+);
+
+const joinLink = (inv: Invitation, secret: string) => `${SEATS_PATH}/join?i=${inv.id}&t=${secret}`;
+
 function joinView(lang: Lang, s: JoinState) {
   if (s.kind === "stale" || s.kind === "done") {
     return (
@@ -558,19 +582,7 @@ function joinView(lang: Lang, s: JoinState) {
       <>
         {head}
         <Panel title={t(lang, "join.what_title")}>{what}</Panel>
-        <Panel title={t(lang, "account.email_panel")} class="panel-form">
-          <p>{t(lang, "join.sign_in", { email: s.inv.email })}</p>
-          <form method="post" action="/account/sign-in" class="stack">
-            <input type="hidden" name="lang" value={lang} />
-            <input type="hidden" name="next" value={s.next} />
-            <label>
-              {t(lang, "interest.email")}
-              <input name="email" type="email" required maxlength={EMAIL_MAX} autocomplete="email" spellcheck={false} value={s.inv.email} />
-            </label>
-            <div class="hp"><label>{t(lang, "form.honeypot")}<input name="website" type="text" tabindex={-1} autocomplete="off" /></label></div>
-            <button type="submit" class="btn btn-primary">{t(lang, "account.send_code")}</button>
-          </form>
-        </Panel>
+        <JoinSignIn lang={lang} inv={s.inv} next={s.next} />
       </>
     );
   }
@@ -579,6 +591,7 @@ function joinView(lang: Lang, s: JoinState) {
       <>
         {head}
         <p class="account-notice" role="status">{t(lang, "join.other", { email: s.inv.email, you: s.you })}</p>
+        <JoinSignIn lang={lang} inv={s.inv} next={s.next} />
       </>
     );
   }
@@ -631,9 +644,9 @@ export async function joinPage(c: Context<AppEnv>): Promise<Response> {
   if (!inv || !secret) return joinPageOf(c, { kind: "stale" }, 400);
   const read = await readSession(c);
   if (read.state === "unavailable") return unavailable(c);
-  if (read.state !== "ok") return joinPageOf(c, { kind: "out", inv, next: `${SEATS_PATH}/join?i=${inv.id}&t=${secret}` });
+  if (read.state !== "ok") return joinPageOf(c, { kind: "out", inv, next: joinLink(inv, secret) });
   const who = read.account;
-  if (who.email !== inv.email) return joinPageOf(c, { kind: "other", inv, you: who.email });
+  if (who.email !== inv.email) return joinPageOf(c, { kind: "other", inv, you: who.email, next: joinLink(inv, secret) });
   if (who.seat) return joinPageOf(c, { kind: "seated", inv, who, secret });
   if (isPaidPlan(who.plan)) return joinPageOf(c, { kind: "own_plan", inv, who, secret });
   const fits = await whatFits(c, inv, who);
@@ -651,7 +664,7 @@ export async function joinPost(c: Context<AppEnv>, who: Account, fields: Record<
   const now = new Date();
   const inv = await readInvitation(c.env, fields.i, fields.t, now);
   if (!inv) return joinPageOf(c, { kind: "stale" }, 400);
-  if (who.email !== inv.email) return joinPageOf(c, { kind: "other", inv, you: who.email }, 403);
+  if (who.email !== inv.email) return joinPageOf(c, { kind: "other", inv, you: who.email, next: joinLink(inv, fields.t!) }, 403);
   const secret = fields.t!;
   if (fields.action === "decline") {
     if (!(await declineInvitation(c.env, inv, now))) return joinPageOf(c, { kind: "stale" }, 400);

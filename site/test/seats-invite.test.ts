@@ -453,6 +453,49 @@ describe("the invitation's page", () => {
     expect((await joinGet(l, member.cookie)).status).toBe(400);
   });
 
+  it("gives a browser signed in as another address the invited address's sign-in, which leads back to Take the seat", async () => {
+    const h = await person("other-holder", "ultra");
+    const to = newEmail("other-to");
+    await invite(h, to);
+    const l = await linkTo(to);
+    const other = await person("other-in");
+    const next = `/account/seats/join?i=${l.i}&t=${l.t}`;
+    const FORM_RE = /<form method="post" action="\/account\/sign-in" class="stack">[\s\S]*?<\/form>/;
+    for (const lang of ["en", "fr"] as const) {
+      const res = await joinGet(l, other.cookie, lang);
+      expect(res.status, lang).toBe(200);
+      const html = await res.text();
+      const page = text(html);
+      expect(page, lang).toContain(line(lang, "join.other", { email: to, you: other.email }));
+      expect(page, lang).toContain(line(lang, "join.sign_in", { email: to }));
+      expect(html.match(/class="btn btn-primary"/g), lang).toHaveLength(1);
+      const form = decode(FORM_RE.exec(html)?.[0] ?? "");
+      expect(form, lang).toContain(`<input type="hidden" name="lang" value="${lang}"/>`);
+      expect(form, lang).toContain(`<input type="hidden" name="next" value="${next}"/>`);
+      expect(form, lang).toContain(`value="${to}"`);
+      expect(page, lang).not.toContain(t(lang, "join.take"));
+    }
+    expect(SEATS_STRINGS["join.other"].en).not.toMatch(/sign out|open the link again/i);
+    // The panel's form as this browser posts it, still signed in as the other address.
+    const form = decode(FORM_RE.exec(await (await joinGet(l, other.cookie)).text())![0]);
+    const fields: Record<string, string> = { website: "", email: /name="email"[^>]* value="([^"]*)"/.exec(form)![1] };
+    for (const m of form.matchAll(/<input type="hidden" name="([^"]+)" value="([^"]*)"\/>/g)) fields[m[1]] = m[2];
+    expect(fields).toMatchObject({ email: to, next, lang: "en" });
+    expect((await post("/account/sign-in", fields, { cookie: other.cookie, env: ON() })).status).toBe(200);
+    const mail = await lastMail(to);
+    const check = await post("/account/check", { email: to, code: codeIn(mail?.text ?? ""), sent: "1", next }, { cookie: other.cookie, env: ON() });
+    expect(check.status).toBe(303);
+    expect(check.headers.get("location")).toBe(next);
+    // The browser is the invited address's now, and the other address's session in it has ended.
+    const member: Person = { email: to, id: await userId(to), cookie: sessionCookie(check) };
+    expect((await get("/account", { cookie: other.cookie, env: ON() })).headers.get("location")).toBe("/account/sign-in?m=ended");
+    const page = await read(await joinGet(l, member.cookie));
+    expect(page).toContain(t("en", "join.take"));
+    const res = await joinPost(member, l, "take");
+    expect(res.status).toBe(303);
+    expect(await rowById(l.i)).toMatchObject({ member_id: member.id, ended_at: null });
+  });
+
   it("refuses an account with its own paid plan and one seated elsewhere, offering Decline alone; a decline frees the seat at once", async () => {
     const h = await person("own-holder", "ultra");
     const pro = await person("own-pro", "pro");

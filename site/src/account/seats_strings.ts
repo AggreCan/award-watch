@@ -178,9 +178,10 @@ export const SEATS_STRINGS = {
   "join.room_none": { en: "Everything your account keeps fits.", fr: "Tout ce que garde votre compte y entre." },
   "join.take": { en: "Take the seat", fr: "Prendre le siège" },
   "join.decline": { en: "Decline", fr: "Refuser" },
+  // Above the sign-in panel the signed-out page has (join.sign_in): a sign-in there replaces this browser's session.
   "join.other": {
-    en: "This invitation is for {email}, and this browser is signed in as {you}. Sign out, open the link again and sign in with {email}.",
-    fr: "Cette invitation s'adresse à {email}, et ce navigateur est connecté au compte {you}. Déconnectez-vous, rouvrez le lien et connectez-vous avec {email}.",
+    en: "This invitation is for {email}, and this browser is signed in as {you}. Signing in below with {email} signs this browser out of {you}.",
+    fr: "Cette invitation s'adresse à {email}, et ce navigateur est connecté au compte {you}. La connexion ci-dessous avec {email} déconnecte ce navigateur du compte {you}.",
   },
   "join.own_plan": {
     en: "This account has a paid plan of its own, so it cannot take a seat while that plan lasts. You can decline, or ask {holder} for a new invitation once your plan has ended.",
