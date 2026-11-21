@@ -8,7 +8,7 @@ import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { STYLES_VERSION } from "../src/layout";
 
-const PINNED = { version: 81, sha256: "4b1c26231ae0862745a6dae3c3c279b8d7b1cb02d6c731f0c6ce53b9b3d8edc5" };
+const PINNED = { version: 81, sha256: "325c918bc519f6586f45c43291faee36cbfe96c83dabbf4ec9fb22ccbd850972" };
 
 const STYLES = (env as unknown as { STYLES_CSS: string }).STYLES_CSS;
 

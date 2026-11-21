@@ -2098,10 +2098,13 @@ th[aria-sort="descending"] .th-sort::after {
    to the next (the operator's ruling of 2026-11-20): a card takes most of the
    width, so the next one shows at the edge, and a lone card takes it all. The
    cards stay columns of the one grid, so their rows still line up. The row
-   scrolls inside its own box; the page itself never scrolls sideways. */
+   scrolls inside its own box; the page itself never scrolls sideways. The
+   row is the containing block of what is positioned inside it (the hidden
+   words of a line a plan lacks, .visually-hidden): left to the page, each
+   would sit where its card is in the scrolled row and widen the page. */
 @media (max-width: 699px) {
   .plan-cards {
-    grid-template-columns: none; grid-template-rows: repeat(var(--plan-card-rows, 1), auto); grid-auto-flow: column; grid-auto-columns: 86%;
+    position: relative; grid-template-columns: none; grid-template-rows: repeat(var(--plan-card-rows, 1), auto); grid-auto-flow: column; grid-auto-columns: 86%;
     column-gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: thin;
   }
   .plan-cards:has(> .plan-card:only-child) { grid-auto-columns: 100%; }

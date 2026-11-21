@@ -36,7 +36,7 @@ const page = async (path: string) =>
 describe("the plans on a phone", () => {
   it("sit side by side on the landing page and swipe, a card at a time, inside their own box", () => {
     const phone = block(LANDING, "@media (max-width: 640px) {");
-    expect(phone).toMatch(/\.lp-plans \{ display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain;[^}]*\}/);
+    expect(phone).toMatch(/\.lp-plans \{ position: relative; display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain;[^}]*\}/);
     expect(phone).toContain(".lp-plan { flex: 0 0 86%; scroll-snap-align: center; }");
     expect(phone).toContain(".lp-plans-swipe { display: block; }");
     // Outside the phone block the line is hidden and the plans do not scroll.
@@ -54,12 +54,30 @@ describe("the plans on a phone", () => {
     expect(await page("/?lang=fr")).toContain('<p class="lp-plans-swipe">Balayez pour voir chaque forfait.</p>');
   });
 
+  it("wrap every card's lines on the landing page at every width, so none is cut with an ellipsis", () => {
+    // From 1001 px the cards share three columns: a card's text is then about 232 px of 14 px Inter, and the Free
+    // and Pro cards' longest lines (PLAN_LINE_MAX characters, French) run to about 300 px, which a column holds only
+    // at the page's full width. The rule outside every media block is the one those widths read.
+    const outside = LANDING.replace(/\/\*[\s\S]*?\*\//g, "").replace(/@media[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, "");
+    const span = /\.lp-plan-list li > span \{([^}]*)\}/.exec(outside)?.[1];
+    expect(span).toBeDefined();
+    expect(span).toContain("white-space: normal");
+    expect(span).not.toContain("ellipsis");
+    expect(span).not.toContain("nowrap");
+  });
+
   it("swipe the same way wherever the plan cards are drawn, their rows kept level and their lines wrapped", () => {
     const phone = blocks(STYLES, "@media (max-width: 699px) {").find((b) => b.includes(".plan-cards {"));
     expect(phone).toBeDefined();
     const cards = /\.plan-cards \{([^}]*)\}/.exec(phone!)![1];
     for (const rule of ["grid-auto-flow: column", "grid-auto-columns: 86%", "grid-template-rows: repeat(var(--plan-card-rows, 1), auto)", "overflow-x: auto",
       "scroll-snap-type: x mandatory", "overscroll-behavior-x: contain"]) expect(cards, rule).toContain(rule);
+    // The page never scrolls sideways: each row that scrolls holds what is positioned inside it. A card's hidden
+    // words (.visually-hidden, position: absolute) would otherwise be placed by the page, out where their card
+    // sits in the scrolled row, and a phone could pan the whole page that far (seen live on 2026-11-21).
+    expect(cards).toContain("position: relative");
+    for (const sheet of [STYLES, LANDING]) expect(sheet).toMatch(/\.visually-hidden \{ position: absolute;/);
+    expect(block(LANDING, "@media (max-width: 640px) {")).toMatch(/\.lp-plans \{ position: relative;/);
     expect(phone).toContain(".plan-cards:has(> .plan-card:only-child) { grid-auto-columns: 100%; }");
     expect(phone).toContain(".plan-card { scroll-snap-align: center; }");
     expect(phone).toMatch(/\.plan-card \.plan-list li \{[^}]*white-space: normal;[^}]*\}/);

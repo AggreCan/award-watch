@@ -141,6 +141,15 @@ Pro page, the billing page, the dashboard's and the seats page's offers)
 swipe the same way at 699 px and under (`public/styles.css`, `.plan-cards`),
 and a line of a narrow card wraps. `site/test/plans-swipe.test.ts` holds both.
 
+Each row that scrolls is `position: relative`, so it is the containing block
+of what is positioned inside it. The cards hold words for a screen reader
+(`.visually-hidden`, `position: absolute`); placed by the page, each sat out
+where its card is in the scrolled row and let a phone pan the whole page
+sideways (found 2026-11-21, measured in a browser at 390 px). On the landing
+page every card's lines wrap at every width: from 1001 px a card's text
+column is narrower than the longest lines, which one line would cut with an
+ellipsis (version 9).
+
 ## The builder's band
 
 A band that shows the analytics builder and the dashboard at work, behind

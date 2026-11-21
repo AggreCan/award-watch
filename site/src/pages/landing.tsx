@@ -95,7 +95,7 @@ import { money, provincesText } from "./shared";
 
 // The stylesheet's version: bump it with any change to public/landing.css so
 // a cached copy is never paired with new markup.
-export const LANDING_VERSION = 8;
+export const LANDING_VERSION = 9;
 
 // The stylesheet's address. The builder's band (below) brought rules that the
 // page without it never uses, so that page names the stylesheet as it always

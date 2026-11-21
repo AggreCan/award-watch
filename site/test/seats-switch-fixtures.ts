@@ -8,6 +8,7 @@ import { ACCOUNTS, PRO_SALE, ULTRA_VARS, nextIp, onEnv } from "./accounts-helper
 import { GROUP_OVER } from "../src/account/deliveries";
 import { app } from "../src/index";
 import { STYLES_VERSION } from "../src/layout";
+import { LANDING_VERSION } from "../src/pages/landing";
 
 const hexOf = (tag: number, n: number) => `${tag.toString(16).padStart(8, "0")}${n.toString(16).padStart(24, "0")}`;
 const AT = "2026-01-05T09:00:00.000Z";
@@ -75,6 +76,9 @@ export async function makeReaders(): Promise<Record<Reader, string | undefined>>
 // (layout.tsx STYLES_VERSION) and changes nothing else in a page's bytes, so the stamp is put back before a page is
 // hashed; a new stamp alone needs no new capture.
 const CAPTURED_STYLES = 74;
+// The landing page's own stylesheet carries a stamp the same way (pages/landing.tsx LANDING_VERSION); its entries
+// were captured again at this one, and a later stamp alone needs no new capture either.
+const CAPTURED_LANDING = 8;
 // The capture was made before the counter told four classes of client apart. The privacy page's two sentences about
 // it changed with that (i18n.ts privacy.counting and privacy.visitor, each language), and nothing else on the page
 // did, so each sentence as it reads now is put back as it read at the capture before the page is hashed: [now, at
@@ -119,7 +123,8 @@ export const CAPTURED_WITHOUT: readonly string[] = [
 ];
 export const withoutMonthly = (page: string): string => CAPTURED_WITHOUT.reduce((p, added) => p.replaceAll(added, ""), page);
 export async function shortHash(text: string): Promise<string> {
-  let page = withoutMonthly(text).replaceAll(`styles.css?v=${STYLES_VERSION}"`, `styles.css?v=${CAPTURED_STYLES}"`);
+  let page = withoutMonthly(text).replaceAll(`styles.css?v=${STYLES_VERSION}"`, `styles.css?v=${CAPTURED_STYLES}"`)
+    .replaceAll(`landing.css?v=${LANDING_VERSION}`, `landing.css?v=${CAPTURED_LANDING}`);
   for (const [now, then] of CAPTURED_TEXT) for (const drawn of DRAWN) page = page.replaceAll(drawn(now), drawn(then));
   return (await sha256Hex(page)).slice(0, 24);
 }
