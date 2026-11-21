@@ -889,6 +889,31 @@ describe("the page", () => {
     expect(routeTemplate("GET", CSV)).toEqual({ route: CSV, kind: "download" });
   });
 
+  it("keeps lang=fr in the address the form writes on a French page, and in no address the view keeps or posts", async () => {
+    const q = "?subject=buyer&b=pwgsc-tpsgc&rows=year&measure=value&source=history&from=2022&to=2026";
+    const formOf = (html: string) => {
+      const at = html.indexOf('<form method="get" action="/analytics/build"');
+      return html.slice(at, html.indexOf("</form>", at));
+    };
+    const fr = (await view(`${q}&lang=fr`)).html;
+    expect(formOf(fr)).toContain('<input type="hidden" name="lang" value="fr"/>');
+    expect(formOf(fr).match(/name="lang"/g)).toHaveLength(1);
+    // An English page's form names no language: the address is the view's alone.
+    expect(formOf((await view(q)).html)).not.toContain('name="lang"');
+    // The CSV link, Add to dashboard's refs and Save's address are the view's one form, on the page and in the preview.
+    for (const html of [fr, (await view(`${q}&lang=fr`, { headers: { "x-build-fragment": "1" } })).html]) {
+      const result = decode(html.slice(html.indexOf('<div id="build-result"')));
+      const kept = [...result.matchAll(/name="(?:ref|address)" value="([^"]+)"/g)].map((m) => m[1]);
+      expect(kept.length).toBeGreaterThanOrEqual(3);
+      for (const address of kept) expect(address, address).toBe(`${PATH}${q}&show=bars`);
+      expect(result).toContain(`href="${CSV}${q}&show=bars"`);
+    }
+    // The menu model reads past it and never writes it.
+    const read = readBuild(new URL(`https://x.invalid${PATH}${q}&lang=fr`), 2026);
+    expect(read).toEqual(readBuild(new URL(`https://x.invalid${PATH}${q}`), 2026));
+    expect(buildQuery(read)).not.toContain("lang");
+  });
+
   it("reads in French, with no English left, no em or en dash, and every string in both languages", async () => {
     const { html } = await view("?lang=fr&subject=buyer&b=pwgsc-tpsgc&rows=segment&measure=noncompetitive&source=history&from=2022&to=2026");
     expect(html).toContain('<html lang="fr">');

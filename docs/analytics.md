@@ -1018,7 +1018,11 @@ hidden, its controls disabled, every group of fields the view does not use:
 the buyers, segment or organizations of another subject, the box to compare
 of the other kind, the source and period of the contracts ending, the rows
 shown where the rows take no top N; the script only shows and hides them as
-the menus change, and a disabled control is not sent.
+the menus change, and a disabled control is not sent. On a French page the
+form also carries a hidden `lang=fr`, so the address the script writes to
+the bar (and the button's) keeps the language and a copied link opens in
+French; the menu model reads past it, and the addresses the view keeps
+(the CSV link, Add to dashboard's refs, Save's address) never carry it.
 
 **The CSV file.** `/analytics/build.csv` with the view's query: the
 subject's id and name, the row's key and label, the source and fiscal years

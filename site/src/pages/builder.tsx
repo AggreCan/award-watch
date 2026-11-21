@@ -969,6 +969,9 @@ const Menus: FC<{ lang: Lang; ctx: Ctx; locked?: boolean }> = ({ lang, ctx, lock
     </form>
   ) : (
     <form method="get" action={BUILD_PATH} class="toolbar build-form" id="build-form" aria-label={t(lang, "build.form")} data-most={String(BUILD_YEARS)}>
+      {/* A French page's address keeps its language through every menu change, so a copied link opens in French;
+          readBuild reads past it and buildQuery never writes it, so the view's kept and posted addresses stay without. */}
+      {lang === "fr" ? <input type="hidden" name="lang" value="fr" /> : null}
       {fields}
     </form>
   );
