@@ -14,7 +14,7 @@ import { app } from "../src/index";
 import { bucketFor } from "../src/limits";
 import { REFUNDS_TO_CANCEL_SQL, collectAlerts, gatherInputs, readRefundsToCancel } from "../src/watchdog";
 import { testEnv } from "./assets";
-import { ACCOUNTS, csrf, decode, get, grantPro, nbsp, newEmail, nextIp, onEnv, post, signIn, useAccountsDb, userId } from "./accounts-helpers";
+import { ACCOUNTS, ULTRA_VARS, csrf, decode, get, grantPro, nbsp, newEmail, nextIp, onEnv, post, signIn, useAccountsDb, userId } from "./accounts-helpers";
 
 useAccountsDb();
 
@@ -149,13 +149,13 @@ let n = 0;
 const tag = () => `${Date.now().toString(36)}${n++}`;
 const event = (type: string, object: object) => ({ id: `evt_rf${tag()}`, object: "event", type, api_version: STRIPE_VERSION, data: { object } });
 
-async function deliver(e: object): Promise<Response> {
+async function deliver(e: object, env: object = payEnv()): Promise<Response> {
   const body = JSON.stringify(e);
   const t = nowS();
   const header = `t=${t},v1=${await hmacHex(KEYS.STRIPE_WEBHOOK_SECRET, `${t}.${body}`)}`;
   return app.request("/account/billing/webhook", {
     method: "POST", headers: { "content-type": "application/json", "stripe-signature": header, "cf-connecting-ip": nextIp() }, body,
-  }, payEnv());
+  }, env);
 }
 
 function subscriptionObject(id: string, customer: string, status: string, periodEnd: number, user: string | null) {
@@ -454,6 +454,37 @@ describe("the press", () => {
     expect(await billing(s)).toContain("Your plan today: Free.");
     const after = await auditOf(s.user);
     expect(after).toContain("plan_changed stripe ended, refunded");
+  });
+
+  it("names Ultra in the line after an Ultra subscriber's press, before the notices and once they have ended the plan, in both languages", async () => {
+    // An Ultra subscription: its one item on Ultra's price, granted by the checkout notice with Ultra's variables set.
+    const ultra = payEnv(ULTRA_VARS);
+    const email = newEmail("press-ultra");
+    const cookie = await signIn(email, { env: ultra });
+    const user = await userId(email);
+    const t = tag();
+    const sub = `sub_rf${t}`;
+    const cus = `cus_rf${t}`;
+    const price = { id: ULTRA_VARS.STRIPE_PRICE_ULTRA_MONTHLY, object: "price", product: ULTRA_VARS.STRIPE_PRODUCT_ULTRA, recurring: { interval: "month", interval_count: 1 } };
+    const plain = subscriptionObject(sub, cus, "active", nowS() + 30 * DAY_S, user);
+    subs.set(sub, { ...plain, items: { object: "list", data: [{ ...plain.items.data[0], price, quantity: 1 }] } });
+    expect((await deliver(checkoutCompleted(user, sub, cus), ultra)).status).toBe(200);
+    const charge = payment(sub, cus);
+    const s = { cookie };
+    expect(await billing(s)).toContain("Your plan today: Ultra, paid until");
+    expect((await press(s)).status).toBe(303);
+    expect(await billing(s, "?refund=done")).toContain("and the subscription is cancelled. Ultra ends when Stripe confirms the refund");
+    // The notices end the plan; the line the reader reloads for still names the plan refunded.
+    expect((await deliver(chargeRefunded(charge, cus))).status).toBe(200);
+    expect((await deliver(subscriptionDeleted(sub, cus, user))).status).toBe(200);
+    const en = await billing(s, "?refund=done");
+    expect(en).toContain("Your plan today: Free.");
+    expect(en).toContain("and the subscription is cancelled. Ultra ends when Stripe confirms the refund, usually within a minute.");
+    expect(en).not.toContain("Pro ends");
+    expect(await billing(s, "?refund=sent")).toContain("cancels it by hand. Ultra ends when Stripe confirms the refund");
+    const fr = nbsp(await billing(s, "?refund=done&lang=fr"));
+    expect(fr).toContain("et l’abonnement est annulé. Ultra prend fin dès que Stripe confirme le remboursement");
+    expect(fr).not.toContain("Pro prend fin");
   });
 
   it("keeps the language: a French press returns to the French page", async () => {

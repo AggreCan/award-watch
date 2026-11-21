@@ -508,8 +508,13 @@ export async function billingPage(
   const offered = source.kind !== "stub" && (await refundState(c.env, who.userId, row, line)) === "offer";
   const refund = offered ? (extra.confirm || asked === "confirm" ? "confirm" : "offer") : null;
   const ultra = (await ultraOnSale(c.env)) ? source.offerFor("ultra") : null;
-  const noticeKey = refundNotice(asked) ?? (ultra || who.plan === "ultra" ? moveNotice(c.req.query("move") ?? "") : null);
-  const notice = noticeKey ? t(lang, noticeKey, { plan: planName(lang, isPaidPlan(who.plan) ? who.plan : "pro") }) : null;
+  const refundKey = refundNotice(asked);
+  const noticeKey = refundKey ?? (ultra || who.plan === "ultra" ? moveNotice(c.req.query("move") ?? "") : null);
+  // Once the refund's notices have ended the plan, the line still names the plan refunded: the bound subscription's
+  // own newest row, ended or not (Pro only when none reads).
+  const noticePlan: PaidPlan = isPaidPlan(who.plan) ? who.plan
+    : refundKey ? (await subscriptionPlan(c.env, who.userId, row?.subscription_id ?? null)) ?? "pro" : "pro";
+  const notice = noticeKey ? t(lang, noticeKey, { plan: planName(lang, noticePlan) }) : null;
   const lastPlan = !isPaidPlan(who.plan) && liveSubscription(row) ? await subscriptionPlan(c.env, who.userId, row!.subscription_id) : null;
   // While the seats' switch is on: a member's billing, the link to the Seats page for a member or an account that gives
   // seats, and the people in the other seats the account's own plan covers (its group, as the session read it; nothing read).
