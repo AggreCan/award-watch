@@ -667,6 +667,36 @@ describe("the holder's pool table", () => {
     // The stamp moved with this rule (layout.tsx STYLES_VERSION 76), so no cached stylesheet meets the new table.
     expect(STYLES_VERSION).toBeGreaterThanOrEqual(76);
   });
+
+  it("says the joins and the items past the figures in the singular for one, and for none in French", async () => {
+    const bareUser = async (tag: string) => {
+      const id = hexId();
+      await ACCOUNTS.prepare("INSERT INTO users (id, email, created_at, lang, status, plan) VALUES (?, ?, ?, 'en', 'active', 'free')").bind(id, newEmail(tag), iso(-50)).run();
+      return id;
+    };
+    const seats = async (h: Person, lang: Lang) => read(await get(`/account/seats${lang === "fr" ? "?lang=fr" : ""}`, { cookie: h.cookie, env: ON() }));
+    // The joins of the window: none, one, two.
+    for (const used of [0, 1, 2]) {
+      const h = await person(`joins-${used}`, "ultra");
+      for (let i = 0; i < used; i++) await seatRow(h.id, { member: await bareUser(`joins-${used}-m${i}`), joined: -2 - i });
+      expect(await seats(h, "en"), `en ${used}`).toContain(`; ${used} joined in the last 30.`);
+      expect(await seats(h, "fr"), `fr ${used}`).toContain(`; ${used} ${used < 2 ? "l'a fait" : "l'ont fait"} au cours des 30 derniers jours.`);
+    }
+    // The group's items past the figures: one key past its 5, then two.
+    for (const past of [1, 2]) {
+      const h = await person(`over-${past}`, "ultra");
+      await seatRow(h.id, { member: await bareUser(`over-${past}-m`), joined: -2 });
+      await batched(Array.from({ length: KEYS_MAX + past }, (_, i) => ACCOUNTS.prepare(
+        "INSERT INTO api_keys (id, user_id, name, key_hash, prefix, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      ).bind(hexId(), h.id, `Key ${i + 1}`, hexId() + hexId(), hexId().slice(0, 8), iso(-30, i * 1000))));
+      expect(await seats(h, "en"), `en ${past}`).toContain(
+        past === 1 ? "so 1 of their items is saved and unavailable until there is room." : "so 2 of their items are saved and unavailable until there is room.",
+      );
+      expect(await seats(h, "fr"), `fr ${past}`).toContain(past === 1
+        ? "1 de leurs éléments est donc conservé et indisponible jusqu'à ce qu'il y ait de la place."
+        : "2 de leurs éléments sont donc conservés et indisponibles jusqu'à ce qu'il y ait de la place.");
+    }
+  });
 });
 
 describe("the words of this slice", () => {

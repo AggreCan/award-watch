@@ -252,14 +252,18 @@ function holderView(lang: Lang, who: Account, s: HolderState) {
             </table>
           </div>
           {room > 0 ? (
-            <p class="muted small">{t(lang, "seats.rule_joins", { n: fmtInt(joinsAllowed(s.plan), lang), used: fmtInt(s.seats.joins, lang) })}</p>
+            <p class="muted small">
+              {tn(lang, "seats.rule_joins_one", "seats.rule_joins", s.seats.joins, { n: fmtInt(joinsAllowed(s.plan), lang), used: fmtInt(s.seats.joins, lang) })}
+            </p>
           ) : null}
         </Panel>
       ) : null}
       {s.pool && s.group ? (
         <Panel title={t(lang, "seats.pool_title")}>
           <p>{t(lang, "seats.pool_lead")}</p>
-          {pastFigures(s.pool, s.plan) > 0 ? <p>{t(lang, "seats.pool_over", { n: fmtInt(pastFigures(s.pool, s.plan), lang) })}</p> : null}
+          {pastFigures(s.pool, s.plan) > 0
+            ? <p>{tn(lang, "seats.pool_over_one", "seats.pool_over", pastFigures(s.pool, s.plan), { n: fmtInt(pastFigures(s.pool, s.plan), lang) })}</p>
+            : null}
           <PoolTable lang={lang} pool={s.pool} plan={s.plan} columns={[
             { label: t(lang, "seats.you", { email: who.email }), id: who.userId },
             ...s.group.ids.slice(1).map((id) => ({ label: emailOf.get(id) ?? "", id })),

@@ -41,13 +41,23 @@ export const SEATS_STRINGS = {
   "seats.pool_col_figure": { en: "Figure", fr: "Chiffre" },
   "seats.pool_col_total": { en: "In use", fr: "En usage" },
   "seats.pool_total": { en: "{n} of {cap}", fr: "{n} sur {cap}" },
+  // The _one forms are chosen by i18n.ts tn: pool_over for {n}, rule_joins for {used} (English takes the singular
+  // for 1, French for 0 and 1; English needs no other word for {used}).
   "seats.pool_over": {
     en: "The seats hold more than the subscription's figures, so {n} of their items are saved and unavailable until there is room. Yours come first.",
     fr: "Les sièges détiennent plus que les chiffres de l'abonnement; {n} de leurs éléments sont donc conservés et indisponibles jusqu'à ce qu'il y ait de la place. Les vôtres passent en premier.",
   },
+  "seats.pool_over_one": {
+    en: "The seats hold more than the subscription's figures, so {n} of their items is saved and unavailable until there is room. Yours come first.",
+    fr: "Les sièges détiennent plus que les chiffres de l'abonnement; {n} de leurs éléments est donc conservé et indisponible jusqu'à ce qu'il y ait de la place. Les vôtres passent en premier.",
+  },
   "seats.rule_joins": {
     en: "Up to {n} people can join this subscription in any 30 days; {used} joined in the last 30.",
     fr: "Jusqu'à {n} personnes peuvent se joindre à cet abonnement sur toute période de 30 jours; {used} l'ont fait au cours des 30 derniers jours.",
+  },
+  "seats.rule_joins_one": {
+    en: "Up to {n} people can join this subscription in any 30 days; {used} joined in the last 30.",
+    fr: "Jusqu'à {n} personnes peuvent se joindre à cet abonnement sur toute période de 30 jours; {used} l'a fait au cours des 30 derniers jours.",
   },
   "seats.invite_title": { en: "Invite a Person", fr: "Inviter une personne" },
   "seats.invite_lead": {
