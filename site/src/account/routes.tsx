@@ -2081,11 +2081,13 @@ account.post("/seat/leave", async (c) => {
 // switch is on the seat the account holds or the seats it gives.
 const factsOf = async (c: Context<AppEnv>, who: Account) => ({ ...(await deleteFacts(c.env, who)), ...(await deleteSeatFacts(c, who)) });
 
+// factsOf reads the database (the seats' count has no fallback of its own), so
+// the page and the unticked post below answer through guarded: the 503 page, never the 500.
 account.get("/delete", async (c) => {
   const who = await signedIn(c);
   if (who instanceof Response) return who;
   const lang = c.get("lang");
-  return accountPage(c, t(lang, "account.delete_title"), deleteView(lang, who, undefined, await factsOf(c, who)));
+  return guarded(c, async () => accountPage(c, t(lang, "account.delete_title"), deleteView(lang, who, undefined, await factsOf(c, who))));
 });
 
 // The user row stays, marked deleted, its email replaced by "deleted:" and
@@ -2141,7 +2143,7 @@ account.post("/delete", async (c) => {
   const { account: who, fields } = post;
   const lang = c.get("lang");
   if (fields.confirm !== "yes") {
-    return accountPage(c, t(lang, "account.delete_title"), deleteView(lang, who, ["account.err_confirm"], await factsOf(c, who)), 400);
+    return guarded(c, async () => accountPage(c, t(lang, "account.delete_title"), deleteView(lang, who, ["account.err_confirm"], await factsOf(c, who)), 400));
   }
   return guarded(c, async () => {
     // A deleted account must not be charged again: its subscriptions are cancelled first, or nothing is deleted.

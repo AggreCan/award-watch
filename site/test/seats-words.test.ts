@@ -15,7 +15,7 @@ import { KEYS_MAX } from "../src/account/api_keys";
 import { PLAN_SEATS, memberSeats } from "../src/account/entitlements";
 import { FEEDS_MAX } from "../src/account/feeds";
 import { mailCheckMessages } from "../src/account/mail_check";
-import { SEAT_INVITE_DAYS, SEAT_KEEP_DAYS, SEAT_WINDOW_DAYS, joinsAllowed } from "../src/account/seats";
+import { SEATS_IN_USE_SQL, SEAT_INVITE_DAYS, SEAT_KEEP_DAYS, SEAT_WINDOW_DAYS, joinsAllowed } from "../src/account/seats";
 import { SEATS_STRINGS } from "../src/account/seats_strings";
 import { SESSIONS_MAX } from "../src/account/session";
 import { SaveViewRow } from "../src/account/view_pages";
@@ -434,6 +434,38 @@ describe("the delete page", () => {
     const one = await person("del-one", "ultra");
     await seatRow(one.id, { invited: 0 });
     expect(await read(await get("/account/delete", { cookie: one.cookie, env: ON() }))).toContain(line("en", "account.delete_seats_one"));
+  });
+
+  it("answers the 503 page, never the 500, when the accounts database fails under the page or its unticked post", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const h = await person("del-fault", "ultra");
+    await seatRow(h.id, { invited: 0 });
+    const token = await csrf(h.cookie, "/account", { env: ON() });
+    // The seats' count fails, as any statement does while the database stops answering; the rest still read.
+    const failing = new Proxy(ACCOUNTS, {
+      get(target, prop) {
+        if (prop === "prepare") {
+          return (sql: string) => (sql === SEATS_IN_USE_SQL
+            ? { bind: () => ({ first: async () => { throw new Error("D1_ERROR: the database did not answer"); } }) }
+            : target.prepare(sql));
+        }
+        const value = Reflect.get(target, prop);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const env = ON({ ACCOUNTS: failing });
+    for (const lang of ["en", "fr"] as const) {
+      const answers = [
+        await get(`/account/delete${lang === "fr" ? "?lang=fr" : ""}`, { cookie: h.cookie, env }),
+        await post("/account/delete", { csrf: token, lang }, { cookie: h.cookie, env }),
+      ];
+      for (const res of answers) {
+        expect(res.status, lang).toBe(503);
+        expect(await read(res), lang).toContain(`<h1>${line(lang, "account.unavailable_title")}</h1>`);
+      }
+    }
+    // Nothing was deleted.
+    expect(await ACCOUNTS.prepare("SELECT status FROM users WHERE id = ?").bind(h.id).first("status")).toBe("active");
   });
 });
 
