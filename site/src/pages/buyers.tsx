@@ -15,6 +15,7 @@ import { ChartStack, type Panel as ChartPanel, ShortMoney, moneyTip, recordsText
 import { Table } from "../columns";
 import { MONEY_SOURCES } from "../constants";
 import { BUYER_ID_RE, INSTITUTION, loadBuyer, loadBuyerAlias, loadBuyers, loadStats, type BuyerAlias, type BuyerSummary } from "../data";
+import { clockOf, closingPassed, tenderState } from "../closing";
 import type { AppEnv } from "../env";
 import { fmtInt, fmtMoneyShort, numberLocale, pick, sourceLabel, t, tn, type Key, type Lang } from "../i18n";
 import { Layout, PageHead, Panel, lowerRedirect, noDataPage, notFoundPage, page, todayOf } from "../layout";
@@ -30,9 +31,18 @@ import { BuyerPaymentsPanel, BuyerWorksPanel, buyerPublicAccounts } from "../pub
 import { IndigenousTargetPanel, buyerIndigenousTarget } from "../indigenous_target";
 import { HoldersPanel } from "./instruments";
 import {
-  AnalyticsLink, AwardTable, BUYER_SOURCE_RESTS, Count, OrgTotalTable, PHONE_ROWS, PhonePagerScript, PhonePages, SourceLine, SourcesSeparate, YearsBox, money,
-  grantsOnly, shareText, sourceCellClass, sourceColumns,
+  AnalyticsLink, AwardTable, BUYER_SOURCE_RESTS, Count, CountdownScript, OrgTotalTable, PHONE_ROWS, PhonePagerScript, PhonePages, SourceLine, SourcesSeparate,
+  TenderTable, YearsBox, money, grantsOnly, shareText, sourceCellClass, sourceColumns,
 } from "./shared";
+
+// How many open notices a buyer's page lists, the soonest to close, and how
+// many of them a phone shows before the button for the rest; the tender list
+// filtered to the buyer has them all. A reader who searched the buyer's name
+// with "tenders" lands here, so the notices come first on the page, and each
+// is a link a search engine can follow to the notice (the filtered list is
+// closed to crawlers).
+export const BUYER_OPEN_ROWS = 10;
+export const BUYER_OPEN_PHONE_ROWS = 5;
 
 const KIND: Record<string, Key> = {
   department: "buyer.kind_department",
@@ -225,6 +235,12 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
   // The holder's record under each named holder of the contracts ending, for a signed-in reader
   // (pages/expiring.tsx sectionLines); nothing is read for anyone else.
   const lines = b.expiring ? await sectionLines(c, lang, b.expiring.rows) : undefined;
+  // Its open notices, when the file carries them (a file from before them draws the page as it was): one whose
+  // closing time has passed goes after the ones still open, as on a segment's page.
+  const clock = clockOf(c.env);
+  const held = b.open_notices ?? [];
+  const open = [...held.filter((r) => !closingPassed(r.closing, clock)), ...held.filter((r) => closingPassed(r.closing, clock))];
+  const shown = open.slice(0, BUYER_OPEN_ROWS);
 
   return page(
     c,
@@ -263,6 +279,19 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
         ) : null}
         <AlsoAppearsAs lang={lang} aliases={b.aliases ?? []} />
       </PageHead>
+
+      {/* The buyer's open tender notices, first on the page; none, and the page opens on its figures as before. */}
+      {shown.length ? (
+        <Panel id="open" title={t(lang, "buyer.open_title")} count={n(b.open_tenders)}>
+          {b.open_tenders > shown.length ? (
+            <p class="muted small">
+              {t(lang, "buyer.open_first", { n: n(shown.length) })}{" "}
+              <a href={`/tenders?buyer=${b.buyer.id}`}>{t(lang, "buyer.open_all", { n: n(b.open_tenders) })}</a>
+            </p>
+          ) : null}
+          <TenderTable lang={lang} rows={shown} clock={clock} timeLeft buyer={false} phoneRows={BUYER_OPEN_PHONE_ROWS} />
+        </Panel>
+      ) : null}
 
       {/* A tile opens the source's largest values when the page has them. */}
       <section class="tiles" aria-label={t(lang, "org.tiles_label")}>
@@ -343,6 +372,8 @@ export async function buyerPage(c: Context<AppEnv>): Promise<Response> {
           a panel of their own and the last of the page, never summed with the payments. */}
       <BuyerPaymentsPanel lang={lang} pa={payments} buyer={name} />
       <BuyerWorksPanel lang={lang} pa={payments} />
+      {/* The live time left under a notice closing soon (public/countdown.js), only when the list holds one. */}
+      {shown.some((r) => tenderState("open", r.closing, clock) === "closing") ? <CountdownScript lang={lang} /> : null}
       <PhonePagerScript lang={lang} />
     </Layout>,
   );

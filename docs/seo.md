@@ -227,6 +227,18 @@ no recent contract stays open to a search engine and is in no part.
 Each of the three can be undone on its own; the engineering notes on search
 engines name the places.
 
+**A buyer's open tender notices on its own page (since 2026-11-21).** A
+search for a buyer's name with "tenders" lands on the buyer's page, and the
+tender list filtered to a buyer is closed to crawlers, so until now that
+page held a count and a button and none of the notices. The page now lists
+them itself, first on the page: the ten soonest to close, each a link to its
+notice, the whole count beside the title, and a link to the filtered list
+when there are more. A notice whose closing time has passed goes after the
+ones still open. The table has no buyer column, every row being that
+buyer's. A buyer with no open notice opens on its figures as before. The
+nightly export writes each buyer's open notices into the buyer's own file,
+25 at most, so the page reads nothing more than it did.
+
 **Links into the guides.** The record pages (a tender notice, an award
 notice, a contract history record, a published contract, a standing offer)
 and the tender, award and radar lists end on one line, "Guides:", that links

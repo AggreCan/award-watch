@@ -448,13 +448,17 @@ export function YearsBox<Y extends YearRow>({ lang, years, dataYear, cols, cells
 // the region rests too, and a row's provinces show under its buyer, as
 // beside the detail panel and on the home lists.
 // sorts: on /tenders, the list's orders the Closing and Published heads set (pages/tenders.tsx).
-export function tenderColumns(lang: Lang, sorts?: TenderSorts): Column[] {
+// buyer false: a buyer's own page, where every row is that buyer's. Its
+// column goes, and the region, narrower than it, takes its room and never
+// rests, so the table is no wider than the list's at any width.
+export function tenderColumns(lang: Lang, sorts?: TenderSorts, buyer: boolean = true): Column[] {
+  const region: Column = { kind: "region", label: t(lang, "col.region"), class: "c-region" };
   return [
     { kind: "main", label: t(lang, "col.notice"), class: "c-notice" },
-    { kind: "buyer", label: t(lang, "col.buyer"), class: "c-buyer" },
+    ...(buyer ? [{ kind: "buyer", label: t(lang, "col.buyer"), class: "c-buyer" } as Column] : []),
     { kind: "datetime", label: t(lang, "col.closing"), class: "c-date", sort: sorts?.closing },
     { kind: "date", label: t(lang, "col.published"), rest: "md", class: "c-pub", sort: sorts?.published },
-    { kind: "region", label: t(lang, "col.region"), rest: "md", class: "c-region" },
+    buyer ? { ...region, rest: "md" } : region,
   ];
 }
 
@@ -519,16 +523,19 @@ export function methodShort(lang: Lang, en: string | null, fr: string | null, ty
 // sorts: /tenders, one page of the whole list, whose Closing and Published
 // heads link the list's orders; every other list is whole on its page and
 // sorts there.
+// buyer false: a buyer's own page, without the buyer's column (tenderColumns).
+// phoneRows: the rows a phone shows before the button for the rest
+// (public/pager.js), as on a record list.
 export const TenderTable: FC<{
   lang: Lang; rows: readonly TenderRow[]; clock: Clock; status?: boolean; selectable?: boolean; note?: boolean; timeLeft?: boolean; omit?: string;
-  variant?: "home"; marked?: ReadonlySet<string>; sorts?: TenderSorts;
-}> = ({ lang, rows, clock, status, selectable, note = true, timeLeft = false, omit, variant, marked, sorts }) => {
+  variant?: "home"; marked?: ReadonlySet<string>; sorts?: TenderSorts; buyer?: boolean; phoneRows?: number;
+}> = ({ lang, rows, clock, status, selectable, note = true, timeLeft = false, omit, variant, marked, sorts, buyer = true, phoneRows }) => {
   const home = variant === "home";
   return (
   <>
   {note ? <SegmentNote lang={lang} rows={rows} omit={omit} /> : null}
-  <div class="table-wrap bordered">
-    <Table cols={home ? homeTenderColumns(lang) : tenderColumns(lang, sorts)} class="t-tenders" sorting={sorts ? "server" : "client"}>
+  <div class="table-wrap bordered" data-phone-rows={phoneRows ? String(phoneRows) : undefined}>
+    <Table cols={home ? homeTenderColumns(lang) : tenderColumns(lang, sorts, buyer)} class="t-tenders" sorting={sorts ? "server" : "client"}>
       <tbody>
         {rows.map((r) => {
           const state = tenderState(status ? r.status ?? "open" : "open", r.closing, clock);
@@ -552,12 +559,14 @@ export const TenderTable: FC<{
                   {method ? <span class="type-method">{method}</span> : null}
                 </td>
               ) : null}
+              {buyer ? (
               <td data-label={t(lang, "col.buyer")} class="c-buyer">
                 <BuyerLink lang={lang} id={r.buyer_id} en={r.buyer_en} fr={r.buyer_fr} />
                 {/* Beside the detail panel the provinces column rests; they show here instead. They show here too
                     while the column rests on a medium screen (md-only). */}
                 <span class="split-only md-only muted small">{provincesText(lang, r.provinces, r.provinces_derived)}</span>
               </td>
+              ) : null}
               <td data-label={t(lang, "col.closing")} class="mono c-date" data-closes={closes ?? undefined}
                 data-time={closes ? closingTime(r.closing, lang) ?? undefined : undefined} data-notice={closes ? r.reference.toLowerCase() : undefined}>
                 {closingText(r.closing, lang)}{" "}
@@ -567,7 +576,7 @@ export const TenderTable: FC<{
                 {far !== null ? <span class="countdown countdown-far">{far}</span> : null}
               </td>
               {home ? null : <td data-label={t(lang, "col.published")} class="mono c-pub mdh">{r.published ?? ""}</td>}
-              <td data-label={t(lang, "col.region")} class="c-region mdh">{provincesText(lang, r.provinces, r.provinces_derived)}</td>
+              <td data-label={t(lang, "col.region")} class={buyer ? "c-region mdh" : "c-region"}>{provincesText(lang, r.provinces, r.provinces_derived)}</td>
             </tr>
           );
         })}

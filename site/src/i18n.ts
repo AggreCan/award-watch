@@ -1377,6 +1377,10 @@ const STRINGS = {
   "buyer.seen": { en: "Records from {first} to {last}.", fr: "Dossiers de {first} à {last}." },
   "buyer.top": { en: "Largest Values: {source}", fr: "Valeurs les plus élevées : {source}" },
   "buyer.recent_awards": { en: "Newest Award Notices", fr: "Avis d'attribution les plus récents" },
+  // The buyer's open tender notices on its own page (pages/buyers.tsx OpenNotices).
+  "buyer.open_title": { en: "Open Tender Notices", fr: "Avis d'appel d'offres ouverts" },
+  "buyer.open_first": { en: "The {n} closing soonest.", fr: "Les {n} dont la clôture est la plus proche." },
+  "buyer.open_all": { en: "All {n} open notices, with filters", fr: "Les {n} avis ouverts, avec filtres" },
   "buyer.expiring": { en: "Contracts Ending Soon", fr: "Contrats prenant fin bientôt" },
   "buyer.expiring_all": {
     en: "This buyer's contracts in the 12-month list",

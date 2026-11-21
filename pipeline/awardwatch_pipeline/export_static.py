@@ -111,7 +111,8 @@ change there. Output tree (under data/out/static):
   buyers/index.json, buyers/<id>.json   the listed buyers (export.LISTED_BUYER): those with an open notice,
                                 an award notice, a contract history record, a published contract or a grant,
                                 and the institutions only the lobbying registry names (kind "institution",
-                                with n_lobbying); a buyer file's "aliases" are the names it also appears under
+                                with n_lobbying); a buyer file's "aliases" are the names it also appears under,
+                                and its "open_notices" its open tender notices, the BUYER_OPEN soonest to close
                                 (buyer_aliases_of); a buyer with a class of the newest Public Accounts file
                                 carries public_accounts (sources/public_accounts.buyer_blocks), apart from its
                                 contract figures, and a buyer with a row of the newest works file carries its
@@ -295,6 +296,9 @@ FAMILY_MEMBERS = 50
 PROFILE_ALIASES = 12
 BUYER_TOP = 25
 BUYER_AWARDS = 50
+# The open notices a buyer's file lists at most, the soonest to close first (its page shows the first of them and
+# links the tender list filtered to the buyer, which has them all; the file's "open_tenders" is the whole count).
+BUYER_OPEN = 25
 # The other names a buyer page lists at most ("Also appears as").
 BUYER_ALIASES = 12
 CATEGORY_TOP = 25
@@ -2152,6 +2156,11 @@ def write_buyers(m: Model, out: Path, totals: Totals, open_rows: list[dict]) -> 
     conn = m.conn
     listed = m.listed
     open_by: Counter = Counter(r["buyer_id"] for r in open_rows if r["buyer_id"])
+    # Each buyer's open notices in the open list's order (soonest closing first), as a segment's file holds its own.
+    open_of: dict[str, list[dict]] = defaultdict(list)
+    for r in open_rows:
+        if r["buyer_id"] and len(open_of[r["buyer_id"]]) < BUYER_OPEN:
+            open_of[r["buyer_id"]].append(list_fields(r))
     history_totals = totals.buyer.get(("all", "history"), {})
     summaries = []
     for bid in sorted(listed):
@@ -2198,6 +2207,8 @@ def write_buyers(m: Model, out: Path, totals: Totals, open_rows: list[dict]) -> 
             "top_organizations": {source: [m.org_total(*c) for c in ranked]
                                   for source, ranked in sorted(top.get(bid, {}).items()) if ranked},
             "open_tenders": s["n_open_tenders"],
+            # Always written, empty for a buyer with none: the site reads its absence as a file from before it.
+            "open_notices": open_of.get(bid, []),
             "recent_awards": recent,
             "expiring": m.expiring_part("buyer_id", bid),
             "aliases": also.get(bid, []),

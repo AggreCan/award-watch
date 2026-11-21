@@ -317,6 +317,9 @@ def test_every_file_passes_the_site_checks(exported):
     for b in buyers:
         doc = load(out, f"buyers/{b['id']}.json")
         assert doc["buyer"]["id"] == b["id"] and count(doc["open_tenders"]) and every(doc["recent_awards"], award_row)
+        # Its open notices, always written: the open list's rows for the buyer, never more than the cap or the count.
+        assert every(doc["open_notices"], tender_row) and len(doc["open_notices"]) == min(doc["open_tenders"], es.BUYER_OPEN)
+        assert all(r["buyer_id"] == b["id"] for r in doc["open_notices"])
         assert every(doc["years"], lambda y: year_figure(y) and num_or_none(y["n_organizations"]))
         assert all(k in MONEY and every(v, org_total) for k, v in doc["top_organizations"].items())
     categories = load(out, "categories/index.json")
@@ -951,6 +954,26 @@ def test_a_notice_past_its_closing_day_is_closed_and_left_out_of_every_open_list
     assert all(tender_row(r) for r in new.values())
     buyer = load(out, "buyers/pwgsc-tpsgc.json")
     assert buyer["open_tenders"] == 6 and buyer["buyer"]["n_open_tenders"] == 6
+    # The buyer's page lists them: the open list's own rows for the buyer, in its order (soonest closing first),
+    # without what only the list's filters read.
+    listed = [es.list_fields(r) for r in load(out, "tenders/open.json") if r["buyer_id"] == "pwgsc-tpsgc"]
+    assert buyer["open_notices"] == listed and len(listed) == 6
+    closings = [r["closing"] for r in listed if r["closing"]]
+    assert closings == sorted(closings)
+    assert not any(k in r for r in buyer["open_notices"] for k in es.WORD_FIELDS)
+    assert "cb-yesterday" not in {r["reference"] for r in buyer["open_notices"]}
+    # A buyer with more than the cap keeps the first of them and the whole count.
+    assert es.BUYER_OPEN == 25
+    for i in range(30):
+        tender(conn, f"cb-many-{i:02d}", 0, title=f"One of many {i}", closing=f"2026-12-{(i % 28) + 1:02d}T14:00:00")
+    conn.commit()
+    es.export_static(conn, out, today=TODAY, base_url=BASE)
+    many = load(out, "buyers/pwgsc-tpsgc.json")
+    whole = [es.list_fields(r) for r in load(out, "tenders/open.json") if r["buyer_id"] == "pwgsc-tpsgc"]
+    assert many["open_tenders"] == len(whole) == 36 and many["open_notices"] == whole[:es.BUYER_OPEN]
+    # Every buyer's file carries the key, with as many rows as its count allows (none for a buyer with none).
+    docs = [load(out, f"buyers/{b['id']}.json") for b in load(out, "buyers/index.json")["buyers"]]
+    assert docs and all(len(d["open_notices"]) == min(d["open_tenders"], es.BUYER_OPEN) for d in docs)
 
 
 # -- buyers with nothing to show ------------------------------------------------------------

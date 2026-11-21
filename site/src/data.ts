@@ -744,6 +744,10 @@ export interface Buyer {
   years: BuyerYear[];
   top_organizations: Partial<Record<MoneySource, OrgTotal[]>>;
   open_tenders: number;
+  // Its open tender notices, the soonest to close first, at most the
+  // export's BUYER_OPEN (open_tenders is the whole count); empty for a buyer
+  // with none, absent from exports written before 2026-11-21.
+  open_notices?: TenderRow[];
   recent_awards: AwardRow[];
   // The contracts ending within 12 months; absent from older exports.
   expiring?: ExpiringPart;
@@ -1585,7 +1589,7 @@ export async function loadBuyer(env: Env, id: string): Promise<Buyer | null> {
     isObj(v.top_organizations) &&
     Object.entries(v.top_organizations).every(([k, rows]) => isMoneySource(k) && isListOf(rows, isOrgTotal)) &&
     isCount(v.open_tenders) && isListOf(v.recent_awards, isAwardRow) && optional(v.expiring, isExpiringPart) &&
-    optional(v.aliases, (a) => isListOf(a, isBuyerAlias));
+    optional(v.aliases, (a) => isListOf(a, isBuyerAlias)) && optional(v.open_notices, (r) => isListOf(r, isTenderRow));
   return ok ? (v as unknown as Buyer) : null;
 }
 
