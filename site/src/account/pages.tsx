@@ -778,10 +778,14 @@ export function searchesView(
         <Panel title={t(lang, "account.panel_import")} count={fmtInt(pending.length, lang)}>
           <p>{t(lang, "account.import_text")}</p>
           <ul class="account-list">{pending.map((r) => <li><a href={r.params}>{r.label}</a></li>)}</ul>
-          <form method="post" action="/account/searches/import">
-            <Csrf account={account} />
-            <button type="submit" class="btn btn-primary">{t(lang, "account.import_button")}</button>
-          </form>
+          {/* At the figure the button would add nothing (the rows past it stay pending): the page's own cap line and
+              its plans link stand in its place, or in a group whom to ask, as Add a Search below says. */}
+          {full ? (pool ? <p><PoolFull lang={lang} who={account} figure="searches" cap={cap} otherwise={capLine} /></p> : foot) : (
+            <form method="post" action="/account/searches/import">
+              <Csrf account={account} />
+              <button type="submit" class="btn btn-primary">{t(lang, "account.import_button")}</button>
+            </form>
+          )}
         </Panel>
       ) : null}
       <Panel title={t(lang, "account.searches_title")}

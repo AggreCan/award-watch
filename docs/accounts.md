@@ -18,7 +18,12 @@ the tests are `site/test/accounts-*.test.ts`.
   or a segment page (*Save this search*), or by pasting a page's address on
   the searches page; either way the site rebuilds the filter and writes its
   label, as the alerts form does. Requests made earlier through the alerts
-  form are offered for import after sign-in.
+  form are offered for import after sign-in: a sign-in with no page to
+  return to lands on the searches page while one of them can still be
+  added, and on the overview once the account holds its figure. At the
+  figure the import panel still lists the rows left over, with the page's
+  own cap line and its link to the plans (in a group, whom to ask) in place
+  of the button, which would add nothing.
 - **Delivery by email.** On the Pro plan, any saved search can be sent
   daily or weekly: a tender list, a list of contracts ending, or the new
   records of an organization, a buyer or a segment (*Phase 2: delivery*).

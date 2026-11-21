@@ -557,10 +557,23 @@ account.post("/check", async (c) => {
     if (next) return c.redirect(next, 303);
     // Without a page to return to, the overview says another browser was signed out, ahead of the alerts form's rows.
     if (capped) return c.redirect("/account?m=capped", 303);
+    // The alerts form's rows go to the searches page only while one of them can still be added: an account at
+    // its figure would find nothing to press there, sign-in after sign-in.
     const pending = await pendingInterest(c.env, checked.email, user.id).catch(() => []);
-    return c.redirect(pending.length ? "/account/searches" : "/account", 303);
+    const room = pending.length ? await roomAtSignIn(c, user.id, now).catch(() => false) : false;
+    return c.redirect(room ? "/account/searches" : "/account", 303);
   });
 });
+
+// Whether the account the address has just signed in to holds fewer saved
+// searches and briefings than its figure (the subscription's, in a group), as
+// addSearch counts them: the alerts form's rows can then be added.
+async function roomAtSignIn(c: Context<AppEnv>, userId: string, now: Date): Promise<boolean> {
+  const held = await planAtSignIn(c, userId, now);
+  if (!held) return false;
+  const who = { userId, plan: held.plan, ...(held.group ? { group: held.group } : {}) };
+  return (await heldCount(c.env, who)) < capFor(who);
+}
 
 account.post("/sign-out", async (c) => {
   const post = await signedInPost(c);

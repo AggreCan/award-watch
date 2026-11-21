@@ -10,7 +10,8 @@ import { sha256Hex } from "../src/account/secrets";
 import { forgetSessions, planOfRequest } from "../src/account/session";
 import type { AppEnv } from "../src/env";
 import {
-  ACCOUNTS, DB, MANUAL_GRANT_SQL, csrf, decode, get, grantPro, nbsp, newEmail, nextIp, onEnv, post, sessionCookie, signIn, useAccountsDb, userId,
+  ACCOUNTS, DB, MANUAL_GRANT_SQL, csrf, decode, get, grantPro, nbsp, newEmail, nextIp, onEnv, post, requestCode, sessionCookie, signIn, useAccountsDb,
+  userId,
 } from "./accounts-helpers";
 
 useAccountsDb();
@@ -152,6 +153,34 @@ describe("the alerts form's rows", () => {
     expect(await searches(email)).toHaveLength(3);
     const confirmed = await DB.prepare("SELECT COUNT(*) AS n FROM interest WHERE email = ? AND confirmed_at IS NOT NULL").bind(email).first<{ n: number }>();
     expect(confirmed?.n).toBe(3);
+  });
+
+  it("at the plan's figure, offer the cap line and the plans in place of a button that adds nothing, and sign in to the overview", async () => {
+    const email = newEmail("many-full");
+    for (const p of ["/segments/82", "/segments/43", "/tenders", "/expiring/3m"]) await addInterest(email, p.startsWith("/segments") ? "segment" : p === "/tenders" ? "tenders" : "expiring", p, `label ${p}`);
+    const cookie = await signIn(email);
+    await post("/account/searches/import", { csrf: await csrf(cookie, "/account/searches") }, { cookie });
+    expect(await searches(email)).toHaveLength(3);
+    const panelOf = (html: string) => /<h2[^>]*>(?:From Your Alert Requests|À partir de vos demandes d’alertes)<\/h2>[\s\S]*?<\/section>/.exec(html)?.[0] ?? "";
+    const panel = panelOf(decode(await (await get("/account/searches", { cookie })).text()));
+    // The row left over is still listed, so the reader sees what did not fit.
+    expect(panel).toContain('<a href="/expiring/3m">label /expiring/3m</a>');
+    expect(panel).not.toContain('action="/account/searches/import"');
+    expect(panel).not.toContain("btn-primary");
+    expect(panel).toContain("This account holds 3 of 3 saved searches and briefings. Pro holds up to 25 and sends them by email, daily or weekly.");
+    expect(panel).toContain('<a href="/account/billing">Plans and prices</a>');
+    const fr = nbsp(panelOf(decode(await (await get("/account/searches?lang=fr", { cookie })).text())));
+    expect(fr).toContain("Recherches enregistrées et bulletins de ce compte : 3 sur 3.");
+    expect(fr).toContain('<a href="/account/billing">Forfaits et prix</a>');
+    // A sign-in with no page to return to goes to the overview: nothing on the searches page can be added.
+    const { code } = await requestCode(email);
+    expect((await post("/account/check", { email, code, sent: "1" })).headers.get("location")).toBe("/account");
+    // With room again, the sign-in goes to the searches page and the button is back.
+    const [first] = await searches(email);
+    await post(`/account/searches/${first.id}/delete`, { csrf: await csrf(cookie, "/account/searches") }, { cookie });
+    const next = await requestCode(email);
+    expect((await post("/account/check", { email, code: next.code, sent: "1" })).headers.get("location")).toBe("/account/searches");
+    expect(panelOf(decode(await (await get("/account/searches", { cookie })).text()))).toContain('action="/account/searches/import"');
   });
 
   it("include the lists the Email lists page saved together, each label rebuilt in the page's language", async () => {
