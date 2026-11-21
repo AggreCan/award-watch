@@ -191,7 +191,7 @@ describe("following with the sign-in", () => {
     expect(page).toContain(`<input type="hidden" name="next" value="/organizations/${ORG}"/>`);
     expect(page).toContain(`<input type="hidden" name="follow" value="organization:${ORG}"/>`);
     const { mail, link } = await mailOf(email);
-    expect(mail?.text).toContain(`&next=%2Forganizations%2F${ORG}&follow=organization%3A${ORG}`);
+    expect(mail?.text).toContain(`&lang=en&next=%2Forganizations%2F${ORG}&follow=organization%3A${ORG}`);
     // Opening the link changes nothing; its page carries follow to its button.
     const opened = await get(link.replace("http://localhost", ""));
     expect(opened.status).toBe(200);

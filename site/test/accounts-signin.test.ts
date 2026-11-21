@@ -35,7 +35,7 @@ describe("the sign-in request", () => {
     expect(mail?.subject).toBe("Your Award Watch sign-in code");
     expect(mail?.subject).not.toMatch(/[0-9]{6}/);
     const { code, token } = { code: /([0-9]{6})/.exec(mail!.text)![1], token: /token=([0-9a-f.]+)/.exec(mail!.text)![1] };
-    expect(mail?.text).toContain(`http://localhost/account/check?token=${token}`);
+    expect(mail?.text).toContain(`http://localhost/account/check?token=${token}&lang=en`);
     const [row] = await codeRows(email);
     expect(row.user_id).toBeNull();
     expect(row.code_hash).toBe(await codeHash(row.id, code));
@@ -445,6 +445,32 @@ describe("the account pages in French", () => {
     expect(nbsp(mail!.text)).toMatch(/^Votre code de connexion\n\n[0-9]{6}\n/);
     expect(mail?.text).toMatch(/token=[0-9a-f.]+&lang=fr/);
     expect(mail?.html).not.toContain("<script");
+  });
+
+  it("make the account's mail language the asking page's, whatever language cookie the browser that opens the link holds", async () => {
+    for (const [asked, cookie] of [["en", "fr"], ["fr", "en"]] as const) {
+      const email = newEmail(`link-${asked}`);
+      await post("/account/sign-in", { email, lang: asked });
+      const mail = await lastMail(email);
+      expect(mail?.text, asked).toMatch(new RegExp(`/account/check\\?token=[0-9a-f.]+&lang=${asked}(?:\\s|$)`));
+      const link = /http:\/\/localhost(\/account\/check\?\S+)/.exec(mail!.text)![1];
+      // Opened on another device, whose language cookie is the other language.
+      const opened = await get(link, { cookie: `lang=${cookie}` });
+      expect(opened.status, asked).toBe(200);
+      const html = await opened.text();
+      expect(html, asked).toContain(`<html lang="${asked}">`);
+      expect(html, asked).toContain(`<input type="hidden" name="lang" value="${asked}"/>`);
+      const token = /name="token" value="([^"]+)"/.exec(html)![1];
+      const done = await post("/account/check", { lang: asked, token }, { cookie: `lang=${cookie}` });
+      expect(done.status, asked).toBe(303);
+      const user = await ACCOUNTS.prepare("SELECT lang FROM users WHERE email = ?").bind(email).first<{ lang: string }>();
+      expect(user?.lang, asked).toBe(asked);
+    }
+    // The code path keeps the page's language as before.
+    const typed = newEmail("code-en");
+    const { code } = await requestCode(typed);
+    expect((await post("/account/check", { email: typed, code, sent: "1", lang: "en" }, { cookie: "lang=fr" })).status).toBe(303);
+    expect((await ACCOUNTS.prepare("SELECT lang FROM users WHERE email = ?").bind(typed).first<{ lang: string }>())?.lang).toBe("en");
   });
 });
 

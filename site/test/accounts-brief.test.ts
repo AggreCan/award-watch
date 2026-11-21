@@ -184,7 +184,7 @@ describe("saving a briefing with the sign-in", () => {
     expect(page).toContain(`<input type="hidden" name="next" value="/segments/${SEGMENT}"/>`);
     expect(page).toContain(`<input type="hidden" name="brief" value="segment:${SEGMENT}"/>`);
     const { mail, link } = await mailOf(email);
-    expect(mail?.text).toContain(`&next=%2Fsegments%2F${SEGMENT}&brief=segment%3A${SEGMENT}`);
+    expect(mail?.text).toContain(`&lang=en&next=%2Fsegments%2F${SEGMENT}&brief=segment%3A${SEGMENT}`);
     // Opening the link changes nothing; its page carries brief to its button.
     const opened = await get(link.replace("http://localhost", ""));
     expect(opened.status).toBe(200);
@@ -468,7 +468,7 @@ describe("a sign-in that carries both follow and brief", () => {
       .all<{ detail: string }>();
     expect((marked.results ?? []).map((r) => r.detail)).toEqual(["follow"]);
     const { mail, code } = await mailOf(email);
-    expect(mail?.text).toContain(`&next=%2Fbuyers%2F${BUYER}&follow=buyer%3A${BUYER}&brief=buyer%3A${BUYER}`);
+    expect(mail?.text).toContain(`&lang=en&next=%2Fbuyers%2F${BUYER}&follow=buyer%3A${BUYER}&brief=buyer%3A${BUYER}`);
     const done = await post("/account/check", { email, code, sent: "1", next: `/buyers/${BUYER}`, follow: `buyer:${BUYER}`, brief: `buyer:${BUYER}` });
     expect(done.status).toBe(303);
     const id = await userId(email);

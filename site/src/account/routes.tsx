@@ -465,7 +465,10 @@ account.post("/sign-in", async (c) => {
     // what the hour's ceiling counts; one carrying both is marked once.
     await audit(c.env, issued.userId, "code_requested", follow ? FOLLOW_CODE_DETAIL : brief ? BRIEF_CODE_DETAIL : null, now);
     const base = siteBase(c);
-    const link = `${base}/account/check?token=${issued.token}${lang === "fr" ? "&lang=fr" : ""}${next ? `&next=${encodeURIComponent(next)}` : ""}` +
+    // The page's language rides on the link in either language, so the link's
+    // page, its form and a new account's mail language (users.lang) are the
+    // asking page's, whatever language cookie the device that opens it holds.
+    const link = `${base}/account/check?token=${issued.token}&lang=${lang}${next ? `&next=${encodeURIComponent(next)}` : ""}` +
       `${follow ? `&follow=${encodeURIComponent(followValue(follow.kind, follow.target))}` : ""}` +
       `${brief ? `&brief=${encodeURIComponent(briefValue(brief.kind, brief.subject))}` : ""}${weekly ? "&weekly=1" : ""}`;
     const sent = await senderFor(c.env, c.req.url)

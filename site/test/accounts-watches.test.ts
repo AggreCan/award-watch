@@ -215,7 +215,7 @@ describe("the Follow control and the watch routes", () => {
     const form = await (await get(`/account/sign-in?next=%2Forganizations%2F${ORG}`)).text();
     expect(form).toContain(`<input type="hidden" name="next" value="/organizations/${ORG}"/>`);
     await post("/account/sign-in", { email, next: `/organizations/${ORG}` });
-    expect((await lastMail(email))?.text).toContain(`&next=%2Forganizations%2F${ORG}`);
+    expect((await lastMail(email))?.text).toContain(`&lang=en&next=%2Forganizations%2F${ORG}`);
     const { code } = await requestCode(email);
     const res = await post("/account/check", { email, code, sent: "1", next: `/organizations/${ORG}` });
     expect(res.headers.get("location")).toBe(`/organizations/${ORG}`);

@@ -130,7 +130,7 @@ describe("turning the weekly email on with the sign-in", () => {
     expect(page).toContain(`<p class="muted small">${NOTE_EN}</p>`);
     expect(page).toContain(FIELD_HTML);
     const { mail, link } = await mailOf(email);
-    expect(mail?.text).toMatch(/\/account\/check\?token=[0-9a-f.]+&weekly=1(?:\s|$)/);
+    expect(mail?.text).toMatch(/\/account\/check\?token=[0-9a-f.]+&lang=en&weekly=1(?:\s|$)/);
     const opened = await text(await get(link.replace("http://localhost", "")));
     expect(opened).toContain(NOTE_EN);
     expect(opened).toContain(FIELD_HTML);

@@ -139,7 +139,8 @@ describe("the message's template", () => {
     const m = handed[0];
     const html = m.html!;
     const code = codeIn(m.text!);
-    const link = `https://awardwatch.ca/account/check?token=${tokenIn(m.text!)}`;
+    // The link of an English request carries lang=en (the button's href escapes its &).
+    const link = `https://awardwatch.ca/account/check?token=${tokenIn(m.text!)}&amp;lang=en`;
     // The light wordmark shows by default; the dark one waits for the dark query.
     const images = imagesIn(html);
     expect(images.map((tag) => attr(tag, "src"))).toEqual([

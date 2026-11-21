@@ -144,7 +144,10 @@ in.
    `crypto.getRandomValues` and both stored only as SHA-256 hashes.
 3. The message goes out through the sender (*Sending mail*). The page that answers is
    the same for an address with an account and one without; no user row is
-   made at this step.
+   made at this step. The message's link carries the asking page's language
+   (`lang=en` or `lang=fr`), so the link's page, its form and a new
+   account's mail language are the asking page's, whatever language cookie
+   the device that opens the link holds.
 4. `POST /account/check` with the address and the code, or with the link's
    token. `GET /account/check?token=...` (the link) shows a button that posts
    the token, so a mail scanner that opens the link uses nothing up. The
