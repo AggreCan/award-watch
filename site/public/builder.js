@@ -14,15 +14,51 @@
    Then the page asks the server for the result alone: a GET of the form's
    own address with the header x-build-fragment, answered with the result's
    section and the same header, which takes the place of the one on the page;
-   the address in the bar becomes the view's. Any other answer leaves the page
-   as it was. Without this script every option shows, the form's button does
-   the same, and the page answers a combination outside the matrix with its
-   reason. This file holds no text of its own. */
+   the address in the bar becomes the view's. Any other answer, or a fault,
+   puts one line in the result's place, from the words the page carries in
+   its JSON block (#build-words), in its language: the view could not be
+   drawn, and the form's own button to try again (drawable, failedLine); a
+   request a newer one replaced writes nothing. Without this script every
+   option shows, the form's button does the same, and the page answers a
+   combination outside the matrix with its reason. This file holds no text of
+   its own. */
 
 import { longestSpan, measuresFor, rowsFor, showsFor, sourcesFor, topOffered } from "./build-menu.js";
 
-const form = document.getElementById("build-form");
-if (form && window.fetch && window.URLSearchParams && window.FormData && window.DOMParser) {
+/** Whether a preview's answer is the result to draw: 200, marked by the Worker as the fragment. @param {number} status @param {string | null} header */
+export function drawable(status, header) {
+  return status === 200 && header === "1";
+}
+
+/**
+ * The line a preview that could not be drawn leaves in the result: the page's words for it, then the form's own button
+ * (a submit button naming the form, so it asks the Worker for the whole page) to try again. null without the words.
+ * @param {{ createElement: (tag: string) => any }} doc @param {{ failed?: unknown, retry?: unknown } | null} words
+ */
+export function failedLine(doc, words) {
+  if (!words || typeof words.failed !== "string" || typeof words.retry !== "string") return null;
+  const line = doc.createElement("p");
+  const retry = doc.createElement("button");
+  retry.type = "submit";
+  retry.setAttribute("form", "build-form");
+  retry.className = "btn-link";
+  retry.textContent = words.retry;
+  line.append(`${words.failed} `, retry);
+  return line;
+}
+
+if (typeof document !== "undefined") start();
+
+function start() {
+  const form = document.getElementById("build-form");
+  if (!form || !window.fetch || !window.URLSearchParams || !window.FormData || !window.DOMParser) return;
+  /** @type {{ failed?: unknown, retry?: unknown } | null} */
+  let words = null;
+  try {
+    words = JSON.parse(document.getElementById("build-words")?.textContent || "null");
+  } catch {
+    words = null;
+  }
   const most = Number(form.getAttribute("data-most")) || 20;
   const field = (name) => form.elements.namedItem(name);
 
@@ -86,19 +122,37 @@ if (form && window.fetch && window.URLSearchParams && window.FormData && window.
     if (asked) asked.abort();
     const controller = new AbortController();
     asked = controller;
+    // The view could not be drawn: the line in the result's place, so it no longer shows a view the menus have left,
+    // and the address the menus' view, so a reload or the line's button asks for it again.
+    const failed = () => {
+      const now = document.getElementById("build-result");
+      const line = failedLine(document, words);
+      if (!now || !line) return;
+      now.hidden = false;
+      now.replaceChildren(line);
+      history.replaceState(null, "", `${location.pathname}?${query}`);
+    };
     try {
       const res = await fetch(`${form.action}?${query}`, { headers: { "x-build-fragment": "1" }, credentials: "same-origin", signal: controller.signal });
-      if (!res.ok || res.headers.get("x-build-fragment") !== "1") return;
+      if (!drawable(res.status, res.headers.get("x-build-fragment"))) {
+        if (controller === asked) failed();
+        return;
+      }
       const doc = new DOMParser().parseFromString(await res.text(), "text/html");
       const next = doc.getElementById("build-result");
       const now = document.getElementById("build-result");
-      if (!next || !now || controller !== asked) return;
+      if (controller !== asked || !now) return;
+      if (!next) {
+        failed();
+        return;
+      }
       // The box stays, so a screen reader hears its new content; what it holds is the answer's.
       now.hidden = next.hidden;
       now.replaceChildren(...Array.from(next.childNodes, (node) => document.importNode(node, true)));
       history.replaceState(null, "", `${location.pathname}?${query}`);
     } catch {
-      // A fault or a newer request: the page stays as it was.
+      // A newer request aborted this one and draws in its place; a fault leaves the line.
+      if (controller === asked) failed();
     }
   };
 

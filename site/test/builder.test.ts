@@ -344,18 +344,47 @@ describe("a reader without Ultra", () => {
     }
   });
 
-  it("answers the preview's ask with an empty box and the file with the site's 404, reading nothing", async () => {
+  it("answers the preview's ask with a line and the file with the site's 404, reading nothing", async () => {
     const r = await readers();
     for (const cookie of [undefined, r.free, r.pro]) {
-      // The preview's ask: an empty box, nothing read.
+      // The preview's ask: the line that says why (below), nothing read.
       const records = trap<D1Database>("the records database");
       const frag = await view("?subject=all", { cookie: cookie ?? "", env: onWith({ RECORDS: records.binding }), headers: { "x-build-fragment": "1" } });
-      expect(frag.html).toBe('<div id="build-result" aria-live="polite" hidden=""></div>');
+      expect(frag.html).toMatch(/^<div id="build-result" aria-live="polite"><section class="panel">.*<p>.+<\/p><\/section><\/div>$/s);
       expect(records.used).toEqual([]);
       // The file is Ultra's: the site's 404, nothing read.
       const csv = await get(`${CSV}?subject=all`, { cookie, env: onWith({ RECORDS: records.binding }) });
       expect(csv.status).toBe(404);
       expect(records.used).toEqual([]);
+    }
+  });
+
+  it("answers the preview's ask with a line that says why it draws no view: sign in again, or the plan; never an empty box", async () => {
+    const r = await readers();
+    const ask = "?subject=buyer&b=pwgsc-tpsgc&rows=year&measure=value&source=history&from=2022&to=2026";
+    const next = encodeURIComponent(`${PATH}${ask}&show=bars`);
+    for (const lang of ["en", "fr"] as const) {
+      const q = lang === "fr" ? `${ask}&lang=fr` : ask;
+      const cases: [string, string][] = [
+        ["", lang === "fr"
+          ? `<p>Votre session a pris fin. <a href="/account/sign-in?next=${next}&amp;lang=fr">Reconnectez-vous pour voir cette vue</a></p>`
+          : `<p>Your session has ended. <a href="/account/sign-in?next=${next}">Sign in again to see this view</a></p>`],
+        [r.free, lang === "fr"
+          ? `<p>Le générateur fait partie d’Ultra, que ce compte ne détient pas pour le moment. <a href="/pro">Voir les forfaits</a></p>`
+          : `<p>The builder comes with Ultra, which this account does not hold now. <a href="/pro">See the plans</a></p>`],
+      ];
+      for (const [cookie, line] of [...cases, [r.pro, cases[1][1]] as [string, string]]) {
+        const records = trap<D1Database>("the records database");
+        const frag = await view(q, { cookie, env: onWith({ RECORDS: records.binding }), headers: { "x-build-fragment": "1" } });
+        expect(frag.res.status).toBe(200);
+        expect(frag.res.headers.get("x-build-fragment")).toBe("1");
+        expect(frag.res.headers.get("cache-control")).toBe("private, no-store");
+        // The box is shown, holding the line and nothing the page would act on.
+        expect(frag.html.startsWith('<div id="build-result" aria-live="polite"><section class="panel">'), frag.html).toBe(true);
+        expect(frag.html, `${lang} ${cookie ? "signed in" : "signed out"}`).toContain(line);
+        for (const absent of ["hidden", "btn-primary", "<form", "/analytics/build.csv"]) expect(frag.html, absent).not.toContain(absent);
+        expect(records.used).toEqual([]);
+      }
     }
   });
 });

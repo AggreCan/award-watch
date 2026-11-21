@@ -24,7 +24,8 @@
 // page's script (public/builder.js, an Ultra reader's alone) hides what the menus do not offer
 // and asks for the result alone as each menu changes: the same address with
 // the header x-build-fragment, answered with the result's section and the same
-// header; without the script the form's button does the same.
+// header (for a reader not read as Ultra, a line that says why, notUltraLine);
+// without the script the form's button does the same.
 //
 // The figures are the views' own: the cubes hold the same rows' counts
 // (pipeline cubes.py), the average is the views' (analytics.tsx averageOf), a
@@ -49,7 +50,7 @@ import { MEASURES, ROWS, SET_MAX, SOURCES, SUBJECTS, TOPS, topOffered } from "..
 import { AddToDashboard, type BoardChoice, boardChoices, dashboardAccount } from "../account/dashboard_add";
 import { FIND_PATH } from "../account/dashboard_rule";
 import { BUILD_LABEL_MAX, NAME_MAX, cleanName, fitName, midSentence } from "../account/saved_views";
-import type { Account } from "../account/session";
+import { type Account, readSession } from "../account/session";
 import { SaveViewRow, type SaveViewState, saveViewControl } from "../account/view_pages";
 import {
   BUILD_CSV_PATH, BUILD_PATH, BUILD_YEARS, FRAGMENT_HEADER, type BuildChoice, type Measure, type Problem, type Rows, type Show, type Subject,
@@ -997,17 +998,32 @@ const Readies: FC = () => {
 
 const PRIVATE = "private, no-store";
 
+// Why the preview draws no view for a reader not read as Ultra: signed out, the way to sign in again and back to the
+// view the address names; signed in on a plan without the builder, the plan line and the way to the plans; the
+// accounts database not answering, that the builder cannot be read now. It reads the session the plan was read from
+// (readSession keeps one answer a request) and parses the address, nothing more.
+async function notUltraLine(c: Context<AppEnv>, ctx: Ctx): Promise<unknown> {
+  const { lang } = ctx;
+  const read = await readSession(c).catch(() => ({ state: "unavailable" as const }));
+  if (read.state === "ok") return <>{t(lang, "build.preview_plan")} <a href="/pro">{t(lang, "build.gate_link")}</a></>;
+  if (read.state === "unavailable") return t(lang, "build.unavailable");
+  const next = encodeURIComponent(buildAddress(readBuild(new URL(c.req.url), ctx.current)));
+  const href = `/account/sign-in?next=${next}${lang === "fr" ? "&lang=fr" : ""}`;
+  return <>{t(lang, "build.preview_out")} <a href={href}>{t(lang, "build.preview_out_link")}</a></>;
+}
+
 export async function builderPage(c: Context<AppEnv>): Promise<Response> {
   const ctx = await context(c);
   if (ctx instanceof Response) return ctx;
   const { lang } = ctx;
   const fragment = c.req.header(FRAGMENT_HEADER) === "1";
   if (fragment && !ctx.ultra) {
-    // The preview is an Ultra reader's: anyone else's ask gets an empty box, and nothing is read.
+    // The preview is an Ultra reader's: anyone else's ask (a session ended in another tab, a plan that no longer holds
+    // the builder) reads nothing and gets the line that says why, which the page's script draws in the result.
     varyOnCookie(c);
     c.header("Cache-Control", PRIVATE);
     c.header("X-Build-Fragment", "1");
-    return c.html((<Box hidden />) as any, 200);
+    return c.html((<Box><Panel title={t(lang, "build.title")}><p>{await notUltraLine(c, ctx)}</p></Panel></Box>) as any, 200);
   }
   // Nothing is read for a view the builder does not offer. A reader without the builder reads its one sample.
   const outcome = !ctx.problem ? await readView(ctx) : null;
@@ -1031,7 +1047,9 @@ export async function builderPage(c: Context<AppEnv>): Promise<Response> {
       </PageHead>
       <Menus lang={lang} ctx={ctx} locked={!ctx.ultra} />
       {result as any}
-      {ctx.ultra ? <><Readies /><script type="module" src="/builder.js"></script></> : null}
+      {/* The script's words, in the page's language: the line for a preview it cannot draw, and its button's. */}
+      {ctx.ultra ? <><Readies /><ClientData id="build-words" data={{ failed: t(lang, "build.preview_failed"), retry: t(lang, "build.apply") }} />
+        <script type="module" src="/builder.js"></script></> : null}
     </Layout>,
     failed ? 503 : 200,
   );

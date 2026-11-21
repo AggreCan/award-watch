@@ -46,6 +46,17 @@ export const BUILDER_STRINGS = {
   "build.unavailable": { en: "The builder's figures cannot be read right now.", fr: "Les chiffres du générateur ne peuvent pas être lus pour le moment." },
   "build.unavailable_title": { en: "Figures Not Available Right Now", fr: "Chiffres non disponibles pour le moment" },
   "build.form": { en: "Choose the view", fr: "Choisir la vue" },
+  // A preview the server does not draw (public/builder.js, from the page's JSON block #build-words): this line, then
+  // the form's own button (build.apply) to try again.
+  "build.preview_failed": { en: "The view could not be drawn.", fr: "La vue n'a pas pu être affichée." },
+  // The preview asked by a reader not read as Ultra: signed out (a session ended elsewhere), with the way to sign in
+  // again and back to the view; signed in on a plan without the builder, with the way to the plans (build.gate_link).
+  "build.preview_out": { en: "Your session has ended.", fr: "Votre session a pris fin." },
+  "build.preview_out_link": { en: "Sign in again to see this view", fr: "Reconnectez-vous pour voir cette vue" },
+  "build.preview_plan": {
+    en: "The builder comes with Ultra, which this account does not hold now.",
+    fr: "Le générateur fait partie d'Ultra, que ce compte ne détient pas pour le moment.",
+  },
 
   // -- the menus ----------------------------------------------------------------------------------------
   "build.subject": { en: "About", fr: "Sujet" },

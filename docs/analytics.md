@@ -1013,6 +1013,18 @@ buyer and for the period), the rows only in the view's title. The page's script
 (`site/public/builder.js`) hides what the menus do not offer and redraws the
 result as each menu changes: a GET of the form's address with the header
 `x-build-fragment`, answered with the result alone and the same header.
+Any other answer (a status but 200, no header, a refusal of the page
+bucket) or a fault puts one line in the result's place, "The view could not
+be drawn." with the form's own button "Show this view" to try again, from
+the words the page carries in its JSON block `#build-words`, in its
+language; the address becomes the menus' view, so a reload asks for it
+again, and a request a newer one replaced writes nothing. The preview asked
+by a reader not read as Ultra (a session ended elsewhere, a lapsed plan)
+reads nothing and answers, in the result, a line that says why: "Your
+session has ended." with "Sign in again to see this view" (to the sign-in
+page, back to the view), or, signed in, "The builder comes with Ultra,
+which this account does not hold now." with "See the plans" (a plain link,
+not a second filled button).
 Without the script, the form's button does the same. The page itself draws
 hidden, its controls disabled, every group of fields the view does not use:
 the buyers, segment or organizations of another subject, the box to compare
