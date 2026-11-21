@@ -433,6 +433,17 @@ account.post("/sign-in", async (c) => {
     return signInOnly();
   }
   return guarded(c, async () => {
+    // A Follow or briefing form drawn before this browser signed in (another
+    // tab), posted with the address the browser is signed in to now: a code
+    // would only replace the session and leave the other tabs' forms stale. No
+    // message, no code and nothing counted; back to the page (next, safeNext),
+    // which now draws its signed-in control, one press away. Nothing is added
+    // here, since this post carries no CSRF value. Only the session's own
+    // address is compared, so the answer says nothing of any other address.
+    if ((follow || brief) && next) {
+      const read = await readSession(c);
+      if (read.state === "ok" && read.account.email === email) return c.redirect(inLang(next, lang), 303);
+    }
     const now = new Date();
     await sweep(c.env, now);
     if ((follow || brief) && (await followCodesInHour(c.env, now)) >= FOLLOW_CODES_PER_HOUR) {

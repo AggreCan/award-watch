@@ -15,7 +15,7 @@ import { ADD_WATCH_SQL } from "../src/account/watches";
 import { FOLLOW_MAX, followOf } from "../src/account/watch_events";
 import { CODES_PER_HOUR, FOLLOW_CODES_PER_HOUR, FOLLOW_CODES_SQL } from "../src/account/signin";
 import {
-  ACCOUNTS, decode, get, lastMail, nbsp, newEmail, offEnv, onEnv, post, sessionCookie, signIn, useAccountsDb, userId,
+  ACCOUNTS, csrf, decode, get, lastMail, nbsp, newEmail, offEnv, onEnv, post, sessionCookie, signIn, useAccountsDb, userId,
 } from "./accounts-helpers";
 import { testEnv } from "./assets";
 
@@ -282,6 +282,40 @@ describe("following with the sign-in", () => {
     expect(done.status).toBe(303);
     expect(await watchesOf(await userId(before))).toEqual([]);
     expect(await watchesOf(await userId(email))).toHaveLength(1);
+  });
+
+  it("sends nothing for the address this browser is signed in to: back to the page, where its own control is, the session kept", async () => {
+    const email = newEmail("f-same");
+    const cookie = await signIn(email);
+    const id = await userId(email);
+    const token = await csrf(cookie);
+    const count = async (sql: string, ...binds: unknown[]) => Number(await ACCOUNTS.prepare(sql).bind(...binds).first("n"));
+    const sent = () => count("SELECT COUNT(*) AS n FROM sent_mail WHERE to_addr = ?", email);
+    const codes = () => count("SELECT COUNT(*) AS n FROM magic_codes WHERE email = ?", email);
+    const asked = () => count("SELECT COUNT(*) AS n FROM audit WHERE event = 'code_requested' AND user_id = ?", id);
+    const before = [await sent(), await codes(), await asked()];
+    // A Follow form drawn before the sign-in, the address typed in another case.
+    const res = await post("/account/sign-in", await pageForm(`/organizations/${ORG}`, email.toUpperCase()), { cookie });
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe(`/organizations/${ORG}`);
+    // A French page's form, and a briefing's: back to each page, in its language.
+    const fr = await post("/account/sign-in", await pageForm(`/buyers/${BUYER}?lang=fr`, email), { cookie });
+    expect(fr.headers.get("location")).toBe(`/buyers/${BUYER}?lang=fr`);
+    const brief = await post("/account/sign-in", { lang: "en", next: "/segments/82", brief: "segment:82", email, website: "" }, { cookie });
+    expect(brief.status).toBe(303);
+    expect(brief.headers.get("location")).toBe("/segments/82");
+    // No message, no code, nothing counted, nothing added: the post carries no CSRF value.
+    expect([await sent(), await codes(), await asked()]).toEqual(before);
+    expect(await watchesOf(id)).toEqual([]);
+    expect(await count("SELECT COUNT(*) AS n FROM briefings WHERE user_id = ?", id)).toBe(0);
+    for (const r of [res, fr, brief]) expect(r.headers.getSetCookie().some((s) => s.startsWith("__Host-aw_session="))).toBe(false);
+    // The session stands: the page offers its signed-in Follow, and the CSRF value read before still posts.
+    expect(await (await get(`/organizations/${ORG}`, { cookie })).text()).toContain('<form method="post" action="/account/watches" class="watch-control">');
+    expect((await post("/account/watches", { csrf: token, kind: "organization", target: ORG }, { cookie })).status).toBe(303);
+    expect(await watchesOf(id)).toHaveLength(1);
+    // The sign-in page's own post, with no follow and no brief, sends a code as before.
+    expect((await post("/account/sign-in", { lang: "en", email, website: "" }, { cookie })).status).toBe(200);
+    expect(await sent()).toBe(before[0] + 1);
   });
 
   it("drops an invalid follow without a word, and the sign-in goes on as before", async () => {

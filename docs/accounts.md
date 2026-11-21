@@ -670,7 +670,13 @@ the console is the safer way, since its batch is one transaction.
   adds anything by itself: the watch is added only
   after the address's own code or link is verified, for the account that
   address signs in to, and only one watch on a page the data holds, within
-  the plan's cap.
+  the plan's cap. A Follow form (or a briefing's sign-in form) drawn before
+  the browser signed in, posted with the very address the browser is signed
+  in to now, sends nothing, issues no code and counts nothing: it answers
+  303 back to its `next`, in the page's language, where the page now draws
+  its signed-in control. That post adds nothing either, since it carries no
+  CSRF value; a different address, or a post with neither `follow` nor
+  `brief`, goes on as above.
 - **The Save this briefing link on public pages.** A segment or buyer page
   links a reader not signed in to `/account/sign-in?next=<page>&brief=<kind>:<subject>`
   (*Weekly briefings*), so a crawler that follows the link finds a sign-in
