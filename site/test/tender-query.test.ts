@@ -52,6 +52,39 @@ describe("the browser's view rules", () => {
       .toBe("?category=GD&category=SRV&segment=43&segment=82&province=BC&province=QC");
   });
 
+  it("read the straight and the typographic apostrophe as one, and the oe and ae ligatures as their letters, both ways", () => {
+    // Titles carry either apostrophe (the open list holds both), and a phone with smart punctuation types U+2019.
+    const curly = String.fromCharCode(0x2019);
+    const modifier = String.fromCharCode(0x02bc);
+    const oe = String.fromCharCode(0x0153);
+    const ae = String.fromCharCode(0x00e6);
+    const row = (reference: string, title_en: string, title_fr: string) =>
+      ({ ...rows[0], reference, reference_published: undefined, title_en, title_fr, excerpt_en: null, excerpt_fr: null }) as TenderRow;
+    const titled = [
+      row("t-water", "Water treatment", `Traitement d${curly}eau potable`),
+      row("t-architecture", "Architectural services", "Services d'architecture"),
+      row("t-labour-curly", "Labour recruitment", `Recrutement de main-d${curly}${oe}uvre`),
+      row("t-labour-plain", "Temporary labour", "Main-d'oeuvre temporaire"),
+      row("t-encyclopaedia-ae", `Encyclop${ae}dia subscriptions`, "Abonnements"),
+      row("t-encyclopaedia-plain", "Encyclopaedia licences", "Licences"),
+    ];
+    const both = (q: string) => {
+      const search = `?q=${encodeURIComponent(q)}`;
+      const serverSide = filterTenders(titled, server(search), testClock).map((r) => r.reference);
+      const browserSide = (filterRows(titled, readSearch(search), testClock.now) as TenderRow[]).map((r) => r.reference);
+      expect(browserSide, q).toEqual(serverSide);
+      return [...serverSide].sort();
+    };
+    for (const q of ["d'eau", `d${curly}eau`, `d${modifier}eau`, `traitement d'eau`]) expect(both(q), q).toEqual(["t-water"]);
+    for (const q of [`d${curly}architecture`, "d'architecture"]) expect(both(q), q).toEqual(["t-architecture"]);
+    for (const q of ["oeuvre", `${oe}uvre`, "main-d'oeuvre", `main-d${curly}${oe}uvre`, `MAIN-D'${String.fromCharCode(0x0152)}UVRE`]) {
+      expect(both(q), q).toEqual(["t-labour-curly", "t-labour-plain"]);
+    }
+    for (const q of ["encyclopaedia", `encyclop${ae}dia`, `ENCYCLOP${String.fromCharCode(0x00c6)}DIA`]) {
+      expect(both(q), q).toEqual(["t-encyclopaedia-ae", "t-encyclopaedia-plain"]);
+    }
+  });
+
   // tenders.js shows Save this search's saved state for the view the page was
   // served with and for any view with the same key (src/account/search_control.tsx).
   it("give two views one saved-search key exactly when the server saves them as one filter", async () => {

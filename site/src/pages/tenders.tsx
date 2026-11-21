@@ -127,9 +127,13 @@ export function readTenderQuery(url: URL): TenderQuery {
   };
 }
 
-// Lower case with accents removed, so "evaluation" finds "Évaluation".
+// Lower case with accents removed, so "evaluation" finds "Évaluation"; the
+// typographic apostrophes read as the straight one and the oe and ae
+// ligatures as their letters, which NFD leaves alone, since titles and
+// keyboards use either. public/tender-query.js holds the same rule.
 export function fold(s: string): string {
-  return s.normalize("NFD").replace(/\p{Mn}/gu, "").toLowerCase();
+  return s.normalize("NFD").replace(/\p{Mn}/gu, "").toLowerCase()
+    .replace(/[\u2018\u2019\u02bc\u0060\u00b4]/g, "'").replace(/\u0153/g, "oe").replace(/\u00e6/g, "ae");
 }
 
 // The text the text filter reads in a notice, folded: its title and the start

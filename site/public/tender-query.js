@@ -110,9 +110,12 @@ export function searchKey(s) {
   return queryString(kept, 1);
 }
 
-// Lower case with accents removed, so "evaluation" finds "Évaluation".
+// Lower case with accents removed, so "evaluation" finds "Évaluation"; the
+// typographic apostrophes read as the straight one and the oe and ae
+// ligatures as their letters, as the server's fold (src/pages/tenders.tsx).
 export function fold(s) {
-  return String(s || "").normalize("NFD").replace(/\p{Mn}/gu, "").toLowerCase();
+  return String(s || "").normalize("NFD").replace(/\p{Mn}/gu, "").toLowerCase()
+    .replace(/[\u2018\u2019\u02bc\u0060\u00b4]/g, "'").replace(/\u0153/g, "oe").replace(/\u00e6/g, "ae");
 }
 
 // As filterTenders(): the rows the view keeps, in its order, at the instant now.
