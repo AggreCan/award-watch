@@ -165,7 +165,7 @@ async function readView(ctx: Ctx): Promise<Outcome> {
 // database). Read only once the view is drawn with a record: a view with none offers neither.
 type Keep = { dash: Account | null; boards: BoardChoice[]; save: SaveViewState | null };
 async function keepOf(ctx: Ctx, outcome: Outcome): Promise<Keep | null> {
-  if (!ctx.ultra || !outcome.ok || !hasRecords(ctx.choice, outcome.model)) return null;
+  if (!ctx.ultra || !outcome.ok || !hasRecords(outcome.model)) return null;
   const { c, lang, choice } = ctx;
   const dash = await dashboardAccount(c).catch(() => null);
   const [boards, save] = await Promise.all([
@@ -724,9 +724,10 @@ const Sample: FC<{ lang: Lang; ctx: Ctx; outcome: Outcome | null }> = ({ lang, c
   return <ViewPanel lang={lang} ctx={ctx} model={outcome.model} asOf={outcome.asOf} title={title} sample />;
 };
 
-// Whether a view read holds any record: a line by its rows, or for one figure a record counted.
-const hasRecords = (c: BuildChoice, model: Model): boolean =>
-  model.groups.some((g) => g.lines.length > 0 && (c.rows !== "none" || n0(g.lines[0].f, "n") > 0));
+// Whether a view read holds any record: some line counts one. A line alone says nothing, since the period's one
+// figure, a set's own buyers or organizations and competitive or not draw their lines whatever the period holds.
+// Every kind of line carries n.
+const hasRecords = (model: Model): boolean => model.groups.some((g) => g.lines.some((l) => n0(l.f, "n") > 0));
 
 // A view's panel: its chart, its table, its notes, the line naming the source, the period and the data date, and
 // its CSV file; for an Ultra reader (keep) its Add to dashboard beside the CSV link. A view with no record offers
@@ -744,7 +745,7 @@ const ViewPanel: FC<{ lang: Lang; ctx: Ctx; model: Model; asOf: string; keep?: K
     if (!l) memo.set(g, (l = ordered(c, model, g, primary)));
     return l;
   };
-  const any = hasRecords(c, model);
+  const any = hasRecords(model);
   const csv = `${BUILD_CSV_PATH}?${buildQuery(c)}`;
   const line = c.measure === "ending" ? t(lang, "build.as_of_ending", { date: asOf })
     : t(lang, "build.as_of", { source: t(lang, FROM_KEY[c.source]), first: fiscalLabel(lang, c.first), last: fiscalLabel(lang, c.last), date: asOf });
@@ -792,8 +793,7 @@ export function buildTileBody(
     if (!l) memo.set(g, (l = ordered(c, model, g, primary)));
     return l;
   };
-  const any = model.groups.some((g) => g.lines.length > 0 && (c.rows !== "none" || n0(g.lines[0].f, "n") > 0));
-  if (!any) return { body: <p class="muted">{t(lang, "build.none")}</p>, shown: 0, total: 0 };
+  if (!hasRecords(model)) return { body: <p class="muted">{t(lang, "build.none")}</p>, shown: 0, total: 0 };
   const total = model.groups.reduce((n, g) => n + full(g).length, 0);
   const ranked = c.show === "ranked";
   const each = Math.max(1, Math.floor(fit.rows / Math.max(1, model.groups.length)));
@@ -1108,7 +1108,9 @@ export async function builderCsv(c: Context<AppEnv>): Promise<Response> {
   const columns = csvColumns(ch.measure);
   const period = ch.measure === "ending" ? [] : [ch.source, String(ch.first), String(ch.last)];
   const head = ["subject_id", "subject", "row", "row_label", ...(ch.measure === "ending" ? ["from"] : ["source", "first_fiscal_year", "last_fiscal_year"]), ...columns.map(([k]) => k)];
-  const body = outcome.model.groups.flatMap((g) => ordered(ch, outcome.model, g, primary).map((l) => [
+  // A view whose lines count no record is written as the page draws it, as one with no line: the head alone.
+  const groups = hasRecords(outcome.model) ? outcome.model.groups : [];
+  const body = groups.flatMap((g) => ordered(ch, outcome.model, g, primary).map((l) => [
     ...csvSubject(g.subject, names), ...csvKey(l.key, names), ...(ch.measure === "ending" ? [ctx.day] : period), ...columns.map(([, get]) => get(l.f)),
   ]));
   const text = [head, ...body].map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n";

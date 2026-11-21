@@ -441,6 +441,32 @@ describe("the tiles", () => {
     }
   });
 
+  it("draw the page's line that there is no record for a view whose lines count none: a set by its own rows, competitive or not", async () => {
+    const r = await reader("tiles-no-record");
+    const board = await freshBoard(r);
+    // PSPC and Fisheries and Oceans give no grant in the fixture, National Defence holds no award notice, Builder Org 1
+    // Ltd. holds no grant.
+    const empty = [
+      B("subject=buyers&b=pwgsc-tpsgc&b=dfo-mpo&rows=buyer&measure=value&source=grants&from=2017&to=2026&show=ranked"),
+      B("subject=organizations&o=org-a000000001&rows=organization&measure=value&source=grants&from=2022&to=2026&show=ranked"),
+      B("subject=buyer&b=dnd-mdn&rows=competitive&measure=value&source=awards&from=2022&to=2026&show=ranked"),
+    ];
+    let y = 0;
+    for (const address of empty) {
+      await putTile(r, board, "build", address, { x: 0, y, w: 6, h: 13 });
+      y += 13;
+    }
+    for (const lang of ["en", "fr"] as const) {
+      const html = await text(await page(r, `/account/dashboard${lang === "fr" ? "?lang=fr" : ""}`, on()));
+      for (const address of empty) {
+        const tile = html.split("<section ").find((x) => x.includes(`<a href="${address}">`)) ?? "";
+        expect(tile, `${lang} ${address}`).toContain(`<p class="muted">${norm(t(lang, "build.none"))}</p>`);
+        expect(tile, `${lang} ${address}`).not.toContain('<ol class="rank-bars"');
+        expect(tile, `${lang} ${address}`).not.toContain("<table");
+      }
+    }
+  });
+
   it("reads one tile at a size for the page's script, and Add a Tile opens the builder from its third door", async () => {
     const r = await reader("tiles-one");
     const board = await freshBoard(r);

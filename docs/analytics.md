@@ -1001,8 +1001,13 @@ labelled block; where a figure takes the widest column, its head stands over
 its numbers at the right), the notes the view needs, the line naming the source
 in lower case with its article ("Figures from the award notices", "Chiffres
 tirés de l'historique des contrats de SPAC"), the period and the data date,
-and the CSV link. A view with no record offers no CSV link, no Add to
-dashboard and no Save. Each figure is named alone in the Figure menu (the
+and the CSV link. A view with no record says "No record of this view in
+these fiscal years." and offers no CSV link, no Add to dashboard and no
+Save; its CSV address answers the head alone, and a tile kept from it draws
+the same line. A view has no record when none of its lines counts one: a
+set's own buyers or organizations, competitive or not and the one figure
+for the period draw their lines whatever the period holds, so a line alone
+is not a record. Each figure is named alone in the Figure menu (the
 contracts ending as "Contracts ending", offered by fiscal quarter, segment,
 buyer and for the period), the rows only in the view's title. The page's script
 (`site/public/builder.js`) hides what the menus do not offer and redraws the

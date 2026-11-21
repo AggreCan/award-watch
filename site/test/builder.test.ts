@@ -837,6 +837,40 @@ describe("the page", () => {
     expect(html).toContain("/analytics/build.csv?");
   });
 
+  it("offers no action on a view whose lines count no record: a set by its own rows, competitive or not, and its CSV file as an empty view's", async () => {
+    // PSPC and Fisheries and Oceans give no grant in the fixture, National Defence holds no award notice, Builder Org 1
+    // Ltd. holds no grant: each line is drawn for a subject the period holds nothing of.
+    expect(RECS.filter((x) => (x.bid === PSPC || x.bid === DFO) && x.src === 4)).toEqual([]);
+    expect(RECS.filter((x) => x.oid === oid(ORGS[0]) && x.src === 4)).toEqual([]);
+    const views = [
+      "?subject=buyers&b=pwgsc-tpsgc&b=dfo-mpo&rows=buyer&measure=value&source=grants&from=2017&to=2026&show=ranked",
+      "?subject=buyers&b=dnd-mdn&rows=buyer&measure=value&source=awards&from=2022&to=2026&show=ranked",
+      `?subject=organizations&o=${ORGS[0]}&rows=organization&measure=value&source=grants&from=2022&to=2026&show=ranked`,
+      "?subject=buyer&b=dnd-mdn&rows=competitive&measure=value&source=awards&from=2022&to=2026&show=ranked",
+      "?subject=all&rows=competitive&measure=records&source=awards&from=2007&to=2010&show=table",
+    ];
+    for (const q of views) {
+      for (const lang of ["", "&lang=fr"]) {
+        for (const headers of [undefined, { "x-build-fragment": "1" }]) {
+          const { res, html } = await view(`${q}${lang}`, { headers });
+          expect(res.status, q).toBe(200);
+          const end = html.indexOf("</main>");
+          const result = html.slice(html.indexOf('<div id="build-result"'), end > 0 ? end : undefined);
+          expect(result, `${q}${lang}`).toContain(lang ? "Aucun dossier pour cette vue et ces exercices." : "No record of this view in these fiscal years.");
+          for (const absent of ["/analytics/build.csv", 'method="post"', "/account/dashboard/panels", "/account/views", 'class="panel-tools"', '<ol class="rank-bars"', "<table"]) {
+            expect(result, `${q}${lang} ${absent}`).not.toContain(absent);
+          }
+        }
+      }
+      // Its file is the head alone, as a view with no line's is.
+      const csv = await get(`${CSV}${q}`, { cookie: (await readers()).ultra, env: onWith() });
+      expect(csv.status, q).toBe(200);
+      expect((await csv.text()).trim().split("\r\n"), q).toHaveLength(1);
+    }
+    const plain = await get(`${CSV}?subject=buyer&b=dnd-mdn&rows=year&measure=value&source=awards&from=2022&to=2026&show=bars`, { cookie: (await readers()).ultra, env: onWith() });
+    expect((await plain.text()).trim().split("\r\n")).toHaveLength(1);
+  });
+
   it("gives the view as a CSV file, private, a download under the per-address limit, its rows and their counts", async () => {
     const { ultra } = await readers();
     const res = await get(`${CSV}?subject=all&rows=segment&measure=value&source=history&from=2022&to=2026`, { cookie: ultra, env: onWith() });
