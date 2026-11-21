@@ -28,6 +28,7 @@ import type { Context } from "hono";
 import type { FC } from "hono/jsx";
 import { SampleLine } from "../account/briefing_pages";
 import { KEYS_MAX } from "../account/api_keys";
+import { GROUP_OVER } from "../account/deliveries";
 import { PLAN_SEATS, RULES, type Feature, memberSeats } from "../account/entitlements";
 import { seatsOn } from "../account/seats";
 import { railAccount } from "../account/session";
@@ -67,7 +68,7 @@ export function proFaq(lang: Lang, price: ProPrice | null, ultra: ProPrice | nul
     ...(price
       ? [qa("propage.q_price", t(lang, "propage.a_price", { monthly: decimal(lang, price.monthly), yearly: decimal(lang, price.yearly) }))]
       : []),
-    qa("propage.q_mail", t(lang, "propage.a_mail")),
+    qa("propage.q_mail", t(lang, "propage.a_mail", { n: fmtInt(GROUP_OVER, lang) })),
     qa("propage.q_alerts", t(lang, "propage.a_alerts", { n: fmtInt(RULES.pro.saved_searches, lang) })),
     qa("propage.q_recompete", t(lang, "propage.a_recompete")),
     qa("propage.q_source", t(lang, "propage.a_source")),

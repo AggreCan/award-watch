@@ -4154,11 +4154,13 @@ const STRINGS = {
     fr: "Entrez votre adresse courriel, saisissez le code à 6 chiffres que le site envoie, puis payez au mois ou à l'année sur la page de Stripe. Il n'y a pas de mot de passe.",
   },
   // The Pro page's questions: what the mail holds and when it comes (the
-  // delivery cron starts at 15:00 UTC), and how to cancel.
+  // delivery cron starts at 15:00 UTC), and how to cancel. {n} in the mail
+  // answer is account/deliveries.ts GROUP_OVER: past it, an account's saved
+  // searches with news on one day go in one message.
   "propage.q_mail": { en: "What arrives by email, and when?", fr: "Qu'est-ce qui arrive par courriel, et quand?" },
   "propage.a_mail": {
-    en: "One message per saved search, daily or weekly, sent late morning Eastern time after the day's refresh, with only what is new; a day with nothing new sends nothing. Watches arrive together in one message; a briefing comes on Mondays.",
-    fr: "Un message par recherche enregistrée, chaque jour ou chaque semaine, envoyé en fin de matinée (heure de l'Est) après la mise à jour du jour, avec seulement ce qui est nouveau; un jour sans nouveauté n'envoie rien. Les suivis arrivent ensemble dans un message; un bulletin arrive le lundi.",
+    en: "Each saved search sends its own message, daily or weekly, late morning Eastern time after the day's refresh, with only what is new; when more than {n} searches have news on the same day, they come together in one message. A day with nothing new sends nothing. Watches arrive together in one message; a briefing comes on Mondays.",
+    fr: "Chaque recherche enregistrée envoie son propre message, chaque jour ou chaque semaine, en fin de matinée (heure de l'Est) après la mise à jour du jour, avec seulement ce qui est nouveau; quand plus de {n} recherches ont du nouveau le même jour, elles arrivent ensemble dans un message. Un jour sans nouveauté n'envoie rien. Les suivis arrivent ensemble dans un message; un bulletin arrive le lundi.",
   },
   "propage.a_cancel": {
     en: "Yes, at any time: Plan and Billing in your account opens Stripe's page, where you cancel. Pro stays on to the end of the period paid, which is not refunded except as the next answer says, and nothing more is charged.",

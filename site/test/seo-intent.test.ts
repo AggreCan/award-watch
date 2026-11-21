@@ -5,7 +5,9 @@
 // and the home page's lines. test/seo.test.ts keeps the per-page metadata it already held.
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
+import { GROUP_OVER } from "../src/account/deliveries";
 import { RULES } from "../src/account/entitlements";
+import { rawEntry } from "../src/i18n";
 import { app } from "../src/index";
 import { homeRequest } from "./home";
 import { CONTRACT_SITEMAP_SQL } from "../src/records_tables";
@@ -267,6 +269,24 @@ describe("the Pro page", () => {
       expect(page).toContain(`<p>${q.acceptedAnswer.text}</p>`);
     }
     expect(faq.mainEntity[0].acceptedAnswer.text).toContain("CA$21.50 a month or CA$215.00 a year");
+  });
+
+  it("says the mail answer as the delivery run sends it: past GROUP_OVER searches with news, one message, in the page and its markup", async () => {
+    for (const [q, said, old] of [
+      ["", `when more than ${GROUP_OVER} searches have news on the same day, they come together in one message`, "One message per saved search"],
+      ["?lang=fr", `quand plus de ${GROUP_OVER} recherches ont du nouveau le même jour, elles arrivent ensemble dans un message`, "Un message par recherche enregistrée"],
+    ] as const) {
+      const page = nbsp(decode(await html(`/pro${q}`, payEnv())));
+      const [, faq] = jsonLd(page);
+      const answers: string[] = faq.mainEntity.map((e: any) => e.acceptedAnswer.text);
+      const mail = answers.find((a) => a.includes(said));
+      expect(mail, q).toBeDefined();
+      expect(page).toContain(`<p>${mail}</p>`);
+      for (const a of answers) expect(a, q).not.toContain(old);
+      expect(page, q).not.toContain(old);
+    }
+    // The figure is the constant's, filled in; the string holds none.
+    for (const lang of ["en", "fr"] as const) expect(rawEntry("propage.a_mail")[lang]).toContain("{n}");
   });
 
   it("prints the figures with a decimal comma in French", async () => {

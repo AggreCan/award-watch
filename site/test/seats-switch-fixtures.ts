@@ -5,6 +5,7 @@
 // pages each reads, signed out and signed in, with Ultra off sale and on sale. Nothing here depends on the
 // day the suite runs. A change to this file changes what the capture means: capture again from main.
 import { ACCOUNTS, PRO_SALE, ULTRA_VARS, nextIp, onEnv } from "./accounts-helpers";
+import { GROUP_OVER } from "../src/account/deliveries";
 import { app } from "../src/index";
 import { STYLES_VERSION } from "../src/layout";
 
@@ -87,6 +88,17 @@ const CAPTURED_TEXT: readonly (readonly [string, string])[] = [
    "A request from a browser also gets a visitor code"],
   ["Une requête comptée comme celle d'une personne reçoit aussi un code de visiteur",
    "Une requête venant d'un navigateur reçoit aussi un code de visiteur"],
+  // The capture was also made before /pro's answer about mail said that an account's saved searches with news go
+  // out together past GROUP_OVER a day (i18n.ts propage.a_mail, in the page and in its FAQ markup). Nothing else
+  // on the page changed with it, so its two changed parts are put back the same way, in each language.
+  ["Each saved search sends its own message, daily or weekly, late morning Eastern time",
+   "One message per saved search, daily or weekly, sent late morning Eastern time"],
+  [`with only what is new; when more than ${GROUP_OVER} searches have news on the same day, they come together in one message. A day with nothing new sends nothing.`,
+   "with only what is new; a day with nothing new sends nothing."],
+  ["Chaque recherche enregistrée envoie son propre message, chaque jour ou chaque semaine, en fin de matinée",
+   "Un message par recherche enregistrée, chaque jour ou chaque semaine, envoyé en fin de matinée"],
+  [`avec seulement ce qui est nouveau; quand plus de ${GROUP_OVER} recherches ont du nouveau le même jour, elles arrivent ensemble dans un message. Un jour sans nouveauté n'envoie rien.`,
+   "avec seulement ce qui est nouveau; un jour sans nouveauté n'envoie rien."],
 ];
 // Text as a page carries it: the apostrophe as the page writer escapes it (hono/jsx, &#39;) in English, and as
 // French typography sets it first (i18n.ts, U+2019) in French.
