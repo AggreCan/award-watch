@@ -8,10 +8,12 @@
 // neither holds a seat nor gives one reads every page as before once what the switch adds is taken out of it:
 // the plan cards' seats row, /pro's Ultra text and its question, the Terms' Seats section and abuse phrase, the
 // privacy page's paragraph, and an Ultra account's Seats row on the overview and Seats link on the billing page.
+import { env as poolEnv } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import wrangler from "../wrangler.jsonc?raw";
 import { KEYS_MAX } from "../src/account/api_keys";
 import { PLANS, PLAN_SEATS, RULES, memberSeats } from "../src/account/entitlements";
-import { SEAT_INVITE_DAYS, SEAT_KEEP_DAYS, SEAT_WINDOW_DAYS, joinsAllowed } from "../src/account/seats";
+import { SEAT_INVITE_DAYS, SEAT_KEEP_DAYS, SEAT_WINDOW_DAYS, joinsAllowed, seatsSwitched } from "../src/account/seats";
 import { SESSIONS_MAX } from "../src/account/session";
 import { keyQuota } from "../src/api_keyed_spec";
 import { fmtInt, t, type Lang } from "../src/i18n";
@@ -39,7 +41,7 @@ async function readers(): Promise<Record<Reader, string | undefined>> {
   return cookies;
 }
 
-// An environment with the seats' variable as given: "off" (as wrangler.jsonc ships it), "on", or absent (as before slice C).
+// An environment with the seats' variable as given: "off" (as the test pool holds it), "on" (as wrangler.jsonc ships it), or absent (as before slice C).
 function withSeats(env: object, value: "off" | "on" | null): object {
   const out = { ...env } as Record<string, unknown>;
   if (value === null) delete out.SEATS;
@@ -110,6 +112,20 @@ const counts = async () => {
     runs: await one("SELECT COUNT(*) AS n FROM delivery_runs"), audit: await one("SELECT COUNT(*) AS n FROM audit WHERE event LIKE 'seat_%'"),
   };
 };
+
+describe("the switch as shipped", () => {
+  it("ships \"on\", starts \"off\" under test, and only \"on\" with accounts open switches it", () => {
+    // The site ships the switch on (since 2026-11-21); the test pool holds it off (vitest.config.ts), so every
+    // test that does not set it sees the pages without seats.
+    expect(wrangler).toMatch(/"SEATS":\s*"on"/);
+    expect((poolEnv as unknown as { SEATS?: string }).SEATS).toBe("off");
+    const switched = (extra: Record<string, unknown>) => seatsSwitched(onEnv(extra) as never);
+    expect(switched({ SEATS: "on" })).toBe(true);
+    for (const v of ["off", "", "On", "ON", "true", "1", undefined]) expect(switched({ SEATS: v }), String(v)).toBe(false);
+    // Accounts closed: the seats' switch alone opens nothing.
+    expect(switched({ SEATS: "on", ACCOUNTS_ENABLED: "false" })).toBe(false);
+  });
+});
 
 describe("with the switch off", () => {
   it("draws every page, every reader, Ultra off sale and on sale, byte for byte as main drew it, the table present and absent", { timeout: 180_000 }, async () => {

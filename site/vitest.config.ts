@@ -70,6 +70,12 @@ export function workersPool() {
         // switches themselves.
         BUILDER: "off",
         BUILDER_DEMO: "off",
+        // The seats' switch starts off under test the same way: wrangler.jsonc
+        // ships it "on" since 2026-11-21, and with it on the plan cards, the
+        // Terms and the privacy page gain their seats text, so the tests that
+        // hold pages as they are without seats keep their meaning; the seats'
+        // own tests set the switch themselves.
+        SEATS: "off",
         // The delivery job's daily ceiling (src/env.ts mailCeiling) starts off
         // under test the same way, so a run is held to it only where a test
         // sets the two figures (test/recs-ops.test.ts).

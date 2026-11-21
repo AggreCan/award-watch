@@ -140,7 +140,7 @@ const PAID_TERMS: [Key, Key][] = [
 // The paid plans' parts while the seats' switch is on as well (account/seats.ts
 // seatsOn; the seats design's 6.3): Seats after What the Paid Plans Include,
 // and the abuse paragraph naming a seat beside an account. With the switch off
-// the paid terms above stand word for word. These wait on the lawyer's read.
+// the paid terms above stand word for word. Cleared by the operator 2026-11-21.
 const SEATS_TERMS: [Key, Key][] = PAID_TERMS.flatMap(([title, body]): [Key, Key][] =>
   body === "terms.pro_includes_ultra" ? [[title, body], ["terms.pro_seats_title", "terms.pro_seats"]]
     : body === "terms.pro_abuse_ultra" ? [[title, "terms.pro_abuse_seats"]]

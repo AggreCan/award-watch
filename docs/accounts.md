@@ -3178,8 +3178,12 @@ same test takes out of each page exactly what *What the seats say
 elsewhere* adds (the cards' seats row, `/pro`'s Ultra text and question, the
 Terms' section and phrase, the privacy paragraph, an Ultra account's
 overview row and billing link) and holds what is left to the same bytes.
-The operator sets it `"on"` once the lawyer's read of the Terms' Seats
-section and of the invitation is done.
+`wrangler.jsonc` ships it `"on"` since 2026-11-21: the operator cleared the
+Terms' Seats section, the privacy paragraph and the invitation, and a
+read of production found no paid plan live (so no notice of changed terms
+was owed) and no seat. The test pool holds it `"off"`
+(`site/vitest.config.ts`), as it holds the accounts switch, so the tests
+that hold pages as they are without seats keep their meaning.
 
 ### Invitations
 
@@ -3387,7 +3391,7 @@ with it off, every one of these reads as before.
   Plans Include (`terms.pro_seats`, every figure read when drawn: the plans'
   seats, the invitation's days, the joins and their window, the signed-in
   browsers), and the abuse paragraph names a seat beside an account
-  (`terms.pro_abuse_seats`). Both wait on the lawyer's read.
+  (`terms.pro_abuse_seats`). The operator cleared both on 2026-11-21.
 - **The privacy page.** A paragraph after the signed-in browsers' sentence
   (`seats.privacy`): what an invitation and a seat keep and for how long
   (`SEAT_KEEP_DAYS`), who sees which addresses and counts, and what a
