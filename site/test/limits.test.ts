@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { app } from "../src/index";
+import { SESSION_COOKIE } from "../src/account/session";
 import { AI_CRAWLERS, CRAWLER_RETRY_S, CRAWLER_WINDOW_S, SEARCH_ENGINE_CATEGORY, bucketFor, crawlerOf, crawlerWindow, searchEngine } from "../src/limits";
 import robotsTxt from "../public/robots.txt?raw";
 import { testEnv } from "./assets";
@@ -118,6 +119,24 @@ describe("per-address limits", () => {
     expect(statuses.slice(0, 5).every((s) => s === 200)).toBe(true);
     expect(statuses.slice(5)).toEqual([429, 429]);
     expect((await from("203.0.113.9", "/corrections")).status).toBe(200);
+  });
+
+  it("sends a refused first visit's way back to the home page, and only a reader with a session to the account", async () => {
+    // A first visit from a search engine or a typed address has no Referer of the site's own and no session: the
+    // account page would only send it on to the sign-in page.
+    const spent = { limit: async () => ({ success: false }) } as unknown as RateLimit;
+    const refused = async (headers: Record<string, string>) => {
+      const res = await app.request("/tenders", { headers: { "sec-fetch-mode": "navigate", "cf-connecting-ip": "203.0.113.31", ...headers } },
+        { ...testEnv(), ACCOUNTS_ENABLED: "true", PAGE_LIMIT: spent });
+      expect(res.status).toBe(429);
+      return res.text();
+    };
+    expect(await refused({})).toContain('<a href="/">Back to the page</a>');
+    expect(await refused({ cookie: "lang=fr" })).toContain('<a href="/">Retour à la page</a>');
+    expect(await refused({ referer: "https://www.google.com/" })).toContain('<a href="/">Back to the page</a>');
+    expect(await refused({ cookie: `${SESSION_COOKIE}=0123.4567` })).toContain('<a href="/account">Back to the page</a>');
+    // A referring page of the site's own still wins.
+    expect(await refused({ referer: "http://localhost/tenders?segment=82" })).toContain('<a href="/tenders?segment=82">Back to the page</a>');
   });
 });
 

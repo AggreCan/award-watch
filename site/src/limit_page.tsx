@@ -2,8 +2,9 @@
 // the request is a browser's navigation, a form post or a page asked for by a
 // browser: a page in the site's shell, in the reader's language, with the
 // message and a link back to the page the browser came from on this site
-// (account/next.ts refererPath), else the account page (the home page while
-// the accounts switch is off, when there is none). Its status and
+// (account/next.ts refererPath), else the account page for a request with a
+// session cookie, and the home page for any other (and while the accounts
+// switch is off, when there is no account page). Its status and
 // Retry-After are the refusal's. Nothing is read for it but the stats file
 // the top bar's date comes from: no session, no rail counts, no database.
 // A request that is not a browser's navigation (a script, a feed reader)
@@ -11,8 +12,10 @@
 // for a paying reader's download past its own cap (limits.ts throttle).
 
 import type { Context } from "hono";
+import { getCookie } from "hono/cookie";
 import { html } from "hono/html";
 import { refererPath } from "./account/next";
+import { SESSION_COOKIE } from "./account/session";
 import { accountsEnabled } from "./account/switch";
 import { loadStats } from "./data";
 import type { AppEnv } from "./env";
@@ -28,7 +31,11 @@ export type RefusalLine = "limits.too_many" | "limits.too_many_account";
 export async function refusalPage(c: Context<AppEnv>, status: 429, line: RefusalLine = "limits.too_many"): Promise<Response> {
   const lang = c.get("lang") ?? "en";
   const stats = await loadStats(c.env).catch(() => null);
-  const back = refererPath(c.req.header("referer"), c.req.url) ?? (accountsEnabled(c.env) ? "/account" : "/");
+  // Without a referring page, the account page only for a request that carries the session cookie (its presence
+  // alone, so no session is looked up): a first visit from a search engine or a typed address has none, and
+  // /account would only send it on to the sign-in page.
+  const back = refererPath(c.req.header("referer"), c.req.url) ??
+    (accountsEnabled(c.env) && getCookie(c, SESSION_COOKIE) ? "/account" : "/");
   const title = t(lang, "limits.title");
   const body = (
     <Layout lang={lang} title={title} dataAsOf={stats?.data_as_of ?? null}

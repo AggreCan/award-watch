@@ -633,8 +633,9 @@ the console is the safer way, since its batch is one transaction.
   browser asks for: `Sec-Fetch-Mode: navigate` or an `Accept` naming
   `text/html`) is a page in the site's shell, in the reader's language, with
   the line and a link back to the page the browser came from (its `Referer`
-  on this site, held to `safeNext`; else the account page, or the home page
-  while the switch is off), keeping the 429 and `Retry-After: 60`
+  on this site, held to `safeNext`; else the account page for a request that
+  carries the session cookie, and the home page for any other, a first visit
+  among them, and while the switch is off), keeping the 429 and `Retry-After: 60`
   (`site/src/limit_page.tsx`). Any other request keeps the plain text line,
   and the API its JSON.
 - **Cross-site posts refused.** Every POST checks `Origin`; the session
