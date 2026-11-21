@@ -276,11 +276,8 @@ polls are counted with the other feeds'.
 
 ## Profile titles
 
-The first Search Console reading (2026-11-01 to 2026-11-13: 70 clicks, 3,719
-impressions) showed where the site is found: of 262 queries Google named, 253
-were the names of organizations, each landing on a profile. Nine were
-descriptive searches, low on the fifth page or lower, and none held the
-site's own name.
+Most searches that reach the site are the names of organizations, each
+landing on a profile.
 
 A profile's title therefore says what the organization holds, in the words
 a person adds to a name when they want this page: "Federal Contracts" for a
