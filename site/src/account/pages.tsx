@@ -351,7 +351,16 @@ type OverviewCounts = {
   watches?: number | null; watchesOwn?: boolean;
   // The organization the account claims (org_claim.ts claimSummary): false for none, undefined before its table exists.
   org?: { id: string; name: string | null } | false;
+  // An account in a group (seats): searches and watches above are the subscription's, and these the account's own
+  // (searches.ts heldCounts, watches.ts watchCount mine). Absent for an account in no group, which reads as before.
+  searchesMine?: number; watchesMine?: number;
 };
+
+// In a group, a figure as the list pages say it (pool_lines.tsx poolCount): the subscription's total of its
+// figure and how much of it is this account's; null for an account in no group.
+function groupLine(lang: Lang, figure: "searches" | "watches", total: number | null | undefined, mine: number | undefined, cap: number): string | null {
+  return mine === undefined || total === null || total === undefined ? null : poolCount(lang, figure, { total, own: mine, cap, allowance: cap });
+}
 
 // The first steps, over the overview's own panels while the account follows
 // no page or keeps no saved search or briefing (counts.searches is both, the
@@ -365,10 +374,14 @@ type OverviewCounts = {
 // first step shown holds the page's one filled button; the steps are not
 // numbered, as nothing orders them. No Pro chip: a Free account's figures are
 // the watches and searches pages' own sentences, and a Pro account's lines
-// name its own plan only.
+// name its own plan only. In a group (seats) the steps are decided on what the
+// account keeps itself, never on the subscription's totals, and its figures
+// are the pool's own lines, which say whose the total is.
 const StartPanel: FC<{ lang: Lang; account: Account; counts: OverviewCounts }> = ({ lang, account, counts }) => {
-  const follow = counts.watches === 0 && !counts.watchesOwn;
-  const save = counts.searches === 0;
+  const ownWatches = counts.watchesMine ?? counts.watches;
+  const ownSearches = counts.searchesMine ?? counts.searches;
+  const follow = ownWatches === 0 && !counts.watchesOwn;
+  const save = ownSearches === 0;
   if (!follow && !save) return null;
   const n = (v: number) => fmtInt(v, lang);
   const mail = allowed(account, "watch_mail");
@@ -376,12 +389,12 @@ const StartPanel: FC<{ lang: Lang; account: Account; counts: OverviewCounts }> =
   const watching = { n: n(counts.watches ?? 0), cap: n(watchCap(account.plan)) };
   const held = { n: n(counts.searches), cap: n(counts.cap) };
   // A Free account's lines name Pro's own figures, from the plans.
-  const watchFigures = mail
+  const watchFigures = groupLine(lang, "watches", counts.watches, counts.watchesMine, watchCap(account.plan)) ?? (mail
     ? t(lang, "account.start_follow_cap", watching)
-    : t(lang, "watches.cap_free", { ...watching, max: n(RULES.pro.watchlists) });
-  const searchFigures = deliver
+    : t(lang, "watches.cap_free", { ...watching, max: n(RULES.pro.watchlists) }));
+  const searchFigures = groupLine(lang, "searches", counts.searches, counts.searchesMine, counts.cap) ?? (deliver
     ? t(lang, "account.start_search_cap", held)
-    : t(lang, "account.cap_note", { ...held, max: n(RULES.pro.saved_searches) });
+    : t(lang, "account.cap_note", { ...held, max: n(RULES.pro.saved_searches) }));
   return (
     <Panel title={t(lang, "account.start_panel")}>
       <ul class="start-steps">
@@ -521,6 +534,10 @@ export function overviewView(
   } = {},
 ) {
   const stripe = extra.billing?.stripe && account.plan !== "free";
+  // In a group the Lists rows say the figure is the subscription's, in the pool's own line under the link, as the
+  // organization's row holds its note; an account in no group keeps its "n of cap".
+  const searchesGroup = groupLine(lang, "searches", counts.searches, counts.searchesMine, counts.cap);
+  const watchesGroup = groupLine(lang, "watches", counts.watches, counts.watchesMine, watchCap(account.plan));
   return (
     <>
       <PageHead lang={lang} title={t(lang, "account.title")} lead={t(lang, "account.lead", { email: account.email })} />
@@ -561,10 +578,19 @@ export function overviewView(
       </Panel>
       <Panel title={t(lang, "rail.lists")}>
         <ul class="kv">
-          <li>
-            <a href="/account/searches">{t(lang, "account.searches")}</a>
-            <span class="num">{t(lang, "account.searches_n", { n: fmtInt(counts.searches, lang), cap: fmtInt(counts.cap, lang) })}</span>
-          </li>
+          {searchesGroup ? (
+            <li>
+              <span>
+                <a href="/account/searches">{t(lang, "account.searches")}</a>
+                <span class="kv-note">{searchesGroup}</span>
+              </span>
+            </li>
+          ) : (
+            <li>
+              <a href="/account/searches">{t(lang, "account.searches")}</a>
+              <span class="num">{t(lang, "account.searches_n", { n: fmtInt(counts.searches, lang), cap: fmtInt(counts.cap, lang) })}</span>
+            </li>
+          )}
           <li>
             <a href="/account/keys">{t(lang, "account.keys")}{allowed(account, "api") ? null : <ProTag lang={lang} />}</a>
             <span class="num">{fmtInt(counts.keys, lang)}</span>
@@ -573,7 +599,14 @@ export function overviewView(
           <li>
             <a href="/account/api">{t(lang, "apiusage.link")}{allowed(account, "api") ? null : <ProTag lang={lang} />}</a>
           </li>
-          {counts.watches === undefined || counts.watches === null ? null : (
+          {counts.watches === undefined || counts.watches === null ? null : watchesGroup ? (
+            <li>
+              <span>
+                <a href="/account/watches">{t(lang, "watches.title")}</a>
+                <span class="kv-note">{watchesGroup}</span>
+              </span>
+            </li>
+          ) : (
             <li>
               <a href="/account/watches">{t(lang, "watches.title")}</a>
               <span class="num">

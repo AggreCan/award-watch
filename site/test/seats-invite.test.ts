@@ -726,6 +726,48 @@ describe("the Seats page", () => {
     expect(fr).toContain(line("fr", "seats.invite_title"));
   });
 
+  it("draws the overview's first steps from the account's own lists, and says the Lists counts are the subscription's", async () => {
+    const watchRow = (user: string, target: string) => ACCOUNTS.prepare(
+      "INSERT INTO watches (id, user_id, kind, target, segment, label, events, cadence, created_at) VALUES (?, ?, 'buyer', ?, '', ?, 'award', 'daily', ?)",
+    ).bind(hexId(), user, target, target, iso(-10)).run();
+    const pool = (lang: Lang, figure: "pool.f_searches" | "pool.f_watches", total: number, cap: number, own: number) =>
+      line(lang, (lang === "fr" ? own < 2 : own === 1) ? "pool.count_one" : "pool.count", { total, cap, own, things: line(lang, figure) });
+    // A holder who keeps a saved search and a watch; a member, just seated, who keeps neither.
+    const h = await person("start-holder", "ultra");
+    const m = await person("start-member");
+    await seatRow(h.id, { member: m.id, joined: -1 });
+    await searches(h.id, 1, 5);
+    await watchRow(h.id, "start-holder-buyer");
+    const searchCap = RULES.ultra.saved_searches;
+    const watchCap = RULES.ultra.watchlists;
+    for (const lang of ["en", "fr"] as const) {
+      const q = lang === "fr" ? "?lang=fr" : "";
+      const member = await read(await get(`/account${q}`, { cookie: m.cookie, env: ON() }));
+      expect(member, lang).toContain(line(lang, "account.start_panel"));
+      expect(member, lang).toContain(line(lang, "account.start_search_button"));
+      expect(member, lang).toContain(line(lang, "account.start_follow"));
+      // Lists: the subscription's figure in the pool's own words, never as the member's own "1 of 100".
+      expect(member, lang).toContain(pool(lang, "pool.f_searches", 1, searchCap, 0));
+      expect(member, lang).toContain(pool(lang, "pool.f_watches", 1, watchCap, 0));
+      expect(member, lang).not.toContain(`<span class="num">${line(lang, "account.searches_n", { n: 1, cap: searchCap })}</span>`);
+      expect(member.match(/class="btn btn-primary"/g), lang).toHaveLength(1);
+      // The holder keeps both, so no first steps; its Lists say how much of the subscription's figure is its own.
+      const holder = await read(await get(`/account${q}`, { cookie: h.cookie, env: ON() }));
+      expect(holder, lang).not.toContain(line(lang, "account.start_panel"));
+      expect(holder, lang).toContain(pool(lang, "pool.f_searches", 1, searchCap, 1));
+      expect(holder, lang).toContain(pool(lang, "pool.f_watches", 1, watchCap, 1));
+    }
+    // A holder who keeps nothing while its member does: the first steps, on the holder's own lists.
+    const h2 = await person("start-holder2", "ultra");
+    const m2 = await person("start-member2");
+    await seatRow(h2.id, { member: m2.id, joined: -1 });
+    await searches(m2.id, 2, 5);
+    await watchRow(m2.id, "start-member2-buyer");
+    const empty = await read(await get("/account", { cookie: h2.cookie, env: ON() }));
+    expect(empty).toContain(line("en", "account.start_panel"));
+    expect(empty).toContain(pool("en", "pool.f_searches", 2, searchCap, 0));
+  });
+
   it("cancels an open invitation: its link stops at once, the address kept for its count; another id changes nothing", async () => {
     const h = await person("cancel-holder", "ultra");
     const to = newEmail("cancel-to");

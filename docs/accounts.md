@@ -3182,7 +3182,12 @@ address, not a counted item, so the allowance does not touch them. The
 searches page counts the "all" feed's events as the feed lists them. The
 searches and watches pages' notices at the figure state the group's count
 too. New Dashboard and a new key or feed are offered while the subscription
-has room. A member reads the group's totals and its own counts, never
+has room. On the overview of an account in a group (a member or the holder),
+the Lists panel's saved searches and watches rows carry the same line under
+their links in place of "n of cap", and the Start Here panel's steps are
+decided on what the account keeps itself (a new member with none sees them,
+whatever the subscription holds), its figures in that line too. A member
+reads the group's totals and its own counts, never
 another account's count by itself, and nothing of what another account
 keeps.
 

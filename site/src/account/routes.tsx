@@ -179,7 +179,7 @@ import {
   groupStopView, groupStoppedView, signInToggle, signInView, staleFormView, stopView, stoppedView, unavailableView, weeklyStopView, weeklyStoppedView,
 } from "./pages";
 import {
-  type SavedSearch, addSearch, capFor, deleteSearch, heldCount, importInterest, isDelivery, lastDeliveries, listSearches, paidCapLine,
+  type SavedSearch, addSearch, capFor, deleteSearch, heldCount, heldCounts, importInterest, isDelivery, lastDeliveries, listSearches, paidCapLine,
   pendingInterest, setDelivery,
 } from "./searches";
 import { GROUP_TAGS_MAX, GROUP_TAG_CHARS, type GroupKind, USER_RE, provenBy, readGroupTags } from "./group_stop";
@@ -620,9 +620,9 @@ account.get("/", async (c) => {
       .bind(who.userId).first<{ keys: number }>();
     // The account's live sessions: the Account panel's row counts them, the Signed-In Browsers panel lists them.
     const sessions = await liveSessions(c.env, who.userId);
-    // The saved searches with the briefings, which share the cap: the count every page states (searches.ts heldCount),
-    // the subscription's for an account in a group, as the watches' is.
-    const held = await heldCount(c.env, who);
+    // The saved searches with the briefings, which share the cap: the count every page states (searches.ts heldCounts),
+    // the subscription's for an account in a group, as the watches' is; mine, the account's own, beside each only in a group.
+    const held = await heldCounts(c.env, who);
     const watching = await watchCount(c.env, who);
     const org = await claimSummary(c.env, who.userId);
     const m = c.req.query("m");
@@ -630,8 +630,9 @@ account.get("/", async (c) => {
     const returned = c.req.query("session");
     if ((c.req.query("billing") === "done" || c.req.query("billing") === "done_ultra") && returned) await bindReturn(c.env, who, returned);
     return accountPage(c, t(lang, "account.title"), overviewView(lang, who, {
-      sessions: sessions.length, searches: held, cap: capFor(who), keys: counts?.keys ?? 0,
+      sessions: sessions.length, searches: held.n, cap: capFor(who), keys: counts?.keys ?? 0,
       watches: watching?.n ?? null, watchesOwn: watching?.own ?? false, org,
+      ...(held.mine === undefined ? {} : { searchesMine: held.mine }), ...(watching?.mine === undefined ? {} : { watchesMine: watching.mine }),
     }, {
       billing: await billingLine(c.env, who.userId),
       // Stripe's checkout returns here; the plan changes when its notice lands, often a moment later.
