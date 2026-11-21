@@ -505,11 +505,17 @@ account.post("/check", async (c) => {
       // The third and fourth wrong codes of the hour say how many tries are left.
       const left = checked.reason === "wrong" ? checked.left : null;
       const errors: Key[] = [left === 2 ? "account.err_code_two" : left === 1 ? "account.err_code_one" : CHECK_ERROR[checked.reason]];
-      if (token) return accountPage(c, t(lang, "account.link_title"), linkView(lang, "", errors, next, follow, brief, weekly), 400);
+      // Stale in a browser that is signed in, most often the other of the pair after the first signed it in: the
+      // page stays and says so, naming the session's own address (the rail names it already) with the one way on,
+      // next (safeNext) or the overview, in place of asking for a new code. A wrong code keeps its page, since a
+      // signed-in reader may be signing in to another address; so does a stale one in a browser with no session.
+      const standing = checked.reason === "stale" ? await readSession(c) : null;
+      const signedIn = standing?.state === "ok" ? { email: standing.account.email, href: inLang(next ?? "/account", lang), next: !!next } : undefined;
+      if (token) return accountPage(c, t(lang, "account.link_title"), linkView(lang, "", errors, next, follow, brief, weekly, signedIn), 400);
       const title = t(lang, sentForm ? "account.check_title" : "account.enter_title");
       // A mistyped code keeps the page to return to, what to follow, the briefing to save and the weekly email's tick, for the next try.
       return accountPage(c, title,
-        codeView(lang, { email: email ?? typed.slice(0, EMAIL_MAX), sent: sentForm && !!email, errors, next, follow, brief, weekly }), 400);
+        codeView(lang, { email: email ?? typed.slice(0, EMAIL_MAX), sent: sentForm && !!email, errors, next, follow, brief, weekly, signedIn }), 400);
     }
     const user = await findOrCreateUser(c.env, checked.email, lang, now);
     if (user.created) await audit(c.env, user.id, "user_created", null, now);

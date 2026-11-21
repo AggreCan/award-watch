@@ -88,6 +88,14 @@ export const ACCOUNT_STRINGS = {
     en: "This code or link has expired or was already used. Ask for a new one.",
     fr: "Ce code ou ce lien a expiré ou a déjà servi. Demandez-en un nouveau.",
   },
+  // In place of account.err_stale when the browser that sent the code or link is signed in (most often the
+  // other of the pair, after the first signed it in): {email} the session's own address, {link} the one way
+  // on, account.stale_signed_in_next to the page the sign-in was heading for, else account.title.
+  "account.stale_signed_in": {
+    en: "This code or link has expired or was already used, and this browser is signed in as {email}. {link}",
+    fr: "Ce code ou ce lien a expiré ou a déjà servi, et ce navigateur est connecté au compte {email}. {link}",
+  },
+  "account.stale_signed_in_next": { en: "Continue to the page you came from", fr: "Continuer vers la page d'où vous veniez" },
   // The sign-in pages, when a public page's Follow form started the sign-in (routes.tsx, follow).
   "account.follow_pending": {
     en: "Signing in also follows the page where you pressed Follow.",

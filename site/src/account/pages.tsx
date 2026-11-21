@@ -193,12 +193,26 @@ export function signInView(
 // The code field's pattern: six digits, spaces allowed around and between them.
 const CODE_PATTERN = "\\s*([0-9]\\s*){6}";
 
+// A code or link that answers stale in a browser already signed in (routes.tsx
+// POST /account/check): the session's own address, which the rail of the same
+// page names already, and the one way on, the page the sign-in was heading for
+// (next) or the overview. Drawn in place of the stale line on either page.
+export type SignedInHere = { email: string; href: string; next: boolean };
+const SignedInLine: FC<{ lang: Lang; here: SignedInHere }> = ({ lang, here }) => (
+  <p class="account-notice" role="status">
+    {tj(lang, "account.stale_signed_in", {
+      email: here.email, link: <a href={here.href}>{t(lang, here.next ? "account.stale_signed_in_next" : "account.title")}</a>,
+    })}
+  </p>
+);
+
 // The code form: after a request (email hidden, the lead names it), or typed
 // from scratch (the email as a field).
 export function codeView(
   lang: Lang,
   state: {
     email?: string; sent?: boolean; errors?: Key[]; next?: string | null; follow?: Follow | null; brief?: Brief | null; weekly?: boolean;
+    signedIn?: SignedInHere;
   } = {},
 ) {
   const sent = !!state.sent && !!state.email;
@@ -208,7 +222,7 @@ export function codeView(
         title={t(lang, sent ? "account.check_title" : "account.enter_title")}
         lead={sent ? tj(lang, "account.check_lead", { email: <strong>{state.email}</strong>, minutes: CODE_MINUTES }) : t(lang, "account.enter_lead")} />
       <Panel title={t(lang, "account.code_panel")} class="panel-form">
-        <Errors lang={lang} errors={state.errors} />
+        {state.signedIn ? <SignedInLine lang={lang} here={state.signedIn} /> : <Errors lang={lang} errors={state.errors} />}
         <FollowNote lang={lang} follow={state.follow} />
         <BriefNote lang={lang} brief={state.brief} />
         <WeeklyNote lang={lang} weekly={state.weekly} />
@@ -249,13 +263,14 @@ export function codeView(
 // mail scanner that fetches the link signs no one in and uses nothing up.
 export function linkView(
   lang: Lang, token: string, errors?: Key[], next?: string | null, follow?: Follow | null, brief?: Brief | null, weekly?: boolean,
+  signedIn?: SignedInHere,
 ) {
   return (
     <>
       <PageHead lang={lang} title={t(lang, "account.link_title")} lead={t(lang, "account.link_lead")} />
       <Panel title={t(lang, "account.link_panel")} class="panel-form">
-        <Errors lang={lang} errors={errors} />
-        {errors?.length ? (
+        {signedIn ? <SignedInLine lang={lang} here={signedIn} /> : <Errors lang={lang} errors={errors} />}
+        {errors?.length || signedIn ? (
           <p><a href={againHref(next, follow, brief)} class="btn">{t(lang, "account.code_again_link")}</a></p>
         ) : (
           <>

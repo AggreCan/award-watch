@@ -259,6 +259,63 @@ describe("the link", () => {
   });
 });
 
+// The other of the pair (the link after the code, the code after the link) in
+// the browser the first one signed in: the page stays, and its line says the
+// browser is signed in, with one link on, in place of asking for a new code.
+describe("a code or link used again in a browser that is signed in", () => {
+  const SIGNED_IN = (email: string) => `This code or link has expired or was already used, and this browser is signed in as ${email}.`;
+
+  it("names the browser's address and links to the account, or to the page the sign-in was heading for", async () => {
+    // The code first, then the message's link in the same browser.
+    const email = newEmail("again-link");
+    const { code, token } = await requestCode(email);
+    const cookie = sessionCookie(await post("/account/check", { email, code, sent: "1" }));
+    const viaLink = await post("/account/check", { token }, { cookie });
+    expect(viaLink.status).toBe(400);
+    const page = nbsp(decode(await viaLink.text()));
+    expect(page).toContain("<h1>Finish Signing In</h1>");
+    expect(page).toContain(`${SIGNED_IN(email)} <a href="/account">Your Account</a>`);
+    expect(page).not.toContain("Ask for a new one.");
+    expect(viaLink.headers.getSetCookie().some((s) => s.startsWith("__Host-aw_session="))).toBe(false);
+    expect((await get("/account", { cookie })).status).toBe(200);
+    // The link first, then the code typed in the first tab, with a page to return to.
+    const other = newEmail("again-code");
+    const pair = await requestCode(other);
+    const signed = await post("/account/check", { token: pair.token, next: "/tenders" });
+    expect(signed.headers.get("location")).toBe("/tenders");
+    const viaCode = await post("/account/check", { email: other, code: pair.code, sent: "1", next: "/tenders" }, { cookie: sessionCookie(signed) });
+    expect(viaCode.status).toBe(400);
+    const codePage = nbsp(decode(await viaCode.text()));
+    expect(codePage).toContain("<h1>Check Your Email</h1>");
+    expect(codePage).toContain(`${SIGNED_IN(other)} <a href="/tenders">Continue to the page you came from</a>`);
+    expect(codePage).not.toContain("Ask for a new one.");
+    // French, the link in the page's language.
+    const fr = newEmail("again-fr");
+    const third = await requestCode(fr);
+    const frCookie = sessionCookie(await post("/account/check", { email: fr, code: third.code, sent: "1" }));
+    const french = nbsp(decode(await (await post("/account/check", { token: third.token, lang: "fr" }, { cookie: frCookie })).text()));
+    expect(french).toContain(`Ce code ou ce lien a expiré ou a déjà servi, et ce navigateur est connecté au compte ${fr}. <a href="/account?lang=fr">Votre compte</a>`);
+  });
+
+  it("keeps today's page for a wrong code in a signed-in browser, and for a stale one in a browser with no session", async () => {
+    const email = newEmail("again-wrong");
+    const cookie = await signIn(email);
+    const { code } = await requestCode(email);
+    const wrong = code === "000000" ? "111111" : "000000";
+    const typo = await post("/account/check", { email, code: wrong, sent: "1" }, { cookie });
+    expect(typo.status).toBe(400);
+    const typoPage = await typo.text();
+    expect(typoPage).toContain("That code does not match. Check the message and try again.");
+    expect(typoPage).not.toContain("this browser is signed in as");
+    expect((await post("/account/check", { email, code, sent: "1" })).status).toBe(303);
+    const stale = await post("/account/check", { email, code, sent: "1" });
+    expect(stale.status).toBe(400);
+    const stalePage = await stale.text();
+    expect(stalePage).toContain("This code or link has expired or was already used. Ask for a new one.");
+    expect(stalePage).not.toContain("this browser is signed in as");
+  });
+});
+
 describe("sessions", () => {
   it("send a page without a session to the sign-in form, which ends on the page asked for", async () => {
     // The overview is where signing in ends anyway, so it carries no page.

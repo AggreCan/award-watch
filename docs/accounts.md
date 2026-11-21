@@ -158,7 +158,14 @@ in.
    Each try is counted before it is compared, in one statement with the
    hour's count, so tries sent at the same moment cannot pass the five. A
    code or link is single use, and using one closes the address's other
-   open requests.
+   open requests. A used or expired code or link answers "This code or link
+   has expired or was already used. Ask for a new one.", except in a browser
+   that is signed in (most often the other of the pair, after the first
+   signed it in): there the same page reads "This code or link has expired
+   or was already used, and this browser is signed in as <address>." with
+   one link on, to `next` when the sign-in carried one, else to the
+   overview. The address is the session's own, which the page's rail names
+   already. A wrong code keeps its page either way.
 5. On a match the site creates the user on first sign-in, creates a session
    and sets the cookie `__Host-aw_session` (`HttpOnly`, `Secure`, `SameSite=Lax`,
    `Path=/`, 30 days). The cookie holds the session id and a 32-byte
