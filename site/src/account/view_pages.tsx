@@ -19,7 +19,7 @@ import type { Context } from "hono";
 import type { FC } from "hono/jsx";
 import { Table } from "../columns";
 import type { AppEnv } from "../env";
-import { fmtInt, t, type Key, type Lang } from "../i18n";
+import { fmtInt, t, tn, type Key, type Lang } from "../i18n";
 import { PageHead, Panel } from "../layout";
 import { PlanCards, type PlanCard } from "../pro";
 import type { View } from "../view_address";
@@ -36,6 +36,11 @@ import { accountsEnabled } from "./switch";
 export const VIEWS_PATH = "/account/views";
 
 const Csrf: FC<{ account: Account }> = ({ account }) => <input type="hidden" name="csrf" value={account.csrf} />;
+
+// The Saved Views panel's count, on /account/views and on /analytics: n of the plan's figure in the right number
+// (French takes the singular for none and one), or n alone for a plan that keeps none.
+const viewsCount = (lang: Lang, n: number, cap: number): string =>
+  cap ? tn(lang, "views.count_one", "views.count", n, { n: fmtInt(n, lang), cap: fmtInt(cap, lang) }) : fmtInt(n, lang);
 
 // The gate line: plain muted text and the way to the plans, naming Ultra
 // only while it is on sale.
@@ -168,7 +173,7 @@ export function viewsView(lang: Lang, account: Account, s: ViewsPageState) {
       {s.notice ? <p class="account-notice" role="status">{s.notice}</p> : null}
       {cap ? null : <Gate lang={lang} ultra={s.ultra} />}
       {cap || n ? (
-        <Panel title={t(lang, "views.title")} count={cap ? t(lang, "views.count", { n: fmtInt(n, lang), cap: fmtInt(cap, lang) }) : fmtInt(n, lang)}>
+        <Panel title={t(lang, "views.title")} count={viewsCount(lang, n, cap)}>
           {/* Past the plan's figure (after a move to a smaller plan): nothing deleted, the ones past it marked. In a
               group, what the subscription holds, and the account's own past its allowance marked. */}
           {pool ? <PoolLines lang={lang} figure="views" line={pool.line} past={pool.past.size} />
@@ -255,7 +260,7 @@ export type SavedViewsState = {
 export const SavedViewsPanel: FC<{ lang: Lang } & SavedViewsState> = ({ lang, views, cap, builder, pool }) => {
   const n = pool ? pool.line.total : views.length;
   return cap || views.length ? (
-    <Panel title={t(lang, "views.title")} count={cap ? t(lang, "views.count", { n: fmtInt(n, lang), cap: fmtInt(cap, lang) }) : fmtInt(n, lang)}
+    <Panel title={t(lang, "views.title")} count={viewsCount(lang, n, cap)}
       tools={<a href={VIEWS_PATH}>{t(lang, "views.manage")}</a>}>
       {pool ? <PoolLines lang={lang} figure="views" line={pool.line} past={pool.past.size} /> : null}
       {views.length ? (

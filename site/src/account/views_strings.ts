@@ -29,6 +29,8 @@ export const VIEWS_STRINGS = {
     en: "Analytics views kept with their source, period and choices. Each opens as you saved it.",
     fr: "Des vues d'analyse conservées avec leur source, leur période et leurs choix. Chacune s'ouvre telle que vous l'avez enregistrée.",
   },
+  // Chosen by tn (French takes the singular for none and one); English keeps the noun with the figure.
+  "views.count_one": { en: "{n} of {cap} views", fr: "{n} vue sur {cap}" },
   "views.count": { en: "{n} of {cap} views", fr: "{n} vues sur {cap}" },
   "views.full": {
     en: "This account holds its {cap} saved views. Remove one to save another.",

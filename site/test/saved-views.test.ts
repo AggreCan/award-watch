@@ -443,6 +443,22 @@ describe("the saved views page", () => {
     const free = await reader("views-index-free", "free");
     expect(mainOf(await text(await open(free, "/analytics")))).not.toContain(`<h2>${t("en", "views.title")}</h2>`);
   });
+
+  it("states the count in the right number on both panels, French taking the singular for none and one", async () => {
+    const r = await reader("views-count-number");
+    // [views held, English, French]. English keeps the noun with the figure ("1 of 10 views").
+    const cases: [number, string, string][] = [[0, "0 of 10 views", "0 vue sur 10"], [1, "1 of 10 views", "1 vue sur 10"], [2, "2 of 10 views", "2 vues sur 10"]];
+    for (const [n, en, fr] of cases) {
+      if (n) expect(await addView(onEnv() as never, { userId: r.id, plan: "pro" }, { kind: "segment", address: `${SEGMENT}?source=awards&years=${[3, 5][n - 1]}`, name: `View ${n}` }, "en")).toBe("added");
+      expect(await rowsOf(r.id)).toHaveLength(n);
+      for (const path of ["/account/views", "/analytics"]) {
+        expect(mainOf(await text(await open(r, path))), `${path} ${n}`).toContain(`<span class="panel-count">${en}</span>`);
+        const french = mainOf(await text(await open(r, `${path}?lang=fr`)));
+        expect(french, `${path} ${n} fr`).toContain(`<span class="panel-count">${fr}</span>`);
+        expect(french, `${path} ${n} fr`).not.toMatch(/\b[01] vues\b/);
+      }
+    }
+  });
 });
 
 describe("the email", () => {

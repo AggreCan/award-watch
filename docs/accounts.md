@@ -4458,7 +4458,9 @@ address is no analytics view's, which the run reads every address as).
 
 `/account/views` lists the views in the order they were saved, each with a
 link that opens it as saved, the kind of view, Remove, and the count against
-the plan's figure. While Ultra is on sale an Email column holds, for Ultra,
+the plan's figure ("1 of 10 views"; in French the singular for none and one,
+"0 vue sur 10", "1 vue sur 10", "2 vues sur 10", through `tn`, as on the
+Saved Views panel of `/analytics`). While Ultra is on sale an Email column holds, for Ultra,
 the select (Weekly, Monthly, Off) with the last run's line ("Sent ...",
 "Checked ...: nothing changed, no message.", "Not sent ..."), and for Pro the
 line "Off. Email delivery of saved views is part of Ultra." While Ultra is off
