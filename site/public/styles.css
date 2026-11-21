@@ -146,6 +146,13 @@
   --map-4: #0a5234;
   /* The line between provinces: visible on the lightest step and on the darkest (operator, 2026-11-07). */
   --topbar: 56px;
+  /* Corners (the operator's ruling of 2026-11-21, from a side-by-side picture:
+     softer): a box and a control turn by 8 px, a band or table that fills a
+     box's corner by the box's less its 1 px edge, a chip by 6. The rail, the
+     top bar and the rows of a table stay square. */
+  --corner: 8px;
+  --corner-in: 7px;
+  --corner-chip: 6px;
   /* Wide enough for the longest label and its count on one line in both
      languages (measured: 256 px is the floor at 1440; 264 leaves margin). */
   --rail: 264px;
@@ -334,7 +341,7 @@ kbd { display: inline-block; min-width: 20px; padding: 0 4px; border: 1px solid 
    control, the bar's lighter step and a whiter edge under the pointer. */
 .lang-toggle, .theme-toggle {
   display: inline-flex; align-items: center; height: 32px; padding: 0 11px;
-  border: 2px solid var(--field-border); border-radius: 6px; background: var(--panel); color: var(--ink-2);
+  border: 2px solid var(--field-border); border-radius: var(--corner); background: var(--panel); color: var(--ink-2);
   font: inherit; font-size: 12px; line-height: 16px; font-weight: 500; text-decoration: none; cursor: pointer;
 }
 .lang-toggle:hover, .theme-toggle:hover { border-color: var(--ink-2); background: var(--hover); color: var(--ink); }
@@ -486,7 +493,7 @@ h1 { font-family: var(--display); font-size: 28px; line-height: 34px; font-weigh
 .btn {
   display: inline-flex; align-items: center; gap: 8px; max-width: 100%;
   min-height: var(--field-h); padding: 4px 11px;
-  border: 2px solid var(--field-border); border-radius: 6px; background: var(--panel); color: var(--ink);
+  border: 2px solid var(--field-border); border-radius: var(--corner); background: var(--panel); color: var(--ink);
   font: inherit; font-size: 13px; line-height: 20px; font-weight: 500; text-align: left; text-decoration: none; cursor: pointer;
 }
 .btn:hover { border-color: var(--ink-2); background: var(--hover); text-decoration: none; }
@@ -499,7 +506,7 @@ h1 { font-family: var(--display); font-size: 28px; line-height: 34px; font-weigh
 .btn-link:hover { text-decoration-color: currentColor; }
 input[type="search"], input[type="text"], input[type="number"], input[type="email"], select, textarea {
   max-width: 100%; min-height: var(--field-h); padding: 4px 7px;
-  border: 2px solid var(--field-border); border-radius: 6px; background: var(--panel); color: var(--ink);
+  border: 2px solid var(--field-border); border-radius: var(--corner); background: var(--panel); color: var(--ink);
   font: inherit; font-size: 13px; line-height: 20px;
 }
 /* A select draws its own chevron, so its text sits as far from the right
@@ -634,7 +641,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ink); width: 1
 .dash-menu > summary::-webkit-details-marker { display: none; }
 .dash-menu-button {
   display: flex; align-items: center; justify-content: center; width: 28px; height: 28px;
-  border: 2px solid transparent; border-radius: 6px; color: var(--ink-2); cursor: pointer;
+  border: 2px solid transparent; border-radius: var(--corner); color: var(--ink-2); cursor: pointer;
 }
 .dash-menu-button svg { fill: currentColor; }
 .dash-menu-button:hover, .dash-menu[open] > .dash-menu-button { border-color: var(--field-border); background: var(--panel); color: var(--ink); }
@@ -1031,7 +1038,7 @@ dd .flag { height: auto; min-height: 24px; max-width: none; padding: 3px 8px; wh
 /* -- status chips, the competitive flag, codes, filter chips -------------- */
 .badge, .flag, .chip, .fchip {
   display: inline-flex; align-items: center; gap: 6px; max-width: 100%; height: 24px; padding: 0 8px;
-  border: 1px solid var(--border-2); border-radius: 0; background: var(--panel); color: var(--ink-2);
+  border: 1px solid var(--border-2); border-radius: var(--corner-chip); background: var(--panel); color: var(--ink-2);
   font-size: 12px; line-height: 16px; font-weight: 500; white-space: nowrap; vertical-align: middle; text-decoration: none;
 }
 /* Status: a square glyph and the label. Open is outlined emerald; Closing
@@ -2249,3 +2256,17 @@ html.js .cmap-toggles { display: flex; }
   .doc dl.terms dd { padding-top: 0; border-top: 0; }
 }
 .doc ol.sources li { margin: 0 0 8px; overflow-wrap: anywhere; }
+
+/* -- corners ------------------------------------------------------------------
+   Softer corners (--corner and its two companions, above). A box turns by
+   --corner. A band or a table that reaches the box's corner turns with it,
+   by --corner-in, so no ground pokes past the edge; a table's wrap clips
+   its rows to that turn. A panel itself clips nothing: a tile's menu and an
+   Add list hang outside it. A plan card and what opens over the page clip to
+   their own corner, since a card's head and a menu's rows have grounds. */
+.panel, .tile, .toolbar, .toc, .doc, .cite-block, .sources-line, .account-notice, .errors, .cmap-list .table-wrap { border-radius: var(--corner); }
+.panel > .panel-head:first-child, .panel > .table-wrap:first-child, .doc > h2:first-child { border-top-left-radius: var(--corner-in); border-top-right-radius: var(--corner-in); }
+.panel > :last-child { border-bottom-left-radius: var(--corner-in); border-bottom-right-radius: var(--corner-in); }
+.plan-card { border-radius: var(--corner); overflow: hidden; }
+.dash-menu-list, .dash-add-list, .dash-adder-body, .dash-board-body { border-radius: var(--corner); overflow: hidden; }
+.tip, .tag, .quick-links a, .quick-links span[aria-current], .toc a, kbd { border-radius: var(--corner-chip); }

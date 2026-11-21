@@ -146,7 +146,7 @@ describe("the navy top bar", () => {
     const toggles = rule(".lang-toggle, .theme-toggle")?.body;
     expect(decl(toggles, "border")).toBe("2px solid var(--field-border)");
     expect(decl(toggles, "background")).toBe("var(--panel)");
-    expect(decl(toggles, "border-radius")).toBe("6px");
+    expect(decl(toggles, "border-radius")).toBe("var(--corner)");
   });
 });
 
@@ -266,16 +266,21 @@ describe("on a phone", () => {
 });
 
 describe("corners", () => {
-  it("round a control by 6 px and the Pro and Ultra chips by 4, and nothing else but the charts' bars", () => {
+  // The operator's ruling of 2026-11-21, from a side-by-side picture of three settings: softer. Until then only a
+  // control and the two plan chips were rounded and every box was square.
+  it("turn a box and a control by 8 px and a chip by 6, through three tokens, and leave the rail, the top bar and a table's rows square", () => {
+    const root = rule(":root")?.body;
+    expect([decl(root, "--corner"), decl(root, "--corner-in"), decl(root, "--corner-chip")]).toEqual(["8px", "7px", "6px"]);
     const rounded = rules()
       .map((r) => [r.selector, decl(r.body, "border-radius")] as const)
       .filter(([, radius]) => radius !== undefined && radius !== "0");
     expect(rounded).toEqual([
-      [".lang-toggle, .theme-toggle", "6px"],
-      [".btn", "6px"],
-      ['input[type="search"], input[type="text"], input[type="number"], input[type="email"], select, textarea', "6px"],
+      [".lang-toggle, .theme-toggle", "var(--corner)"],
+      [".btn", "var(--corner)"],
+      ['input[type="search"], input[type="text"], input[type="number"], input[type="email"], select, textarea', "var(--corner)"],
       // A dashboard tile's menu button (src/account/dashboard.tsx DashTile), a control with its edge on hover.
-      [".dash-menu-button", "6px"],
+      [".dash-menu-button", "var(--corner)"],
+      [".badge, .flag, .chip, .fchip", "var(--corner-chip)"],
       [".rank-bar", "0 4px 4px 0"],
       // A meter against a cap is one whole: its track and its fill are rounded both ends.
       [".rank-bars.of-cap .rank-track", "4px"],
@@ -283,7 +288,32 @@ describe("corners", () => {
       [".pro-tag", "4px"],
       // Ultra's chip (src/pro.tsx UltraTag), the Pro chip's box in sapphire.
       [".ultra-tag", "4px"],
+      // The boxes, in the stylesheet's last block.
+      [".panel, .tile, .toolbar, .toc, .doc, .cite-block, .sources-line, .account-notice, .errors, .cmap-list .table-wrap", "var(--corner)"],
+      [".plan-card", "var(--corner)"],
+      [".dash-menu-list, .dash-add-list, .dash-adder-body, .dash-board-body", "var(--corner)"],
+      [".tip, .tag, .quick-links a, .quick-links span[aria-current], .toc a, kbd", "var(--corner-chip)"],
     ]);
+  });
+
+  it("turn a band or a table that reaches a box's corner with the box, and clip only what has no menu hanging out of it", () => {
+    // A panel's head and a document's first band have grounds of their own; a table's wrap clips its rows to its turn.
+    const top = rule(".panel > .panel-head:first-child, .panel > .table-wrap:first-child, .doc > h2:first-child")?.body;
+    expect(decl(top, "border-top-left-radius")).toBe("var(--corner-in)");
+    expect(decl(top, "border-top-right-radius")).toBe("var(--corner-in)");
+    const bottom = rule(".panel > :last-child")?.body;
+    expect(decl(bottom, "border-bottom-left-radius")).toBe("var(--corner-in)");
+    expect(decl(bottom, "border-bottom-right-radius")).toBe("var(--corner-in)");
+    // A tile's menu and an Add list hang outside their panel, so a panel never clips; a card and a menu do.
+    const overflowOf = (selector: string) => rules().filter((r) => r.selector === selector || r.selector.split(", ").includes(selector))
+      .map((r) => decl(r.body, "overflow")).filter((v) => v !== undefined);
+    expect(overflowOf(".panel")).toEqual([]);
+    expect(overflowOf(".plan-card")).toEqual(["hidden"]);
+    expect(decl(rule(".dash-menu-list, .dash-add-list, .dash-adder-body, .dash-board-body")?.body, "overflow")).toBe("hidden");
+    // Square still: the rail, the top bar, a table's cells.
+    for (const r of rules()) {
+      if (/^(\.rail|\.topbar|table|th|td|tr)\b/.test(r.selector)) expect(decl(r.body, "border-radius"), r.selector).toBeUndefined();
+    }
   });
 });
 
