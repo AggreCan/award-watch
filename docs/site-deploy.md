@@ -425,14 +425,17 @@ files, a key with a further slash and a key outside `downloads/` are never
 stale. It also counts the objects under `mirror/`, which the download route
 serves and nothing in the repository writes, and never touches them.
 
-`nightly.PRUNE_MODE` ships as `"report"`: the run status gets a notice that
-names the stale files (ten at most, then the count of the rest) and gives the
-count under `mirror/`, and nothing is deleted. Set to `"delete"`, it removes
-each stale object and names what it removed; a removal that fails is named
-and the others still go, and the notice says how many other objects were
-checked and found as they were. To switch, change the constant, the step's comment
-in `nightly.yml` and this section in one commit, with the test that holds the
-shipped value.
+`nightly.PRUNE_MODE` ships as `"delete"` since 2026-11-21: it removes each
+stale object and names what it removed; a removal that fails is named and
+the others still go, and the notice says how many other objects were checked
+and found as they were. It shipped as `"report"` until the nightly of
+2026-11-21 had named exactly the files a listing of the bucket had found
+(the 21 award files the first two nights left) and the operator had approved
+the removal. Set to `"report"`, the run status gets a notice that names the
+stale files (ten at most, then the count of the rest) and gives the count
+under `mirror/`, and nothing is deleted. To switch, change the constant, the
+step's comment in `nightly.yml` and this section in one commit, with the
+test that holds the shipped value.
 
 | When | Outcome |
 |---|---|

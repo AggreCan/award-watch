@@ -139,8 +139,10 @@ def test_the_yearly_pattern_is_the_one_the_site_serves():
         assert nightly.YEARLY_DOWNLOAD_RE.fullmatch(name) and export.YEAR_RE.match(name), name
 
 
-def test_the_mode_ships_as_report_and_nothing_outside_the_code_changes_it():
-    assert nightly.PRUNE_MODE == "report"
+def test_the_mode_ships_as_delete_and_nothing_outside_the_code_changes_it():
+    # "delete" since 2026-11-21: the night's report had named exactly the 21 files a listing of the bucket found
+    # (test_more_stale_files_than_the_cap_are_refused_in_either_mode holds that bucket), and the operator approved.
+    assert nightly.PRUNE_MODE == "delete"
     options = {a.dest for a in nightly.build_parser()._subparsers._group_actions[0].choices["prune-downloads"]._actions}
     assert options == {"help", "csv", "upload_outcome", "save_db_outcome", "out_dir", "bucket"}
     # The limits the docs and the workflow comment name.
@@ -167,12 +169,12 @@ def test_tonight_s_set_is_what_the_upload_loop_sends(tmp_path):
     assert '[ -f "$f" ] || continue' in save and 'put "$BUCKET/downloads/$(basename "$f")" "$f"' in save
 
 
-# -- report mode (as shipped) --------------------------------------------------------------------
+# -- report mode (as shipped until 2026-11-21; asked for by name here) -----------------------------
 
 
 def test_the_report_names_the_stale_files_counts_the_other_prefix_and_deletes_nothing(tmp_path):
     fake = bucket()
-    record = nightly.prune_downloads(r2(fake), export_folder(tmp_path), "success")
+    record = nightly.prune_downloads(r2(fake), export_folder(tmp_path), "success", mode="report")
     assert record["outcome"] == "4 stale (reported)" and record["mode"] == "report"
     assert record["stale"] == sorted(STALE) and record["deleted"] == [] and record["mirror_objects"] == 2
     assert record["notice"] == REPORT
@@ -180,7 +182,7 @@ def test_the_report_names_the_stale_files_counts_the_other_prefix_and_deletes_no
     # The token travels in the header only.
     assert all(h["Authorization"] == f"Bearer {TOKEN}" and TOKEN not in u for _, u, h in fake.calls)
     # Nothing stale: said so, with the count, and still nothing deleted.
-    quiet = nightly.prune_downloads(r2(bucket(stale=[])), export_folder(tmp_path, name="csv2"), "success")
+    quiet = nightly.prune_downloads(r2(bucket(stale=[])), export_folder(tmp_path, name="csv2"), "success", mode="report")
     assert quiet["outcome"] == "none stale" and quiet["notice"] == (
         "report only, nothing deleted: no yearly file under downloads/ that tonight's export no longer writes; "
         "2 objects under mirror/ (never touched)")
@@ -188,7 +190,7 @@ def test_the_report_names_the_stale_files_counts_the_other_prefix_and_deletes_no
 
 def test_the_report_names_ten_at_most_then_the_rest_as_a_count(tmp_path):
     many = [f"history-{y}.csv" for y in range(1990, 2002)]
-    record = nightly.prune_downloads(r2(bucket(stale=many)), export_folder(tmp_path), "success")
+    record = nightly.prune_downloads(r2(bucket(stale=many)), export_folder(tmp_path), "success", mode="report")
     assert record["outcome"] == "12 stale (reported)"
     named = record["notice"].split("no longer writes: ", 1)[1].split(";", 1)[0]
     assert named == ", ".join(many[:10]) + " and 2 others"
@@ -197,7 +199,7 @@ def test_the_report_names_ten_at_most_then_the_rest_as_a_count(tmp_path):
 
 def test_every_page_of_the_listing_is_read(tmp_path):
     fake = bucket(page_size=7)
-    record = nightly.prune_downloads(r2(fake), export_folder(tmp_path), "success")
+    record = nightly.prune_downloads(r2(fake), export_folder(tmp_path), "success", mode="report")
     assert record["outcome"] == "4 stale (reported)" and record["stale"] == sorted(STALE)
     under = sum(1 for k in fake.keys if k.startswith("downloads/"))
     assert len(fake.listed("downloads/")) == -(-under // 7) > 10
@@ -228,8 +230,20 @@ def test_delete_mode_removes_each_stale_object_and_nothing_else(tmp_path):
     assert (again["outcome"], again["notice"], fake.deleted()[4:]) == ("none stale", None, [])
     # A report never lists the whole bucket: it removes nothing, so it has nothing to compare.
     quiet = bucket()
-    nightly.prune_downloads(r2(quiet), export_folder(tmp_path, name="report"), "success")
+    nightly.prune_downloads(r2(quiet), export_folder(tmp_path, name="report"), "success", mode="report")
     assert quiet.listed("") == [] and quiet.deleted() == []
+
+
+def test_with_no_mode_named_it_removes_as_shipped_and_only_on_a_night_whose_database_was_saved(tmp_path):
+    # The workflow names no mode: the code's own value decides.
+    fake = bucket()
+    record = nightly.prune_downloads(r2(fake), export_folder(tmp_path), "success", save_db="success")
+    assert record["outcome"] == "4 deleted" and record["mode"] == "delete"
+    assert fake.deleted() == [f"downloads/{n}" for n in sorted(STALE)] and set(BACKUPS) <= fake.keys
+    # Without the save step's word nothing goes.
+    fake = bucket()
+    record = nightly.prune_downloads(r2(fake), export_folder(tmp_path, name="unsaved"), "success")
+    assert record["outcome"] == "refused" and record["mode"] == "delete" and fake.deleted() == []
 
 
 def test_a_removal_that_fails_is_reported_and_the_rest_go_on(tmp_path, caplog):
@@ -243,7 +257,8 @@ def test_a_removal_that_fails_is_reported_and_the_rest_go_on(tmp_path, caplog):
 
 
 def test_any_mode_but_delete_deletes_nothing(tmp_path):
-    for mode in ("report", "Delete", "", "remove", None):
+    # A mode named and not exactly "delete"; no mode named is the code's own value (the test above).
+    for mode in ("report", "Delete", "", "remove", "DELETE", " delete", "true"):
         fake = bucket()
         nightly.prune_downloads(r2(fake), export_folder(tmp_path, name=f"csv-{mode}"), "success", mode=mode, save_db="success")
         assert fake.deleted() == [], mode
@@ -296,12 +311,19 @@ def test_more_stale_files_than_the_cap_are_refused_in_either_mode(tmp_path):
     fake = bucket(stale=many[:30])
     record = nightly.prune_downloads(r2(fake), export_folder(tmp_path, name="cap"), "success", mode="delete", save_db="success")
     assert record["outcome"] == "30 deleted" and len(fake.deleted()) == 30
-    # The bucket as it stood when the cap was set: 21 stale files, which one night may report and remove.
+    # The bucket as it stood when the cap was set: 21 stale files, which one night may report and remove. The
+    # nightly of 2026-11-21 reported these 21, and a listing of the bucket that day found the same names.
     first = [f"awards-{y}.csv" for y in (*range(1996, 2012), 2027, 2028, 2029, 2030, 2040)]
     assert len(first) == 21
     fake = bucket(stale=first)
-    record = nightly.prune_downloads(r2(fake), export_folder(tmp_path, name="first"), "success")
+    record = nightly.prune_downloads(r2(fake), export_folder(tmp_path, name="first"), "success", mode="report")
     assert record["outcome"] == "21 stale (reported)" and fake.deleted() == [] and record["stale"] == sorted(first)
+    # As shipped, the next night removes them and nothing else.
+    held = len(fake.keys)
+    record = nightly.prune_downloads(r2(fake), export_folder(tmp_path, name="first-removed"), "success", save_db="success")
+    assert record["outcome"] == "21 deleted" and fake.deleted() == [f"downloads/{n}" for n in sorted(first)]
+    assert len(fake.keys) == held - 21 and set(BACKUPS) | set(NEVER) | set(MIRRORED) <= fake.keys
+    assert {f"downloads/{n}" for n in YEARLY + FIXED + ["SHA256SUMS"]} <= fake.keys
 
 
 def answers(prefix, answer):
@@ -332,7 +354,7 @@ def test_a_listing_that_fails_or_is_cut_short_is_failed_and_deletes_nothing(tmp_
 
 def test_the_other_prefix_uncounted_never_stops_the_report(tmp_path):
     fake = answers("mirror/", Resp(500, json_data={"success": False, "errors": []}))
-    record = nightly.prune_downloads(r2(fake), export_folder(tmp_path), "success")
+    record = nightly.prune_downloads(r2(fake), export_folder(tmp_path), "success", mode="report")
     assert record["outcome"] == "4 stale (reported)" and record["mirror_objects"] is None
     assert record["notice"].endswith("; the objects under mirror/ could not be counted")
 
@@ -366,19 +388,22 @@ def run(tmp_path, monkeypatch):
     monkeypatch.setenv("CLOUDFLARE_API_TOKEN", TOKEN)
     monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", ACCOUNT)
 
-    def go(fake, upload="success", folder=None):
+    def go(fake, upload="success", folder=None, saved=None):
         monkeypatch.setattr(nightly, "_session", lambda: fake)
         out = tmp_path / "out"
         out.mkdir(exist_ok=True)
         (out / nightly.PRUNE_OUTCOME).write_text("failed\n", encoding="utf-8")
         code = nightly.main(["prune-downloads", "--csv", str(folder or export_folder(tmp_path, name="csv-cli")),
-                             "--upload-outcome", upload, "--out-dir", str(out), "--bucket", "awardwatch-data"])
+                             "--upload-outcome", upload, "--out-dir", str(out), "--bucket", "awardwatch-data",
+                             *(["--save-db-outcome", saved] if saved is not None else [])])
         return code, (out / nightly.PRUNE_OUTCOME).read_bytes(), json.loads((out / nightly.PRUNE_SUMMARY).read_text())
 
     return go
 
 
-def test_the_command_writes_the_word_and_the_record_and_logs_no_token(run, caplog):
+def test_the_command_writes_the_word_and_the_record_and_logs_no_token(run, caplog, monkeypatch):
+    # In report mode (the code's value until 2026-11-21): the word, the record, the log's line.
+    monkeypatch.setattr(nightly, "PRUNE_MODE", "report")
     fake = bucket()
     with caplog.at_level(logging.INFO):
         code, word, record = run(fake)
@@ -390,6 +415,25 @@ def test_the_command_writes_the_word_and_the_record_and_logs_no_token(run, caplo
     assert (code, word) == (1, b"failed\n") and TOKEN not in caplog.text and TOKEN not in json.dumps(record)
     code, word, _ = run(bucket(), upload="failure")
     assert (code, word) == (0, b"skipped\n")
+
+
+def test_the_command_as_shipped_removes_on_a_saved_night_and_refuses_on_any_other(run, caplog):
+    fake = bucket()
+    held = len(fake.keys)
+    with caplog.at_level(logging.INFO):
+        code, word, record = run(fake, saved="success")
+    assert (code, word) == (0, b"4 deleted\n") and record["mode"] == "delete" and fake.closed
+    assert fake.deleted() == [f"downloads/{n}" for n in sorted(STALE)] and len(fake.keys) == held - 4
+    assert set(BACKUPS) | set(NEVER) | set(MIRRORED) <= fake.keys
+    assert "prune-downloads: 4 deleted (mode delete)" in caplog.text and TOKEN not in caplog.text
+    # The save step's word missing, or anything but "success": refused, the step red, nothing removed.
+    for saved in (None, "failure", "skipped"):
+        fake = bucket()
+        code, word, record = run(fake, saved=saved)
+        assert (code, word) == (1, b"refused\n") and fake.deleted() == [], saved
+    # An upload that did not save every file: nothing is listed, whatever the save did.
+    fake = bucket()
+    assert run(fake, upload="failure", saved="success")[:2] == (0, b"skipped\n") and fake.calls == []
 
 
 def test_the_command_never_lists_without_a_full_upload(run):
@@ -603,7 +647,7 @@ def test_a_removal_waits_for_a_night_whose_database_was_saved(tmp_path, saved):
         "removal waits for a night with a fresh backup; 4 yearly files under downloads/ that tonight's export no longer "
         "writes: awards-2027.csv, awards-2029.csv, grants-2019-3.csv, history-after-2025.csv")
     # A report says what it found whatever the save did: it removes nothing.
-    assert nightly.prune_downloads(r2(bucket()), export_folder(tmp_path, name="r"), "success", save_db=saved)[
+    assert nightly.prune_downloads(r2(bucket()), export_folder(tmp_path, name="r"), "success", mode="report", save_db=saved)[
         "outcome"] == "4 stale (reported)"
 
 

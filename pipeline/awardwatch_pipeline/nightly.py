@@ -77,8 +77,10 @@ one, and always leaves a status file the site's daily check can read.
   prune-downloads
             after an upload of the public files that saved every one: list
             downloads/ in R2 and find the yearly files tonight's export no
-            longer writes (stale). PRUNE_MODE "report" (as shipped) names
-            them in a notice and deletes nothing; "delete" removes each.
+            longer writes (stale). PRUNE_MODE "delete" (as shipped since
+            2026-11-21) removes each, behind the three checks that keep
+            the database and its backups from a removal; "report" names
+            them in a notice and deletes nothing.
             Writes the outcome word and the record the status reads.
 
 Backups travel in parts. Wrangler refuses a single R2 upload above 300 MiB,
@@ -1132,12 +1134,16 @@ def read_byte_count(path: str | None) -> int | None:
 # removes one. The yearly files' names change over time (a -3 part a year no
 # longer needs, an after-<year> file whose year moved), so a file tonight's
 # export no longer writes stays in R2 and stays downloadable through the site,
-# stale data shown as current. A removal cannot be undone, so the prune ships
-# reporting only.
+# stale data shown as current. A removal cannot be undone, so the prune
+# shipped reporting only until a night's report named exactly the files a
+# listing of the bucket had found (the nightly of 2026-11-21: the 21 awards
+# files left by the first two nights), and it removes since, on the
+# operator's approval of 2026-11-20.
 
-# "report": name the stale files in a notice and delete nothing (the value to
-# ship). "delete": remove each stale object. Any other value deletes nothing.
-PRUNE_MODE = "report"
+# "delete": remove each stale object, behind the three checks prune_downloads
+# describes (the value shipped since 2026-11-21). "report": name the stale
+# files in a notice and delete nothing. Any other value deletes nothing.
+PRUNE_MODE = "delete"
 DOWNLOADS_PREFIX = "downloads/"
 # The other prefix the site's download route serves (site/src/index.tsx
 # downloadAllowed); nothing in the repository writes it. Counted for the

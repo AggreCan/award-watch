@@ -1134,8 +1134,10 @@ jobs:
       # yearly file by the site's own pattern (YEARLY_DOWNLOAD) that tonight
       # did not send; SHA256SUMS and the other files never are. It also
       # counts the objects under the download route's other prefix, and never
-      # touches them. It reports only (nightly.PRUNE_MODE "report"): the
-      # stale files by name in a notice of the run status, nothing deleted.
+      # touches them. It removes the stale files (nightly.PRUNE_MODE
+      # "delete", since 2026-11-21) and names them in a notice of the run
+      # status; with the constant at "report" it names them and deletes
+      # nothing.
       # It acts only after an upload that saved every file (anything else is
       # "skipped"), and refuses (an item needing attention, nothing deleted)
       # more than nightly.PRUNE_CAP (30) stale files, or an upload without
