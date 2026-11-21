@@ -5,7 +5,7 @@ import { LIVE_PRO_SQL, planFromRows, type EntitlementRow } from "../src/account/
 import {
   ACCOUNTS_BACKUP_KEY, ACCOUNTS_BACKUP_STALE_DAYS, BACKUP_KEY, FIGURES_KEY, INTRADAY_RUNS_SQL, INTRADAY_STEP_NOTICES, LATE_END_UTC, LATE_START_HOURS,
   LOOKUP_MAX_BYTES, MONEY_ITEMS_SQL, NIGHTLY_SLOT_UTC, REFUNDS_TO_CANCEL_SQL, WORKFLOW_TOKEN_WARN_DAYS, buildEmail, collectAlerts, collectNotes,
-  collectNotices, gatherInputs, lateNight, readFigures, readIntradayRuns, readStatus, readTokenExpiry, readWorkflowToken, runWatchdog,
+  collectNotices, gatherInputs, lateNight, readFigures, readIntradayRuns, readMoneyItems, readStatus, readTokenExpiry, readWorkflowToken, runWatchdog,
 } from "../src/watchdog";
 import { testEnv } from "./assets";
 import { applySql } from "./setup";
@@ -346,14 +346,15 @@ describe("daily check: the same-day refresh's runs", () => {
     // The window's bound written as intraday_runs writes its times; the plans' instant as toISOString writes it.
     // The accounts database also answers the refunds to cancel (test/accounts-refund.test.ts), over the audit's 90 days.
     expect(search.calls).toEqual([{ sql: INTRADAY_RUNS_SQL, params: ["2026-10-19T06:00:00Z"] }]);
-    // And the money items (test/hardening-money.test.ts): the check's instant, and their 14 days.
+    // And the money items (test/hardening-money.test.ts): the check's instant, their 14 days, and the 30 minutes a
+    // bound subscription waits for its plan.
     expect(accounts.calls).toEqual([
       { sql: LIVE_PRO_SQL, params: ["2026-10-20T06:00:00.000Z"] },
       { sql: REFUNDS_TO_CANCEL_SQL, params: ["2026-07-22T06:00:00.000Z"] },
-      { sql: MONEY_ITEMS_SQL, params: ["2026-10-20T06:00:00.000Z", "2026-10-06T06:00:00.000Z"] },
+      { sql: MONEY_ITEMS_SQL, params: ["2026-10-20T06:00:00.000Z", "2026-10-06T06:00:00.000Z", "2026-10-20T05:30:00.000Z"] },
     ]);
     expect(inputs.refundsToCancel).toEqual([]);
-    expect(inputs.money).toEqual({ second: [], deleted: [], failed: [] });
+    expect(inputs.money).toEqual({ second: [], deleted: [], failed: [], ungranted: [] });
     expect(inputs.intraday).toEqual({ lastOk: "2026-10-20T03:45:30Z", runs: 9, failed: 0, rowsNew: 12 });
     expect(inputs.intradayProblem).toBeNull();
     expect(inputs.livePro).toBe(2);
@@ -499,6 +500,75 @@ describe("daily check: the same-day refresh's runs", () => {
     const counted = await gatherInputs({ ...testEnv(), SEARCH: fakeD1(cleanRuns).db, ACCOUNTS: accounts }, now);
     expect(counted.livePro).toBe(pro.length);
     await accounts.prepare("DELETE FROM entitlements").run();
+  });
+});
+
+describe("daily check: a subscription Stripe reports active that gives no plan", () => {
+  const accounts = (env as unknown as { ACCOUNTS: D1Database }).ACCOUNTS;
+  const ago = (minutes: number) => new Date(now.getTime() - minutes * 60_000).toISOString();
+  const user = (n: number) => `${"c".repeat(30)}${n.toString(16).padStart(2, "0")}`;
+  const line = (u: string, sub: string, status = "active") =>
+    `Stripe reports a subscription ${status} that gives no plan: account ${u}, subscription ${sub}, last updated more than 30 minutes ago. ` +
+    `Its payment notices may be refused or failing: look at the endpoint's deliveries in Stripe's Workbench and at the Worker's ` +
+    `"billing webhook" log lines. A payment refunded or disputed while the subscription runs on reads the same way; cancel that ` +
+    `subscription in Stripe's dashboard if it should not bill again.`;
+  const check = async () => gatherInputs({ ...testEnv(), SEARCH: fakeD1(cleanRuns).db, ACCOUNTS: accounts }, now);
+  const grant = (id: string, u: string, sub: string, o: { source?: string; ends?: string | null; revoked?: string | null } = {}) => accounts.prepare(
+    "INSERT INTO entitlements (id, user_id, plan, source, starts_at, ends_at, reference, created_at, revoked_at) VALUES (?, ?, 'pro', ?, ?, ?, ?, ?, ?)",
+  ).bind(id, u, o.source ?? "stripe", ago(600), o.ends === undefined ? ago(-600) : o.ends, sub, ago(600), o.revoked ?? null).run();
+
+  it("names the account and the subscription after 30 minutes, until a live Stripe row names that subscription", async () => {
+    await applySql(accounts, accountsSchema);
+    const rows: [number, string, string, number][] = [
+      [1, "sub_held1", "active", 60],
+      [2, "sub_held2", "trialing", 31],
+      [3, "sub_fresh", "active", 1], // a minute ago: its notices may still be on their way
+      [4, "sub_due", "past_due", 60],
+      [5, "sub_ended", "canceled", 60],
+      [6, "sub_manual", "active", 60], // a grant by hand is not Stripe's
+      [7, "sub_lapsed", "active", 60], // its Stripe row ended, or was revoked
+      [8, "sub_other", "active", 60], // a live Stripe row of another subscription
+    ];
+    await accounts.batch(rows.flatMap(([n, sub, status, minutes]) => [
+      accounts.prepare("INSERT INTO users (id, email, created_at) VALUES (?, ?, ?)").bind(user(n), `ungranted-${n}@example.com`, ago(900)),
+      accounts.prepare("INSERT INTO payment_customers (user_id, customer_id, subscription_id, status, current_period_end, updated_at) VALUES (?, ?, ?, ?, ?, ?)")
+        .bind(user(n), `cus_u${n}`, sub, status, ago(-30 * 24 * 60), ago(minutes)),
+    ]));
+    await grant("eu6", user(6), "sub_manual", { source: "manual" });
+    await grant("eu7a", user(7), "sub_lapsed", { ends: ago(5) });
+    await grant("eu7b", user(7), "sub_lapsed", { revoked: ago(5) });
+    await grant("eu8", user(8), "sub_older");
+    const named = (await check()).money?.ungranted;
+    expect(named).toEqual(expect.arrayContaining([
+      { userId: user(1), subscriptionId: "sub_held1", status: "active" },
+      { userId: user(2), subscriptionId: "sub_held2", status: "trialing" },
+      { userId: user(6), subscriptionId: "sub_manual", status: "active" },
+      { userId: user(7), subscriptionId: "sub_lapsed", status: "active" },
+      { userId: user(8), subscriptionId: "sub_other", status: "active" },
+    ]));
+    expect(named).toHaveLength(5);
+    const alerts = collectAlerts(await check());
+    expect(alerts).toContain(line(user(1), "sub_held1"));
+    expect(alerts).toContain(line(user(2), "sub_held2", "trialing"));
+    for (const n of [3, 4, 5]) expect(alerts.join("\n")).not.toContain(user(n));
+    // The notice lands: the subscription's live Stripe row clears the item, and nothing else changes.
+    await grant("eu1", user(1), "sub_held1");
+    const after = collectAlerts(await check());
+    expect(after.join("\n")).not.toContain(user(1));
+    expect(after).toContain(line(user(2), "sub_held2", "trialing"));
+    await accounts.prepare("DELETE FROM entitlements WHERE id LIKE 'eu%'").run();
+    await accounts.prepare("DELETE FROM payment_customers WHERE user_id LIKE 'cccc%'").run();
+  });
+
+  it("stays in the money items' one statement, reading entitlements through the account's index", async () => {
+    await applySql(accounts, accountsSchema);
+    const since = new Date(now.getTime() - 14 * 24 * 60 * 60_000).toISOString();
+    const plan = ((await accounts.prepare(`EXPLAIN QUERY PLAN ${MONEY_ITEMS_SQL}`).bind(now.toISOString(), since, ago(30)).all<{ detail: string }>()).results ?? [])
+      .map((r) => r.detail);
+    expect(plan.join("\n")).toContain("SEARCH e USING INDEX idx_entitlements_user (user_id=?)");
+    // Every other row the money items read stands at ids and fixed words, so a stray row reads as nothing.
+    expect(readMoneyItems({ ungranted: `${user(9)} sub_x active,${user(9)} sub_y past_due,nobody sub_z active,${user(9)} sub_w active extra` }).ungranted)
+      .toEqual([{ userId: user(9), subscriptionId: "sub_x", status: "active" }]);
   });
 });
 

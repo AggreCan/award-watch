@@ -2552,11 +2552,20 @@ their end.
   A payment landed on a deleted account: account <user id>, subscription <sub id>. The subscription is cancelled and nothing was granted. The refund of the payment is not confirmed yet; the site asks again each time Stripe resends the notice, for up to three days. If this line is still here after that, refund the payment in Stripe's dashboard.
   A subscription that could still bill reached a deleted account: account <user id>, subscription <sub id>. It is cancelled and nothing was granted. Check in Stripe's dashboard whether it took a payment after the deletion.
   A refund failed after Stripe took it: account <user id>, charge <charge id> (<reason>). The site changed no plan; the money is back in the Stripe balance. Refund the person another way, or grant the plan by hand.
+  Stripe reports a subscription <active|trialing> that gives no plan: account <user id>, subscription <sub id>, last updated more than 30 minutes ago. Its payment notices may be refused or failing: look at the endpoint's deliveries in Stripe's Workbench and at the Worker's "billing webhook" log lines. A payment refunded or disputed while the subscription runs on reads the same way; cancel that subscription in Stripe's dashboard if it should not bill again.
   ```
 
   The first stands while two live Stripe rows of the account name two
   subscriptions, so cancelling the extra one (its notice ends its row)
-  clears it. The others are audit rows (`plan_changed` "stripe paid on a
+  clears it. The last stands while `payment_customers` binds the
+  subscription as `active` or `trialing`, its row last updated more than
+  30 minutes before the check (`UNGRANTED_MINUTES`), and no live Stripe
+  row of the account names that subscription: a payer whose notices are
+  refused or fail (the way back from checkout binds the subscription and
+  grants nothing), or a payment refunded or disputed with the subscription
+  left to bill. A notice that grants the plan clears it, and so does the
+  subscription's end. It reads only: it grants, changes and sends nothing.
+  The middle three are audit rows (`plan_changed` "stripe paid on a
   deleted account, cancelled <sub id>", the same followed by "refunded" or
   "unrefunded <reason>", "stripe live on a deleted account, cancelled <sub
   id>", and `refund_failed`), which nothing clears: each repeats for 14 days

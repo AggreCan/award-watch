@@ -26,8 +26,9 @@ import { faultSummary } from "./search_db";
 // account's id and the subscription's Stripe id and nothing else, until the
 // subscription is cancelled (REFUNDS_TO_CANCEL_SQL below). So are an account
 // billed by two Stripe subscriptions, a payment that landed on a deleted
-// account and a refund that failed after Stripe took it (MONEY_ITEMS_SQL),
-// each naming ids and nothing else.
+// account, a refund that failed after Stripe took it and a subscription
+// Stripe reports active that gives no plan (MONEY_ITEMS_SQL), each naming
+// ids and nothing else.
 //
 // The same-day refresh (docs/intraday.md) sends no email of its own: a
 // failed cut is a row in intraday_runs, not a red workflow run, so this
@@ -185,7 +186,7 @@ export const REFUND_LOOKBACK_DAYS = 90;
 
 export type RefundToCancel = { userId: string; subscriptionId: string };
 
-// Three more items of the money path (docs/accounts.md, Payments), in one
+// Four more items of the money path (docs/accounts.md, Payments), in one
 // statement over the accounts database, each the newest first, at most
 // MONEY_ITEMS_MAX of each:
 // - second: an account billed by more than one Stripe subscription, which
@@ -201,10 +202,22 @@ export type RefundToCancel = { userId: string; subscriptionId: string };
 //   refund not confirmed yet, and gives way to its outcome (readMoneyItems).
 // - failed: a refund Stripe took that failed later (refund.failed,
 //   billing.tsx onRefundFailed): "<user id> <charge id> <reason>".
-// The last two are audit rows, which nothing clears: each stands for
+// - ungranted: a subscription payment_customers binds as active or trialing,
+//   last updated before ?3 (UNGRANTED_MINUTES before the check), with no
+//   live Stripe row naming it: a payer whose notices are refused or fail
+//   (the way back from checkout binds it and grants nothing, billing.tsx
+//   bindReturn), or a payment refunded or disputed while the subscription
+//   runs on. "<user id> <subscription id> <status>"; it stands until a notice
+//   grants the plan or the subscription ends. payment_customers is read
+//   whole (one row an account that went to checkout; nothing indexes its
+//   status), and each row's entitlements through idx_entitlements_user.
+// deleted and failed are audit rows, which nothing clears: each stands for
 // MONEY_ITEM_DAYS from ?2.
 export const MONEY_ITEMS_MAX = 20;
 export const MONEY_ITEM_DAYS = 14;
+// Room for a payer's first notices after the way back from checkout binds
+// the subscription: Stripe's notices usually land within a minute.
+export const UNGRANTED_MINUTES = 30;
 export const MONEY_ITEMS_SQL =
   "SELECT (SELECT group_concat(item, ',') FROM (SELECT e.user_id || ' ' || replace(group_concat(DISTINCT e.reference), ',', ' ') AS item " +
   "FROM entitlements e WHERE e.source = 'stripe' AND e.revoked_at IS NULL AND e.reference IS NOT NULL " +
@@ -215,7 +228,12 @@ export const MONEY_ITEMS_SQL =
   "AND (a.detail LIKE 'stripe paid on a deleted account, cancelled sub%' OR a.detail LIKE 'stripe live on a deleted account, cancelled sub%') " +
   `GROUP BY item ORDER BY t DESC LIMIT ${MONEY_ITEMS_MAX})) AS deleted, ` +
   "(SELECT group_concat(item, ',') FROM (SELECT a.user_id || ' ' || a.detail AS item, MAX(a.at) AS t FROM audit a " +
-  `WHERE a.event = 'refund_failed' AND a.at >= ?2 GROUP BY item ORDER BY t DESC LIMIT ${MONEY_ITEMS_MAX})) AS failed`;
+  `WHERE a.event = 'refund_failed' AND a.at >= ?2 GROUP BY item ORDER BY t DESC LIMIT ${MONEY_ITEMS_MAX})) AS failed, ` +
+  "(SELECT group_concat(item, ',') FROM (SELECT p.user_id || ' ' || p.subscription_id || ' ' || p.status AS item FROM payment_customers p " +
+  "WHERE p.status IN ('active', 'trialing') AND p.subscription_id IS NOT NULL AND p.updated_at < ?3 " +
+  "AND NOT EXISTS (SELECT 1 FROM entitlements e WHERE e.user_id = p.user_id AND e.source = 'stripe' AND e.reference = p.subscription_id " +
+  "AND e.revoked_at IS NULL AND e.starts_at <= ?1 AND (e.ends_at IS NULL OR e.ends_at > ?1)) " +
+  `ORDER BY p.updated_at DESC LIMIT ${MONEY_ITEMS_MAX})) AS ungranted`;
 
 // deleted.refund, for a payment: "unconfirmed" while no outcome is recorded,
 // "refunded", or "refused" with Stripe's code or the site's reason.
@@ -223,6 +241,7 @@ export type MoneyItems = {
   second: { userId: string; subscriptions: string[] }[];
   deleted: { userId: string; kind: "paid" | "live"; subscriptionId: string; refund?: "unconfirmed" | "refunded" | "refused"; reason?: string }[];
   failed: { userId: string; chargeId: string; reason: string }[];
+  ungranted: { userId: string; subscriptionId: string; status: "active" | "trialing" }[];
 };
 
 // The delivery job's runs on one UTC day (?1 its start, ?2 the next day's),
@@ -524,7 +543,7 @@ export function readTokenExpiry(text: string | null): Date | null {
   return new Date(ms);
 }
 
-// The money items' lines: ids, Stripe's fixed reason and nothing else.
+// The money items' lines: ids, Stripe's fixed reason or status and nothing else.
 function moneyAlerts(m: MoneyItems | null): string[] {
   if (!m) return [];
   return [
@@ -543,6 +562,7 @@ function moneyAlerts(m: MoneyItems | null): string[] {
       return `${landed} The subscription is cancelled and nothing was granted. The refund of the payment is not confirmed yet; the site asks again each time Stripe resends the notice, for up to three days. If this line is still here after that, refund the payment in Stripe's dashboard.`;
     }),
     ...m.failed.map((f) => `A refund failed after Stripe took it: account ${f.userId}, charge ${f.chargeId} (${f.reason}). The site changed no plan; the money is back in the Stripe balance. Refund the person another way, or grant the plan by hand.`),
+    ...m.ungranted.map((u) => `Stripe reports a subscription ${u.status} that gives no plan: account ${u.userId}, subscription ${u.subscriptionId}, last updated more than ${UNGRANTED_MINUTES} minutes ago. Its payment notices may be refused or failing: look at the endpoint's deliveries in Stripe's Workbench and at the Worker's "billing webhook" log lines. A payment refunded or disputed while the subscription runs on reads the same way; cancel that subscription in Stripe's dashboard if it should not bill again.`),
   ];
 }
 
@@ -575,6 +595,9 @@ export function readMoneyItems(row: unknown): MoneyItems {
     failed: items(r.failed).flatMap(([userId, chargeId, reason, rest]) =>
       rest === undefined && USER_RE.test(userId ?? "") && PAYMENT_RE.test(chargeId ?? "") && REASON_RE.test(reason ?? "")
         ? [{ userId, chargeId, reason }] : []),
+    ungranted: items(r.ungranted).flatMap(([userId, subscriptionId, status, rest]) =>
+      rest === undefined && USER_RE.test(userId ?? "") && SUBSCRIPTION_RE.test(subscriptionId ?? "") && (status === "active" || status === "trialing")
+        ? [{ userId, subscriptionId, status }] : []),
   };
 }
 
@@ -848,7 +871,8 @@ async function readMoney(env: Env, now: Date): Promise<MoneyItems | null> {
   if (!env.ACCOUNTS) return null;
   try {
     const since = new Date(now.getTime() - MONEY_ITEM_DAYS * 24 * HOUR).toISOString();
-    return readMoneyItems(await env.ACCOUNTS.prepare(MONEY_ITEMS_SQL).bind(now.toISOString(), since).first());
+    const settled = new Date(now.getTime() - UNGRANTED_MINUTES * 60_000).toISOString();
+    return readMoneyItems(await env.ACCOUNTS.prepare(MONEY_ITEMS_SQL).bind(now.toISOString(), since, settled).first());
   } catch (e) {
     console.log(`watchdog: money items not read (${faultSummary(e)})`);
     return null;
