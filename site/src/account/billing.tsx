@@ -711,16 +711,22 @@ export async function endForDeletion(env: Env, userId: string, now = new Date())
 
 // -- the webhook -------------------------------------------------------------------------
 
-// POST /account/billing/webhook. Unverified: 400 and nothing written. A
-// notice already taken: 200 and nothing done. Otherwise the notice is
-// claimed by its id first, so two deliveries at once apply it once; a
-// failure to apply it releases the claim and answers 500, and Stripe sends
-// it again.
+// POST /account/billing/webhook. Unverified: 400 and nothing written, and
+// one log line naming which check refused it (payments.ts NoticeRefusal),
+// so refused payment notices show in the Worker's logs; the answer is the
+// same whatever the kind, so the sender learns nothing more. A notice
+// already taken: 200 and nothing done. Otherwise the notice is claimed by its
+// id first, so two deliveries at once apply it once; a failure to apply it
+// releases the claim and answers 500, and Stripe sends it again.
 export async function billingWebhook(c: Context<AppEnv>): Promise<Response> {
   const now = new Date();
   const source = paymentSource(c.env);
   const read = await source.readNotice(c.req.raw, now);
-  if (!read.ok) return c.text("Not verified.", 400);
+  if (!read.ok) {
+    // The kind alone: nothing from the body, the header, the secret or the sender's address.
+    console.error(`billing webhook: notice refused (${read.why})`);
+    return c.text("Not verified.", 400);
+  }
   const db = c.env.ACCOUNTS!;
   const at = now.toISOString();
   try {

@@ -90,7 +90,16 @@ export type Notice =
   | { kind: "refund_failed"; chargeId: string | null; refundId: string | null; customerId: string | null; reason: string }
   | { kind: "other" };
 
-export type NoticeResult = { ok: true; id: string; type: string; notice: Notice } | { ok: false };
+// Why a notice was refused, for the webhook's one log line (billing.tsx
+// billingWebhook), which names the kind and nothing the post carried: a body
+// past the cap (too_large), no Stripe-Signature header (no_signature), a
+// header without a timestamp or a v1 signature (bad_header), a timestamp
+// outside the tolerance (stale), no v1 matching the endpoint's secret
+// (bad_signature), signed bytes that are not an event (unreadable), or no
+// payment source to check it against (no_source, stubPayments).
+export type NoticeRefusal = "too_large" | "no_signature" | "bad_header" | "stale" | "bad_signature" | "unreadable" | "no_source";
+
+export type NoticeResult = { ok: true; id: string; type: string; notice: Notice } | { ok: false; why: NoticeRefusal };
 
 export type ReadSubscription = SubscriptionState | "missing" | null;
 
@@ -137,7 +146,7 @@ export const stubPayments: PaymentSource = {
   checkoutUrl: async () => null,
   checkoutSession: async () => null,
   portalUrl: async () => null,
-  readNotice: async () => ({ ok: false }),
+  readNotice: async () => ({ ok: false, why: "no_source" }),
   subscription: async () => null,
   chargeCustomer: async () => null,
   cancel: async () => false,

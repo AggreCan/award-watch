@@ -2187,7 +2187,15 @@ Every notice is checked before anything in it is read: the `Stripe-Signature`
 header's `t` and each `v1` (HMAC-SHA256 under the endpoint's signing secret,
 over `t`, a full stop and the raw body), compared in constant time, with `t`
 within 5 minutes of the Worker's clock. An unverified post answers 400 and
-writes nothing. A verified notice is claimed in `payment_events` by its
+writes nothing, and the Worker's log gets one line naming which check
+refused it, `billing webhook: notice refused (<kind>)`, the kind one of
+`too_large`, `no_signature`, `bad_header` (no timestamp or no `v1`), `stale`
+(outside the 5 minutes), `bad_signature`, `unreadable` (signed bytes that
+are not an event) and `no_source` (Stripe's keys not set). The line holds
+nothing from the body, the header or the sender, and the answer is the same
+for every kind. `bad_signature` lines while Stripe's Workbench shows the
+endpoint's deliveries failing mean `STRIPE_WEBHOOK_SECRET` is not that
+endpoint's signing secret. A verified notice is claimed in `payment_events` by its
 event id before it is applied, so a notice delivered twice (Stripe retries
 until it gets a 2xx) answers 200 the second time and changes nothing.
 `payment_events` and `payment_reversals` rows go after 90 days.

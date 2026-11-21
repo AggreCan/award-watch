@@ -382,7 +382,7 @@ export function readEvent(event: unknown): NoticeResult {
   const e = obj(event);
   const id = str(e?.id);
   const type = str(e?.type);
-  if (!e || !id || !/^evt_[A-Za-z0-9_]+$/.test(id) || !type) return { ok: false };
+  if (!e || !id || !/^evt_[A-Za-z0-9_]+$/.test(id) || !type) return { ok: false, why: "unreadable" };
   const o = obj(obj(e.data)?.object);
   const at = isoOf(e.created);
   let notice: Notice = { kind: "other" };
@@ -412,7 +412,20 @@ const encoder = new TextEncoder();
 export async function signatureValid(
   body: Uint8Array, header: string | null | undefined, secret: string, nowSeconds: number, tolerance = SIGNATURE_TOLERANCE_S,
 ): Promise<boolean> {
-  if (!header || !secret) return false;
+  return (await signatureCheck(body, header, secret, nowSeconds, tolerance)) === "ok";
+}
+
+// The same checks in the same order, answering which one refused, for the
+// webhook's log line (payments.ts NoticeRefusal); "ok" exactly when
+// signatureValid is true.
+export type SignatureCheck = "ok" | "no_signature" | "bad_header" | "stale" | "bad_signature";
+
+export async function signatureCheck(
+  body: Uint8Array, header: string | null | undefined, secret: string, nowSeconds: number, tolerance = SIGNATURE_TOLERANCE_S,
+): Promise<SignatureCheck> {
+  if (!header) return "no_signature";
+  // Nothing can match without a secret (the source is never made without one).
+  if (!secret) return "bad_signature";
   let t: string | null = null;
   const v1: string[] = [];
   for (const part of header.split(",")) {
@@ -423,8 +436,8 @@ export async function signatureValid(
     if (name === "t") t = value;
     else if (name === "v1") v1.push(value.toLowerCase());
   }
-  if (!t || !/^[0-9]{1,12}$/.test(t) || !v1.length) return false;
-  if (Math.abs(nowSeconds - Number(t)) > tolerance) return false;
+  if (!t || !/^[0-9]{1,12}$/.test(t) || !v1.length) return "bad_header";
+  if (Math.abs(nowSeconds - Number(t)) > tolerance) return "stale";
   const prefix = encoder.encode(`${t}.`);
   const signed = new Uint8Array(prefix.byteLength + body.byteLength);
   signed.set(prefix, 0);
@@ -433,7 +446,7 @@ export async function signatureValid(
   const expected = toHex(await crypto.subtle.sign("HMAC", key, signed));
   let match = false;
   for (const s of v1) match = sameHash(s, expected) || match;
-  return match;
+  return match ? "ok" : "bad_signature";
 }
 
 // The body as sent, up to the cap; null past it.
@@ -609,13 +622,14 @@ export function stripeSource(env: Env): PaymentSource | null {
 
     async readNotice(request: Request, now: Date = new Date()): Promise<NoticeResult> {
       const body = await rawBody(request);
-      if (!body) return { ok: false };
+      if (!body) return { ok: false, why: "too_large" };
       const signature = request.headers.get("stripe-signature");
-      if (!(await signatureValid(body, signature, keys.webhookSecret, Math.floor(now.getTime() / 1000)))) return { ok: false };
+      const check = await signatureCheck(body, signature, keys.webhookSecret, Math.floor(now.getTime() / 1000));
+      if (check !== "ok") return { ok: false, why: check };
       try {
         return readEvent(JSON.parse(new TextDecoder().decode(body)));
       } catch {
-        return { ok: false };
+        return { ok: false, why: "unreadable" };
       }
     },
 

@@ -463,7 +463,7 @@ describe("the webhook's notices", () => {
     for (const r of [current, older]) {
       expect(r.ok && r.notice.kind === "subscription" && r.notice.subscription.periodEnd).toBe(iso(end));
     }
-    expect(readEvent({ id: "nope", type: "invoice.paid" })).toEqual({ ok: false });
+    expect(readEvent({ id: "nope", type: "invoice.paid" })).toEqual({ ok: false, why: "unreadable" });
     expect(readEvent(event("checkout.session.completed", { mode: "payment", client_reference_id: "a".repeat(32), customer: "cus", subscription: "sub" }))).toMatchObject({ ok: true, notice: { kind: "other" } });
   });
 });

@@ -397,7 +397,7 @@ describe("entitlements", () => {
     expect(await source.checkoutUrl({
       userId: "u", email: "u@example.com", plan: "pro", interval: "monthly", lang: "en", customerId: null, successUrl: "/", cancelUrl: "/",
     })).toBeNull();
-    expect(await source.readNotice(new Request("https://x.invalid/", { method: "POST", body: "{}" }))).toEqual({ ok: false });
+    expect(await source.readNotice(new Request("https://x.invalid/", { method: "POST", body: "{}" }))).toEqual({ ok: false, why: "no_source" });
     const cookie = await signIn(newEmail());
     expect(await (await get("/account/billing", { cookie })).text()).toContain("Paying for Pro is not available yet.");
     expect((await post("/account/billing", {}, { cookie })).status).toBe(404);

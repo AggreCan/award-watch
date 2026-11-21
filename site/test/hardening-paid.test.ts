@@ -17,7 +17,7 @@ import { apiKeyOf, forgetKeys, requireApiKey } from "../src/account/api_keys";
 import { runDeliveries } from "../src/account/deliveries";
 import { account } from "../src/account/routes";
 import { forgetSessions } from "../src/account/session";
-import { STRIPE_VERSION } from "../src/account/stripe";
+import { NOTICE_MAX_BYTES, STRIPE_VERSION } from "../src/account/stripe";
 import type { ExpiringRow, TenderRow } from "../src/data";
 import type { AppEnv } from "../src/env";
 import { app } from "../src/index";
@@ -302,6 +302,34 @@ describe("the webhook", () => {
       expect((await deliverRaw(JSON.stringify(event("invoice.paid", {})), { header })).status, header).toBe(400);
     }
     expect((await ACCOUNTS.prepare("SELECT COUNT(*) AS n FROM payment_events").first<{ n: number }>())?.n ?? 0).toBe(before);
+  });
+
+  it("says in one console line which check refused a notice, the kind alone, and answers the sender as before", async () => {
+    const marker = `zqmark${tag()}`;
+    const ip = "198.51.100.77";
+    const body = JSON.stringify(event("invoice.paid", { note: marker }));
+    const postRaw = async (b: string, headers: Record<string, string>, e: object = payEnv()) => app.request("/account/billing/webhook", {
+      method: "POST", headers: { "content-type": "application/json", "cf-connecting-ip": ip, ...headers }, body: b,
+    }, e);
+    const signed = async (b: string, t: number, secret = WEBHOOK_SECRET) => ({ "stripe-signature": `t=${t},v1=${await hmacHex(secret, `${t}.${b}`)}` });
+    const big = JSON.stringify(event("invoice.paid", { note: marker, pad: "x".repeat(NOTICE_MAX_BYTES) }));
+    const junk = `${marker} is not an event`;
+    const cases: [string, () => Promise<Response>][] = [
+      ["no_signature", () => postRaw(body, {})],
+      ["bad_signature", async () => postRaw(body, await signed(body, nowS(), `whsec_${marker}`))],
+      ["too_large", async () => postRaw(big, await signed(big, nowS()))],
+      ["bad_header", () => postRaw(body, { "stripe-signature": `t=${marker}` })],
+      ["stale", async () => postRaw(body, await signed(body, nowS() - 301))],
+      ["unreadable", async () => postRaw(junk, await signed(junk, nowS()))],
+      ["no_source", async () => postRaw(body, await signed(body, nowS()), onEnv())],
+    ];
+    for (const [kind, send] of cases) {
+      let res: Response | null = null;
+      const out = await consoleOf(async () => { res = await send(); });
+      expect([res!.status, await res!.text()], kind).toEqual([400, "Not verified."]);
+      expect(out.split("\n"), kind).toEqual([`billing webhook: notice refused (${kind})`]);
+      for (const bytes of [marker, ip, WEBHOOK_SECRET, "evt_", "invoice"]) expect(out, `${kind}: ${bytes}`).not.toContain(bytes);
+    }
   });
 
   it("finds the account by client_reference_id or the ids already bound, never by an address", async () => {
