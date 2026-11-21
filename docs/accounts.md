@@ -226,7 +226,10 @@ in.
    `/account/sign-in?m=ended`, with `next` as for any other page, where the
    line reads "This browser was signed out. That happens when the account
    signs out from another browser, or signs in on more than 3 browsers.
-   Sign in again to continue." Why a session ended is not stored, so the
+   Sign in again to continue." The sign-in page itself, reached from the
+   rail or the landing page with that cookie, reads the same line (unless
+   another notice is asked for by name, as `m=out`) and clears the cookie.
+   Why a session ended is not stored, so the
    line says when that happens and never which. A cookie with the right id and a
    wrong secret, a session that ran out and a deleted account's session go
    to the plain sign-in page. On a public page an ended session reads as

@@ -171,6 +171,28 @@ describe("a browser the cap signed out", () => {
     expect(fr).toContain("Ce navigateur a été déconnecté. Cela se produit quand le compte se déconnecte depuis un autre navigateur ou se connecte dans plus de 3 navigateurs.");
   });
 
+  it("is told on the sign-in page itself, reached from the rail or the landing page, and its cookie goes", async () => {
+    const { email, b } = await threeBrowsers("ended-signin");
+    await fourth(email);
+    for (const lang of ["en", "fr"] as const) {
+      const res = await get(`/account/sign-in${lang === "fr" ? "?lang=fr" : ""}`, { cookie: b });
+      expect(res.status, lang).toBe(200);
+      expect(res.headers.getSetCookie().join("\n"), lang).toMatch(/__Host-aw_session=;.*Max-Age=0/);
+      const line = nbsp(t(lang, "account.msg_ended", { cap: fmtInt(SESSIONS_MAX, lang) }));
+      expect(await read(res), lang).toContain(`<p class="account-notice" role="status">${line}</p>`);
+    }
+    // A notice asked for by name keeps its own line.
+    const out = await read(await get("/account/sign-in?m=out", { cookie: b }));
+    expect(out).toContain('<p class="account-notice" role="status">You are signed out.</p>');
+    expect(out).not.toContain("This browser was signed out.");
+    // No cookie, or the id with another secret: the plain page, no line, no cookie touched.
+    for (const cookie of [undefined, `__Host-aw_session=${idOf(b)}.${"0".repeat(64)}`]) {
+      const res = await get("/account/sign-in", { cookie });
+      expect(await read(res)).not.toContain('class="account-notice"');
+      if (!cookie) expect(res.headers.getSetCookie()).toEqual([]);
+    }
+  });
+
   it("is told only with the cookie's own secret: the id with another secret reads as any unknown session", async () => {
     const { email, b } = await threeBrowsers("ended-forged");
     await fourth(email);

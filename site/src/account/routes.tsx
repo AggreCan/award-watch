@@ -382,12 +382,18 @@ export { safeNext };
 account.get("/sign-in", async (c) => {
   const lang = c.get("lang");
   const next = safeNext(c.req.query("next"));
-  if ((await readSession(c)).state === "ok") return c.redirect(next ?? "/account", 303);
+  const read = await readSession(c);
+  if (read.state === "ok") return c.redirect(next ?? "/account", 303);
   const follow = followOf(c.req.query("follow"));
   const brief = briefOf(c.req.query("brief"));
   const m = c.req.query("m");
+  // A browser whose own cookie names a session ended elsewhere (lookup's ended: the cap, a sign-out everywhere, the
+  // overview's row) reaches this page from the rail or the landing page as often as from an account page's m=ended:
+  // it reads the same line, unless another notice is asked for by name, and the cookie goes, as signedIn clears it.
+  // A public page still reads such a browser as signed out.
+  if (read.state === "none" && read.ended) clearSessionCookie(c);
   const notice = m === "out" ? t(lang, "account.msg_signed_out") : m === "out_all" ? t(lang, "account.msg_signed_out_all")
-    : m === "ended" ? t(lang, "account.msg_ended", { cap: fmtInt(SESSIONS_MAX, lang) }) : null;
+    : m === "ended" || (read.state === "none" && read.ended) ? t(lang, "account.msg_ended", { cap: fmtInt(SESSIONS_MAX, lang) }) : null;
   const offerWeekly = await weeklyReady(c.env);
   return accountPage(c, t(lang, "account.sign_in_title"), signInView(lang, { notice, next, follow, brief, offerWeekly }));
 });
