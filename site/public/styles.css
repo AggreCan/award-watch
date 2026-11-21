@@ -429,6 +429,9 @@ a.rail-item:hover { background: var(--hover); color: var(--ink); }
   }
   .rail-user { margin-top: auto; }
   .content { min-height: calc(100vh - var(--topbar)); }
+  /* With the bar stuck to the top, a fragment link or a scrollIntoView would
+     put its target's heading under it; the padding stops them 8 px below. */
+  html { scroll-padding-top: calc(var(--topbar) + 8px); }
 }
 /* Below 1000 px the rail is a band under the top bar: its links are a wrap of
    bordered items, one height, the group names kept for screen readers. */

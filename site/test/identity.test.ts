@@ -127,6 +127,16 @@ describe("the navy top bar", () => {
     }
   });
 
+  it("keeps an in-page link's target below the bar from 1000 px, where the bar sticks to the top", () => {
+    // A fragment link (a contents box, a profile's source tile, the footer's /data#downloads) and tenders.js's
+    // scrollIntoView after Next both bring their target to the top of the viewport; with the bar stuck there, the
+    // target's heading would sit under it. The page's scroll padding is what moves them both below the bar.
+    const wide = /@media \(min-width: 1000px\) \{\n {2}\.topbar \{ position: sticky;[\s\S]*?\n\}/.exec(STYLES)?.[0] ?? "";
+    expect(wide).not.toBe("");
+    const pad = decl(rules(wide).find((r) => r.selector === "html")?.body, "scroll-padding-top");
+    expect(pad).toMatch(/^(?:var\(--topbar\)|calc\(var\(--topbar\) \+ \d+px\))$/);
+  });
+
   it("styles the language button and the theme button as the bar's controls, by the class the markup gives them", async () => {
     const page = await (await get("/tenders")).text();
     const bar = /<header class="topbar">[\s\S]*?<\/header>/.exec(page)?.[0] ?? "";
