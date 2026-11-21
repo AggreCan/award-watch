@@ -150,7 +150,11 @@ stored). It is `noindex`, and `robots.txt` keeps crawlers off it.
 
 - The query: at most 200 characters, folded, at most 8 words of letters and
   digits. Each word becomes a quoted FTS5 phrase and the last one a prefix
-  (`"tim" "horton"*`).
+  (`"tim" "horton"*`). A query that is nothing but a business number as the
+  records write it (`123456789RC0001`, `123456789 RC0001`, `123 456 789`,
+  `123-456-789`) is searched as its nine digits, the form the index holds
+  (`search_db.ts` `businessNumberQuery`, the shapes of the pipeline's
+  `normalize.py` `BN_RE`); the field and the title keep what was typed.
 - Ranking: a match on the name itself (an exact display name, for a buyer
   either name or an acronym; a name that starts with the query; a name
   holding every word) first, then a match through another spelling or a

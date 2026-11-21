@@ -67,6 +67,18 @@ export function searchTerms(raw: string): SearchTerms {
   return { terms, folded: terms.join(" ") };
 }
 
+// A business number as the records and the CRA write it: nine digits, spaced
+// or hyphenated or not, with a program account after them or not
+// ("123456789RC0001", "123456789 RC0001", "123 456 789"), the shapes the
+// pipeline reads (normalize.py BN_RE). The index holds the nine digits alone,
+// so a query that is nothing but such a number is searched as those digits;
+// null for any other query.
+const BN_QUERY = /^(\d{9})(?:[A-Z]{2}\d{0,4})?$/;
+
+export function businessNumberQuery(raw: string): string | null {
+  return BN_QUERY.exec(raw.replace(/[\s-]/g, "").toUpperCase())?.[1] ?? null;
+}
+
 // The words as an FTS5 expression: quoted phrases joined by spaces (an
 // implicit AND). The last word gets a prefix star ("tim"* finds Tim and
 // Timbers) unless it is one character: a one-letter prefix makes FTS5 merge

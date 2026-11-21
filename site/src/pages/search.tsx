@@ -17,7 +17,9 @@ import type { AppEnv, Env } from "../env";
 import { fmtInt, pick, provinceName, sourceLabel, t, tj, tn, type Lang } from "../i18n";
 import { clockOf } from "../closing";
 import { Layout, PageHead, Panel, page } from "../layout";
-import { BUYER_ROWS, MAX_PAGE, MAX_Q, PAGE_SIZE, type BuyerHit, type Figures, type OrgHit, runSearch, searchTerms } from "../search_db";
+import {
+  BUYER_ROWS, MAX_PAGE, MAX_Q, PAGE_SIZE, type BuyerHit, type Figures, type OrgHit, businessNumberQuery, runSearch, searchTerms,
+} from "../search_db";
 import type { Seo } from "../seo";
 import { directoryName } from "./organization";
 import { BUYER_SOURCE_RESTS, Count, money, sourceCellClass, sourceColumns } from "./shared";
@@ -151,7 +153,8 @@ export async function searchPage(c: Context<AppEnv>): Promise<Response> {
     c.header("Cache-Control", "public, max-age=300");
     return c.redirect(`/organizations/${id}`, 302);
   }
-  const terms = searchTerms(q);
+  // A business number with its spaces, hyphens or program account is searched as its nine digits, as indexed.
+  const terms = searchTerms(businessNumberQuery(q) ?? q);
   const wanted = readPage(c.req.query("page"));
   const stats = await loadStats(c.env).catch(() => null);
   const dataAsOf = stats?.data_as_of ?? null;

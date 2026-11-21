@@ -9,7 +9,7 @@ import { app } from "../src/index";
 import { homeRequest } from "./home";
 import { bucketFor } from "../src/limits";
 import {
-  ANY_ROW_SQL, BUYER_COUNT_SQL, BUYER_SELECT_SQL, MAX_TERMS, ORG_COUNT_SQL, ORG_SELECT_SQL, PAGE_SIZE, buyerSelect, counts,
+  ANY_ROW_SQL, BUYER_COUNT_SQL, BUYER_SELECT_SQL, MAX_TERMS, ORG_COUNT_SQL, ORG_SELECT_SQL, PAGE_SIZE, businessNumberQuery, buyerSelect, counts,
   faultSummary, foldText, ftsExpression, lineMatches, orgSelect, runSearch, searchTerms,
 } from "../src/search_db";
 import { routeTemplate } from "../src/views";
@@ -233,6 +233,25 @@ describe("/search", () => {
     expect(html).toContain('<input type="search" name="q" value="exemplar" maxlength="200" autocomplete="off" placeholder="Organization or buyer"');
     // How the search works is a line under the results, not ahead of them.
     expect(html.indexOf("Searched: organization names")).toBeGreaterThan(html.indexOf("1 to 6 of 6"));
+  });
+
+  it("finds an organization by its business number written as the records and the CRA write it, in both languages", async () => {
+    // The index holds the nine digits (pipeline normalize.py BN_RE strips the spaces, the hyphens and the program account).
+    for (const typed of ["123456782", "123456782RC0001", "123456782 RC0001", "123456782rc0001", "123456782 RC 0001", "123456782RT",
+      "123 456 782", "123-456-782", " 123 456 782 RC0001 "]) {
+      for (const lang of ["", "&lang=fr"]) {
+        const html = nbsp(await (await get(`/search?q=${encodeURIComponent(typed)}${lang}`)).text());
+        expect(html, typed).toContain('<a href="/organizations/org-a000000001">Exemplar Translation Services Inc.</a>');
+        expect(html, typed).toContain(lang ? "Numéro d’entreprise 123456782." : "Business number 123456782.");
+        // The field and the title keep what was typed.
+        expect(html, typed).toContain(`name="q" value="${typed.trim()}"`);
+      }
+    }
+    // Only a query that is nothing but such a number is read as one; any other is searched as typed.
+    expect(businessNumberQuery("123 456 782 RC0001")).toBe("123456782");
+    for (const other of ["123456782 exemplar", "exemplar 123456782", "12345678", "1234567820", "123456782RC00012", "123456782R", "RC0001", ""]) {
+      expect(businessNumberQuery(other), other).toBeNull();
+    }
   });
 
   it("drops the Lobbying column until the registry is read, and mutes the zeros", async () => {
