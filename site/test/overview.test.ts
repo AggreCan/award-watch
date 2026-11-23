@@ -197,7 +197,7 @@ describe("the links", () => {
         for (const path of ["/overview", "/tenders", "/about", "/nothing-here"]) {
           const page = await (await request(`${path}${q(lang)}`, env, cookie)).text();
           const footer = footerLinks(page);
-          expect(hrefs(footer).slice(0, 3), `${path} ${lang}`).toEqual(["/overview", "/segments", "/rankings"]);
+          expect(hrefs(footer).slice(0, 4), `${path} ${lang}`).toEqual(["/overview", "/segments", "/provinces", "/rankings"]);
           expect(footer, `${path} ${lang}`).toContain(overviewLink(lang));
         }
       }

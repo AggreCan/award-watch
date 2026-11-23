@@ -126,6 +126,9 @@ change there. Output tree (under data/out/static):
                                 retired (buyer_aliases, chains followed), for a permanent redirect; an alias
                                 whose target is not listed, or whose old id is listed again, is left out
   categories/index.json, categories/<nn>.json     the 57 UNSPSC segments
+  provinces/index.json, provinces/<code>.json     the open notices placed in each province and territory
+                                (write_provinces): the index is the home map's open layer, a province's file
+                                its count, its first PROVINCE_OPEN notices, its buyers and its segments
   rankings/all.json, rankings/<year>.json
   expiring/index.json           the expiring-contracts radar (expiring.py): the three windows' counts and
                                 totals, the top buyers, the segments
@@ -302,6 +305,19 @@ BUYER_OPEN = 25
 # The other names a buyer page lists at most ("Also appears as").
 BUYER_ALIASES = 12
 CATEGORY_TOP = 25
+# A province's file: the open notices it lists at most, the soonest to close first (its page shows the first of
+# them and links the tender list filtered to the province, which has them all; "open_tenders" is the whole count),
+# and the buyers and UNSPSC segments it ranks at most.
+PROVINCE_OPEN = 40
+PROVINCE_TOP = 10
+# Each province's page is /provinces/<slug>: its English name in lower case, hyphens for spaces, the same address
+# in both languages. Its file is provinces/<code in lower case>.json. The site holds the same table
+# (site/src/constants.ts PROVINCE_SLUGS; site/test/provinces.test.ts holds the two equal).
+PROVINCE_SLUGS = {
+    "AB": "alberta", "BC": "british-columbia", "MB": "manitoba", "NB": "new-brunswick",
+    "NL": "newfoundland-and-labrador", "NS": "nova-scotia", "NT": "northwest-territories", "NU": "nunavut",
+    "ON": "ontario", "PE": "prince-edward-island", "QC": "quebec", "SK": "saskatchewan", "YT": "yukon",
+}
 RANK_ROWS = 100
 RANK_BUYERS = 50
 RUN_ROWS = 20
@@ -363,13 +379,14 @@ ACTIVE_MONTHS = 24
 # /overview is the site's app home at its own address, the same page for every
 # reader; "/" is the landing page for a reader without a session.
 SITEMAP_PAGES = ["/", "/overview", "/tenders", "/tenders/new", "/tenders/same-day", "/awards", "/awards/erroneous",
-                 "/expiring", "/organizations", "/buyers", "/segments", "/analytics", "/rankings", "/feeds", "/watchlist",
-                 "/data", "/methodology", "/cite", "/corrections", "/about", "/terms", "/privacy", "/alerts", "/pro",
-                 "/monthly"]
+                 "/expiring", "/organizations", "/buyers", "/segments", "/provinces", "/analytics", "/rankings", "/feeds",
+                 "/watchlist", "/data", "/methodology", "/cite", "/corrections", "/about", "/terms", "/privacy", "/alerts",
+                 "/pro", "/monthly"]
 # Pages whose content follows the nightly data carry a date; the others
 # change only with the code, so they carry none rather than a false one.
 SITEMAP_DATED_PAGES = {"/", "/overview", "/tenders", "/tenders/new", "/awards", "/awards/erroneous", "/expiring",
-                       "/organizations", "/buyers", "/segments", "/analytics", "/rankings", "/feeds", "/data", "/monthly"}
+                       "/organizations", "/buyers", "/segments", "/provinces", "/analytics", "/rankings", "/feeds", "/data",
+                       "/monthly"}
 # The export files that hold what each dated page shows. Its lastmod is the
 # data date on which their bytes last changed (page_dates), so a page whose
 # files a night left as they were keeps its date. "{day}" is the data date.
@@ -385,6 +402,7 @@ SITEMAP_PAGE_FILES: dict[str, tuple[str, ...]] = {
     "/organizations": ("directory/index.json",),
     "/buyers": ("buyers/index.json",),
     "/segments": ("categories/index.json", "tenders/open-levels.json", "expiring/index.json"),
+    "/provinces": ("provinces/index.json",),
     "/analytics": ("buyers/index.json",),
     "/rankings": ("rankings/all.json",),
     "/feeds": ("feeds/index.json",),
@@ -2271,6 +2289,41 @@ def write_categories(m: Model, out: Path, open_rows: list[dict]) -> dict[str, in
     return {"categories": len(index)}
 
 
+def write_provinces(m: Model, out: Path, open_rows: list[dict]) -> dict[str, int]:
+    """provinces/index.json and one file per province or territory, provinces/<code in lower case>.json.
+
+    A notice is placed in a province by a stated province or a derived one: the rule of province_counts and of the
+    site's province filter with the notices that name no province left out (/tenders?province=XX&national=0, the
+    list a province's page links). So a notice delivered in several provinces is in each of their files, and one
+    placed in none is in no file; the index counts those as not_stated.
+
+    index.json is province_counts(open_rows), the home map's open layer. A province's file: open_tenders, its
+    whole count; open_notices, the first PROVINCE_OPEN of them in the open list's order (soonest closing first);
+    buyers, the PROVINCE_TOP linked buyers with the most of them (n_buyers is how many buyers there are); segments,
+    the PROVINCE_TOP UNSPSC segments they carry most (a notice with codes in two segments counts in each;
+    n_segments is how many segments there are). Every province gets a file, one with no notice an empty one."""
+    placed: dict[str, list[dict]] = {code: [] for code in sorted(PROVINCE_SLUGS)}
+    for r in open_rows:
+        for code in {p for p in (*r["provinces"], *(r.get("provinces_derived") or ())) if p in placed}:
+            placed[code].append(r)
+    for code, rows in placed.items():
+        buyers: Counter = Counter(r["buyer_id"] for r in rows if r["buyer_id"])
+        segments: Counter = Counter(seg for r in rows for seg in r["segments"])
+        _dump(out / "provinces" / f"{code.lower()}.json", {
+            "code": code,
+            "open_tenders": len(rows),
+            "open_notices": [list_fields(r) for r in rows[:PROVINCE_OPEN]],
+            "buyers": [{"id": bid, "name_en": m.buyers[bid]["name_en"], "name_fr": m.buyers[bid]["name_fr"], "n": n}
+                       for bid, n in sorted(buyers.items(), key=lambda b: (-b[1], b[0]))[:PROVINCE_TOP]],
+            "n_buyers": len(buyers),
+            "segments": [{"code": seg, "n": n}
+                         for seg, n in sorted(segments.items(), key=lambda s: (-s[1], s[0]))[:PROVINCE_TOP]],
+            "n_segments": len(segments),
+        })
+    _dump(out / "provinces" / "index.json", province_counts(open_rows))
+    return {"provinces": len(placed)}
+
+
 # -- the expiring-contracts radar ----------------------------------------------------
 
 
@@ -2416,8 +2469,9 @@ def _award_years(m: Model) -> list[int]:
 def _site_page_digests(m: Model, out: Path, fixed: Sequence[str], years: Sequence[int],
                        skip: Collection[str]) -> dict[str, str]:
     """The digest of what each dated page of the site's own part shows: the fixed pages by SITEMAP_PAGE_FILES, a
-    segment by its own file and its row of the radar's segments, an award year and a window of the radar by their
-    first page and index (the address the sitemap lists), and the instruments' index by its file."""
+    segment by its own file and its row of the radar's segments, a province by its own file, an award year and a
+    window of the radar by their first page and index (the address the sitemap lists), and the instruments' index
+    by its file."""
     digests = {p: _digest(out, (f.format(day=m.as_of) for f in SITEMAP_PAGE_FILES[p]))
                for p in fixed if p in SITEMAP_DATED_PAGES}
     # /feeds lists the monthly record's feed beside the feeds of feeds/index.json when the monthly section wrote it
@@ -2433,6 +2487,9 @@ def _site_page_digests(m: Model, out: Path, fixed: Sequence[str], years: Sequenc
         for code in sorted(m.segments):
             row = json.dumps(radar.get(code), sort_keys=True)
             digests[f"/segments/{code}"] = _digest(out, (f"categories/{code}.json",), row)
+    if "provinces" not in skip:
+        for code, slug in sorted(PROVINCE_SLUGS.items()):
+            digests[f"/provinces/{slug}"] = _digest(out, (f"provinces/{code.lower()}.json",))
     for y in years:
         digests[f"/awards/{y}"] = _digest(out, (f"awards/{y}/index.json", f"awards/{y}/1.json"))
     if "expiring" not in skip:
@@ -2456,9 +2513,10 @@ def sitemap_parts(m: Model, out: Path, skip: Collection[str] = ()) -> list[tuple
     notice or an amendment) first appeared, which is its lastmod, then by publication date and reference. A
     notice that has closed is in no part.
     pages: the fixed pages, the buyers (dated by updated_at, which indicators.compute moves only when a figure
-    changed), the segments, the award years, the radar's windows, the directory pages (directory_pages) and the
-    standing offers and supply arrangements (sosa_export.sitemap_entries). A fixed page in SITEMAP_DATED_PAGES,
-    a segment, a year, a window and the instruments' index are dated by page_dates.
+    changed), the segments, the provinces and territories (PROVINCE_SLUGS, all thirteen), the award years, the
+    radar's windows, the directory pages (directory_pages) and the standing offers and supply arrangements
+    (sosa_export.sitemap_entries). A fixed page in SITEMAP_DATED_PAGES, a segment, a province, a year, a window
+    and the instruments' index are dated by page_dates.
     active-organizations: the organizations whose newest counted record (m.activity) falls on or after
     active_since(data date), the most recent first, ties by id.
     Every other organization is in no part: the site marks a profile with nothing recent noindex
@@ -2489,6 +2547,8 @@ def sitemap_parts(m: Model, out: Path, skip: Collection[str] = ()) -> list[tuple
                   for r in conn.execute("SELECT id, updated_at FROM buyers ORDER BY id") if r["id"] in m.listed]
     if "categories" not in skip:
         pages += [(f"/segments/{code}", dates[f"/segments/{code}"]) for code in sorted(m.segments)]
+    if "provinces" not in skip:
+        pages += [(f"/provinces/{slug}", dates[f"/provinces/{slug}"]) for _, slug in sorted(PROVINCE_SLUGS.items())]
     pages += [(f"/awards/{y}", dates[f"/awards/{y}"]) for y in years]
     if "expiring" not in skip:
         pages += [(f"/expiring/{name}", dates[f"/expiring/{name}"]) for name, _ in expiring.WINDOWS]
@@ -2649,6 +2709,7 @@ def _write_static(conn: sqlite3.Connection, out: Path, today: date, base_url: st
         ("feeds", lambda: write_feeds(conn, out, today=today, base_url=base_url)),
         ("buyers", lambda: write_buyers(m, out, totals, open_rows)),
         ("categories", lambda: write_categories(m, out, open_rows)),
+        ("provinces", lambda: write_provinces(m, out, open_rows)),
         ("rankings", lambda: write_rankings(m, out, totals)),
         ("expiring", lambda: write_expiring(m, out)),
         ("aliases", lambda: write_aliases(conn, out)),

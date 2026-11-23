@@ -1,0 +1,48 @@
+{
+ "buyers": [
+  {
+   "id": "pwgsc-tpsgc",
+   "n": 1,
+   "name_en": "Public Services and Procurement Canada",
+   "name_fr": "Services publics et Approvisionnement Canada"
+  }
+ ],
+ "code": "ON",
+ "n_buyers": 1,
+ "n_segments": 1,
+ "open_notices": [
+  {
+   "amendment": 1,
+   "buyer_en": "Public Services and Procurement Canada",
+   "buyer_fr": "Services publics et Approvisionnement Canada",
+   "buyer_id": "pwgsc-tpsgc",
+   "category": [
+    "SRV"
+   ],
+   "closing": "2026-11-04T14:00:00",
+   "first_seen": "2026-10-30",
+   "method_en": "Competitive - Open bidding",
+   "method_fr": "Concurrentielle - Appel d'offres ouvert",
+   "notice_type_en": "Request for Proposal",
+   "notice_type_fr": "Demande de propositions",
+   "provinces": [
+    "ON",
+    "QC"
+   ],
+   "published": "2026-10-30",
+   "reference": "cb-100-10000001",
+   "segments": [
+    "82"
+   ],
+   "title_en": "Translation services for regional offices",
+   "title_fr": "Services de traduction pour les bureaux régionaux"
+  }
+ ],
+ "open_tenders": 1,
+ "segments": [
+  {
+   "code": "82",
+   "n": 1
+  }
+ ]
+}

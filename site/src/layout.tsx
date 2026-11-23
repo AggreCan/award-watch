@@ -555,6 +555,8 @@ export const FooterRow: FC<{ lang: Lang; lobbyingLoaded: boolean; on: boolean; b
       {/* The app home's own address (pages/home.tsx overviewPage), which "/" gives a signed-in reader only. */}
       <a href="/overview">{t(lang, "rail.index")}</a>
       <a href="/segments">{t(lang, "nav.segments")}</a>
+      {/* The open notices by province and territory (pages/provinces.tsx), which the rail does not list. */}
+      <a href="/provinces">{t(lang, "footer.provinces")}</a>
       <a href="/rankings">{t(lang, "nav.rankings")}</a>
       {/* The rail's Browse group hides on a phone, where these links stand in for it; no chip here. */}
       <FooterAnalyticsLink lang={lang} on={on} />

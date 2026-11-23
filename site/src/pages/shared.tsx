@@ -5,7 +5,7 @@
 import type { FC, PropsWithChildren } from "hono/jsx";
 import { ProTag, SameDayMark } from "../pro";
 import { type Column, type HeadSort, type MaybeColumn, type Rest, type Sorting, Table, restClass } from "../columns";
-import { METHOD_SHORT, MONEY_SOURCES, NOTICE_TYPE_SHORT, type MoneySource } from "../constants";
+import { METHOD_SHORT, MONEY_SOURCES, NOTICE_TYPE_SHORT, provincePath, type MoneySource } from "../constants";
 import { type AwardRow, type Competitive, type DerivedPlaces, type OrgTotal, type PlaceSource, type TenderRow, type YearFigure, publishedReference } from "../data";
 import { buyerPath } from "../crosslinks";
 import { fmtInt, fmtMoney, fmtPct, pick, provinceName, segmentLabel, segmentShort, sourceLabel, t, tj, tn, type Key, type Lang } from "../i18n";
@@ -237,6 +237,18 @@ export function provincesText(lang: Lang, provinces: readonly string[], derived:
   ];
   return names.length ? names.join(", ") : t(lang, "common.national");
 }
+
+// The provinces a notice's regions of delivery state, each of the thirteen a
+// link to its page of open notices (pages/provinces.tsx); the words of
+// provincesText when there are none.
+export const ProvinceLinks: FC<{ lang: Lang; provinces: readonly string[] }> = ({ lang, provinces }) => provinces.length ? (
+  <>
+    {provinces.map((p, i) => {
+      const href = provincePath(p);
+      return <>{i ? ", " : ""}{href ? <a href={href}>{provinceName(lang, p)}</a> : provinceName(lang, p)}</>;
+    })}
+  </>
+) : <>{t(lang, "common.national")}</>;
 
 const PLACE_FROM_KEY: Record<PlaceSource, Key> = {
   delivery: "places.from_delivery", opportunity: "places.from_opportunity", land_claims: "places.from_land_claims",

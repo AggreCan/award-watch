@@ -139,6 +139,10 @@ def test_the_export_writes_the_parts_in_order(conn, tmp_path):
     assert pages[:len(es.SITEMAP_PAGES)] == es.SITEMAP_PAGES
     assert "/buyers/dnd-mdn" in pages and "/buyers/never-buys" not in pages
     assert sum(p.startswith("/segments/") for p in pages) == 57
+    # Every province and territory, at its named address, after the segments.
+    provinces = [p for p in pages if p.startswith("/provinces/")]
+    assert provinces == [f"/provinces/{slug}" for _, slug in sorted(es.PROVINCE_SLUGS.items())] and len(provinces) == 13
+    assert "/provinces/british-columbia" in provinces and pages.index(provinces[0]) > pages.index("/segments/95")
     assert {"/awards/2026", "/awards/2021", "/expiring/3m", "/expiring/12m", "/organizations/directory/on"} <= set(pages)
     assert "/awards/2029" not in pages
     assert not any(p.startswith(("/tenders/cb-", "/organizations/org-")) for p in pages)
@@ -178,6 +182,8 @@ def test_the_pages_dated_by_the_data_and_the_pages_that_are_not(conn, tmp_path):
     got = everything(out)
     assert got[f"{BASE}/"] == "2026-10-31" and got[f"{BASE}/overview"] == "2026-10-31"
     assert got[f"{BASE}/analytics"] == "2026-10-31"
+    # The provinces' index and each province's page follow the open notices, each dated by its own file.
+    assert got[f"{BASE}/provinces"] == "2026-10-31" and got[f"{BASE}/provinces/ontario"] == "2026-10-31"
     # Pages that change only with the code carry no date rather than a false one.
     for path in ("/methodology", "/alerts", "/pro", "/tenders/same-day", "/terms", "/watchlist"):
         assert got[f"{BASE}{path}"] is None, path

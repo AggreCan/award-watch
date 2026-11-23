@@ -663,6 +663,7 @@ describe("no route but the window page serves a deep window's rows to a free req
     "/organizations/:id/respond": ["/organizations/org-a000000001/respond"],
     "/buyers/:id": ["/buyers/pwgsc-tpsgc", "/buyers/dnd-mdn"],
     "/segments/:nn": ["/segments/82", "/segments/43"],
+    "/provinces/:slug": ["/provinces/british-columbia", "/provinces/yukon"],
     "/categories/:nn": ["/categories/82"],
     "/rankings/:year": ["/rankings/2026"],
     "/api/organizations/:id": ["/api/organizations/org-a000000001"],

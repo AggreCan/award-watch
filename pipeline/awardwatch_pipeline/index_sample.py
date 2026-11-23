@@ -14,11 +14,13 @@ TENDER_DAYS days to the data date (tenders/open.json), organizations with an
 award notice in the ORGANIZATION_DAYS days to it (awards/recent.json), the
 site's list pages that follow the data with the guides' index and the monthly
 record's months (export_static.SITEMAP_DATED_PAGES, monthly/index.json), the
-guides (their addresses as site/src/guides.ts writes them), and the buyers
+guides (their addresses as site/src/guides.ts writes them), the buyers
 with an open tender notice (buyers/index.json), whose pages list those
-notices since 2026-11-21. Until 2026-11-22 the last kind was published
-contracts; the site's robots.txt closes their pages since 2026-11-21, so
-Google has nothing to say of them. Each kind's candidates are ranked by
+notices since 2026-11-21, and the provinces' and territories' pages
+(export_static.PROVINCE_SLUGS, once the export holds provinces/index.json),
+added with those pages on 2026-11-22. Until 2026-11-22 the fifth kind was
+published contracts; the site's robots.txt closes their pages since
+2026-11-21, so Google has nothing to say of them. Each kind's candidates are ranked by
 SHA-256 of SEED, the kind and the page's path, and the lowest are taken: the
 same candidates give the same sample every night, and the sample rolls
 slowly as pages enter and leave the windows. The kinds are asked in turn,
@@ -30,8 +32,8 @@ ones the sitemaps list.
 The requests: one POST per page to INSPECT_URL, with the page's address and
 the property, one at a time, PAUSE_S apart, none after BUDGET_S. Google's
 limits are 2,000 inspections a day and 600 a minute for a property
-(developers.google.com/webmaster-tools/limits), so 40 a night is 2% of the
-day's allowance. A night already inspected (the file holds today's date) asks
+(developers.google.com/webmaster-tools/limits), so 44 a night is about 2% of
+the day's allowance. A night already inspected (the file holds today's date) asks
 nothing. The token is search_console.py's: the same service account and the
 read-only scope (webmasters.readonly), which the method accepts.
 
@@ -71,8 +73,9 @@ FILE = "index_sample.csv"
 HEADER = ["date", "kind", "path", "verdict", "coverage", "robots", "indexing", "fetch", "last_crawl", "google_canonical"]
 OUTCOME = "index_outcome.txt"
 
-# The kinds of page and how many of each a night, 40 in all, in the order a round asks them.
-SAMPLE: tuple[tuple[str, int], ...] = (("tender", 12), ("organization", 12), ("page", 6), ("guide", 4), ("buyer", 6))
+# The kinds of page and how many of each a night, 44 in all, in the order a round asks them.
+SAMPLE: tuple[tuple[str, int], ...] = (("tender", 12), ("organization", 12), ("page", 6), ("guide", 4), ("buyer", 6),
+                                       ("province", 4))
 SAMPLE_SIZE = sum(n for _, n in SAMPLE)
 SEED = "award-watch index sample 1"
 TENDER_DAYS = 7
@@ -158,6 +161,17 @@ def buyer_paths(static: Path) -> list[str]:
     return sorted(out)
 
 
+def province_paths(static: Path) -> list[str]:
+    """Each province's and territory's page, at the address the sitemap lists (export_static.PROVINCE_SLUGS), for
+    the codes provinces/index.json counts; none when the export holds no such file (a section that failed, or an
+    export from before the pages)."""
+    from .export_static import PROVINCE_SLUGS
+
+    index = _load(static / "provinces" / "index.json")
+    codes = index.get("provinces") if isinstance(index, dict) else None
+    return sorted(f"/provinces/{PROVINCE_SLUGS[c]}" for c in (codes if isinstance(codes, dict) else ()) if c in PROVINCE_SLUGS)
+
+
 MONTH_RE = re.compile(r"^[0-9]{4}-(?:0[1-9]|1[0-2])$")
 GUIDES_INDEX = "/guides"
 # The guides' addresses as the site's own file writes them, each a quoted "/guides/<slug>".
@@ -208,7 +222,8 @@ def candidates(static: Path) -> dict[str, list[str]]:
     if as_of is None:
         return {}
     return {"tender": tender_paths(static, as_of), "organization": organization_paths(static, as_of),
-            "page": page_paths(static), "guide": guide_paths(), "buyer": buyer_paths(static)}
+            "page": page_paths(static), "guide": guide_paths(), "buyer": buyer_paths(static),
+            "province": province_paths(static)}
 
 
 # -- one inspection ---------------------------------------------------------------

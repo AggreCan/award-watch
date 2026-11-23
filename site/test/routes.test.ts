@@ -47,6 +47,8 @@ const PAGES: [string, string, string, string][] = [
   ["/buyers/pwgsc-tpsgc", "Public Services and Procurement Canada", "<h1>Services publics et Approvisionnement Canada", "stats.json"],
   ["/segments", "<h1>Procurement by Segment</h1>", "<h1>Approvisionnement par segment</h1>", "categories/index.json"],
   ["/segments/82", "<h1>Editorial and Design and Graphic and Fine Art Services</h1>", "<h1>Services de rédaction, de design, de graphisme et de beaux-arts</h1>", "categories/82.json"],
+  ["/provinces", "<h1>Federal Tenders by Province and Territory</h1>", "<h1>Appels d’offres fédéraux par province et territoire</h1>", "provinces/index.json"],
+  ["/provinces/british-columbia", "<h1>Federal Tenders in British Columbia</h1>", "<h1>Appels d’offres fédéraux en Colombie-Britannique</h1>", "provinces/bc.json"],
   ["/rankings", "<h1>Rankings</h1>", "<h1>Classements</h1>", "rankings/all.json"],
   ["/rankings/2026", "<h1>Rankings for 2026</h1>", "<h1>Classements de 2026</h1>", "stats.json"],
   ["/data", "<h1>Data, Downloads and Licence</h1>", "<h1>Données, téléchargements et licence</h1>", "stats.json"],

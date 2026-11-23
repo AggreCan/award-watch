@@ -9,7 +9,8 @@ import type { Context } from "hono";
 import type { Buyer, Category, ContractDetail, Profile, TenderDetail } from "./data";
 import type { AppEnv } from "./env";
 import type { Guide } from "./guides";
-import { fmtInt, frTypography, pick, provinceName, segmentLabel, t, type Key, type Lang } from "./i18n";
+import { fmtInt, frTypography, pick, provinceIn, provinceName, segmentLabel, t, type Key, type Lang } from "./i18n";
+import { provincePath } from "./constants";
 import { publishedReference } from "./data";
 
 // Canonical URLs name the apex domain whichever host served the request, so
@@ -49,7 +50,7 @@ type Both = Record<Lang, string>;
 
 export type PageKey =
   | "home" | "overview" | "tenders" | "tenders_new" | "same_day" | "awards" | "awards_erroneous" | "expiring" | "organizations" | "buyers"
-  | "segments" | "rankings" | "analytics"
+  | "segments" | "provinces" | "rankings" | "analytics"
   | "feeds" | "watchlist" | "methodology" | "data" | "cite" | "corrections" | "about" | "terms" | "privacy" | "alerts" | "pro"
   | "guides" | "monthly";
 
@@ -161,6 +162,20 @@ const PAGES: Record<PageKey, { path: string; name: Both | Key; title?: Both; des
     description: {
       en: "The 57 UNSPSC segments of federal procurement: open tenders, this year's contract awards and the suppliers that won them, segment by segment.",
       fr: "Les 57 segments UNSPSC de l'approvisionnement fédéral : appels d'offres ouverts, attributions de l'année et fournisseurs retenus.",
+    },
+  },
+  // The open notices by province and territory of delivery (pages/provinces.tsx). The French
+  // name fills a result list's line by itself, so its title leaves the site's name out.
+  provinces: {
+    path: "/provinces",
+    name: "provinces.title",
+    title: {
+      en: "Federal Tenders by Province and Territory | Award Watch",
+      fr: "Appels d'offres fédéraux par province et territoire",
+    },
+    description: {
+      en: "Open federal tender notices by province and territory of delivery: the count in each, with its notices, buyers and UNSPSC segments.",
+      fr: "Avis d'appel d'offres fédéraux ouverts par province et territoire de livraison : le nombre dans chacun, avec ses avis, acheteurs et segments.",
     },
   },
   rankings: {
@@ -950,6 +965,21 @@ export function segmentSeo(seg: Category, lang: Lang, crumbs: { name: string; pa
     title: pageTitle(name),
     socialTitle: name,
     description: clip(t(lang, "segment.description", { name, code: seg.code, n: fmtInt(seg.open_tenders.length, lang) })),
+    jsonLd: [breadcrumbJsonLd(crumbs)],
+  };
+}
+
+// A province's or territory's page of open notices (pages/provinces.tsx). The
+// result list names the place ("Federal Tenders in British Columbia"); a name
+// too long for the site's name after it stands alone, as a record's does.
+export function provinceSeo(code: string, open: number, lang: Lang, crumbs: { name: string; path?: string }[]): Seo {
+  const where = provinceIn(lang, code);
+  const name = t(lang, "province.heading", { where });
+  return {
+    path: provincePath(code) ?? "/provinces",
+    title: [pageTitle(name), name].find((s) => s.length <= TITLE_MAX) ?? name,
+    socialTitle: name,
+    description: clip(t(lang, "province.description", { where, n: fmtInt(open, lang) })),
     jsonLd: [breadcrumbJsonLd(crumbs)],
   };
 }

@@ -12,6 +12,25 @@ export const PLACE_CODES: readonly string[] = [...PROVINCES, OUTSIDE, UNKNOWN];
 // The directory's codes are the same in lower case (they sit in URLs).
 export const DIRECTORY_CODES: readonly string[] = PLACE_CODES.map((p) => p.toLowerCase());
 
+// Each province's and territory's page of open tender notices is
+// /provinces/<slug>: its English name in lower case, hyphens for spaces, the
+// same address in both languages (pages/provinces.tsx). The pipeline writes
+// the same table for the sitemap (export_static.PROVINCE_SLUGS;
+// test/provinces.test.ts holds the two equal).
+export const PROVINCE_SLUGS: Record<(typeof PROVINCES)[number], string> = {
+  AB: "alberta", BC: "british-columbia", MB: "manitoba", NB: "new-brunswick", NL: "newfoundland-and-labrador",
+  NS: "nova-scotia", NT: "northwest-territories", NU: "nunavut", ON: "ontario", PE: "prince-edward-island",
+  QC: "quebec", SK: "saskatchewan", YT: "yukon",
+};
+const PROVINCE_OF_SLUG: ReadonlyMap<string, (typeof PROVINCES)[number]> = new Map(PROVINCES.map((p) => [PROVINCE_SLUGS[p], p]));
+// The province a page address names, or undefined for anything else.
+export const provinceOfSlug = (slug: string): (typeof PROVINCES)[number] | undefined => PROVINCE_OF_SLUG.get(slug);
+// A province's page, or null for a code that is not one of the thirteen (outside Canada, no address).
+export function provincePath(code: string): string | null {
+  const slug = (PROVINCE_SLUGS as Record<string, string | undefined>)[code];
+  return slug ? `/provinces/${slug}` : null;
+}
+
 // normalize.tender_status in the pipeline.
 export const TENDER_STATUSES = ["open", "expired", "cancelled", "awarded", "unknown"] as const;
 // The awardStatus column, folded to lower case; contract history uses the same words.

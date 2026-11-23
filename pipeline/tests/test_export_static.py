@@ -329,6 +329,24 @@ def test_every_file_passes_the_site_checks(exported):
         assert doc["code"] == c["code"] and every(doc["open_tenders"], tender_row)
         assert every(doc["top_organizations"], org_total)
         assert every(doc["years"], lambda y: isinstance(y["year"], int) and count(y["n"]) and num_or_none(y["total"]))
+    # The provinces' files (the site's loadProvinces and loadProvince): the index is the home map's open layer, and
+    # every province and territory has a file whose notices are the open list's rows placed there, in its order.
+    placed_index = load(out, "provinces/index.json")
+    assert placed_index == stats["map"]["open"] and len(placed_index["provinces"]) == 13
+    assert sorted(p.stem for p in (out / "provinces").glob("*.json")) == sorted(["index", *(c.lower() for c in es.PROVINCE_SLUGS)])
+    open_list = load(out, "tenders/open.json")
+    known_segments = es.read_segments()
+    for code, n in placed_index["provinces"].items():
+        doc = load(out, f"provinces/{code.lower()}.json")
+        placed = [r["reference"] for r in open_list if code in (*r["provinces"], *r.get("provinces_derived", ()))]
+        assert doc["code"] == code and doc["open_tenders"] == n == len(placed)
+        assert every(doc["open_notices"], tender_row)
+        assert [r["reference"] for r in doc["open_notices"]] == placed[:es.PROVINCE_OPEN]
+        assert every(doc["buyers"], lambda b: BUYER_ID.match(b["id"]) and s(b["name_en"]) and s_or_none(b["name_fr"])
+                     and count(b["n"]))
+        assert every(doc["segments"], lambda g: g["code"] in known_segments and count(g["n"]))
+        assert len(doc["buyers"]) == min(doc["n_buyers"], es.PROVINCE_TOP)
+        assert len(doc["segments"]) == min(doc["n_segments"], es.PROVINCE_TOP)
     for path in (out / "rankings").glob("*.json"):
         doc = json.loads(path.read_text(encoding="utf-8"))
         assert doc["year"] == (None if path.stem == "all" else int(path.stem))
@@ -830,6 +848,7 @@ def test_a_failing_section_is_logged_and_left_out_of_the_sitemap(conn, tmp_path,
     def broken(*args, **kwargs):
         raise RuntimeError("bad buyer")
 
+    write_buyers = es.write_buyers
     monkeypatch.setattr(es, "write_buyers", broken)
     out = tmp_path / "static"
     es.export_static(conn, out, today=TODAY, base_url=BASE)
@@ -838,6 +857,16 @@ def test_a_failing_section_is_logged_and_left_out_of_the_sitemap(conn, tmp_path,
     assert not (out / "buyers").exists() and (out / "categories" / "index.json").exists()
     sitemap = (out / "sitemaps" / "sitemap-pages-1.xml").read_text(encoding="utf-8")
     assert "/buyers" not in sitemap and f"{BASE}/segments</loc>" in sitemap
+    assert f"{BASE}/provinces</loc>" in sitemap and f"{BASE}/provinces/ontario</loc>" in sitemap
+
+    # The provinces' section the same: its index and all thirteen pages leave the sitemap with its files.
+    monkeypatch.setattr(es, "write_buyers", write_buyers)
+    monkeypatch.setattr(es, "write_provinces", broken)
+    out = tmp_path / "without-provinces"
+    es.export_static(conn, out, today=TODAY, base_url=BASE)
+    assert not (out / "provinces").exists() and (out / "buyers" / "index.json").exists()
+    sitemap = (out / "sitemaps" / "sitemap-pages-1.xml").read_text(encoding="utf-8")
+    assert "/provinces" not in sitemap and f"{BASE}/buyers</loc>" in sitemap
 
 
 def test_an_empty_database_exports_a_tree_the_checks_accept(tmp_path):
@@ -1174,6 +1203,70 @@ def test_stats_map_counts_the_new_open_and_closing_soon_notices_by_province_stat
     # The province filter's facet reads the open notices the same way.
     facet = {f["value"]: f["n"] for f in load(out, "tenders/open-first.json")["facets"]["province"]}
     assert facet == {code: n for code, n in layers["open"]["provinces"].items() if n}
+
+
+def test_a_provinces_file_holds_the_open_notices_placed_in_it_with_their_buyers_and_segments(conn, tmp_path, monkeypatch):
+    """provinces/<code>.json, a province's page: the open notices a stated or a derived province places there (the
+    province filter's reading with the notices that name none left out), soonest closing first, the buyers with the
+    most of them and the segments they carry. A notice in two provinces is in both files; one in none is in no file."""
+    seed(conn)
+    tender(conn, "cb-map-two", 0, title="Two provinces", published="2026-10-31", closing="2026-11-04T14:00:00",
+           provinces=("ON", "QC"), buyer="dnd-mdn", codes=("72101500", "81111500"))
+    tender(conn, "cb-map-derived", 0, title="Placed by a city", closing="2026-11-25T14:00:00", first_seen="2026-10-29",
+           provinces=())
+    tender(conn, "cb-map-none", 0, title="Canada-wide", published="2026-10-31", closing="2026-11-06T14:00:00", provinces=())
+    conn.execute("UPDATE tenders SET provinces_derived = '[\"NS\"]', provinces_from = 'delivery' "
+                 "WHERE reference = 'cb-map-derived'")
+    conn.commit()
+    out = tmp_path / "static"
+    counts = es.export_static(conn, out, today=TODAY, base_url=BASE)
+    assert counts["provinces"] == 13
+    open_list = load(out, "tenders/open.json")
+    by_ref = {r["reference"]: r for r in open_list}
+    index = load(out, "provinces/index.json")
+    assert index == load(out, "stats.json")["map"]["open"] and index["not_stated"] == 1
+
+    on = load(out, "provinces/on.json")
+    assert on["code"] == "ON" and on["open_tenders"] == index["provinces"]["ON"] == 4
+    # The open list's own order (soonest closing first), each row its list row without the open list's filter fields.
+    refs = [r["reference"] for r in on["open_notices"]]
+    assert refs == [r["reference"] for r in open_list if "ON" in r["provinces"]] and "cb-map-two" in refs
+    assert on["open_notices"][0] == es.list_fields(by_ref[refs[0]])
+    assert not any(k in r for r in on["open_notices"] for k in es.WORD_FIELDS)
+    # Its buyers, the most notices first, then by id; its segments the same way, a notice with codes in two
+    # segments counted in each.
+    assert [(b["id"], b["n"]) for b in on["buyers"]] == [("pwgsc-tpsgc", 3), ("dnd-mdn", 1)] and on["n_buyers"] == 2
+    assert on["buyers"][1]["name_en"] == by_ref["cb-map-two"]["buyer_en"]
+    assert on["segments"] == [{"code": "81", "n": 3}, {"code": "43", "n": 1}, {"code": "72", "n": 1}, {"code": "82", "n": 1}]
+    assert on["n_segments"] == 4
+
+    # The two-province notice is in both files, the derived one in the province a city gave it, and the notice that
+    # names no province in none.
+    assert [r["reference"] for r in load(out, "provinces/qc.json")["open_notices"]] == ["cb-map-two"]
+    ns = load(out, "provinces/ns.json")
+    assert [r["reference"] for r in ns["open_notices"]] == ["cb-map-derived"]
+    assert ns["open_notices"][0]["provinces"] == [] and ns["open_notices"][0]["provinces_derived"] == ["NS"]
+    every_file = [r["reference"] for code in es.PROVINCE_SLUGS for r in load(out, f"provinces/{code.lower()}.json")["open_notices"]]
+    assert "cb-map-none" not in every_file and "cb-map-none" in by_ref
+    # A province with no notice still has its file, empty.
+    assert load(out, "provinces/yt.json") == {"code": "YT", "open_tenders": 0, "open_notices": [], "buyers": [],
+                                              "n_buyers": 0, "segments": [], "n_segments": 0}
+
+    # The caps: the file lists the first notices and ranks the first buyers and segments; the counts stay whole.
+    monkeypatch.setattr(es, "PROVINCE_OPEN", 2)
+    monkeypatch.setattr(es, "PROVINCE_TOP", 1)
+    capped = tmp_path / "capped"
+    es.export_static(conn, capped, today=TODAY, base_url=BASE)
+    on = load(capped, "provinces/on.json")
+    assert [r["reference"] for r in on["open_notices"]] == refs[:2] and on["open_tenders"] == 4
+    assert [b["id"] for b in on["buyers"]] == ["pwgsc-tpsgc"] and on["n_buyers"] == 2
+    assert on["segments"] == [{"code": "81", "n": 3}] and on["n_segments"] == 4
+
+
+def test_the_province_slugs_are_one_address_each_and_cover_the_thirteen_codes():
+    assert sorted(es.PROVINCE_SLUGS) == sorted(es.PROVINCE_CODES) and len(es.PROVINCE_SLUGS) == 13
+    slugs = list(es.PROVINCE_SLUGS.values())
+    assert len(set(slugs)) == 13 and all(re.fullmatch(r"[a-z]+(?:-[a-z]+)*", slug) for slug in slugs)
 
 
 def test_an_empty_export_maps_every_province_at_zero(tmp_path):

@@ -33,6 +33,10 @@ import monthly202608 from "./fixtures/monthly-2026-08.json";
 import monthly202609 from "./fixtures/monthly-2026-09.json";
 import monthlyIndex from "./fixtures/monthly-index.json";
 import profiles from "./fixtures/profiles-a00.json";
+import provinceBc from "./fixtures/province-bc.json";
+import provinceOn from "./fixtures/province-on.json";
+import provinceYt from "./fixtures/province-yt.json";
+import provinces from "./fixtures/provinces-index.json";
 import rankings2026 from "./fixtures/rankings-2026.json";
 import rankingsAll from "./fixtures/rankings-all.json";
 import sitemapPart from "./fixtures/sitemap-1.xml?raw";
@@ -102,6 +106,12 @@ export const FILES: Record<string, unknown> = {
   "buyers/aliases.json": buyerAliases,
   "categories/index.json": categories,
   "categories/82.json": category82,
+  // The open notices by province, as the export would write them from tenders/open-first.json above: the index, two
+  // provinces with one notice each and a territory with none. The other ten are not published here, so they read as missing.
+  "provinces/index.json": provinces,
+  "provinces/bc.json": provinceBc,
+  "provinces/on.json": provinceOn,
+  "provinces/yt.json": provinceYt,
   "rankings/all.json": rankingsAll,
   "rankings/2026.json": rankings2026,
   "feeds/index.json": feeds,

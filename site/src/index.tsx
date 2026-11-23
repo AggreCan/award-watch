@@ -23,6 +23,7 @@ import { analyticsIndex } from "./pages/analytics_index";
 import { builderCsv, builderPage } from "./pages/builder";
 import { awardsPage, awardsYearPage, erroneousAwardsPage } from "./pages/awards";
 import { buyerPage, buyersIndex } from "./pages/buyers";
+import { provincePage, provincesIndex } from "./pages/provinces";
 import { segmentPage, segmentsIndex } from "./pages/segments";
 import { citePage } from "./pages/cite";
 import { alertsPage, listsSubmit } from "./pages/alerts";
@@ -213,6 +214,9 @@ app.get("/segments", segmentsIndex);
 app.get("/segments/:nn", segmentPage);
 app.get("/segments/:nn/analytics", segmentAnalytics);
 app.get("/segments/:nn/analytics/:table{[a-z]+\\.csv}", (c) => analyticsCsv(c, "segment"));
+// The open notices by province and territory of delivery (pages/provinces.tsx).
+app.get("/provinces", provincesIndex);
+app.get("/provinces/:slug", provincePage);
 // The index of the views, the rail's Analytics item (pages/analytics_index.tsx):
 // the site's 404 while the accounts switch is off, as the views are.
 app.get("/analytics", analyticsIndex);

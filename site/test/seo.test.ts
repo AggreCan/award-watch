@@ -52,6 +52,8 @@ const PAGES: [string, string, string][] = [
   ["/buyers/pwgsc-tpsgc", `${O}/buyers/pwgsc-tpsgc`, "Public Services and Procurement Canada | Award Watch"],
   ["/segments", `${O}/segments`, "Federal Tenders and Awards by UNSPSC Segment | Award Watch"],
   ["/segments/82", `${O}/segments/82`, "Editorial and Design and Graphic and Fine Art Services | Award Watch"],
+  ["/provinces", `${O}/provinces`, "Federal Tenders by Province and Territory | Award Watch"],
+  ["/provinces/british-columbia", `${O}/provinces/british-columbia`, "Federal Tenders in British Columbia | Award Watch"],
   ["/rankings", `${O}/rankings`, "Top Federal Suppliers and Grant Recipients | Award Watch"],
   ["/rankings/2026", `${O}/rankings/2026`, "Rankings for 2026 | Award Watch"],
   ["/feeds", `${O}/feeds`, "Atom Feeds of New Federal Tenders | Award Watch"],

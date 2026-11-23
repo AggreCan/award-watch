@@ -75,6 +75,7 @@ both languages; the last column is the page that answers.
 | A department's spending and suppliers | department contracts, PSPC contracts, DND contracts | contrats d'un ministère, contrats de SPAC | `/buyers` and buyer pages, `/analytics` |
 | Contracts over $10,000 | proactive disclosure contracts, contracts over $10,000 | contrats de plus de 10 000 $, divulgation proactive | published contract pages, buyer pages, `/data` |
 | Work in one category | UNSPSC tenders, IT tenders, construction tenders | appels d'offres par catégorie | `/segments` and segment pages |
+| Work delivered in one province | federal tenders in Ontario, government tenders BC | appels d'offres fédéraux au Québec | `/provinces` and province pages |
 | Lobbying behind a supplier | lobbying registry search, lobbying communications | registre des lobbyistes, communications de lobbying | organization profiles |
 | Data for analysis | federal procurement data CSV, contracts API | données d'approvisionnement fédéral | `/data` |
 | A paid tool for all of the above | government procurement intelligence Canada | renseignement sur les marchés publics fédéraux | `/pro`, `/` |

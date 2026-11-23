@@ -136,8 +136,9 @@ python -m awardwatch_pipeline.nightly indexnow --db data/awardwatch.sqlite --sin
 - every tender notice open on the data date with a version first seen during
   the run (a new notice or an amendment), the sitemap's first part;
 - the fixed pages in `FIXED_PAGES` (the home page and the list pages that
-  follow the nightly data, the monthly record's index among them), then the
-  monthly record's newest month (`/monthly/<YYYY-MM>`), the one a late
+  follow the nightly data, the monthly record's index among them), each
+  province's and territory's page right after their index (`/provinces`,
+  since 2026-11-22), then the monthly record's newest month (`/monthly/<YYYY-MM>`), the one a late
   notice moves most;
 - the other notices with a version first seen during the run (closed on the
   data date), and the category pages all those notices fall in;
@@ -696,13 +697,15 @@ Google's verdict (`PASS` is indexed), its coverage state (the reason given
 when a page is not indexed, for example "Crawled - currently not indexed" or
 "URL is unknown to Google"), the robots, indexing and fetch states, the last
 crawl's date, and Google's canonical (its path, or "another host"). The
-sample is 40 pages: 12 open tender notices published in the 7 days to the
+sample is 44 pages: 12 open tender notices published in the 7 days to the
 data date (`tenders/open.json`), 12 organizations with an award notice in
 the 30 days to it (`awards/recent.json`), 6 of the list pages that follow
 the data (with the guides' index and the monthly record's months), 4
-guides (their addresses as `site/src/guides.ts` writes them), and 6
+guides (their addresses as `site/src/guides.ts` writes them), 6
 buyers with an open tender notice (`buyers/index.json`), whose pages list
-those notices since 2026-11-21. Until 2026-11-22 the last kind was 6
+those notices since 2026-11-21, and 4 of the thirteen provinces' and
+territories' pages (`provinces/index.json`), added with those pages on
+2026-11-22. Until 2026-11-22 the fifth kind was 6
 published contracts; `robots.txt` closes their pages since 2026-11-21, so
 Google has nothing to say of them. Each kind is ranked by SHA-256 of a fixed
 seed, the kind and the page's path, lowest first. The same pages come back night
@@ -1011,7 +1014,7 @@ organizations, found by their names.
 | Order | Part | Holds | A page's `lastmod` |
 |---|---|---|---|
 | 1 | `/sitemap-open-tenders-<n>.xml` | every tender notice open on the data date, newest first | the night its newest version (the notice, or its latest amendment) first appeared on the site |
-| 2 | `/sitemap-pages-<n>.xml` | the home page, the overview, the lists, the rankings, the monthly record's index, the buyers, the segments, the award years, the radar's three windows, the directory pages, the standing offers and supply arrangements, each month of the monthly record | below |
+| 2 | `/sitemap-pages-<n>.xml` | the home page, the overview, the lists, the rankings, the monthly record's index, the buyers, the segments, the thirteen provinces and territories, the award years, the radar's three windows, the directory pages, the standing offers and supply arrangements, each month of the monthly record | below |
 | 3 | `/sitemap-guides.xml` | the guides' index and each guide | the day the guide was last checked against its sources |
 | 4 | `/sitemap-active-organizations-<n>.xml` | the organizations with an award notice, a PSPC contract history record or a published contract dated within 24 months of the data date, the most recent record first | the night a figure on the profile last changed |
 
@@ -1048,7 +1051,7 @@ supplier withheld as a person has no page and is in no part.
 
 **Dates.** A `lastmod` is the date on which the page last changed, so a night
 that leaves a page as it was leaves its date as it was. Each list page, each
-segment, each award year, each window of the radar and the standing offers'
+segment, each province, each award year, each window of the radar and the standing offers'
 list carries the data date on which the export files holding what it shows
 last changed: the database's `page_dates` table keeps a hash of those files
 for each page and the date the hash last moved (the data date a file carries
@@ -1089,6 +1092,25 @@ French one (`?lang=fr`), each entry naming both and `x-default` as alternates
 (`xhtml:link`), the same three the page's own head names. That is the form
 Google documents for pages in several languages: every version its own
 entry, each listing all of them. A part holds 25,000 pages, 50,000 addresses.
+
+**Provinces and territories** (since 2026-11-22). `/provinces` lists the
+thirteen with the open tender notices placed in each, and
+`/provinces/<slug>` (the province's English name, `british-columbia`, in
+both languages) lists one province's notices, the soonest to close first,
+with the buyers that have the most of them and the UNSPSC segments they
+carry. A reader who searches for federal tenders in a province had no page
+to land on: the tender list filtered to a province is a query address, and
+`robots.txt` closes query addresses to crawlers. The export writes
+`provinces/index.json` and one file per province
+(`export_static.write_provinces`); a notice is placed by a stated or a
+derived province, the same reading as the province filter with the notices
+that name no province left out, so the list a page links
+(`/tenders?province=XX&national=0`) holds exactly its count. All fourteen
+pages are in the pages part, each dated by its own file, and every page's
+footer links the index; a notice's page links the provinces its regions of
+delivery state. The slugs are one table on each side
+(`export_static.PROVINCE_SLUGS`, `site/src/constants.ts PROVINCE_SLUGS`),
+held equal by `site/test/provinces.test.ts`.
 
 **Award notices, history records.** Their pages (`/awards/<reference>`,
 `/history/<reference>`) were never in a sitemap and are not now; the lists,

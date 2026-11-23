@@ -120,6 +120,9 @@ export const CAPTURED_WITHOUT: readonly string[] = [
   '<li><a href="/monthly">Voir chaque mois en chiffres</a>\u00a0: les avis d’appel d’offres et d’attribution, les acheteurs et les fournisseurs de chaque mois complet, prêts à citer.</li>',
   '<a href="/monthly">Monthly record</a>',
   '<a href="/monthly">Bilan mensuel</a>',
+  // The footer's link to the open notices by province (pages/provinces.tsx), added to every page on 2026-11-22.
+  '<a href="/provinces">By province</a>',
+  '<a href="/provinces">Par province</a>',
 ];
 export const withoutMonthly = (page: string): string => CAPTURED_WITHOUT.reduce((p, added) => p.replaceAll(added, ""), page);
 // The capture was made before the way to Ultra on a plan card took a fill of its own (src/pro.tsx actionClass, the

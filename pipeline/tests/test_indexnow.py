@@ -16,7 +16,11 @@ BASE = "https://awardwatch.example"
 KEY = indexnow.INDEXNOW_KEY
 BEFORE = "2026-10-23T00:04:10Z"
 START = "2026-10-24T00:04:10Z"
-FIXED = [BASE + p for p in indexnow.FIXED_PAGES]
+# The fixed pages as a night sends them: each province's and territory's page follows the provinces' index.
+PROVINCE_PAGES = ["alberta", "british-columbia", "manitoba", "new-brunswick", "newfoundland-and-labrador", "nova-scotia",
+                  "northwest-territories", "nunavut", "ontario", "prince-edward-island", "quebec", "saskatchewan", "yukon"]
+FIXED = [BASE + p for page in indexnow.FIXED_PAGES
+         for p in ([page, *(f"/provinces/{slug}" for slug in PROVINCE_PAGES)] if page == "/provinces" else [page])]
 
 
 class Resp:

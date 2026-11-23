@@ -340,8 +340,11 @@ def test_indexnow_sends_the_index_with_the_fixed_pages_and_then_the_newest_month
     set_meta(conn, "data_as_of", "2026-11-02")
     conn.commit()
     urls = indexnow.changed_urls(conn, "2026-11-02T12:30:00Z", BASE)
-    fixed = [BASE + p for p in indexnow.FIXED_PAGES]
-    assert f"{BASE}/monthly" in fixed
+    # The fixed pages as a night sends them: each province's page follows the provinces' index (test_indexnow.py).
+    fixed = [BASE + p for page in indexnow.FIXED_PAGES
+             for p in ([page, *(f"/provinces/{slug}" for _, slug in sorted(es.PROVINCE_SLUGS.items()))]
+                       if page == "/provinces" else [page])]
+    assert f"{BASE}/monthly" in fixed and f"{BASE}/provinces/yukon" in fixed
     # No notice and no organization changed during this run: the fixed pages, then October, the newest month.
     assert urls == [*fixed, f"{BASE}/monthly/2026-10"]
     # A database that holds no month sends none.

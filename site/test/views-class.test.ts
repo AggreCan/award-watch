@@ -220,6 +220,8 @@ const INDEX_ROUTES: [method: string, path: string, route: string, kind: Kind][] 
   ["GET", "/buyers/dnd-mdn/analytics/years.csv", "/buyers/:id/analytics/:table.csv", "download"],
   ["GET", "/segments", "/segments", "page"],
   ["GET", "/segments/82", "/segments/:nn", "page"],
+  ["GET", "/provinces", "/provinces", "page"],
+  ["GET", "/provinces/british-columbia", "/provinces/:slug", "page"],
   ["GET", "/segments/82/analytics", "/segments/:nn/analytics", "page"],
   ["GET", "/segments/82/analytics/years.csv", "/segments/:nn/analytics/:table.csv", "download"],
   ["GET", "/analytics", "/analytics", "page"],

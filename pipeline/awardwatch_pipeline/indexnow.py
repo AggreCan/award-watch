@@ -16,8 +16,8 @@ here in the code and the workflow needs no secret.
 Which pages: first every tender notice open on the data date with a version
 first seen during the run (a new notice or an amendment: a notice earns
 visits only while it is open, and it is the sitemap's first part); then the
-pages that follow the nightly data (FIXED_PAGES) and the monthly record's
-newest month; then the other notices with a version first seen during the
+pages that follow the nightly data (FIXED_PAGES, with each province's and
+territory's page after their index) and the monthly record's newest month; then the other notices with a version first seen during the
 run (closed on the data date) and the category pages all those notices fall
 in; then every buyer and organization whose row changed during the run
 (organizations.recompute and indicators.compute write updated_at only when
@@ -70,7 +70,7 @@ TIMEOUT = 30
 RETRY_S = 10.0
 # The pages whose content follows the nightly data. "/" is the home page.
 FIXED_PAGES: tuple[str, ...] = ("/", "/overview", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations",
-                                "/buyers", "/segments", "/rankings", "/monthly")
+                                "/buyers", "/segments", "/provinces", "/rankings", "/monthly")
 
 ACCEPTED = (200, 202)
 # 400 bad request, 403 key not valid, 422 URLs not on the host or a key that
@@ -98,7 +98,8 @@ def normalize_since(text: str | None) -> str:
 def changed_urls(conn: sqlite3.Connection, since: str, site_url: str, *, cap: int = CAP,
                  pages: Sequence[str] = FIXED_PAGES) -> list[str]:
     """The tender notices open on the data date with a version first seen on
-    the run's day or later, then the fixed pages, then the other notices with
+    the run's day or later, then the fixed pages (each province's page after
+    the provinces' index), then the other notices with
     such a version and the categories all of them fall in, then the buyers the
     export lists and the organizations changed at or after since (the most
     recently changed first, ties by id; an organization only when its last
@@ -106,7 +107,7 @@ def changed_urls(conn: sqlite3.Connection, since: str, site_url: str, *, cap: in
     all. Raises ValueError for a since that is not ISO, and sqlite3.Error when
     a table cannot be read."""
     from .export import listed_buyer_ids
-    from .export_static import active_since, read_segments, url_reference
+    from .export_static import PROVINCE_SLUGS, active_since, read_segments, url_reference
 
     base = site_url.rstrip("/")
     stamp = normalize_since(since)
@@ -146,6 +147,11 @@ def changed_urls(conn: sqlite3.Connection, since: str, site_url: str, *, cap: in
         add(path)
     for page in pages:
         add(page)
+        # Each province's and territory's page follows their index: it lists the open notices placed there, so
+        # it changes on nearly every night.
+        if page == "/provinces":
+            for _, slug in sorted(PROVINCE_SLUGS.items()):
+                add(f"/provinces/{slug}")
     # The monthly record's newest month (monthly.py), the one late notices move most; none while the record holds none.
     from .monthly import record_months
 

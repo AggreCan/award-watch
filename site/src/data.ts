@@ -782,6 +782,22 @@ export interface Category {
   years: { year: number; n: number; total: number | null }[];
 }
 
+// provinces/<code>.json: the open notices placed in one province or territory
+// by a stated or a derived province (the province filter's reading with the
+// notices that name none left out), as pages/provinces.tsx draws them.
+// open_tenders is the whole count; open_notices the first of them, soonest
+// closing first; buyers and segments the ones with the most, n_buyers and
+// n_segments how many there are in all.
+export interface ProvincePage {
+  code: string;
+  open_tenders: number;
+  open_notices: TenderRow[];
+  buyers: { id: string; name_en: string; name_fr: string | null; n: number }[];
+  n_buyers: number;
+  segments: { code: string; n: number }[];
+  n_segments: number;
+}
+
 export interface BuyerRank { id: string; name_en: string; name_fr: string | null; n: number; total: number | null }
 export interface Rankings {
   year: number | null; // null for rankings/all.json
@@ -1611,6 +1627,26 @@ export async function loadCategory(env: Env, code: string): Promise<Category | n
     isListOf(v.top_organizations, isOrgTotal) &&
     isListOf(v.years, (y) => isObj(y) && isNum(y.year) && isCount(y.n) && isNumOrNull(y.total));
   return ok ? (v as unknown as Category) : null;
+}
+
+// -- provinces and territories ------------------------------------------------------------
+
+// provinces/index.json: the open notices by province, the home map's open
+// layer in a file of its own (the page's date in the sitemap follows it).
+export async function loadProvinces(env: Env): Promise<ProvinceCounts | null> {
+  const v = await loadJson<unknown>(env, "provinces/index.json");
+  return isProvinceCounts(v) ? v : null;
+}
+
+export async function loadProvince(env: Env, code: string): Promise<ProvincePage | null> {
+  if (!PROVINCE_SET.has(code)) return null;
+  const v = await loadJson<unknown>(env, `provinces/${code.toLowerCase()}.json`);
+  const ok = isObj(v) && v.code === code && isCount(v.open_tenders) && isListOf(v.open_notices, isTenderRow) &&
+    v.open_notices.length <= v.open_tenders &&
+    isListOf(v.buyers, (b) => isObj(b) && isStr(b.id) && BUYER_ID_RE.test(b.id) && isStr(b.name_en) && isStrOrNull(b.name_fr) && isCount(b.n)) &&
+    isCount(v.n_buyers) && isListOf(v.segments, (g) => isObj(g) && isStr(g.code) && g.code in SEGMENTS && isCount(g.n)) &&
+    isCount(v.n_segments);
+  return ok ? (v as unknown as ProvincePage) : null;
 }
 
 // -- rankings -----------------------------------------------------------------------------

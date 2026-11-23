@@ -62,6 +62,8 @@ export type Kind = "page" | "api" | "download" | "form" | "file" | "feed" | "hoo
 // /interest is the alerts form's post (kind form); a GET there is sent to /alerts.
 const PAGES = new Set([
   "/", "/tenders", "/tenders/new", "/awards", "/expiring", "/organizations", "/buyers", "/segments", "/categories", "/rankings",
+  // The open notices by province and territory (pages/provinces.tsx); a province's page is "/provinces/:slug" below.
+  "/provinces",
   "/feeds", "/watchlist", "/data", "/methodology", "/cite", "/corrections", "/about", "/terms", "/privacy",
   "/alerts", "/interest",
   // The plans page (pages/pro.tsx) and the weekly briefing's sample (account/briefing_pages.tsx SAMPLE_PATH).
@@ -165,6 +167,7 @@ export function routeTemplate(method: string, path: string): { route: string; ki
   if (path === "/analytics/build.csv") return { route: path, kind: "download" };
   if (/^\/buyers\/[^/]+$/.test(path)) return { route: "/buyers/:id", kind: "page" };
   if (/^\/segments\/[^/]+$/.test(path)) return { route: "/segments/:nn", kind: "page" };
+  if (/^\/provinces\/[^/]+$/.test(path)) return { route: "/provinces/:slug", kind: "page" };
   if (/^\/categories\/[^/]+$/.test(path)) return { route: "/categories/:nn", kind: "page" };
   if (/^\/rankings\/[^/]+$/.test(path)) return { route: "/rankings/:year", kind: "page" };
   // The monthly record (pages/monthly.tsx): the index's CSV, a month's tables as CSV, a month.

@@ -1433,6 +1433,75 @@ const STRINGS = {
     fr: "Segment UNSPSC {code}, {name} : {n} avis d'appel d'offres ouverts, les organisations aux valeurs attribuées les plus élevées et les avis d'attribution par année.",
   },
 
+  // -- provinces and territories (pages/provinces.tsx) ----------------------------------------
+  "provinces.title": { en: "Federal Tenders by Province and Territory", fr: "Appels d'offres fédéraux par province et territoire" },
+  "provinces.lead": {
+    en: "The open federal tender notices, by the province or territory where the work is delivered.",
+    fr: "Les avis d'appel d'offres fédéraux ouverts, selon la province ou le territoire de livraison.",
+  },
+  "provinces.panel": { en: "Provinces and Territories", fr: "Provinces et territoires" },
+  "provinces.col_province": { en: "Province or territory", fr: "Province ou territoire" },
+  "provinces.not_stated_one": {
+    en: "{n} open notice names no province or territory (Canada-wide or not stated).",
+    fr: "{n} avis ouvert ne nomme aucune province ni aucun territoire (tout le Canada ou non indiqué).",
+  },
+  "provinces.not_stated_many": {
+    en: "{n} open notices name no province or territory (Canada-wide or not stated).",
+    fr: "{n} avis ouverts ne nomment aucune province ni aucun territoire (tout le Canada ou non indiqué).",
+  },
+  "provinces.all_open": { en: "All {n} open notices", fr: "Les {n} avis ouverts" },
+  "footer.provinces": { en: "By province", fr: "Par province" },
+  // A province as the place of a sentence: English takes "the" before the territories, French its own preposition.
+  "prov_in.AB": { en: "in Alberta", fr: "en Alberta" },
+  "prov_in.BC": { en: "in British Columbia", fr: "en Colombie-Britannique" },
+  "prov_in.MB": { en: "in Manitoba", fr: "au Manitoba" },
+  "prov_in.NB": { en: "in New Brunswick", fr: "au Nouveau-Brunswick" },
+  "prov_in.NL": { en: "in Newfoundland and Labrador", fr: "à Terre-Neuve-et-Labrador" },
+  "prov_in.NS": { en: "in Nova Scotia", fr: "en Nouvelle-Écosse" },
+  "prov_in.NT": { en: "in the Northwest Territories", fr: "dans les Territoires du Nord-Ouest" },
+  "prov_in.NU": { en: "in Nunavut", fr: "au Nunavut" },
+  "prov_in.ON": { en: "in Ontario", fr: "en Ontario" },
+  "prov_in.PE": { en: "in Prince Edward Island", fr: "à l'Île-du-Prince-Édouard" },
+  "prov_in.QC": { en: "in Quebec", fr: "au Québec" },
+  "prov_in.SK": { en: "in Saskatchewan", fr: "en Saskatchewan" },
+  "prov_in.YT": { en: "in Yukon", fr: "au Yukon" },
+  "province.heading": { en: "Federal Tenders {where}", fr: "Appels d'offres fédéraux {where}" },
+  "province.lead_one": {
+    en: "{n} open federal tender notice has work delivered {where}.",
+    fr: "{n} avis d'appel d'offres fédéral ouvert prévoit une livraison {where}.",
+  },
+  "province.lead_many": {
+    en: "{n} open federal tender notices have work delivered {where}.",
+    fr: "{n} avis d'appel d'offres fédéraux ouverts prévoient une livraison {where}.",
+  },
+  "province.lead_none": {
+    en: "No open federal tender notice has work delivered {where}.",
+    fr: "Aucun avis d'appel d'offres fédéral ouvert ne prévoit de livraison {where}.",
+  },
+  "province.note": {
+    en: "A notice is placed by its regions of delivery. One delivered in several provinces is listed under each, and one that names no province is listed under none.",
+    fr: "Un avis est situé d'après ses régions de livraison. Celui qui vise plusieurs provinces figure sous chacune, et celui qui n'en nomme aucune ne figure sous aucune.",
+  },
+  "province.open_none": { en: "No open notice is placed {where}.", fr: "Aucun avis ouvert n'est situé {where}." },
+  "province.buyers": { en: "Buyers With Open Notices", fr: "Acheteurs ayant des avis ouverts" },
+  "province.buyers_note": {
+    en: "The buyers with the most open notices here. A count opens the list.",
+    fr: "Les acheteurs ayant le plus d'avis ouverts ici. Un nombre ouvre la liste.",
+  },
+  "province.segments": { en: "Open Notices by Segment", fr: "Avis ouverts par segment" },
+  "province.segments_note": {
+    en: "The UNSPSC segments with the most open notices here. A notice with codes in two segments counts in each.",
+    fr: "Les segments UNSPSC ayant le plus d'avis ouverts ici. Un avis portant des codes de deux segments compte dans chacun.",
+  },
+  "province.first": { en: "The first {n} of {total}.", fr: "Les {n} premiers sur {total}." },
+  "province.others": { en: "Other Provinces and Territories", fr: "Autres provinces et territoires" },
+  "province.not_found": { en: "Province Not Found", fr: "Province introuvable" },
+  "province.back": { en: "Back to the provinces and territories", fr: "Retour aux provinces et territoires" },
+  "province.description": {
+    en: "Open federal tender notices with work delivered {where}, soonest closing first, with buyers and UNSPSC segments. Open now: {n}.",
+    fr: "Avis d'appel d'offres fédéraux ouverts avec livraison {where} : acheteurs, segments UNSPSC et dates de clôture. Ouverts : {n}.",
+  },
+
   // -- rankings -------------------------------------------------------------------------------
   "rankings.title": { en: "Rankings", fr: "Classements" },
   "rankings.title_year": { en: "Rankings for {year}", fr: "Classements de {year}" },
@@ -5064,6 +5133,18 @@ const PROVINCE_KEY: Record<string, Key> = {
 
 export function provinceName(lang: Lang, code: string): string {
   const key = PROVINCE_KEY[code.toUpperCase()];
+  return key ? t(lang, key) : code;
+}
+
+const PROVINCE_IN_KEY: Record<string, Key> = {
+  AB: "prov_in.AB", BC: "prov_in.BC", MB: "prov_in.MB", NB: "prov_in.NB", NL: "prov_in.NL", NS: "prov_in.NS", NT: "prov_in.NT",
+  NU: "prov_in.NU", ON: "prov_in.ON", PE: "prov_in.PE", QC: "prov_in.QC", SK: "prov_in.SK", YT: "prov_in.YT",
+};
+
+// A province or territory as the place of a sentence ("in the Northwest
+// Territories", "au Québec"), for the thirteen; any other code comes back as given.
+export function provinceIn(lang: Lang, code: string): string {
+  const key = PROVINCE_IN_KEY[code.toUpperCase()];
   return key ? t(lang, key) : code;
 }
 

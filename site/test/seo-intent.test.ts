@@ -65,6 +65,8 @@ const payEnv = (extra: Record<string, unknown> = {}) => onEnv({ ...PAY, ...extra
 const SECTIONS = [
   "/", "/overview", "/tenders", "/tenders/new", "/tenders/same-day", "/awards", "/awards/erroneous", "/expiring", "/expiring/3m",
   "/organizations", "/buyers", "/segments", "/rankings", "/feeds", "/alerts", "/watchlist", "/methodology", "/data", "/cite",
+  // The open notices by province and territory (pages/provinces.tsx): the index, a province and a territory with none.
+  "/provinces", "/provinces/british-columbia", "/provinces/ontario", "/provinces/yukon",
   "/corrections", "/about", "/terms", "/privacy", "/pro", "/analytics", "/monthly", "/monthly/2026-09",
   // The guides (pages/guides.tsx): the index, and each guide's own title and description from src/guides.ts.
   "/guides", "/guides/reading-a-canadabuys-tender-notice", "/guides/standing-offers-and-supply-arrangements",
