@@ -8,7 +8,6 @@ import csv
 import io
 import json
 import re
-import sqlite3
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
@@ -36,7 +35,7 @@ def answer(verdict: str, coverage: str, path: str, *, fetch: str = "SUCCESSFUL",
                                  "mobileUsabilityResult": {"verdict": "VERDICT_UNSPECIFIED"}}}
 
 
-def write_static(folder, tenders: int = 20, awards: int = 20) -> None:
+def write_static(folder, tenders: int = 20, awards: int = 20, buyers: bool = True) -> None:
     (folder / "tenders").mkdir(parents=True, exist_ok=True)
     (folder / "awards").mkdir(parents=True, exist_ok=True)
     (folder / "stats.json").write_text(json.dumps({"data_as_of": AS_OF.isoformat()}), encoding="utf-8")
@@ -48,17 +47,13 @@ def write_static(folder, tenders: int = 20, awards: int = 20) -> None:
               for i in range(awards)]
     recent.append({"organization_id": None, "awarded": AS_OF.isoformat()})
     (folder / "awards" / "recent.json").write_text(json.dumps(recent), encoding="utf-8")
-
-
-def write_db(path, n: int = 30) -> None:
-    conn = sqlite3.connect(path)
-    conn.execute("CREATE TABLE contracts (owner_org TEXT, reference TEXT, contract_date TEXT)")
-    rows = [("dnd-mdn", f"W8472-{i:06d}", (AS_OF - timedelta(days=5 * i)).isoformat()) for i in range(n)]
-    rows += [("PWGSC-TPSGC", "EN578-170432/001/ZM", AS_OF.isoformat()), ("not a dept", "X1", AS_OF.isoformat()),
-             ("dfo-mpo", "F1234 5678", AS_OF.isoformat()), ("dfo-mpo", "bad\nref", AS_OF.isoformat())]
-    conn.executemany("INSERT INTO contracts VALUES (?, ?, ?)", rows)
-    conn.commit()
-    conn.close()
+    if buyers:
+        # Ten buyers with open notices, three with none, and rows the sample must pass over.
+        index = [{"id": f"buyer-{i:02d}", "n_open_tenders": i + 1} for i in range(10)]
+        index += [{"id": f"quiet-{i}", "n_open_tenders": 0} for i in range(3)]
+        index += [{"id": "Not A Buyer", "n_open_tenders": 4}, {"id": "no-count"}, {"id": "true-count", "n_open_tenders": True}, "x"]
+        (folder / "buyers").mkdir(exist_ok=True)
+        (folder / "buyers" / "index.json").write_text(json.dumps({"buyers": index}), encoding="utf-8")
 
 
 class FakeGoogle:
@@ -94,9 +89,9 @@ def site(monkeypatch):
 
 @pytest.fixture
 def world(tmp_path):
+    # The second is the database path the command still takes (--db); nothing reads it since 2026-11-22.
     static, db = tmp_path / "static", tmp_path / "awardwatch.sqlite"
     write_static(static)
-    write_db(db)
     return static, db
 
 
@@ -118,17 +113,16 @@ def rows_of(tmp_path) -> list[dict]:
 
 
 def test_the_sample_takes_each_kinds_share_from_its_window(world):
-    static, db = world
-    found = ix.candidates(static, db)
+    static, _ = world
+    found = ix.candidates(static)
     # Tenders published in the 7 days to the data date, as the sitemaps write them (lower case).
     assert found["tender"] == sorted(f"/tenders/cb-{100 + i}-1000{i:04d}" for i in range(20) if i % 10 < 7)
     # Organizations with an award notice in the 30 days to it.
     assert found["organization"] == sorted(f"/organizations/org-b{i:09x}" for i in range(15))
-    # Published contracts dated in the 90 days, each address as the site writes it (encodeURIComponent).
-    assert "/contracts/pwgsc-tpsgc/EN578-170432%2F001%2FZM" in found["contract"]
-    assert "/contracts/dfo-mpo/F1234%205678" in found["contract"]
-    assert not any("not%20a%20dept" in p or "bad" in p for p in found["contract"])
-    assert len([p for p in found["contract"] if p.startswith("/contracts/dnd-mdn/")]) == 18
+    # The buyers with an open notice on the data date, whose pages list those notices; a buyer with none, a row
+    # that is no buyer id and a count that is no number are passed over. No published contract: robots.txt closes them.
+    assert found["buyer"] == [f"/buyers/buyer-{i:02d}" for i in range(10)]
+    assert "contract" not in found and not any(p.startswith("/contracts/") for paths in found.values() for p in paths)
     # The list pages that follow the data with the guides' index (no monthly record in this export), and the
     # guides as the site's own file names them.
     assert "/tenders" in found["page"] and "/guides" in found["page"] and "/privacy" not in found["page"]
@@ -136,10 +130,10 @@ def test_the_sample_takes_each_kinds_share_from_its_window(world):
     assert len(found["guide"]) >= 16 and all(re.fullmatch(r"/guides/[a-z0-9-]+", p) for p in found["guide"])
     sample = ix.draw(found)
     kinds = [k for k, _ in sample]
-    assert {k: kinds.count(k) for k in set(kinds)} == {"tender": 12, "organization": 12, "page": 6, "guide": 4, "contract": 6}
+    assert {k: kinds.count(k) for k in set(kinds)} == {"tender": 12, "organization": 12, "page": 6, "guide": 4, "buyer": 6}
     # One page of each kind a round, in the order SAMPLE names them, until a kind has given its share.
-    assert kinds[:20] == ["tender", "organization", "page", "guide", "contract"] * 4
-    assert kinds[20:26] == ["tender", "organization", "page", "contract"] + ["tender", "organization"]
+    assert kinds[:20] == ["tender", "organization", "page", "guide", "buyer"] * 4
+    assert kinds[20:26] == ["tender", "organization", "page", "buyer"] + ["tender", "organization"]
     assert kinds[-12:] == ["tender", "organization"] * 6
     # Each kind's pages are its lowest-ranked candidates, in rank order.
     for kind, share in ix.SAMPLE:
@@ -148,8 +142,8 @@ def test_the_sample_takes_each_kinds_share_from_its_window(world):
 
 
 def test_the_sample_is_the_same_each_night_and_rolls_slowly(world):
-    static, db = world
-    found = ix.candidates(static, db)
+    static, _ = world
+    found = ix.candidates(static)
     first = ix.draw(found)
     assert ix.draw(found) == first
     # A new tender joins the window: at most one tender changes, and the other kinds not at all.
@@ -158,19 +152,19 @@ def test_the_sample_is_the_same_each_night_and_rolls_slowly(world):
     assert len(set(second) - set(first)) <= 1
     assert [p for k, p in second if k != "tender"] == [p for k, p in first if k != "tender"]
     # The rank is a fixed function of the kind and the path.
-    assert ix.rank("tender", "/tenders/x") == ix.rank("tender", "/tenders/x") != ix.rank("contract", "/tenders/x")
+    assert ix.rank("tender", "/tenders/x") == ix.rank("tender", "/tenders/x") != ix.rank("buyer", "/tenders/x")
 
 
-def test_no_export_or_no_database_gives_what_is_there(tmp_path):
-    assert ix.candidates(tmp_path / "none", tmp_path / "none.sqlite") == {}
+def test_no_export_or_a_missing_file_gives_what_is_there(tmp_path):
+    assert ix.candidates(tmp_path / "none") == {}
     static = tmp_path / "static"
-    write_static(static)
-    assert ix.candidates(static, tmp_path / "none.sqlite")["contract"] == []
+    write_static(static, buyers=False)
+    assert ix.candidates(static)["buyer"] == []
     # The monthly record's months join the list pages once the export holds them; a file that names none adds none.
     (static / "monthly").mkdir()
     (static / "monthly" / "index.json").write_text(
         '{"as_of": "2026-11-19", "months": [{"month": "2026-10"}, {"month": "2026-13"}, {"month": 7}, "x"]}', encoding="utf-8")
-    pages = ix.candidates(static, tmp_path / "none.sqlite")["page"]
+    pages = ix.candidates(static)["page"]
     assert "/monthly/2026-10" in pages and not any("2026-13" in p for p in pages)
     assert ix.guide_paths(tmp_path / "no-such-file.ts") == []
 
@@ -180,9 +174,9 @@ def test_no_export_or_no_database_gives_what_is_there(tmp_path):
 
 def test_each_page_is_one_inspection_of_its_canonical_address_paced_and_kept(tmp_path, world, caplog):
     caplog.set_level("INFO")
-    path_of = lambda kind: [p for k, p in ix.draw(ix.candidates(*world)) if k == kind]  # noqa: E731
+    path_of = lambda kind: [p for k, p in ix.draw(ix.candidates(world[0])) if k == kind]  # noqa: E731
     unknown, crawled = path_of("tender")[0], path_of("organization")[0]
-    duplicate, gone = path_of("contract")[0], path_of("contract")[1]
+    duplicate, gone = path_of("buyer")[0], path_of("buyer")[1]
     http = FakeGoogle({
         unknown: answer("NEUTRAL", "URL is unknown to Google", unknown, fetch="PAGE_FETCH_STATE_UNSPECIFIED", crawl=None),
         crawled: answer("NEUTRAL", "Crawled - currently not indexed", crawled),
@@ -239,7 +233,7 @@ def test_a_refusal_stops_the_sample_and_the_night_goes_on(tmp_path, world, caplo
 
 
 def test_a_page_that_fails_is_skipped_and_the_rest_are_kept(tmp_path, world):
-    sample = ix.draw(ix.candidates(*world))
+    sample = ix.draw(ix.candidates(world[0]))
     broken = {p: FakeResponse(500, None, "backend error") for _, p in sample[:3]}
     broken[sample[3][1]] = {"inspectionResult": {}}  # no index status at all
     broken[sample[4][1]] = ConnectionError("reset")
@@ -263,7 +257,6 @@ def test_what_google_says_is_kept_short_and_plain(tmp_path):
     assert row["verdict"] == "" and "\n" not in row["coverage"] and len(row["coverage"]) <= ix.TEXT_MAX
     assert row["last_crawl"] == ""
     assert ix.row_of(date(2026, 11, 19), "tender", "/tenders/x", {"error": "x"}, SITE) is None
-    assert ix.component("EN578-170432/001/ZM (a)") == "EN578-170432%2F001%2FZM%20(a)"
 
 
 def test_without_the_secret_or_a_sample_nothing_is_asked(tmp_path, world):

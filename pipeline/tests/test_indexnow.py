@@ -66,9 +66,12 @@ def send(http, urls, **kwargs):
     return record, waits
 
 
-def organization(conn, name, stamp):
-    """An organization whose row was written at stamp (its updated_at)."""
-    return organizations.upsert(conn, name, source="awards", now=stamp)
+def organization(conn, name, stamp, last_seen="2026-10-01"):
+    """An organization whose row was written at stamp (its updated_at), its last record dated last_seen (recent
+    by default: one with nothing recent is not announced)."""
+    oid = organizations.upsert(conn, name, source="awards", now=stamp)
+    conn.execute("UPDATE organizations SET last_seen = ? WHERE id = ?", (last_seen, oid))
+    return oid
 
 
 def tender(conn, reference, first_seen, codes=(), status="open", closing=None, amendment=0):
@@ -165,6 +168,22 @@ def test_organizations_the_recompute_rewrote_are_selected_and_unchanged_ones_are
     assert organizations.recompute(conn, now=START)["updated"] == 1
     urls = indexnow.changed_urls(conn, START, BASE)
     assert f"{BASE}/organizations/{a}" in urls and f"{BASE}/organizations/{b}" not in urls
+
+
+def test_an_organization_with_nothing_recent_is_not_announced(conn):
+    """The site marks such a profile noindex (site/src/seo.ts dormantProfile), by the export's own window
+    (export_static.active_since): 24 months to the data date, which is the run's day when the database names none."""
+    first_day = organization(conn, "First Day Supply Ltd", START, last_seen="2024-10-24")
+    day_before = organization(conn, "Day Before Supply Ltd", START, last_seen="2024-10-23")
+    undated = organization(conn, "Undated Supply Ltd", START, last_seen=None)
+    conn.commit()
+    urls = indexnow.changed_urls(conn, START, BASE)
+    assert urls == FIXED + [f"{BASE}/organizations/{first_day}"]
+    assert f"{BASE}/organizations/{day_before}" not in urls and f"{BASE}/organizations/{undated}" not in urls
+    # The window follows the export's data date when the database names one.
+    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('data_as_of', '2026-10-25')")
+    conn.commit()
+    assert f"{BASE}/organizations/{first_day}" not in indexnow.changed_urls(conn, START, BASE)
 
 
 def test_order_is_newest_change_first_with_ties_by_id_whatever_the_insert_order(conn):

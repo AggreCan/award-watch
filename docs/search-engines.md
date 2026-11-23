@@ -145,7 +145,11 @@ python -m awardwatch_pipeline.nightly indexnow --db data/awardwatch.sqlite --sin
   `--since` is the time in `data/out/run_started.txt`, written as the
   pipeline step starts. The organizations stage rewrites
   `organizations.updated_at` only when a value on the profile changed, and a
-  new organization row carries the time it was first written.
+  new organization row carries the time it was first written. Since
+  2026-11-22 an organization is sent only when its last record
+  (`organizations.last_seen`) falls in the 24 months to the data date
+  (`export_static.active_since`): the site marks any other profile
+  `noindex`, and a page that asks not to be indexed is not announced.
 
 At most 20,000 URLs a night, in that order, the most recently changed first
 within each kind, so the open notices go first whatever the night's size. A
@@ -697,13 +701,15 @@ data date (`tenders/open.json`), 12 organizations with an award notice in
 the 30 days to it (`awards/recent.json`), 6 of the list pages that follow
 the data (with the guides' index and the monthly record's months), 4
 guides (their addresses as `site/src/guides.ts` writes them), and 6
-published contracts dated in the 90 days to it (the pipeline's contracts
-table, opened read-only), each kind ranked by SHA-256 of a fixed seed, the
-kind and the page's path, lowest first. The same pages come back night
+buyers with an open tender notice (`buyers/index.json`), whose pages list
+those notices since 2026-11-21. Until 2026-11-22 the last kind was 6
+published contracts; `robots.txt` closes their pages since 2026-11-21, so
+Google has nothing to say of them. Each kind is ranked by SHA-256 of a fixed
+seed, the kind and the page's path, lowest first. The same pages come back night
 after night while they stay in their windows, so the sample rolls slowly.
 The kinds are asked in turn, one page of each a round, so a night the time
 limit cuts short has still asked about every kind (the first night asked
-kind by kind and reached 25 pages and no contract). The addresses are the
+kind by kind and reached 25 pages and none of the last kind). The addresses are the
 ones the sitemaps list.
 
 One request per page, `POST https://searchconsole.googleapis.com/v1/urlInspection/index:inspect`

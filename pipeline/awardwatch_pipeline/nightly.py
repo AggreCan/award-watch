@@ -1660,8 +1660,8 @@ def build_parser() -> argparse.ArgumentParser:
                          "index_sample.csv; outcome.txt, detail_outcome.txt and index_outcome.txt go beside them "
                          "(default data/out/search_console)")
     gs.add_argument("--static", default=None, help="tonight's export, for the index sample (default data/out/static)")
-    gs.add_argument("--db", default=None, help="the pipeline's database, for the index sample's contracts "
-                                               "(default data/awardwatch.sqlite; opened read-only)")
+    gs.add_argument("--db", default=None, help="the pipeline's database; accepted and not read since 2026-11-22 "
+                                               "(the index sample took its published contracts from it)")
     # The monthly audience report (views_report.py), from the files in R2.
     vp = sub.add_parser("views-report", help="write the audience report of a finished UTC month")
     vp.add_argument("--month", default=None, help="YYYY-MM (default: the month before today, UTC)")

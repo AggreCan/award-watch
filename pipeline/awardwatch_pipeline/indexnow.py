@@ -22,6 +22,9 @@ run (closed on the data date) and the category pages all those notices fall
 in; then every buyer and organization whose row changed during the run
 (organizations.recompute and indicators.compute write updated_at only when
 something on the page changed, and a new row gets the stamp of its insert).
+An organization with no record in the 24 months to the data date is left
+out since 2026-11-22: the site marks its profile noindex, and a page that
+asks not to be indexed is not announced.
 At most CAP URLs a night, in that order, the most recently changed first
 within each kind; pages beyond
 the cap wait for the sitemap, which lists the open notices and every
@@ -40,7 +43,7 @@ import json
 import logging
 import sqlite3
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Sequence
 from urllib.parse import urlsplit
@@ -98,11 +101,12 @@ def changed_urls(conn: sqlite3.Connection, since: str, site_url: str, *, cap: in
     the run's day or later, then the fixed pages, then the other notices with
     such a version and the categories all of them fall in, then the buyers the
     export lists and the organizations changed at or after since (the most
-    recently changed first, ties by id), without repeats and at most cap in
+    recently changed first, ties by id; an organization only when its last
+    record falls in the active window), without repeats and at most cap in
     all. Raises ValueError for a since that is not ISO, and sqlite3.Error when
     a table cannot be read."""
     from .export import listed_buyer_ids
-    from .export_static import read_segments, url_reference
+    from .export_static import active_since, read_segments, url_reference
 
     base = site_url.rstrip("/")
     stamp = normalize_since(since)
@@ -152,11 +156,20 @@ def changed_urls(conn: sqlite3.Connection, since: str, site_url: str, *, cap: in
     for code in sorted(touched):
         add(f"/segments/{code}")
     listed = listed_buyer_ids(conn, as_of)
-    for table, prefix in (("buyers", "/buyers/"), ("organizations", "/organizations/")):
-        for (rid,) in conn.execute(f"SELECT id FROM {table} WHERE updated_at >= ? ORDER BY updated_at DESC, id LIMIT ?",
-                                   (stamp, limit)):
-            if table != "buyers" or rid in listed:
-                add(prefix + rid)
+    for (rid,) in conn.execute("SELECT id FROM buyers WHERE updated_at >= ? ORDER BY updated_at DESC, id LIMIT ?", (stamp, limit)):
+        if rid in listed:
+            add("/buyers/" + rid)
+    # An organization with no record in the active window says noindex on the site (site/src/seo.ts dormantProfile;
+    # the window is export_static.active_since of the data date), so its page is not sent to a search engine: only
+    # one whose last record falls in the window. A data date that does not parse sends them all, as before.
+    try:
+        window: str | None = active_since(date.fromisoformat(str(as_of)[:10]))
+    except ValueError:
+        window = None
+    recent = " AND last_seen >= ?" if window else ""
+    for (rid,) in conn.execute(f"SELECT id FROM organizations WHERE updated_at >= ?{recent} ORDER BY updated_at DESC, id LIMIT ?",
+                               (stamp, window, limit) if window else (stamp, limit)):
+        add("/organizations/" + rid)
     return urls
 
 

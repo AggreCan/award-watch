@@ -14,15 +14,18 @@ TENDER_DAYS days to the data date (tenders/open.json), organizations with an
 award notice in the ORGANIZATION_DAYS days to it (awards/recent.json), the
 site's list pages that follow the data with the guides' index and the monthly
 record's months (export_static.SITEMAP_DATED_PAGES, monthly/index.json), the
-guides (their addresses as site/src/guides.ts writes them), and published
-contracts dated in the CONTRACT_DAYS days to it (the pipeline's contracts
-table). Each kind's candidates are ranked by SHA-256 of SEED, the kind and
-the page's path, and the lowest are taken: the same candidates give the same
-sample every night, and the sample rolls slowly as pages enter and leave the
-windows. The kinds are asked in turn, one page of each a round, so a night
-the time budget cuts short has still asked about every kind (the first
-night, 2026-11-20, asked kind by kind and reached 25 pages and no contract).
-The addresses are the canonical ones the sitemaps list.
+guides (their addresses as site/src/guides.ts writes them), and the buyers
+with an open tender notice (buyers/index.json), whose pages list those
+notices since 2026-11-21. Until 2026-11-22 the last kind was published
+contracts; the site's robots.txt closes their pages since 2026-11-21, so
+Google has nothing to say of them. Each kind's candidates are ranked by
+SHA-256 of SEED, the kind and the page's path, and the lowest are taken: the
+same candidates give the same sample every night, and the sample rolls
+slowly as pages enter and leave the windows. The kinds are asked in turn,
+one page of each a round, so a night the time budget cuts short has still
+asked about every kind (the first night, 2026-11-20, asked kind by kind and
+reached 25 pages and none of the last kind). The addresses are the canonical
+ones the sitemaps list.
 
 The requests: one POST per page to INSPECT_URL, with the page's address and
 the property, one at a time, PAUSE_S apart, none after BUDGET_S. Google's
@@ -49,13 +52,12 @@ import json
 import logging
 import os
 import re
-import sqlite3
 import time
 from collections.abc import Callable
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping
-from urllib.parse import quote, urlsplit
+from urllib.parse import urlsplit
 
 from . import config
 from .search_console import (DATE_RE, FAILED, NO_CREDENTIALS, SECRET_ENV, UP_TO_DATE, FileError, SearchConsoleError,
@@ -70,14 +72,11 @@ HEADER = ["date", "kind", "path", "verdict", "coverage", "robots", "indexing", "
 OUTCOME = "index_outcome.txt"
 
 # The kinds of page and how many of each a night, 40 in all, in the order a round asks them.
-SAMPLE: tuple[tuple[str, int], ...] = (("tender", 12), ("organization", 12), ("page", 6), ("guide", 4), ("contract", 6))
+SAMPLE: tuple[tuple[str, int], ...] = (("tender", 12), ("organization", 12), ("page", 6), ("guide", 4), ("buyer", 6))
 SAMPLE_SIZE = sum(n for _, n in SAMPLE)
 SEED = "award-watch index sample 1"
 TENDER_DAYS = 7
 ORGANIZATION_DAYS = 30
-CONTRACT_DAYS = 90
-# Candidates read from the contracts table at most (by date, newest first).
-CONTRACT_CANDIDATES = 50_000
 PAUSE_S = 1.0
 # An inspection took about 12 s on the first night, so 420 s reaches about 35 pages; the step's own limit is 900 s.
 BUDGET_S = 420.0
@@ -92,14 +91,7 @@ BUYER_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 REF_RE = re.compile(r"^[A-Za-z0-9._-]{1,80}$")
 VERDICT_RE = re.compile(r"^[A-Z_]{1,40}$")
 CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
-# The longest contract reference the site addresses (records_db.REF_MAX, pages/published.tsx REF_MAX).
-REF_MAX = 200
 TEXT_MAX = 120
-
-
-def component(text: str) -> str:
-    """One path segment as JavaScript's encodeURIComponent writes it (site/src/pages/shared.tsx contractPath)."""
-    return quote(text, safe="!~*'()")
 
 
 # -- the sample -----------------------------------------------------------------
@@ -153,29 +145,16 @@ def organization_paths(static: Path, as_of: date) -> list[str]:
     return sorted(out)
 
 
-def contract_paths(db: Path, as_of: date) -> list[str]:
-    """Published contracts dated in the window, as the site addresses them; none when the database is not there
-    or cannot be read. Opened read-only: the sample never writes to it."""
-    if not db.is_file():
-        return []
-    first = (as_of - timedelta(days=CONTRACT_DAYS - 1)).isoformat()
-    try:
-        conn = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
-    except sqlite3.Error:
-        return []
-    try:
-        rows = conn.execute("SELECT owner_org, reference FROM contracts WHERE contract_date >= ? AND contract_date <= ? "
-                            "ORDER BY contract_date DESC LIMIT ?", (first, as_of.isoformat(), CONTRACT_CANDIDATES)).fetchall()
-    except sqlite3.Error:
-        return []
-    finally:
-        conn.close()
+def buyer_paths(static: Path) -> list[str]:
+    """The buyers with an open tender notice on the data date (buyers/index.json n_open_tenders), whose pages list
+    those notices; none when the file is not there or names none."""
+    index = _load(static / "buyers" / "index.json")
     out = set()
-    for dept, ref in rows:
-        dept = str(dept or "").lower()
-        ref = str(ref or "")
-        if BUYER_ID_RE.match(dept) and len(dept) <= 80 and ref and len(ref) <= REF_MAX and not CONTROL_RE.search(ref):
-            out.add(f"/contracts/{component(dept)}/{component(ref)}")
+    for row in (index.get("buyers") if isinstance(index, dict) else None) or []:
+        bid = row.get("id") if isinstance(row, dict) else None
+        n = row.get("n_open_tenders") if isinstance(row, dict) else None
+        if isinstance(bid, str) and BUYER_ID_RE.match(bid) and len(bid) <= 80 and isinstance(n, int) and not isinstance(n, bool) and n > 0:
+            out.add(f"/buyers/{bid}")
     return sorted(out)
 
 
@@ -224,12 +203,12 @@ def draw(candidates: Mapping[str, list[str]]) -> list[tuple[str, str]]:
     return out
 
 
-def candidates(static: Path, db: Path) -> dict[str, list[str]]:
+def candidates(static: Path) -> dict[str, list[str]]:
     as_of = data_date(static)
     if as_of is None:
         return {}
     return {"tender": tender_paths(static, as_of), "organization": organization_paths(static, as_of),
-            "page": page_paths(static), "guide": guide_paths(), "contract": contract_paths(db, as_of)}
+            "page": page_paths(static), "guide": guide_paths(), "buyer": buyer_paths(static)}
 
 
 # -- one inspection ---------------------------------------------------------------
@@ -299,7 +278,8 @@ def run(out_dir: Path | None = None, *, env: Mapping[str, str] | None = None, se
         sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic) -> str:
     """Inspect tonight's sample. Returns "inspected <n>" (pages Google answered for), "up to date" (tonight's
     sample is in the file already), "no sample", "no credentials", "not permitted", "rate limited" or "failed";
-    never raises, and never logs a token."""
+    never raises, and never logs a token. db is accepted and not read: the sample took its published contracts
+    from the pipeline's database until 2026-11-22, and the command's --db stays so the workflow need not change."""
     try:
         return _run(out_dir, env=env, session=session, now=now, static=static, db=db, sleep=sleep, clock=clock)
     except Exception as exc:
@@ -332,9 +312,9 @@ def _run(out_dir: Path | None, *, env: Mapping[str, str] | None, session: Any | 
     today = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).date()
     if any(r["date"] == today.isoformat() for r in held):
         return UP_TO_DATE
-    sample = draw(candidates(static or (config.OUT_DIR / "static"), db or config.DEFAULT_DB))
+    sample = draw(candidates(static or (config.OUT_DIR / "static")))
     if not sample:
-        log.info("index sample: no page to sample (the export or the database is not there)")
+        log.info("index sample: no page to sample (the export is not there)")
         return NO_SAMPLE
 
     origin = config.SITE_URL.rstrip("/")
