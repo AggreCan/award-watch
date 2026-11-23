@@ -1,4 +1,4 @@
-Last successful refresh: 2026-11-22 13:34 UTC
+Last successful refresh: 2026-11-23 13:46 UTC
 
 Audience roll-up: rolled up
 
@@ -6,20 +6,22 @@ Search Console: imported 1 day
 
 Search Console by page and query: imported 1 day
 
-Index sample: inspected 40
+Index sample: inspected 44
 
-IndexNow: submitted 12 URLs
+IndexNow: submitted 140 URLs
 
-Search database: nothing to send
+Search database: synced
 
-Records database: synced
+Records database: failed
 
-Old download files in R2: 21 deleted
+Old download files in R2: none stale
 
 Notices from this run (information; nothing failed):
 
 - awards: 54 rows (54 names) read as private individuals, supplier withheld; the first 50 names are listed for review in data/out/review/awards-persons.txt
-- organizations: 35556 organizations merged into others (business_number 26072, truncation 903, spelling 8581, seed 0), 624 left for review, 0 seed rows not applied, spelling rule on: 6784 groups (8581 organizations to join another), 35265 candidates for the seed; listed in data/out/review/organization-merges.txt
+- contracts: 55483 rows (21788 names) read as private individuals, vendor withheld; the first 50 names are listed for review in data/out/review/contracts-persons.txt
+- grants: 76934 rows (44364 names) read as private individuals, recipient withheld; the first 50 names are listed for review in data/out/review/grants-persons.txt
+- lobbying: lobbying: the seed copy data/seeds/communications_ocl_cal.zip (sha256 528ea3c64e32) is unchanged; its rows stay
+- organizations: 35556 organizations merged into others (business_number 26072, truncation 903, spelling 8581, seed 0), 624 left for review, 0 seed rows not applied, spelling rule on: 6784 groups (8581 organizations to join another), 35267 candidates for the seed; listed in data/out/review/organization-merges.txt
 - organizations: 1497 contract values flagged for checking and left out of the totals; listed in data/out/review/value-flags.txt
-- expiring: 6002 radar rows dropped as duplicates; the pairs are listed in data/out/review/expiring-duplicates.txt
-- link_sample: 1 of tonight's sampled government links answered 404 or 410; the run-attention issue lists the addresses
+- expiring: 6000 radar rows dropped as duplicates; the pairs are listed in data/out/review/expiring-duplicates.txt
