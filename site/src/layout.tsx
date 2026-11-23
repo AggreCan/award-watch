@@ -398,6 +398,8 @@ const Rail: FC<{ lang: Lang; active?: string; rail: RailCounts | null; here: str
   const states = railStates(index, here, active);
   const browse: RailEntry[] = [
     { href: "/segments", label: t(lang, "nav.segments"), section: "/segments" },
+    // The open notices by province and territory (pages/provinces.tsx), beside the segments (operator, 2026-11-22).
+    { href: "/provinces", label: t(lang, "nav.provinces"), section: "/provinces" },
     { href: "/rankings", label: t(lang, "nav.rankings"), section: "/rankings" },
     // The analytics views' index (pages/analytics_index.tsx), the chip in the count's
     // slot: listed for every reader once Pro exists, since the views exist only then.
@@ -555,7 +557,7 @@ export const FooterRow: FC<{ lang: Lang; lobbyingLoaded: boolean; on: boolean; b
       {/* The app home's own address (pages/home.tsx overviewPage), which "/" gives a signed-in reader only. */}
       <a href="/overview">{t(lang, "rail.index")}</a>
       <a href="/segments">{t(lang, "nav.segments")}</a>
-      {/* The open notices by province and territory (pages/provinces.tsx), which the rail does not list. */}
+      {/* The open notices by province and territory (pages/provinces.tsx): the rail's item stands here on a phone. */}
       <a href="/provinces">{t(lang, "footer.provinces")}</a>
       <a href="/rankings">{t(lang, "nav.rankings")}</a>
       {/* The rail's Browse group hides on a phone, where these links stand in for it; no chip here. */}

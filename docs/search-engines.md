@@ -1106,9 +1106,10 @@ to land on: the tender list filtered to a province is a query address, and
 derived province, the same reading as the province filter with the notices
 that name no province left out, so the list a page links
 (`/tenders?province=XX&national=0`) holds exactly its count. All fourteen
-pages are in the pages part, each dated by its own file, and every page's
-footer links the index; a notice's page links the provinces its regions of
-delivery state. The slugs are one table on each side
+pages are in the pages part, each dated by its own file. Every page links
+the index twice, from the rail's Browse group (Provinces, after Segments)
+and from the footer, which stands in for the rail on a phone; a notice's
+page links the provinces its regions of delivery state. The slugs are one table on each side
 (`export_static.PROVINCE_SLUGS`, `site/src/constants.ts PROVINCE_SLUGS`),
 held equal by `site/test/provinces.test.ts`.
 

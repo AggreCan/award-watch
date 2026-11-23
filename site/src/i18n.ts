@@ -48,6 +48,7 @@ const STRINGS = {
   "nav.organizations": { en: "Organizations", fr: "Organisations" },
   "nav.buyers": { en: "Buyers", fr: "Acheteurs" },
   "nav.segments": { en: "Segments", fr: "Segments" },
+  "nav.provinces": { en: "Provinces", fr: "Provinces" },
   "nav.rankings": { en: "Rankings", fr: "Classements" },
   "nav.data": { en: "Data", fr: "Données" },
   "nav.methodology": { en: "Methodology", fr: "Méthodologie" },
@@ -4998,6 +4999,7 @@ export const SAME_IN_BOTH: ReadonlySet<Key> = new Set<Key>([
   "tip.head", // a chart tip's series and period, joined by a comma in both
   "site.name",
   "nav.segments",
+  "nav.provinces", // the word is the same in French
   "pa.cell_count", // a count and an amount, joined by a comma in both
   "common.page_n",
   "common.source",

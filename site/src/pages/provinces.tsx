@@ -47,7 +47,7 @@ export async function provincesIndex(c: Context<AppEnv>): Promise<Response> {
   const codes = [...PROVINCES].sort((a, b) => open(b) - open(a) || byName(lang)(a, b));
   return page(
     c,
-    <Layout lang={lang} title={t(lang, "provinces.title")} dataAsOf={stats.data_as_of} seo={pageSeo("provinces", lang)}>
+    <Layout lang={lang} title={t(lang, "provinces.title")} dataAsOf={stats.data_as_of} active="/provinces" seo={pageSeo("provinces", lang)}>
       <PageHead lang={lang} title={t(lang, "provinces.title")} lead={t(lang, "provinces.lead")}>
         <p class="page-note">{t(lang, "map.several")}</p>
       </PageHead>
@@ -113,7 +113,7 @@ export async function provincePage(c: Context<AppEnv>): Promise<Response> {
   const others = PROVINCES.filter((p) => p !== code).sort(byName(lang));
   return page(
     c,
-    <Layout lang={lang} title={heading} dataAsOf={stats.data_as_of} seo={provinceSeo(code, prov.open_tenders, lang, crumbs)}>
+    <Layout lang={lang} title={heading} dataAsOf={stats.data_as_of} active="/provinces" seo={provinceSeo(code, prov.open_tenders, lang, crumbs)}>
       <PageHead lang={lang} crumbs={crumbs} title={heading} lead={lead}>
         <p class="page-note">{t(lang, "province.note")}</p>
       </PageHead>

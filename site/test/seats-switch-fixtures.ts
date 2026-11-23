@@ -123,6 +123,8 @@ export const CAPTURED_WITHOUT: readonly string[] = [
   // The footer's link to the open notices by province (pages/provinces.tsx), added to every page on 2026-11-22.
   '<a href="/provinces">By province</a>',
   '<a href="/provinces">Par province</a>',
+  // The rail's item for the same pages, in its Browse group after Segments (the word is the same in French).
+  '<li><a class="rail-item" href="/provinces"><span class="rail-label">Provinces</span></a></li>',
 ];
 export const withoutMonthly = (page: string): string => CAPTURED_WITHOUT.reduce((p, added) => p.replaceAll(added, ""), page);
 // The capture was made before the way to Ultra on a plan card took a fill of its own (src/pro.tsx actionClass, the

@@ -278,6 +278,21 @@ describe("the ways to the pages", () => {
     expect(await html("/tenders?lang=fr")).toContain('<a href="/provinces">Par province</a>');
   });
 
+  it("the rail lists the pages after Segments, and its item is the current one on each of them", async () => {
+    const ITEM = '<a class="rail-item" href="/provinces"><span class="rail-label">Provinces</span></a>';
+    const HERE = '<a class="rail-item" href="/provinces" aria-current="page"><span class="rail-label">Provinces</span></a>';
+    const railOf = (page: string) => /<nav class="rail"[\s\S]*?<\/nav>/.exec(page)?.[0] ?? "";
+    for (const path of ["/tenders", "/tenders?lang=fr", "/segments/82"]) {
+      const rail = railOf(await html(path));
+      expect(rail, path).toContain(`<span class="rail-label">Segments</span></a></li><li>${ITEM}</li>`);
+    }
+    for (const path of ["/provinces", "/provinces/british-columbia", "/provinces/yukon?lang=fr"]) {
+      const rail = railOf(await html(path));
+      expect(rail, path).toContain(`<li>${HERE}</li>`);
+      expect(rail.match(/aria-current="page"/g), path).toHaveLength(1);
+    }
+  });
+
   it("a notice's provinces of delivery link their pages", async () => {
     const main = mainOf(await html("/tenders/cb-100-10000001"));
     expect(main).toContain('<dd><a href="/provinces/ontario">Ontario</a>, <a href="/provinces/quebec">Quebec</a></dd>');
