@@ -1,14 +1,14 @@
-Last successful refresh: 2026-11-23 13:46 UTC
+Last successful refresh: 2026-11-24 13:30 UTC
 
 Audience roll-up: rolled up
 
 Search Console: imported 1 day
 
-Search Console by page and query: imported 1 day
+Search Console by page and query: imported 2 days
 
 Index sample: inspected 44
 
-IndexNow: submitted 140 URLs
+IndexNow: submitted 193 URLs
 
 Search database: synced
 
@@ -19,9 +19,6 @@ Old download files in R2: none stale
 Notices from this run (information; nothing failed):
 
 - awards: 54 rows (54 names) read as private individuals, supplier withheld; the first 50 names are listed for review in data/out/review/awards-persons.txt
-- contracts: 55483 rows (21788 names) read as private individuals, vendor withheld; the first 50 names are listed for review in data/out/review/contracts-persons.txt
-- grants: 76934 rows (44364 names) read as private individuals, recipient withheld; the first 50 names are listed for review in data/out/review/grants-persons.txt
-- lobbying: lobbying: the seed copy data/seeds/communications_ocl_cal.zip (sha256 528ea3c64e32) is unchanged; its rows stay
-- organizations: 35556 organizations merged into others (business_number 26072, truncation 903, spelling 8581, seed 0), 624 left for review, 0 seed rows not applied, spelling rule on: 6784 groups (8581 organizations to join another), 35267 candidates for the seed; listed in data/out/review/organization-merges.txt
+- organizations: 35556 organizations merged into others (business_number 26072, truncation 903, spelling 8581, seed 0), 624 left for review, 0 seed rows not applied, spelling rule on: 6784 groups (8581 organizations to join another), 35269 candidates for the seed; listed in data/out/review/organization-merges.txt
 - organizations: 1497 contract values flagged for checking and left out of the totals; listed in data/out/review/value-flags.txt
-- expiring: 6000 radar rows dropped as duplicates; the pairs are listed in data/out/review/expiring-duplicates.txt
+- expiring: 6008 radar rows dropped as duplicates; the pairs are listed in data/out/review/expiring-duplicates.txt
