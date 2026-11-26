@@ -86,9 +86,12 @@ records table is about a hundred times larger:
   it to 'ready' with the data date, so a page never shows half a load.
 
 A full reload is made on an empty ledger, when asked (`records-sync --full`)
-and after a count read back disagreed, but not within RELOAD_MIN_DAYS of the
-last one: a full load of the twelve tables TABLES held when this was measured
-wrote about 25 million rows (TABLES holds twenty-three now). It is
+and after a count read back disagreed in a table larger than
+TABLE_RELOAD_MAX_ROWS, but not within RELOAD_MIN_DAYS of the last one: a full
+load of the twelve tables TABLES held when this was measured wrote about 25
+million rows (TABLES holds twenty-three now). A smaller table whose count
+disagreed is reloaded alone by the next sync (emptied in D1, every row sent,
+its ledger entries replaced), which the workflow runs the same night. It is
 also made, whatever the days, when the tables changed form (LAYOUT differs
 from the one the last full load recorded): D1 creates a table only when it is
 missing, so the new columns reach it only by dropping the old tables.
@@ -194,6 +197,7 @@ TABLES = (RECORDS, ORGS, BUYERS, BUYER_QUARTERS, SEGMENT_YEARS, BUYER_YEARS, DUE
           EVENTS, INSTRUMENTS, HOLDERS, EXPIRING_PROV, CONTRACT_INDIGENOUS, LINES, FOLLOWS, CONTRACT_EXCEPTION, CUBE_BS,
           CUBE_PLACE, CUBE_META)
 BY_CODE = {t.code: t for t in TABLES}
+BY_NAME = {t.name: t for t in TABLES}
 
 # The form of the tables in records_schema.sql. 1: phase 1 (no meta row says
 # so); 2: the amendment, reference and title columns, the median columns and
@@ -227,8 +231,18 @@ DUE_QUARTERS = 8
 # month the paid plan includes, so one forced by a count that disagreed waits
 # this long after the last.
 RELOAD_MIN_DAYS = 28
+# A table whose count read back from D1 disagrees is reloaded alone when it holds at most this many rows, by the
+# manifest and by D1: records-check names it (META_TABLE_RELOAD), and the next sync deletes its rows in D1 and sends
+# every one again, about twice its rows in writes. A count disagrees when D1 received a batch the ledger never
+# recorded (2026-11-23: Wrangler reported a failed import that had applied, and rows sent that night and removed
+# later stayed in D1, since no delete names a key the ledger does not hold). The workflow runs that sync at once,
+# so the night heals; a larger table waits for a full reload (RELOAD_MIN_DAYS).
+TABLE_RELOAD_MAX_ROWS = 200_000
+# records-check's exit status when every table that disagrees can be reloaded alone: the workflow syncs again at once.
+RELOAD_NOW = 3
 
 META_RELOAD = "records_reload_due"      # the date records-check found a count disagreeing
+META_TABLE_RELOAD = "records_table_reload"  # the tables records-check named for a reload of their own, comma separated
 META_FULL_AT = "records_full_at"        # the date the last full reload was written
 META_PLAN = "records_plan"              # the plan number of the stage records-synced may record
 META_LAYOUT = "records_layout"          # the LAYOUT of the last full load D1 received
@@ -1599,19 +1613,34 @@ def full_reason(conn: sqlite3.Connection, *, requested: bool = False, ledger_emp
     return why if days is None or days >= RELOAD_MIN_DAYS else ""
 
 
-def stage(conn: sqlite3.Connection, reason: str) -> dict[str, dict[str, int]]:
-    """records_staged := tonight's differences from the ledger (all of tonight's rows on a full reload).
+def tables_to_reload(conn: sqlite3.Connection) -> list[Table]:
+    """The tables records-check named for a reload of their own (META_TABLE_RELOAD), in TABLES order."""
+    names = set((get_meta(conn, META_TABLE_RELOAD) or "").split(","))
+    return [t for t in TABLES if t.name in names]
+
+
+def request_table_reload(conn: sqlite3.Connection, names: Sequence[str]) -> None:
+    """Name tables for a reload of their own by the next sync, beside any named already."""
+    wanted = {t.name for t in tables_to_reload(conn)} | set(names)
+    set_meta(conn, META_TABLE_RELOAD, ",".join(t.name for t in TABLES if t.name in wanted))
+    conn.commit()
+
+
+def stage(conn: sqlite3.Connection, reason: str, reload: Sequence[Table] = ()) -> dict[str, dict[str, int]]:
+    """records_staged := tonight's differences from the ledger (all of tonight's rows on a full reload, and all of a
+    table reloaded alone).
 
     A row is staged with its hash when its key is new or its hash changed, and
     with a NULL hash (a delete) when the ledger holds its key and tonight does
-    not. Returns the upserts and deletes per table and the rows each table
-    holds afterwards.
+    not. A table in reload has every row staged and no delete: its batches
+    empty it in D1 first. Returns the upserts and deletes per table and the
+    rows each table holds afterwards.
     """
     conn.execute("DELETE FROM records_staged")
     out = {"upserts": {}, "deletes": {}, "expected": {}}
     for t in TABLES:
         now = f"temp.{_now(t)}"
-        if reason:
+        if reason or t in reload:
             conn.execute(f"INSERT INTO records_staged (t, k, h) SELECT ?, {t.key}, h FROM {now}", (t.code,))
         else:
             conn.execute(
@@ -1684,8 +1713,9 @@ def finish_sql(as_of: str) -> str:
 def write_batches(conn: sqlite3.Connection, out_dir: Path, *, full: bool, max_bytes: int = MAX_BATCH_BYTES,
                   max_statements: int = MAX_BATCH_STATEMENTS, max_rows_per_upsert: int = MAX_ROWS_PER_UPSERT,
                   max_keys_per_delete: int = MAX_KEYS_PER_DELETE, max_statement_bytes: int = MAX_STATEMENT_BYTES,
-                  schema_path: Path | None = None) -> _BatchWriter:
-    """The staged rows as batch files: the reset of a full reload alone first, then the deletes, then the upserts."""
+                  schema_path: Path | None = None, reload: Sequence[Table] = ()) -> _BatchWriter:
+    """The staged rows as batch files: the reset of a full reload alone first, then the emptying of each table
+    reloaded alone, then the deletes, then the upserts. Applied twice, each batch leaves what it left once."""
     out_dir.mkdir(parents=True, exist_ok=True)
     for old in out_dir.glob("batch-*.sql"):
         old.unlink()
@@ -1693,6 +1723,9 @@ def write_batches(conn: sqlite3.Connection, out_dir: Path, *, full: bool, max_by
     if full:
         writer.add(reset_sql(schema_path), "the reset batch")
         writer.flush()
+    elif reload:
+        for t in reload:
+            writer.add(f"DELETE FROM {t.name};", f"the {t.name} reload")
     for t in TABLES:
         keys = (r[0] for r in conn.execute("SELECT k FROM records_staged WHERE t = ? AND h IS NULL ORDER BY k", (t.code,)))
         for statement in delete_statements(t, keys, max_keys=max_keys_per_delete, max_bytes=max_statement_bytes):
@@ -1725,13 +1758,15 @@ def sync(conn: sqlite3.Connection, out_dir: Path | None = None, *, full: bool = 
     events = derive_events(conn, as_of)
     ledger_empty = conn.execute("SELECT NOT EXISTS (SELECT 1 FROM records_ledger)").fetchone()[0] == 1
     reason = full_reason(conn, requested=full, ledger_empty=ledger_empty, today=today)
-    staged = stage(conn, reason)
+    # A full reload sends every table anyway.
+    reload = [] if reason else tables_to_reload(conn)
+    staged = stage(conn, reason, reload)
     plan = secrets.token_hex(8)
     set_meta(conn, META_PLAN, plan)
     if reason:
         set_meta(conn, META_FULL_AT, today or today_iso())
     conn.commit()
-    writer = write_batches(conn, out, full=bool(reason))
+    writer = write_batches(conn, out, full=bool(reason), reload=reload)
     (out / FINISH).write_text(finish, encoding="utf-8")
     for t in TABLES:
         conn.execute(f"DROP TABLE IF EXISTS temp.{_now(t)}")
@@ -1740,6 +1775,8 @@ def sync(conn: sqlite3.Connection, out_dir: Path | None = None, *, full: bool = 
         "plan": plan,
         "full": bool(reason),
         "reason": reason,
+        # The tables emptied and sent whole tonight; records-synced replaces their ledger entries.
+        "reloaded": [t.name for t in reload],
         # The form of the tables a full reload creates; records-synced keeps it (META_LAYOUT).
         "layout": LAYOUT,
         "as_of": as_of,
@@ -1804,6 +1841,19 @@ def count_check(expected: dict[str, int], actual: dict[str, int]) -> str | None:
     return "; ".join(wrong) or None
 
 
+def disagreeing(expected: dict[str, int], actual: dict[str, int]) -> tuple[list[str], list[str]]:
+    """The tables whose counts disagree, in TABLES order: those within TABLE_RELOAD_MAX_ROWS by both counts, which a
+    sync reloads alone, and the rest, which wait for a full reload."""
+    small: list[str] = []
+    large: list[str] = []
+    for t in TABLES:
+        n, got = expected.get(t.name), actual.get(t.name)
+        if got == n:
+            continue
+        (small if max(n or 0, got or 0) <= TABLE_RELOAD_MAX_ROWS else large).append(t.name)
+    return small, large
+
+
 def record_sync(conn: sqlite3.Connection, manifest: dict) -> dict[str, int]:
     """Move the staged entries into the ledger, once D1 holds every batch.
 
@@ -1811,18 +1861,24 @@ def record_sync(conn: sqlite3.Connection, manifest: dict) -> dict[str, int]:
     night, or planned against another database, records nothing), and the
     ledger must then hold exactly the manifest's expected total. A full
     reload replaces the whole ledger and records the form of the tables it
-    created (META_LAYOUT). The stage is emptied, the sync logged in
-    records_sync, and a reload asked for earlier is no longer due.
+    created (META_LAYOUT); a table reloaded alone has its entries replaced. The
+    stage is emptied, the sync logged in records_sync, and a reload asked for
+    earlier, full or of a table, is no longer due: D1's counts agreed.
     """
     if manifest.get("plan") != get_meta(conn, META_PLAN):
         raise ValueError("the manifest's plan is not the one staged in this database; nothing recorded")
     expected = int(manifest["expected_total"])
-    summary = {k: manifest.get(k) for k in ("generated_at", "full", "reason", "layout", "as_of", "bytes", "statements",
-                                            "upserts", "deletes", "expected")}
+    reloaded = manifest.get("reloaded") or []
+    if not isinstance(reloaded, list) or any(name not in BY_NAME for name in reloaded):
+        raise ValueError("the manifest names a reloaded table that is not a records table; nothing recorded")
+    summary = {k: manifest.get(k) for k in ("generated_at", "full", "reason", "reloaded", "layout", "as_of", "bytes",
+                                            "statements", "upserts", "deletes", "expected")}
     summary["batches"] = len(manifest.get("batches") or [])
     try:
         if manifest.get("full"):
             conn.execute("DELETE FROM records_ledger")
+        for name in reloaded:
+            conn.execute("DELETE FROM records_ledger WHERE t = ?", (BY_NAME[name].code,))
         upserts = conn.execute(
             "INSERT INTO records_ledger (t, k, h) SELECT t, k, h FROM records_staged WHERE h IS NOT NULL "
             "ON CONFLICT (t, k) DO UPDATE SET h = excluded.h").rowcount
@@ -1833,7 +1889,7 @@ def record_sync(conn: sqlite3.Connection, manifest: dict) -> dict[str, int]:
         if held != expected:
             raise ValueError(f"the ledger would hold {held} rows where the manifest expects {expected}")
         conn.execute("DELETE FROM records_staged")
-        conn.execute("DELETE FROM meta WHERE key IN (?, ?)", (META_RELOAD, META_PLAN))
+        conn.execute("DELETE FROM meta WHERE key IN (?, ?, ?)", (META_RELOAD, META_TABLE_RELOAD, META_PLAN))
         if manifest.get("full") and isinstance(manifest.get("layout"), int):
             set_meta(conn, META_LAYOUT, manifest["layout"])
         conn.execute("INSERT INTO records_sync (run_at, manifest, rows, full) VALUES (?, ?, ?, ?)",
@@ -1869,7 +1925,8 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     rc.add_argument("--manifest", required=True)
     rc.add_argument("--counts", required=True, help="Wrangler's --json answer to the count statement (COUNT_SQL)")
     rc.add_argument("--db", default=None,
-                    help="SQLite path; when given, a mismatch is noted there so a coming sync reloads in full")
+                    help="SQLite path; when given, a mismatch is noted there: a small table is reloaded alone by the "
+                         "next sync (exit 3 when that covers every table that disagrees), a larger one in a full reload")
     rd = sub.add_parser("records-synced", help="record the staged ledger entries of a manifest whose batches were applied")
     rd.add_argument("--db", default=None, help="SQLite path (default data/awardwatch.sqlite)")
     rd.add_argument("--manifest", required=True)
@@ -1882,7 +1939,8 @@ def _outcome(outcome: str) -> None:
 
 
 def command(args: argparse.Namespace) -> int:
-    """Run one of COMMANDS. 0 on success; 1 when the counts disagree."""
+    """Run one of COMMANDS. 0 on success; for records-check, 1 when the counts disagree, RELOAD_NOW when every table
+    that disagrees is noted for a reload of its own."""
     if args.command == "records-check":
         return _check(args)
     # "failed" first, replaced only by records-synced, so a night that stops
@@ -1894,7 +1952,8 @@ def command(args: argparse.Namespace) -> int:
         if args.command == "records-sync":
             manifest = sync(conn, Path(args.out) if args.out else None, full=args.full,
                             static_dir=Path(args.static) if args.static else None)
-            kind = f"full reload ({manifest['reason']})" if manifest["full"] else "changes only"
+            kind = (f"full reload ({manifest['reason']})" if manifest["full"] else
+                    f"changes only, {', '.join(manifest['reloaded'])} reloaded alone" if manifest["reloaded"] else "changes only")
             summary = (f"records-sync: {kind}: upserts {manifest['upserts']}, deletes {manifest['deletes']}, "
                        f"{len(manifest['batches'])} batches, {manifest['bytes']} bytes, {manifest['statements']} "
                        f"statements, rows expected afterwards {manifest['expected']}, left out {manifest['left_out']}, "
@@ -1920,10 +1979,20 @@ def _check(args: argparse.Namespace) -> int:
         print(f"records-check: {actual}, as the manifest expects")
         return 0
     log.error("records-check: %s", problem)
-    if args.db:
-        conn = connect(args.db)
-        try:
+    if not args.db:
+        return 1
+    small, large = disagreeing(expected_counts(manifest), actual)
+    conn = connect(args.db)
+    try:
+        if small:
+            request_table_reload(conn, small)
+        if large:
             request_reload(conn)
-        finally:
-            conn.close()
-    return 1
+    finally:
+        conn.close()
+    if small:
+        print(f"records-check: the next sync reloads {', '.join(small)} alone")
+    if large:
+        print(f"records-check: {', '.join(large)} wait for a full reload (at most one every {RELOAD_MIN_DAYS} days)")
+        return 1
+    return RELOAD_NOW if small else 1

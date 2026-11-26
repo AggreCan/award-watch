@@ -8,9 +8,12 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
+import shutil
 import sqlite3
 import statistics
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -397,6 +400,85 @@ def test_tables_of_another_form_reload_in_full_whatever_the_days(seeded, tmp_pat
     assert rd.full_reason(conn, ledger_empty=True).startswith("first load")
 
 
+def snapshot(db: sqlite3.Connection) -> list[list[tuple]]:
+    return [db.execute(f"SELECT * FROM {t.name} ORDER BY 1").fetchall() for t in rd.TABLES]
+
+
+def test_a_table_whose_count_disagrees_is_reloaded_alone_and_its_ghost_rows_go(seeded, tmp_path):
+    """2026-11-23: Wrangler reported a failed import that had applied, so the ledger never held what D1 received, and
+    rows sent that night and removed later stayed in D1 (no delete names a key the ledger does not hold). The count
+    check names the table; the next sync empties it in D1 and sends it whole beside the night's changes; the ledger's
+    entries for it are replaced; the night after sends nothing."""
+    conn, _ = seeded
+    out = tmp_path / "records"
+    db = d1()
+    night(conn, out, db)
+    ghost = 9_999_999
+    db.execute("INSERT INTO rec_orgs (oid, name) VALUES (?, 'Gone Ltd')", (ghost,))
+    conn.execute("UPDATE contracts SET amendment_value = 40000 WHERE reference = 'C-2'")
+    tonight = rd.sync(conn, out)
+    assert tonight["reloaded"] == []
+    apply(db, out, tonight)
+    expected = rd.expected_counts(tonight)
+    assert rd.count_check(expected, counts(db)) == \
+        f"rec_orgs holds {expected['rec_orgs'] + 1} rows where the manifest expects {expected['rec_orgs']}"
+    assert rd.disagreeing(expected, counts(db)) == (["rec_orgs"], [])
+
+    rd.request_table_reload(conn, ["rec_orgs"])
+    again = rd.sync(conn, out)
+    assert again["reloaded"] == ["rec_orgs"] and not again["full"] and again["reason"] == ""
+    assert again["upserts"]["rec_orgs"] == again["expected"]["rec_orgs"] and again["deletes"]["rec_orgs"] == 0
+    # The night's own changes still go, since nothing recorded them.
+    assert again["upserts"]["records"] == tonight["upserts"]["records"] >= 1
+    assert (out / again["batches"][0]).read_text(encoding="utf-8").startswith("DELETE FROM rec_orgs;\n")
+    apply(db, out, again)
+    assert rd.count_check(rd.expected_counts(again), counts(db)) is None
+    assert db.execute("SELECT COUNT(*) FROM rec_orgs WHERE oid = ?", (ghost,)).fetchone() == (0,)
+    assert db.execute("SELECT cents FROM records WHERE k = ?", (rd.key_of("contract:dnd-mdn:C-2"),)).fetchone() == (4_000_000,)
+    # Applied twice, the reload's batches leave the same rows.
+    before = snapshot(db)
+    apply(db, out, again)
+    assert snapshot(db) == before
+
+    db.executescript((out / rd.FINISH).read_text(encoding="utf-8"))
+    rd.record_sync(conn, again)
+    assert conn.execute("SELECT COUNT(*) FROM records_ledger").fetchone()[0] == again["expected_total"]
+    assert conn.execute("SELECT COUNT(*) FROM records_ledger WHERE t = ?", (rd.ORGS.code,)).fetchone()[0] == \
+        again["expected"]["rec_orgs"]
+    assert get_meta(conn, rd.META_TABLE_RELOAD) is None
+    logged = json.loads(conn.execute("SELECT manifest FROM records_sync ORDER BY rowid DESC LIMIT 1").fetchone()[0])
+    assert logged["reloaded"] == ["rec_orgs"]
+    after = night(conn, out, db)
+    assert after["batches"] == [] and after["reloaded"] == []
+
+
+def test_a_reload_of_a_table_waits_until_a_sync_is_recorded_and_a_full_reload_takes_its_place(seeded, tmp_path):
+    conn, _ = seeded
+    out = tmp_path / "records"
+    db = d1()
+    night(conn, out, db)
+    rd.request_table_reload(conn, ["rec_buyers"])
+    rd.request_table_reload(conn, ["rec_orgs", "rec_buyers"])
+    assert get_meta(conn, rd.META_TABLE_RELOAD) == "rec_orgs,rec_buyers"
+    assert [t.name for t in rd.tables_to_reload(conn)] == ["rec_orgs", "rec_buyers"]
+    # A sync that is never recorded leaves the request for the next.
+    assert rd.sync(conn, out)["reloaded"] == ["rec_orgs", "rec_buyers"]
+    assert rd.sync(conn, out)["reloaded"] == ["rec_orgs", "rec_buyers"]
+    # A full reload sends every table anyway, and its record ends the request.
+    full = rd.sync(conn, out, full=True)
+    assert full["full"] and full["reloaded"] == []
+    assert not any(line == "DELETE FROM rec_orgs;" for line in (out / full["batches"][0]).read_text(encoding="utf-8").splitlines())
+    apply(db, out, full)
+    rd.record_sync(conn, full)
+    assert get_meta(conn, rd.META_TABLE_RELOAD) is None
+    # A manifest naming a table that is not one records nothing.
+    rd.request_table_reload(conn, ["rec_orgs"])
+    bad = {**rd.sync(conn, out), "reloaded": ["rec_orgs; DROP TABLE records"]}
+    with pytest.raises(ValueError, match="not a records table"):
+        rd.record_sync(conn, bad)
+    assert get_meta(conn, rd.META_TABLE_RELOAD) == "rec_orgs"
+
+
 def test_the_ledger_records_only_the_plan_it_staged(seeded, tmp_path):
     conn, _ = seeded
     out = tmp_path / "records"
@@ -488,9 +570,11 @@ def test_the_commands_run_a_night_end_to_end(tmp_path):
     wrong = tmp_path / "wrong.json"
     answer = counts(db)
     wrong.write_text(json.dumps([{"results": [{**answer, "records": answer["records"] - 1}], "success": True}]))
-    assert cli.main(["records-check", "--manifest", str(out / rd.MANIFEST), "--counts", str(wrong), "--db", str(path)]) == 1
+    # A table this small is noted for a reload of its own, and the workflow syncs again at once.
+    assert cli.main(["records-check", "--manifest", str(out / rd.MANIFEST), "--counts", str(wrong), "--db", str(path)]) \
+        == rd.RELOAD_NOW
     conn = connect(path)
-    assert get_meta(conn, rd.META_RELOAD)
+    assert get_meta(conn, rd.META_TABLE_RELOAD) == "records" and get_meta(conn, rd.META_RELOAD) is None
     conn.close()
 
     right = tmp_path / "count.json"
@@ -501,6 +585,7 @@ def test_the_commands_run_a_night_end_to_end(tmp_path):
     conn = connect(path)
     assert conn.execute("SELECT COUNT(*) FROM records_ledger").fetchone()[0] == manifest["expected_total"]
     assert get_meta(conn, rd.META_RELOAD) is None and get_meta(conn, rd.META_PLAN) is None
+    assert get_meta(conn, rd.META_TABLE_RELOAD) is None
     log_rows = conn.execute("SELECT rows, full FROM records_sync").fetchall()
     assert [tuple(r) for r in log_rows] == [(manifest["expected_total"], 1)]
     conn.close()
@@ -516,6 +601,48 @@ def test_the_commands_run_a_night_end_to_end(tmp_path):
     (tmp_path / "broken.sqlite").write_bytes(b"not a database")
     assert cli.main(["records-sync", "--db", str(tmp_path / "broken.sqlite"), "--out", str(out)]) == 2
     assert outcome.read_text() == "failed\n"
+
+
+def test_the_check_names_small_tables_for_a_reload_of_their_own_and_a_large_one_for_a_full_reload(tmp_path, monkeypatch):
+    path = tmp_path / "awardwatch.sqlite"
+    conn = connect(path)
+    seed(conn)
+    set_meta(conn, "data_as_of", "2026-10-31")
+    conn.commit()
+    conn.close()
+    out = tmp_path / "records"
+    db = d1()
+    assert cli.main(["records-sync", "--db", str(path), "--out", str(out)]) == 0
+    for name in (out / rd.BATCH_LIST).read_text().split():
+        db.executescript((out / name).read_text(encoding="utf-8"))
+    answer = counts(db)
+    answer_file = tmp_path / "count.json"
+
+    def check(**off: int) -> int:
+        answer_file.write_text(json.dumps([{"results": [{**answer, **{k: answer[k] + v for k, v in off.items()}}]}]))
+        return cli.main(["records-check", "--manifest", str(out / rd.MANIFEST), "--counts", str(answer_file), "--db", str(path)])
+
+    def meta(key: str) -> str | None:
+        c = connect(path)
+        try:
+            return get_meta(c, key)
+        finally:
+            c.close()
+
+    # D1 holding one row too many in one small table, then another: each is noted, in TABLES order, exit 3.
+    assert check(rec_buyers=1) == rd.RELOAD_NOW and meta(rd.META_TABLE_RELOAD) == "rec_buyers"
+    assert check(rec_orgs=-1) == rd.RELOAD_NOW and meta(rd.META_TABLE_RELOAD) == "rec_orgs,rec_buyers"
+    assert meta(rd.META_RELOAD) is None
+    # A table over the limit, by either count, waits for a full reload: exit 1, the small one still noted.
+    monkeypatch.setattr(rd, "TABLE_RELOAD_MAX_ROWS", answer["records"])
+    assert check(records=1, rec_gsin=1) == 1
+    assert meta(rd.META_RELOAD) and meta(rd.META_TABLE_RELOAD) == "rec_orgs,rec_buyers,rec_gsin"
+    assert rd.disagreeing({"records": 9, "rec_orgs": 2}, {"records": 9, "rec_orgs": 3}) == (["rec_orgs"], [])
+    # Counts that agree note nothing, and without --db a mismatch notes nothing either.
+    assert check() == 0
+    assert cli.main(["records-check", "--manifest", str(out / rd.MANIFEST), "--counts", str(answer_file)]) == 0
+    answer_file.write_text(json.dumps([{"results": [{**answer, "rec_orgs": answer["rec_orgs"] + 5}]}]))
+    assert cli.main(["records-check", "--manifest", str(out / rd.MANIFEST), "--counts", str(answer_file)]) == 1
 
 
 @pytest.mark.parametrize(("value", "item", "notice"), [
@@ -554,17 +681,24 @@ def test_the_workflow_syncs_the_records_database_before_the_save_and_never_holds
     sync = step(text, "Sync the records database")
     assert "id: records" in sync and "continue-on-error: true" in sync and "timeout-minutes: 300" in sync
     assert "steps.verify.outputs.export_ok == 'true' && steps.verify.outputs.db_ok == 'true'" in sync
-    # The placeholder first (no database: a notice, nothing sent), then plan, schema, batches, counts, check,
-    # finish and ledger, in that order.
+    # The placeholder first (no database: a notice, nothing sent), then the batch apply with its one retry, then at
+    # most two passes of plan, schema, batches, counts and check, then finish and ledger, in that order.
     order = [
         "if grep -q '\"database_id\": \"00000000-0000-0000-0000-000000000000\"' wrangler.jsonc; then",
         "printf 'no database\\n' > \"$out/last_outcome.txt\"",
+        "apply() {",
+        "for try in 1 2; do",
+        '"$WRANGLER" d1 execute awardwatch-records --remote --yes --file "$1"',
+        'if [ "$try" = 1 ] && grep -q "Not currently importing anything" "$out/apply.log"; then',
+        "for pass in 1 2; do",
         'awardwatch_pipeline records-sync --db ../data/awardwatch.sqlite --static ../data/out/static --out "$out"',
         '"$WRANGLER" d1 execute awardwatch-records --remote --yes --file ../pipeline/records_schema.sql',
         'for batch in $(cat "$out/batches.txt"); do',
-        '"$WRANGLER" d1 execute awardwatch-records --remote --yes --file "$out/$batch"',
+        'apply "$out/$batch"',
         f'"$WRANGLER" d1 execute awardwatch-records --remote --json --command "{rd.COUNT_SQL}" > "$out/count.json"',
-        'records-check --db ../data/awardwatch.sqlite --manifest "$out/manifest.json" --counts "$out/count.json"',
+        'records-check --db ../data/awardwatch.sqlite --manifest "$out/manifest.json" --counts "$out/count.json" || code=$?',
+        f'if [ "$code" = {rd.RELOAD_NOW} ] && [ "$pass" = 1 ]; then',
+        "exit 1",
         '"$WRANGLER" d1 execute awardwatch-records --remote --yes --file "$out/finish.sql"',
         'records-synced --db ../data/awardwatch.sqlite --manifest "$out/manifest.json"',
     ]
@@ -576,6 +710,100 @@ def test_the_workflow_syncs_the_records_database_before_the_save_and_never_holds
     assert "--records-outcome data/out/records/last_outcome.txt" in step(text, "Write the run status")
     assert 'echo "Records database: $(cat data/out/records/last_outcome.txt)"' in step(
         text, "Record the run so the schedule stays enabled")
+
+
+BASH = shutil.which("bash")
+# A POSIX bash: the Linux runner's, or Git's on Windows (not the WSL launcher in System32, which cannot read these paths).
+HAS_BASH = BASH is not None and "system32" not in BASH.lower()
+
+# Stand-ins the step's script calls instead of Wrangler and the pipeline: each call is logged; Wrangler fails once on
+# the first batch with FAIL (empty: never); records-check exits with the next code in the codes file.
+STUBS = """
+sleep() { :; }
+wrangler_stub() {
+  echo "wrangler $*" >> "$LOG"
+  case "$*" in
+    *--command*) echo '[{"results": [{}]}]'; return 0 ;;
+    *batch-0001.sql*)
+      if [ -n "$FAIL" ] && [ ! -f "$STATE/failed" ]; then touch "$STATE/failed"; echo "$FAIL"; return 1; fi ;;
+  esac
+  return 0
+}
+python() {
+  echo "python $*" >> "$LOG"
+  case "$*" in
+    *records-sync*) printf 'batch-0001.sql\\nbatch-0002.sql\\n' > "$out/batches.txt"; touch "$out/batch-0001.sql" "$out/batch-0002.sql" ;;
+    *records-check*)
+      local rc
+      rc=$(head -n 1 "$STATE/codes"); tail -n +2 "$STATE/codes" > "$STATE/rest"; mv "$STATE/rest" "$STATE/codes"
+      return "$rc" ;;
+  esac
+  return 0
+}
+"""
+
+
+def run_records_step(tmp_path: Path, codes: list[int], fail: str = "") -> tuple[int, list[str]]:
+    """The step's own script, run by bash -e as the runner runs it, with the stand-ins above."""
+    script = step(WORKFLOW.read_text(encoding="utf-8"), "Sync the records database").split("run: |\n", 1)[1]
+    # The block ends at the first line indented less than it (the next step's comments).
+    lines = []
+    for line in script.splitlines():
+        if line.strip() and not line.startswith(" " * 10):
+            break
+        lines.append(line[10:])
+    body = "\n".join(lines)
+    site = tmp_path / "site"
+    state = tmp_path / "state"
+    for folder in (site, state, tmp_path / "data" / "out"):
+        folder.mkdir(parents=True, exist_ok=True)
+    (site / "wrangler.jsonc").write_text('{"database_id": "b5db88f1-51e9-4dd5-bd48-b939315a56b7"}\n', encoding="utf-8")
+    (state / "codes").write_bytes("".join(f"{c}\n" for c in codes).encode())
+    (state / "step.sh").write_bytes((STUBS + body + "\n").encode("utf-8"))
+    log = state / "log"
+    env = {**os.environ, "WRANGLER": "wrangler_stub", "LOG": log.as_posix(), "STATE": state.as_posix(), "FAIL": fail}
+    done = subprocess.run([BASH, "-e", (state / "step.sh").as_posix()], cwd=site, env=env, capture_output=True, timeout=60)
+    calls = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+    return done.returncode, calls
+
+
+def kinds(calls: list[str]) -> list[str]:
+    """Each call by what it does: sync, schema, a batch by name, counts, check, finish, synced."""
+    out = []
+    for c in calls:
+        # records-synced before records-sync, which it begins with.
+        for needle, name in (("records-synced", "synced"), ("records-sync", "sync"), ("records_schema.sql", "schema"),
+                             ("--command", "counts"), ("records-check", "check"), ("finish.sql", "finish"),
+                             ("batch-0001.sql", "batch1"), ("batch-0002.sql", "batch2")):
+            if needle in c:
+                out.append(name)
+                break
+    return out
+
+
+ONE_PASS = ["sync", "schema", "batch1", "batch2", "counts", "check"]
+
+
+@pytest.mark.skipif(not HAS_BASH, reason="no POSIX bash here")
+def test_the_step_heals_a_small_table_the_same_night_and_retries_a_lost_import_once(tmp_path):
+    # Counts that agree: one pass, then finish and the ledger.
+    code, calls = run_records_step(tmp_path / "a", [0])
+    assert code == 0 and kinds(calls) == ONE_PASS + ["finish", "synced"]
+    # A small table disagreed (exit 3): the sync runs again at once, and its agreeing counts finish the night.
+    code, calls = run_records_step(tmp_path / "b", [rd.RELOAD_NOW, 0])
+    assert code == 0 and kinds(calls) == ONE_PASS + ONE_PASS + ["finish", "synced"]
+    # Still disagreeing after the second pass, or a table that waits for a full reload (exit 1): the step fails,
+    # with nothing finished and nothing recorded.
+    code, calls = run_records_step(tmp_path / "c", [rd.RELOAD_NOW, rd.RELOAD_NOW])
+    assert code != 0 and kinds(calls) == ONE_PASS + ONE_PASS
+    code, calls = run_records_step(tmp_path / "d", [1])
+    assert code != 0 and kinds(calls) == ONE_PASS
+    # Wrangler losing track of an import: the same batch once more, then on.
+    code, calls = run_records_step(tmp_path / "e", [0], fail="✘ [ERROR] Not currently importing anything.")
+    assert code == 0 and kinds(calls) == ["sync", "schema", "batch1", "batch1", "batch2", "counts", "check", "finish", "synced"]
+    # Any other failure stops the step at that batch, without a second try.
+    code, calls = run_records_step(tmp_path / "f", [0], fail="✘ [ERROR] D1_ERROR: no such table: rec_orgs")
+    assert code != 0 and kinds(calls) == ["sync", "schema", "batch1"]
 
 
 def test_the_binding_the_site_reads_is_the_database_the_step_writes():

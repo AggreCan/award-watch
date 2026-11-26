@@ -187,7 +187,13 @@ a table a hundred times larger.
    `last_outcome.txt` before it starts.
 2. Wrangler applies `records_schema.sql` (every statement `IF NOT EXISTS`)
    and each batch in order, then reads each table's row count back;
-   `records-check` compares them with the manifest.
+   `records-check` compares them with the manifest. A batch whose import
+   Wrangler reports as "Not currently importing anything" is applied once
+   more (on 2026-11-23 that report came for an import that had applied). When
+   the only tables that disagree hold at most
+   `records_db.TABLE_RELOAD_MAX_ROWS` rows, `records-check` exits 3 and the
+   step runs steps 1 and 2 again at once, with those tables reloaded alone
+   (below).
 3. Only then does Wrangler apply `finish.sql`, which sets `state` to `ready`
    and `as_of` to tonight's data date, and `records-synced` moves the staged
    entries into the ledger, logs the sync in `records_sync` and writes
@@ -206,10 +212,25 @@ first night of the record tables.
 A full reload drops the tables, applies the schema, sets `state` to
 `loading`, and sends every row. The pages answer "being loaded" until
 `finish.sql` sets it back, so no reader sees half a load. The sync makes one
-by itself on an empty ledger and after a count read back disagreed, but not
-within 28 days of the last one (a full load of the twelve tables `TABLES`
-held when this was measured wrote about 25 million rows, half of the plan's
-monthly allowance; `TABLES` holds 23 now).
+by itself on an empty ledger and after a count read back disagreed in a table
+larger than `TABLE_RELOAD_MAX_ROWS` (200,000 rows), but not within 28 days of
+the last one (a full load of the twelve tables `TABLES` held when this was
+measured wrote about 25 million rows, half of the plan's monthly allowance;
+`TABLES` holds 23 now).
+
+A count disagrees when D1 holds rows the ledger never recorded: a batch
+applied while the night reported it failed, then a row sent that night and
+removed from the data later, which no delete names since the ledger does not
+hold its key. A table within `TABLE_RELOAD_MAX_ROWS` is reloaded alone:
+`records-check` names it in the pipeline database's meta
+(`records_table_reload`), the next sync's first batch empties it in D1
+(`DELETE FROM <table>`) and every row of it is sent, and `records-synced`
+replaces its ledger entries. The nightly runs that sync at once, so the night
+ends with the counts agreeing; a reload costs about twice the table's rows in
+writes. While its batches apply, the pages that read the table may show part
+of it for a minute; `state` stays `ready`. A full reload sends every table, so
+it ends a table's reload too, and so does any sync recorded with agreeing
+counts.
 
 It also makes one, whatever the days, when the tables changed form. D1
 creates a table only when it is missing, so a new column reaches a database
