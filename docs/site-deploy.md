@@ -197,6 +197,20 @@ failed-workflow email, whenever anything was not confirmed, including a
 smoke verdict of `unverifiable`, which (as in the nightly) is not a reason
 to roll back.
 
+The zone's custom rule challenges any client that is not a verified crawler
+on the data pages, and three of the smoke test's five pages are such pages
+(the overview, the open tenders and a profile). The smoke test in both
+workflows sends the header `X-AwardWatch-Check` with the key in the
+repository secret `AWARDWATCH_CHECK_KEY` (64 lower-case hexadecimal
+characters), and the rule lets a request carrying it through, whatever
+network the runner is on. The secret reaches the smoke step alone, as an
+env line; the run's log says whether a key was sent, never the key. The
+same value sits in the rule and in a file on the operator's machine; to
+change it, change all three together. Without the secret the smoke test
+sends no header, its covered pages are challenged, and the verdict is
+`unverifiable`: in the nightly that is a notice in the run status, never a
+rollback.
+
 ## The deploy token
 
 1. Cloudflare dashboard, signed in as the project account: My Profile, API

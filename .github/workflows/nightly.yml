@@ -810,6 +810,9 @@ jobs:
         if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
         continue-on-error: true
         timeout-minutes: 10
+        # The key the zone's rule lets past its challenge on the data pages (resilience.CHECK_KEY_ENV).
+        env:
+          AWARDWATCH_CHECK_KEY: ${{ secrets.AWARDWATCH_CHECK_KEY }}
         run: |
           mkdir -p data/out/deploy
           data_date=$(python -c 'import json, sys; print(json.load(open(sys.argv[1])).get("data_as_of") or "")' data/out/static/stats.json || true)

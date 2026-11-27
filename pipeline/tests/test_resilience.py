@@ -411,6 +411,124 @@ def test_a_missing_data_date_or_a_strange_answer_is_unverifiable():
     assert mixed["verdict"] == "unverifiable"
 
 
+CHECK_KEY = "0123456789abcdef" * 4
+# The key goes only to the site's own host over https (resilience.CHECK_HOSTS).
+SITE = "https://awardwatch.ca"
+
+
+class RecordingHttp(FakeHttp):
+    """FakeHttp that also keeps each call's keyword arguments (allow_redirects)."""
+
+    def __init__(self, routes):
+        super().__init__(routes)
+        self.kwargs = []
+
+    def get(self, url, headers=None, timeout=None, stream=False, **kwargs):
+        self.kwargs.append(kwargs)
+        return super().get(url, headers=headers, timeout=timeout, stream=stream, **kwargs)
+
+
+def site_at(base, **overrides):
+    routes = {base + p: page() for p in PATHS}
+    routes.update({base + p: v for p, v in overrides.items()})
+    return RecordingHttp(routes)
+
+
+def test_the_check_key_goes_with_every_request_and_never_into_the_result():
+    """The zone's rule challenges a client that is not a verified crawler on the data pages; the smoke test's header
+    with the key is how the runner gets past it from any network (2026-11-26: three pages answered from the edge)."""
+    http = site_at(SITE, **{"/tenders": [Resp(403, "<title>Just a moment...</title>"), page()]})
+    waits = []
+    result = resilience.smoke(http, SITE, DATA_DATE, PATHS, sleep=waits.append, settle=20, key=CHECK_KEY)
+    assert result["verdict"] == "ok" and result["keyed"] is True
+    # Every request carries it, the second try included, beside the user agent, and follows no redirect.
+    assert len(http.calls) == len(PATHS) + 1
+    assert all(h[resilience.CHECK_HEADER] == CHECK_KEY and h["User-Agent"].startswith("AwardWatch/") for _, h in http.calls)
+    assert all(kw.get("allow_redirects") is False for kw in http.kwargs)
+    assert CHECK_KEY not in json.dumps(result)
+    # A redirect is judged as it stands (not followed): unverifiable, never broken.
+    moved = site_at(SITE, **{"/data": Resp(301, "", headers={"Location": "https://elsewhere.example/data"})})
+    result = resilience.smoke(moved, SITE, DATA_DATE, PATHS, sleep=waits.append, settle=0, key=CHECK_KEY)
+    assert result["verdict"] == "unverifiable" and "301" in result["detail"]
+    assert [u for u, _ in moved.calls if "elsewhere" in u] == []
+    # Without a key, no header at all, redirects followed as before, and the result says so.
+    plain = site_at(SITE)
+    result = resilience.smoke(plain, SITE, DATA_DATE, PATHS, sleep=waits.append, settle=0)
+    assert result["keyed"] is False and not any(resilience.CHECK_HEADER in h for _, h in plain.calls)
+    assert all("allow_redirects" not in kw for kw in plain.kwargs)
+
+
+@pytest.mark.parametrize("base", [BASE, "http://awardwatch.ca", "https://www.awardwatch.ca", "https://awardwatch.ca:8443",
+                                  "https://awardwatch.ca.example", "https://evil.example/awardwatch.ca"])
+def test_the_check_key_goes_to_no_other_host_or_scheme(base):
+    http = site_at(base)
+    result = resilience.smoke(http, base, DATA_DATE, PATHS, sleep=lambda s: None, settle=0, key=CHECK_KEY)
+    assert result["keyed"] is False
+    assert not any(resilience.CHECK_HEADER in h for _, h in http.calls) and all("allow_redirects" not in kw for kw in http.kwargs)
+    assert resilience.keyed_url(SITE + "/overview") and resilience.keyed_url(SITE + "/")
+
+
+def test_the_check_key_is_read_only_when_well_formed():
+    name = resilience.CHECK_KEY_ENV
+    assert resilience.check_key({name: CHECK_KEY}) == CHECK_KEY
+    assert resilience.check_key({name: f"  {CHECK_KEY}\n"}) == CHECK_KEY
+    for bad in ("", "   ", CHECK_KEY.upper(), CHECK_KEY[:-1], CHECK_KEY + "0", CHECK_KEY[:-1] + "g", "x" * 64,
+                f"{CHECK_KEY[:32]} {CHECK_KEY[32:]}"):
+        assert resilience.check_key({name: bad}) is None, bad
+    assert resilience.check_key({}) is None
+
+
+def test_the_smoke_command_sends_the_key_from_its_environment_and_never_logs_or_writes_it(tmp_path, monkeypatch, caplog):
+    caplog.set_level(logging.INFO)
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "gh_output"))
+    stats = tmp_path / "stats.json"
+    stats.write_text(json.dumps({"data_as_of": DATA_DATE, "top_organizations_year": [{"id": "org-a000000005"}]}))
+    out = tmp_path / "smoke.json"
+    http = site_at(SITE)
+    monkeypatch.setattr(nightly, "_session", lambda: http)
+    monkeypatch.setenv(resilience.CHECK_KEY_ENV, CHECK_KEY)
+    assert nightly.main(["smoke", "--base-url", SITE, "--stats", str(stats), "--out", str(out), "--settle", "0"]) == 0
+    assert all(h.get(resilience.CHECK_HEADER) == CHECK_KEY for _, h in http.calls) and len(http.calls) == len(PATHS)
+    written = out.read_text(encoding="utf-8")
+    assert json.loads(written)["keyed"] is True and CHECK_KEY not in written
+    assert CHECK_KEY not in caplog.text and "check key sent" in caplog.text
+
+    def run(base: str) -> RecordingHttp:
+        h = site_at(base)
+        monkeypatch.setattr(nightly, "_session", lambda: h)
+        assert nightly.main(["smoke", "--base-url", base, "--stats", str(stats), "--out", str(out), "--settle", "0"]) == 0
+        assert not any(resilience.CHECK_HEADER in hd for _, hd in h.calls)
+        return h
+
+    # Another host gets no header, and the log says why.
+    run(BASE)
+    assert "check key not sent (not the site's own https host)" in caplog.text
+    # A malformed secret sends nothing and says so; an unset one (an empty env line) likewise.
+    monkeypatch.setenv(resilience.CHECK_KEY_ENV, CHECK_KEY[:-1])
+    run(SITE)
+    assert "check key not sent (not well formed)" in caplog.text and CHECK_KEY[:-1] not in caplog.text
+    monkeypatch.setenv(resilience.CHECK_KEY_ENV, "")
+    run(SITE)
+    assert "check key not set" in caplog.text
+
+
+def test_an_unconfirmed_smoke_test_is_a_notice_and_never_an_item_or_a_rollback(tmp_path):
+    db = tmp_path / "awardwatch.sqlite"
+    connect(db).close()
+    ended = datetime(2026, 10, 22, 14, 48, tzinfo=timezone.utc)
+    ran = {"restore": "success", "pipeline": "success", "deploy": "success"}
+    edge = nightly.run_status(db, STARTED, {"problems": []}, ran, now=ended,
+                              smoke={"verdict": "unverifiable", "detail": "/tenders: 403 from the edge"})
+    assert edge["ok"] is True and edge["rollback"] == "not needed"
+    assert {"source": "smoke", "detail": nightly.SMOKE_NOTICE} in edge["notices"]
+    assert resilience.attention_items(edge) == []
+    for dash in (chr(0x2014), chr(0x2013)):
+        assert dash not in nightly.SMOKE_NOTICE
+    clean = nightly.run_status(db, STARTED, {"problems": []}, ran, now=ended,
+                               smoke={"verdict": "ok", "detail": "5 pages answered 200"})
+    assert not any(n["source"] == "smoke" for n in clean["notices"])
+
+
 def test_smoke_paths_take_one_well_formed_organization_from_stats():
     stats = {"top_organizations_year": [{"id": "../../admin"}, {"id": "org-A000000005"}, {"id": "org-a000000005"},
                                         {"id": "org-b"}]}

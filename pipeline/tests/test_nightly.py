@@ -1325,6 +1325,22 @@ def test_the_tests_job_runs_the_four_checks_then_decides():
     assert '::error::' in stop and stop.rstrip().endswith("exit 1")
 
 
+def test_the_check_key_reaches_only_the_smoke_test_and_only_from_its_secret():
+    """resilience.CHECK_KEY_ENV: the header the zone's rule lets past its challenge. One env line, on the smoke step of
+    the refresh job, from the repository secret of the same name; no other step and no other job sees it."""
+    text = WORKFLOW.read_text(encoding="utf-8")
+    line = f"{resilience.CHECK_KEY_ENV}: ${{{{ secrets.{resilience.CHECK_KEY_ENV} }}}}"
+    assert [ln.strip() for ln in text.splitlines() if resilience.CHECK_KEY_ENV in ln] == [line]
+    holders = [(job, step_id(block)) for job, body in jobs_of(text).items() if "\n    steps:\n" in body
+               for block in steps_of(body) if resilience.CHECK_KEY_ENV in block]
+    assert holders == [("refresh", "smoke")]
+    smoke = next(block for block in steps_of(jobs_of(text)["refresh"]) if step_id(block) == "smoke")
+    # The smoke test against the site's address (the key goes only to its own https host) and nothing that reads the env.
+    assert 'python -m awardwatch_pipeline.nightly smoke --base-url "${AWARDWATCH_SITE_URL:-https://awardwatch.ca}"' in code(smoke)
+    assert "env" not in code(smoke).split("run: |", 1)[1] and "printenv" not in code(smoke)
+    assert "AWARDWATCH_SITE_URL: ${{ vars.SITE_URL }}" in jobs_of(text)["refresh"]
+
+
 def test_the_cloudflare_token_reaches_only_the_step_that_reads_the_live_version():
     tests = jobs_of(WORKFLOW.read_text(encoding="utf-8"))["tests"]
     assert "secrets." not in tests.split("\n    steps:\n", 1)[0]

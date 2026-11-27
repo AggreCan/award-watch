@@ -302,6 +302,9 @@ jobs:
         if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
         continue-on-error: true
         timeout-minutes: 5
+        # The key the zone's rule lets past its challenge on the data pages (resilience.CHECK_KEY_ENV).
+        env:
+          AWARDWATCH_CHECK_KEY: ${{ secrets.AWARDWATCH_CHECK_KEY }}
         run: |
           python -m awardwatch_pipeline.nightly smoke --base-url "$SITE" --stats site/public/data/stats.json --out "$WORK/smoke.json"
 

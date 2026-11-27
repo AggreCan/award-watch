@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import time
 from dataclasses import dataclass, field
@@ -271,6 +272,23 @@ ORG_ID_RE = re.compile(r"^org-[0-9a-f]{10}$")
 CHALLENGE_MARKERS = ("cf-chl", "challenge-platform", "just a moment...", "attention required! | cloudflare",
                      "cf-error-details", "sorry, you have been blocked")
 MAX_BODY = 2_000_000
+# The zone's custom rule challenges a client that is not a verified crawler on the data pages (/overview, /tenders, a
+# profile among the smoke pages), and a runner's network changes from night to night (2026-11-26: three of the five
+# pages answered with a challenge). The smoke test sends this header with the key from CHECK_KEY_ENV, which the rule
+# lets through; without a key it sends no header. The key comes from the repository secret of the same name, reaches
+# the smoke step only, and is never logged or written.
+CHECK_HEADER = "X-AwardWatch-Check"
+CHECK_KEY_ENV = "AWARDWATCH_CHECK_KEY"
+CHECK_KEY_RE = re.compile(r"^[0-9a-f]{64}$")
+# The only place the key is sent: https on the site's own host, and never past a redirect (requests carries a custom
+# header to wherever a redirect leads). A base URL anywhere else gets no header, and its covered pages are challenged.
+CHECK_HOSTS = ("awardwatch.ca",)
+
+
+def keyed_url(url: str) -> bool:
+    """Whether a request to url may carry the check key."""
+    parts = urlsplit(url)
+    return parts.scheme == "https" and (parts.hostname or "") in CHECK_HOSTS and parts.port is None
 
 VERDICTS = ("ok", "broken", "unverifiable")
 
@@ -322,10 +340,23 @@ def judge_answer(path: str, status: int, body: str, challenge: bool, data_date: 
     return Attempt(status, "ok", f"{path}: 200")
 
 
-def fetch(http: Any, base_url: str, path: str, data_date: str | None, timeout: float = SMOKE_TIMEOUT_S) -> Attempt:
+def check_key(env: Mapping[str, str] | None = None) -> str | None:
+    """The key the smoke test sends (CHECK_KEY_ENV): 64 lower-case hex characters, else None."""
+    value = str((os.environ if env is None else env).get(CHECK_KEY_ENV) or "").strip()
+    return value if CHECK_KEY_RE.match(value) else None
+
+
+def fetch(http: Any, base_url: str, path: str, data_date: str | None, timeout: float = SMOKE_TIMEOUT_S, *,
+          key: str | None = None) -> Attempt:
     url = base_url.rstrip("/") + path
+    headers = {"User-Agent": config.USER_AGENT, "Cache-Control": "no-cache"}
+    extra: dict[str, Any] = {}
+    if key is not None and keyed_url(url):
+        headers[CHECK_HEADER] = key
+        # A redirect is answered as it stands (no page here redirects); it never takes the key elsewhere.
+        extra["allow_redirects"] = False
     try:
-        resp = http.get(url, headers={"User-Agent": config.USER_AGENT, "Cache-Control": "no-cache"}, timeout=timeout)
+        resp = http.get(url, headers=headers, timeout=timeout, **extra)
     except Exception as exc:
         return Attempt(0, "other", f"{path}: no answer ({type(exc).__name__})")
     status = _status_code(resp)
@@ -367,23 +398,26 @@ def judge(results: list[PageResult]) -> tuple[str, str]:
 
 def smoke(http: Any, base_url: str, data_date: str | None, paths: list[str], *,
           sleep: Callable[[float], None] = time.sleep, settle: float = SMOKE_SETTLE_S,
-          retry_after: float = SMOKE_RETRY_S) -> dict[str, Any]:
+          retry_after: float = SMOKE_RETRY_S, key: str | None = None) -> dict[str, Any]:
     """Fetch every page, then once more after retry_after seconds each page
-    whose first answer was not ok, and judge. Never raises."""
+    whose first answer was not ok, and judge. Never raises. key is sent as
+    CHECK_HEADER with every request to the site's own host (keyed_url); the
+    result says only whether one was."""
     try:
         if settle:
             sleep(settle)
-        results = [PageResult(p, [fetch(http, base_url, p, data_date)]) for p in paths]
+        results = [PageResult(p, [fetch(http, base_url, p, data_date, key=key)]) for p in paths]
         again = [r for r in results if r.final.kind != "ok"]
         if again:
             sleep(retry_after)
             for r in again:
-                r.attempts.append(fetch(http, base_url, r.path, data_date))
+                r.attempts.append(fetch(http, base_url, r.path, data_date, key=key))
         verdict, detail = judge(results)
         pages = [r.as_dict() for r in results]
     except Exception as exc:
         verdict, detail, pages = "unverifiable", f"the check itself failed ({type(exc).__name__})", []
-    return {"verdict": verdict, "detail": detail, "base_url": base_url, "data_date": data_date, "pages": pages}
+    return {"verdict": verdict, "detail": detail, "base_url": base_url, "data_date": data_date,
+            "keyed": key is not None and keyed_url(base_url.rstrip("/") + "/"), "pages": pages}
 
 
 # -- site bundle check --------------------------------------------------------

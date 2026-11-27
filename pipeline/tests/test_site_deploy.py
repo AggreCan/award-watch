@@ -222,7 +222,13 @@ def test_site_bundle_check_command(tmp_path, monkeypatch, caplog):
 
 # -- the workflow guard ----------------------------------------------------------
 
-ALLOWED_SECRETS = {"CLOUDFLARE_SITE_DEPLOY_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "MAIL_TEST_TO"}
+ALLOWED_SECRETS = {"CLOUDFLARE_SITE_DEPLOY_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "MAIL_TEST_TO", "AWARDWATCH_CHECK_KEY"}
+# The key the smoke test sends past the zone's challenge (resilience.CHECK_KEY_ENV): this line, on the smoke step alone,
+# whose command is SMOKE_RUN against SITE (the smoke test sends the key only to the site's own https host).
+CHECK_KEY_LINE = "AWARDWATCH_CHECK_KEY: ${{ secrets.AWARDWATCH_CHECK_KEY }}"
+SMOKE_RUN = ('python -m awardwatch_pipeline.nightly smoke --base-url "$SITE" --stats site/public/data/stats.json '
+             '--out "$WORK/smoke.json"')
+SITE_ENV = "SITE: ${{ vars.SITE_URL || 'https://awardwatch.ca' }}"
 ALLOWED_ACTIONS = {"actions/checkout@v4", "actions/setup-python@v5", "actions/setup-node@v4"}
 TOKEN_LINE = "CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_SITE_DEPLOY_TOKEN }}"
 WRANGLER_ENV = "WRANGLER: ${{ github.workspace }}/site/node_modules/.bin/wrangler"
@@ -398,6 +404,8 @@ def workflow_problems(text, nightly_text=None):
                 problems.append(f"secret {name} is not one this workflow may read: {line.strip()}")
         if "CLOUDFLARE_API_TOKEN" in line and line.strip() != TOKEN_LINE:
             problems.append(f"CLOUDFLARE_API_TOKEN may only be set from the site deploy token: {line.strip()}")
+        if "AWARDWATCH_CHECK_KEY" in line and line.strip() != CHECK_KEY_LINE:
+            problems.append(f"AWARDWATCH_CHECK_KEY may only be set from its own secret: {line.strip()}")
         used = re.match(r"\s*(?:-\s+)?uses:\s*(\S+)", line)
         if used and used.group(1) not in ALLOWED_ACTIONS:
             problems.append(f"action {used.group(1)} is not allowed")
@@ -417,6 +425,19 @@ def workflow_problems(text, nightly_text=None):
             problems.append(f"the deploy's arguments may only carry the Brandfetch client id and the test inbox: {line.strip()}")
     if sum(1 for line in lines if line.strip() == WRANGLER_ENV) != 1:
         problems.append("WRANGLER must be defined once, as the site's pinned binary")
+    # The key in one line of the whole file (a job's or the workflow's env: would hand it to npm ci and every step),
+    # and that line in the smoke step, whose command is the smoke test against the site's address and nothing else.
+    steps = re.split(r"\n      - ", text.split("\n    steps:\n", 1)[1]) if "\n    steps:\n" in text else []
+    keyed = [step for step in steps if "AWARDWATCH_CHECK_KEY" in step]
+    if sum(1 for line in lines if "AWARDWATCH_CHECK_KEY" in line) != 1 or len(keyed) != 1 \
+            or not re.search(r"^        id: smoke$", keyed[0], re.M):
+        problems.append("AWARDWATCH_CHECK_KEY must reach the smoke step and no other")
+    # The run block's lines (indented under it; the next step's comments follow at the step's indent).
+    elif [ln.strip() for ln in keyed[0].split("        run: |\n", 1)[-1].splitlines()
+          if ln.startswith(" " * 10) and ln.strip()] != [SMOKE_RUN]:
+        problems.append("the smoke step must run the smoke test against $SITE and nothing else")
+    if [line.strip() for line in lines if line.strip().startswith("SITE:")] != [SITE_ENV]:
+        problems.append("SITE must be the repository variable or the site's own address, defined once")
     if [line.strip() for line in lines if line.strip().startswith("BUCKET:")] != ["BUCKET: awardwatch-data"]:
         problems.append("BUCKET must be awardwatch-data, defined once")
     return problems
@@ -491,6 +512,17 @@ PLANTED = [
     ("deploy flags through the test inbox", 'set -- "$@" --var "MAIL_TEST_TO:$MAIL_TEST_TO"; fi',
      'set -- "$@" --var "MAIL_TEST_TO:$MAIL_TEST_TO" --assets ../other; fi'),
     ("the nightly's token", TOKEN_LINE, "CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}"),
+    ("the check key from a variable", CHECK_KEY_LINE, "AWARDWATCH_CHECK_KEY: ${{ vars.AWARDWATCH_CHECK_KEY }}"),
+    ("the check key from another secret", CHECK_KEY_LINE, "AWARDWATCH_CHECK_KEY: ${{ secrets.CLOUDFLARE_SITE_DEPLOY_TOKEN }}"),
+    ("the check key in another step too", "        run: npm run test:mail\n",
+     "        env:\n          AWARDWATCH_CHECK_KEY: ${{ secrets.AWARDWATCH_CHECK_KEY }}\n        run: npm run test:mail\n"),
+    ("the check key moved off the smoke step", "        env:\n          AWARDWATCH_CHECK_KEY: ${{ secrets.AWARDWATCH_CHECK_KEY }}\n", ""),
+    ("the check key in the job's env as well", f"      {SITE_ENV}\n", f"      {SITE_ENV}\n      {CHECK_KEY_LINE}\n"),
+    ("the check key in the workflow's env as well", "\njobs:\n", f"\nenv:\n  {CHECK_KEY_LINE}\n\njobs:\n"),
+    ("the smoke command replaced", SMOKE_RUN, "true"),
+    ("the smoke command sent elsewhere", SMOKE_RUN, SMOKE_RUN.replace('"$SITE"', "https://elsewhere.example")),
+    ("a second command in the smoke step", SMOKE_RUN, SMOKE_RUN + "\n          env | sort"),
+    ("the site's address changed", SITE_ENV, "SITE: https://elsewhere.example"),
     ("a state-writing nightly command", "--out \"$WORK/version_before.txt\"",
      "--out \"$WORK/version_before.txt\"; python -m awardwatch_pipeline.nightly status --db x --out y"),
     ("another nightly command", "awardwatch_pipeline.nightly join --dir", "awardwatch_pipeline.nightly split --dir"),

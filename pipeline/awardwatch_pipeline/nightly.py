@@ -204,6 +204,10 @@ RECORDS_NOTICE = "the records database is not created yet, so the analytics view
 # did not finish. BROKEN_KEPT bounds the list status.json carries; a night's
 # sample is 40 links.
 LINK_BROKEN_NOTICE = "{n} of tonight's sampled government links answered 404 or 410; the run-attention issue lists the addresses"
+# A smoke test that could not confirm every page (unverifiable): never a rollback, but said, since a page answering
+# from the edge goes unchecked. The detail is in smoke_detail.
+SMOKE_NOTICE = ("the check of the live site after the deploy could not confirm every page (smoke_detail names them); "
+                "an answer from the edge means the runner was challenged, so check the AWARDWATCH_CHECK_KEY secret")
 LINK_FAILED_NOTICE = "the sample of outbound government links did not finish; the next run draws another"
 BROKEN_KEPT = 100
 
@@ -915,6 +919,7 @@ def run_status(
         + [{"source": name, "detail": text} for name, text in INTRADAY_NOTICES.items() if intraday[name] == "failed"]
         + ([{"source": "records_sync", "detail": RECORDS_NOTICE}] if records == "no database" else [])
         + link_notices
+        + ([{"source": "smoke", "detail": SMOKE_NOTICE}] if verdict == "unverifiable" else [])
         + ([review_notice] if review_notice else [])
         + ([{"source": "funnel", "detail": FUNNEL_NOTICE}] if funnel == "failed" else [])
         + ([{"source": "search_console_detail", "detail": SEARCH_DETAIL_NOTICE}] if search_detail == "failed" else [])
@@ -1901,12 +1906,17 @@ def _smoke(args: argparse.Namespace) -> int:
     data_date = data_date if isinstance(data_date, str) and data_date.strip() else None
     http = _session()
     try:
-        result = resilience.smoke(http, args.base_url, data_date, resilience.smoke_paths(stats), settle=args.settle)
+        result = resilience.smoke(http, args.base_url, data_date, resilience.smoke_paths(stats), settle=args.settle,
+                                  key=resilience.check_key())
     finally:
         http.close()
     _write_json(Path(args.out), result)
     _output(verdict=result["verdict"])
-    (log.error if result["verdict"] == "broken" else log.info)("smoke: %s: %s", result["verdict"], result["detail"])
+    raw = os.environ.get(resilience.CHECK_KEY_ENV, "").strip()
+    sent = "sent" if result["keyed"] else "not sent (not well formed)" if raw and resilience.check_key() is None \
+        else "not sent (not the site's own https host)" if raw else "not set"
+    (log.error if result["verdict"] == "broken" else log.info)("smoke: %s: %s (check key %s)", result["verdict"], result["detail"],
+                                                              sent)
     return 1 if result["verdict"] == "broken" else 0
 
 
